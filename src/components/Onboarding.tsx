@@ -6,6 +6,7 @@ import { RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "fireb
 import { motion } from "motion/react";
 import { User, Briefcase, Loader2, MapPin, Shield, CheckCircle2, ChevronRight, ChevronLeft, Upload, AlertCircle, Info, PoundSterling, Award, Gift, Home, Building2, Star } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { toast } from "sonner";
 import { useCategories } from "../lib/CategoryProvider";
 import { lookupPostcode } from "@/src/services/postcodeService";
 import { BLOCKED_DOMAINS, UNSORTED_TRADE_CATEGORIES } from "@/src/constants";
@@ -28,6 +29,7 @@ export default function Onboarding() {
   const [city, setCity] = useState("");
   const [county, setCounty] = useState("");
   const [selectedTrades, setSelectedTrades] = useState<string[]>([]);
+  const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [verificationDocs, setVerificationDocs] = useState<any[]>([]);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,8 +52,18 @@ export default function Onboarding() {
   }, []);
 
   const requiredCerts = categories
-    .filter(t => selectedTrades.includes(t.name) && t.requiredCertifications)
-    .flatMap(t => t.requiredCertifications || []);
+    .filter(t => selectedTrades.includes(t.name))
+    .flatMap(t => {
+      const certs = [...(t.requiredCertifications || [])];
+      if ((t as any).subcategoryCertifications) {
+        t.subcategories?.forEach(sub => {
+          if (selectedSubcategories.includes(sub) && (t as any).subcategoryCertifications[sub]) {
+            certs.push(...(t as any).subcategoryCertifications[sub]);
+          }
+        });
+      }
+      return certs;
+    });
 
   const uniqueRequiredCerts = Array.from(new Set(requiredCerts));
 
@@ -282,6 +294,7 @@ export default function Onboarding() {
         city,
         county,
         trades: selectedTrades,
+        subcategories: selectedSubcategories,
         referralCode: user.uid.slice(0, 8).toUpperCase(), // Generate a simple referral code
         referredBy: referrerUid,
         verificationStatus: uniqueRequiredCerts.length > 0 ? "pending" : "unverified",
@@ -592,7 +605,10 @@ export default function Onboarding() {
                     // Or at least skip tier selection later
                     handleSubmit();
                   } else {
-                    if (role === "tradesperson") setStep(2);
+                    if (role === "tradesperson") {
+                      toast.info("Select one or more categories and subcategories!", { duration: 5000 });
+                      setStep(2);
+                    }
                     else if (role === "homeowner" && homeownerType === "business") setStep(2); // Business homeowner also needs to select category/tier
                     else handleSubmit();
                   }
@@ -641,37 +657,65 @@ export default function Onboarding() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
                 {categories.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      setSelectedTrades(prev => 
-                        prev.includes(t.name) ? prev.filter(name => name !== t.name) : [...prev, t.name]
-                      );
-                    }}
-                    className={cn(
-                      "p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all duration-300 group",
-                      selectedTrades.includes(t.name) 
-                        ? "bg-primary/5 border-primary text-primary shadow-lg shadow-primary/5" 
-                        : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
-                    )}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-colors",
-                        selectedTrades.includes(t.name) ? "bg-primary text-white" : "bg-slate-50"
-                      )}>
-                        {t.icon}
+                  <div key={t.id} className="space-y-2">
+                    <button
+                      onClick={() => {
+                        setSelectedTrades(prev => 
+                          prev.includes(t.name) ? prev.filter(name => name !== t.name) : [...prev, t.name]
+                        );
+                      }}
+                      className={cn(
+                        "w-full p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all duration-300 group",
+                        selectedTrades.includes(t.name) 
+                          ? "bg-primary/5 border-primary text-primary shadow-lg shadow-primary/5" 
+                          : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-colors",
+                          selectedTrades.includes(t.name) ? "bg-primary text-white" : "bg-slate-50"
+                        )}>
+                          {t.icon}
+                        </div>
+                        <span className="font-black text-sm tracking-tight">{t.name}</span>
                       </div>
-                      <span className="font-black text-sm tracking-tight">{t.name}</span>
-                    </div>
-                    {selectedTrades.includes(t.name) && (
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                        <CheckCircle2 className="w-5 h-5 text-primary" />
+                      {selectedTrades.includes(t.name) && (
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                          <CheckCircle2 className="w-5 h-5 text-primary" />
+                        </motion.div>
+                      )}
+                    </button>
+                    {selectedTrades.includes(t.name) && t.subcategories && t.subcategories.length > 0 && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }} 
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="ml-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3"
+                      >
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Specific Services:</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {t.subcategories.map(sub => (
+                            <label key={sub} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-slate-200 group">
+                              <div className="relative flex items-center">
+                                <input 
+                                  type="checkbox" 
+                                  className="w-5 h-5 rounded-md border-2 border-slate-300 text-primary focus:ring-primary focus:ring-offset-0 transition-all cursor-pointer peer"
+                                  checked={selectedSubcategories.includes(sub)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) setSelectedSubcategories(prev => [...prev, sub]);
+                                    else setSelectedSubcategories(prev => prev.filter(s => s !== sub));
+                                  }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">{sub}</span>
+                            </label>
+                          ))}
+                        </div>
                       </motion.div>
                     )}
-                  </button>
+                  </div>
                 ))}
               </div>
 
@@ -851,23 +895,35 @@ export default function Onboarding() {
                 ))}
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={() => setStep(2)}
-                  className="flex-1 p-5 rounded-[2rem] border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto p-5 rounded-[2rem] border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                 >
                   <ChevronLeft className="w-5 h-5" /> Back
                 </button>
-                <button
-                  onClick={() => {
-                    setSelectedTier(platformConfig?.feeTiers?.[0]?.name || "Free Trial");
-                    handleSubmit();
-                  }}
-                  disabled={loading}
-                  className="flex-[2] bg-primary text-white p-5 rounded-[2rem] font-black text-lg hover:bg-primary-hover transition-all shadow-2xl shadow-primary/30 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
-                >
-                  {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Complete Setup"}
-                </button>
+                <div className="flex-1 flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={() => {
+                      setSelectedTier(platformConfig?.feeTiers?.[0]?.name || "Free Trial");
+                      handleSubmit();
+                    }}
+                    disabled={loading}
+                    className="flex-1 bg-white border-2 border-slate-200 text-slate-600 p-5 rounded-[2rem] font-black text-sm sm:text-lg hover:border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    I'll do this later
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedTier(platformConfig?.feeTiers?.[0]?.name || "Free Trial");
+                      handleSubmit();
+                    }}
+                    disabled={loading}
+                    className="flex-1 bg-primary text-white p-5 rounded-[2rem] font-black text-sm sm:text-lg hover:bg-primary-hover transition-all shadow-xl shadow-primary/30 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Complete Setup"}
+                  </button>
+                </div>
               </div>
               
               <div className="flex items-center gap-2 text-slate-400 justify-center">

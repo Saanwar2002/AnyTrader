@@ -1447,6 +1447,39 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "Homeopathy",
       "Sound Healing / Therapy"
     ]
+  },
+  {
+    id: 83,
+    name: "Taxi & Transport",
+    icon: "🚕",
+    requiredCertifications: [], // Main cert logic managed by subcategories
+    subcategoryCertifications: {
+      "School Runs": ["Enhanced DBS Check", "PHV License"],
+      "Hospital & Medical Transport": ["Enhanced DBS Check", "PHV License"],
+      "Wheelchair Accessible Transport": ["Enhanced DBS Check", "PHV License"],
+      "Airport Transfers": ["PHV License", "Hire & Reward Insurance"],
+      "Party & Night Out": ["PHV License", "Hire & Reward Insurance"],
+      "Executive & Corporate": ["PHV License", "Hire & Reward Insurance"],
+      "Minibus & Group Hire": ["PHV License", "Minibus Operator License"],
+      "Courier & Parcel Delivery": ["Goods in Transit / Courier Insurance"],
+      "Pet-Friendly Transport": ["DEFRA Animal Transport Authorization"],
+      "Long Distance": ["PHV License", "Hire & Reward Insurance"]
+    },
+    subcategories: [
+      "Airport Transfers",
+      "Wedding Cars",
+      "Party & Night Out",
+      "Day Trips & Excursions",
+      "Executive & Corporate",
+      "Wheelchair Accessible Transport",
+      "Minibus & Group Hire",
+      "School Runs",
+      "Hospital & Medical Transport",
+      "Funeral Cars",
+      "Courier & Parcel Delivery",
+      "Pet-Friendly Transport",
+      "Long Distance"
+    ]
   }
 ];
 

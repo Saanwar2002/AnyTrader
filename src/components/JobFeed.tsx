@@ -3,7 +3,7 @@ import { db, collection, query, where, orderBy, onSnapshot, type FirebaseUser, h
 import { parseNaturalLanguageSearch } from "@/src/services/gemini";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, Clock, MapPin, ChevronRight, Search, Filter, Wrench, X, Image as ImageIcon, Video as VideoIcon, ChevronDown, ChevronUp, Info, Star, Save, Zap, Loader2, PoundSterling, Calendar, FileText } from "lucide-react";
+import { Briefcase, Clock, MapPin, ChevronRight, Search, Filter, Wrench, X, Image as ImageIcon, Video as VideoIcon, ChevronDown, ChevronUp, Info, Star, Save, Zap, Loader2, PoundSterling, Calendar, FileText, AlertCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { URGENCY_LEVELS } from "@/src/constants";
@@ -359,6 +359,34 @@ export default function JobFeed() {
         title="Find Work | Job Feed" 
         description="Browse the latest jobs for tradespeople and community helpers on AnyTrader. Filter by category, location, and urgency."
       />
+      {profile?.verificationStatus === "pending" && (
+        <div className="bg-orange-50 border-2 border-orange-200 p-4 sm:p-6 rounded-[2rem] flex flex-col sm:flex-row gap-4 sm:items-start justify-between shadow-lg shadow-orange-100">
+          <div className="flex gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-6 h-6 text-orange-600" />
+            </div>
+            <div>
+              <h3 className="font-black text-orange-900 text-lg tracking-tight">Admin Verification Required</h3>
+              <p className="text-orange-800 text-sm font-medium mt-1">
+                Because of the specific services you selected during sign-up, your account requires admin verification before you can quote on jobs.
+              </p>
+              {profile?.verificationDocs && profile.verificationDocs.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-bold text-orange-700 uppercase tracking-wider mb-2">Required Documents:</p>
+                  <ul className="list-disc list-inside text-sm text-orange-800 font-medium space-y-1">
+                    {profile.verificationDocs.map((doc: any, i: number) => (
+                      <li key={i}>{doc.type} <span className="text-xs opacity-70">({doc.status})</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+          <Link to="/profile?tab=documents" className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all text-center">
+            View & Upload Documents
+          </Link>
+        </div>
+      )}
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">Job Feed</h1>

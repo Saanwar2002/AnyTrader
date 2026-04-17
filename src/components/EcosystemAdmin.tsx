@@ -23,7 +23,11 @@ import {
   Search,
   Filter,
   CheckCircle2,
-  XCircle
+  XCircle,
+  HelpCircle,
+  BookOpen,
+  Info,
+  ArrowRight
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
@@ -44,6 +48,7 @@ export default function EcosystemAdmin() {
   const [modalType, setModalType] = useState<"partner" | "campaign">("partner");
   const [aiInsights, setAiInsights] = useState<MonetizationOpportunity[]>([]);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   useEffect(() => {
     if (!user || (profile?.role !== "admin" && profile?.role !== "ecosystem_manager")) return;
@@ -178,29 +183,38 @@ export default function EcosystemAdmin() {
           </h1>
           <p className="text-slate-500 font-medium mt-1">Monetization & Partners center.</p>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-col sm:items-end gap-4">
           <button 
-            onClick={() => {
-              setModalType("partner");
-              setEditingItem(null);
-              setIsModalOpen(true);
-            }}
-            className="flex-1 sm:flex-none justify-center bg-white border-2 border-slate-200 px-3 sm:px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
+            onClick={() => setShowManual(true)}
+            className="flex items-center gap-2 text-primary font-bold text-sm hover:underline transition-all pr-1"
           >
-            <Plus className="w-4 h-4" />
-            Partner
+            <HelpCircle className="w-4 h-4" />
+            How to use
           </button>
-          <button 
-            onClick={() => {
-              setModalType("campaign");
-              setEditingItem(null);
-              setIsModalOpen(true);
-            }}
-            className="flex-1 sm:flex-none justify-center bg-primary text-white px-4 sm:px-6 py-2 rounded-2xl text-xs sm:text-sm font-bold hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Campaign
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button 
+              onClick={() => {
+                setModalType("partner");
+                setEditingItem(null);
+                setIsModalOpen(true);
+              }}
+              className="flex-1 sm:flex-none justify-center bg-white border-2 border-slate-200 px-3 sm:px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Partner
+            </button>
+            <button 
+              onClick={() => {
+                setModalType("campaign");
+                setEditingItem(null);
+                setIsModalOpen(true);
+              }}
+              className="flex-1 sm:flex-none justify-center bg-primary text-white px-4 sm:px-6 py-2 rounded-2xl text-xs sm:text-sm font-bold hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Campaign
+            </button>
+          </div>
         </div>
       </div>
 
@@ -728,6 +742,133 @@ export default function EcosystemAdmin() {
           </motion.div>
         </div>
       )}
+
+      {/* Instructional Manual Modal */}
+      <AnimatePresence>
+        {showManual && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[32px] p-0 max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-8 pb-4 flex items-center justify-between border-b border-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">Ecosystem Manual</h2>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Mastering platform monetization</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowManual(false)}
+                  className="p-2 hover:bg-slate-50 rounded-full transition-colors"
+                >
+                  <XCircle className="w-6 h-6 text-slate-300 hover:text-red-500" />
+                </button>
+              </div>
+
+              <div className="p-8 overflow-y-auto space-y-8 custom-scrollbar">
+                {/* Watchdog Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                    <h3 className="font-black text-slate-900">1. Document Expiry Watchdog</h3>
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">
+                    This is your proactive revenue engine. It scans all tradespeople for documents (like Public Liability Insurance) that expire within the next 30 days.
+                  </p>
+                  <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex items-start gap-3">
+                    <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-800 font-medium">
+                      <strong>How to use:</strong> When a trader appears here, use the "Send Offer" button to immediately trigger a relevant campaign (e.g., insurance renewal discount from a partner).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Partners Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-primary" />
+                    <h3 className="font-black text-slate-900">2. Partner Management</h3>
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">
+                    Manage relationships with external companies (Insurance, Finance, Tool Suppliers) who want access to your audience.
+                  </p>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-start gap-3">
+                    <Info className="w-4 h-4 text-slate-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-slate-700 font-medium">
+                      <strong>Best Practice:</strong> Ensure "Tracking URLs" are accurate to correctly attribute leads. Use the commission rate field to calculate expected revenue.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Campaigns Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-primary" />
+                    <h3 className="font-black text-slate-900">3. Targeted Campaigns</h3>
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">
+                    Orchestrate how and when offers are displayed. You can target specific user roles (Homeowners or Traders).
+                  </p>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {[
+                      { t: "Manual", d: "Pushed from Watchdog" },
+                      { t: "Expiry", d: "Auto-trigger on doc dates" },
+                      { t: "Behavior", d: "Action-based triggers" },
+                      { t: "Seasonal", d: "Date-range promotions" }
+                    ].map((item, i) => (
+                      <li key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                        <ArrowRight className="w-3 h-3 text-primary" />
+                        <div>
+                          <p className="text-[10px] font-black text-slate-900 uppercase">{item.t}</p>
+                          <p className="text-[9px] text-slate-400 font-bold">{item.d}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Leads & AI Insights */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-blue-600" />
+                      <h3 className="font-black text-slate-900">4. Leads Tracking</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Real-time audit log of every campaign click. Manage lead status (New → Converted) to keep track of conversion health.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-600" />
+                      <h3 className="font-black text-slate-900">5. AI Strategist</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Uses Gemini to analyze your platform's top trade categories and expiry patterns to suggest and draft new high-impact campaigns.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <p className="text-xs text-slate-400 font-bold">Version 1.2 • Monetization Center</p>
+                <button 
+                  onClick={() => setShowManual(false)}
+                  className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-slate-800 transition-all shadow-lg"
+                >
+                  Got it, thanks!
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

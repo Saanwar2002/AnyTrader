@@ -11,9 +11,10 @@ import {
   TrendingUp, Activity, FileText, ChevronRight, ChevronUp, ChevronDown, Loader2,
   UserCheck, UserX, MessageSquare, Star, UserPlus, Mail,
   Lock, Unlock, CheckSquare, Square, X, Megaphone, Send, Tag, Tags, Gift,
-  Settings, BarChart3, PieChart, DollarSign, Percent, Clock, MapPin, CreditCard,
+  Settings, Settings2, BarChart3, PieChart, DollarSign, Percent, Clock, MapPin, CreditCard,
   AlertCircle, Zap, Sparkles, ShieldAlert, ShieldCheck, RefreshCw,
-  Plus, Edit2, Calendar, Award, Info, Key, Building2
+  Plus, Edit2, Calendar, Award, Info, Key, Building2, Globe, Database, Download,
+  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import GuestJobs from "./GuestJobs";
@@ -40,6 +41,7 @@ export default function AdminDashboard() {
     const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs"].includes(tabFromUrl) ? tabFromUrl : "users";
     if (validTab !== activeTab) {
       setActiveTab(validTab);
+      setFilter(validTab === "jobs" ? "emergency" : "all");
     }
   }, [tabFromUrl]);
 
@@ -49,6 +51,7 @@ export default function AdminDashboard() {
     setIsUsersExpanded(false);
     setIsJobsExpanded(false);
     setSelectedUserIds([]);
+    setFilter(tab === "jobs" ? "emergency" : "all");
   };
 
   const [loading, setLoading] = useState(true);
@@ -57,12 +60,15 @@ export default function AdminDashboard() {
   const [logs, setLogs] = useState<any[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [searchLogs, setSearchLogs] = useState<any[]>([]);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(initialTab === "jobs" ? "emergency" : "all");
   const [isUsersExpanded, setIsUsersExpanded] = useState(false);
   const [isJobsExpanded, setIsJobsExpanded] = useState(false);
+  const [isDisputesExpanded, setIsDisputesExpanded] = useState(false);
+  const [isLogsExpanded, setIsLogsExpanded] = useState(false);
   const [isSubscribersExpanded, setIsSubscribersExpanded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -138,6 +144,75 @@ export default function AdminDashboard() {
   const [syncConfirmText, setSyncConfirmText] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
+  // Feature Search Logic
+  const [featureSearchTerm, setFeatureSearchTerm] = useState("");
+
+  // Export State
+  const [exportRole, setExportRole] = useState("homeowner");
+  const [exportCategory, setExportCategory] = useState("Plumbing");
+
+  const ADMIN_FEATURES = [
+    { title: "User Management", tab: "users", keywords: ["people", "homeowner", "trader", "delete", "suspend"], icon: <Users className="w-4 h-4" /> },
+    { title: "Job Oversight", tab: "jobs", keywords: ["projects", "status", "cancel", "refund"], icon: <Briefcase className="w-4 h-4" /> },
+    { title: "Dispute Mediation", tab: "disputes", keywords: ["trouble", "argument", "refund", "court"], icon: <AlertTriangle className="w-4 h-4" /> },
+    { title: "Administrative Staff", tab: "team", keywords: ["admin", "invites", "permissions", "team"], icon: <Shield className="w-4 h-4" /> },
+    { title: "Verification & KYC", tab: "verifications", keywords: ["docs", "id check", "license", "approve"], icon: <CheckCircle2 className="w-4 h-4" /> },
+    { title: "Platform Broadcasts", tab: "broadcast", keywords: ["push", "email", "notify all", "marketing"], icon: <Megaphone className="w-4 h-4" /> },
+    { title: "System Configuration", tab: "settings", keywords: ["configs", "setup", "toggle", "maintenance"], icon: <Settings className="w-4 h-4" /> },
+    { title: "Category Management", tab: "categories", keywords: ["trades", "specialties", "tags"], icon: <Tags className="w-4 h-4" /> },
+    { title: "Audit & Logs", tab: "logs", keywords: ["history", "actions", "security", "who did what"], icon: <FileText className="w-4 h-4" /> },
+    { title: "Security & API Keys", tab: "security", keywords: ["gemini", "stripe", "secrets", "env"], icon: <Key className="w-4 h-4" /> },
+    { title: "Growth Stats", tab: "analytics", keywords: ["data", "report", "revenue", "charts"], icon: <BarChart3 className="w-4 h-4" /> },
+    { title: "Monetization Mode", tab: "settings", elementId: "monetization-control", keywords: ["paywall", "beta", "free", "charging"], icon: <DollarSign className="w-4 h-4" /> },
+    { title: "Maintenance Mode", tab: "settings", elementId: "maintenance-control", keywords: ["offline", "killswitch", "update"], icon: <Lock className="w-4 h-4" /> },
+    { title: "Scheduled Maintenance", tab: "settings", elementId: "scheduled-maintenance", keywords: ["banner", "warning", "timer"], icon: <Calendar className="w-4 h-4" /> },
+    { title: "Subscription Tiers", tab: "settings", elementId: "fee-tiers", keywords: ["pricing", "fees", "silver", "gold"], icon: <CreditCard className="w-4 h-4" /> },
+    { title: "Trust & Fairness Engine", tab: "settings", elementId: "fairness-engine", keywords: ["complainer", "newcomer", "boost"], icon: <ShieldCheck className="w-4 h-4" /> },
+    { title: "Export All Users", tab: "settings", elementId: "quick-actions", keywords: ["csv", "download", "backup"], icon: <FileText className="w-4 h-4" /> },
+    { title: "Flush Audit Logs", tab: "settings", elementId: "quick-actions", keywords: ["delete logs", "purge", "clear history"], icon: <Trash2 className="w-4 h-4" /> },
+    { title: "Platform Health (AI)", tab: "insights", keywords: ["gemini", "smart", "advice"], icon: <Sparkles className="w-4 h-4" /> },
+    { title: "Risk Monitor (AI)", tab: "risk", keywords: ["fraud", "suspicious", "safety"], icon: <ShieldAlert className="w-4 h-4" /> },
+    { title: "Guest Job Control", tab: "guest_jobs", keywords: ["unregistered", "anonymous"], icon: <Ghost className="w-4 h-4" /> },
+  ];
+
+  const filteredFeatures = featureSearchTerm.trim() === "" 
+    ? [] 
+    : ADMIN_FEATURES.filter(f => 
+        f.title.toLowerCase().includes(featureSearchTerm.toLowerCase()) || 
+        f.keywords.some(k => k.toLowerCase().includes(featureSearchTerm.toLowerCase()))
+      ).slice(0, 5);
+
+  const navigateToFeature = (feature: any) => {
+    handleTabChange(feature.tab);
+    setFeatureSearchTerm("");
+    
+    if (feature.elementId) {
+      setTimeout(() => {
+        document.getElementById(feature.elementId)?.scrollIntoView({ behavior: 'smooth' });
+        // Flash effect
+        const el = document.getElementById(feature.elementId);
+        if (el) {
+          el.classList.add('ring-4', 'ring-blue-500', 'ring-offset-4');
+          setTimeout(() => el.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-4'), 2000);
+        }
+      }, 300);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('admin-global-search')?.focus();
+      }
+      if (e.key === 'Escape') {
+        setFeatureSearchTerm("");
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const PERMISSIONS = [
     { id: "manage_users", label: "Manage Users", description: "Verify tradespeople and delete accounts" },
     { id: "manage_jobs", label: "Manage Jobs", description: "Edit job details and statuses" },
@@ -174,6 +249,10 @@ export default function AdminDashboard() {
         setBroadcasts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }
     );
+
+    const unsubReviews = onSnapshot(collection(db, "reviews"), (snapshot) => {
+      setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
     const unsubSearchLogs = onSnapshot(collection(db, "search_logs"), (snapshot) => {
       setSearchLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -233,6 +312,7 @@ export default function AdminDashboard() {
       unsubLogs();
       unsubInvites();
       unsubBroadcasts();
+      unsubReviews();
       unsubSearchLogs();
       unsubSecurityAlerts();
       unsubSecrets();
@@ -1023,6 +1103,47 @@ export default function AdminDashboard() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast("Export Ready", `User data (${roleFilter || 'all'}) has been prepared and downloaded.`, "success");
+  };
+
+  const exportUserPerformanceReport = (u: any) => {
+    // Collect specific data for this user
+    const userJobs = jobs.filter(j => j.homeownerId === u.id || j.assignedTraderId === u.id);
+    
+    let csvContent = `USER PERFORMANCE REPORT: ${u.name}\n`;
+    csvContent += `Email: ${u.email || 'N/A'}\n`;
+    csvContent += `Role: ${u.role}\n`;
+    csvContent += `Joined: ${u.createdAt ? (u.createdAt.seconds ? new Date(u.createdAt.seconds * 1000).toLocaleDateString() : new Date(u.createdAt).toLocaleDateString()) : 'N/A'}\n\n`;
+    
+    // Activity Section
+    csvContent += `ACTIVITY HISTORY\n`;
+    csvContent += `Job ID,Title,Role,Status,Date\n`;
+    userJobs.forEach(j => {
+      const userRole = j.homeownerId === u.id ? 'Customer' : 'Trader';
+      const date = j.createdAt ? (j.createdAt.seconds ? new Date(j.createdAt.seconds * 1000).toLocaleDateString() : new Date(j.createdAt).toLocaleDateString()) : 'N/A';
+      csvContent += `"${j.id}","${j.title}","${userRole}","${j.status}","${date}"\n`;
+    });
+    
+    if (userJobs.length === 0) csvContent += "No job activity recorded.\n";
+
+    // Reviews Section
+    const userReviews = reviews.filter(r => r.revieweeId === u.id || r.reviewerId === u.id);
+    csvContent += `\nREVIEWS & FEEDBACK\n`;
+    csvContent += `Reviewer ID,Reviewee ID,Rating,Comment,Date\n`;
+    userReviews.forEach(r => {
+      const date = r.createdAt ? (r.createdAt.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : new Date(r.createdAt).toLocaleDateString()) : 'N/A';
+      csvContent += `"${r.reviewerId}","${r.revieweeId}","${r.rating}","${r.comment?.replace(/"/g, '""')}","${date}"\n`;
+    });
+    
+    if (userReviews.length === 0) csvContent += "No reviews documented.\n";
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `performance_report_${u.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+    showToast("Report Ready", `Individual performance report for ${u.name} downloaded.`, "success");
   };
 
   const exportJobsCSV = (categoryFilter?: string) => {
@@ -1051,7 +1172,52 @@ export default function AdminDashboard() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast("Export Ready", `Job data (${categoryFilter || 'all'}) has been prepared and downloaded.`, "success");
   };
+
+  const exportDisputesCSV = (statusFilter?: string) => {
+    const disputedJobs = jobs.filter(j => j.status === "disputed");
+    const filtered = statusFilter ? disputedJobs.filter(j => j.disputeStatus === statusFilter) : disputedJobs;
+    const headers = ["Job ID", "Title", "Category", "Customer", "Trader", "Dispute Reason", "Created At"];
+    const rows = filtered.map(j => [
+      j.id || "N/A",
+      j.title || "N/A",
+      j.category || "N/A",
+      j.ownerName || "N/A",
+      j.assignedTraderName || "Unassigned",
+      j.disputeReason || "N/A",
+      j.createdAt ? (j.createdAt.seconds ? new Date(j.createdAt.seconds * 1000).toLocaleDateString() : new Date(j.createdAt).toLocaleDateString()) : "N/A"
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map(row => row.map(cell => `"${cell}"`).join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `disputes_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+    showToast("Disputes Exported", "Legal and dispute data has been extracted.", "success");
+  };
+
+  const exportEcosystemCSV = () => {
+    const headers = ["User", "Email", "Role", "Referral Code", "Referred By", "Verification"];
+    const rows = users.map(u => [
+      u.name || "N/A",
+      u.email || "N/A",
+      u.role || "N/A",
+      u.referralCode || "N/A",
+      u.referredBy || "N/A",
+      u.verificationStatus || "N/A"
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map(row => row.map(cell => `"${cell}"`).join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `ecosystem_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+    showToast("Ecosystem Stats Ready", "Referral and growth data downloaded.", "success");
+  };
+
   const handleDeleteUser = async (userId: string) => {
     const u = users.find(userObj => userObj.id === userId);
     const protectedEmails = ["saanwar2002@gmail.com"];
@@ -1112,6 +1278,10 @@ export default function AdminDashboard() {
     
     const matchesTitle = j.title?.toLowerCase().includes(searchLower);
     const matchesJobNo = normalizedSearch !== "" && jobNoNormalized.includes(normalizedSearch);
+    
+    if (filter === "emergency") {
+      return (matchesTitle || matchesJobNo) && j.urgency === "emergency";
+    }
     
     return (matchesTitle || matchesJobNo) && (filter === "all" || j.status === filter);
   });
@@ -1197,34 +1367,8 @@ export default function AdminDashboard() {
         )}
 
         {/* Marketplace Beta Mode Banner (Paywall Off) */}
-        {platformConfig && platformConfig.paywallEnabled === false && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-500 text-white p-4 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl shadow-amber-200"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
-                <Sparkles className="w-6 h-6" />
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="font-black text-lg">Marketplace Beta Mode Active</p>
-                <p className="text-xs opacity-90 font-medium text-amber-50">
-                  The paywall is currently <span className="underline font-black text-white px-1">DISABLED</span>. All users have free, unlimited access to platform features.
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => handleTabChange("settings")}
-              className="bg-white text-amber-600 px-6 py-3 rounded-2xl font-black text-xs hover:bg-amber-50 transition-all shadow-md active:scale-95 w-full sm:w-auto"
-            >
-              Configure Monetization
-            </button>
-          </motion.div>
-        )}
-
         {/* Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+        <div className="flex flex-col gap-6">
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-[28px] bg-blue-600 flex items-center justify-center shadow-2xl shadow-blue-200 shrink-0 transform -rotate-3">
               <Shield className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
@@ -1240,8 +1384,89 @@ export default function AdminDashboard() {
               <p className="text-sm sm:text-base text-slate-500 font-medium">Platform oversight, security & growth analytics.</p>
             </div>
           </div>
-          
-          {/* Navigation Tabs - Horizontally Scrollable on Mobile with Snap Points */}
+
+          {/* Persistent Search Bar Area - Positioned exactly where requested */}
+          <div className="relative w-full max-w-4xl z-[100]">
+            <div className="relative group">
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+              <input 
+                id="admin-global-search"
+                type="text" 
+                placeholder="Search features, settings or help (⌘K)..." 
+                className="w-full pl-16 pr-20 py-5 rounded-[30px] bg-white border-2 border-slate-100 focus:outline-none focus:ring-8 focus:ring-blue-600/5 focus:border-blue-600 transition-all text-lg font-bold text-slate-900 shadow-xl shadow-slate-200/50"
+                value={featureSearchTerm}
+                onChange={(e) => setFeatureSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && filteredFeatures.length > 0) {
+                    navigateToFeature(filteredFeatures[0]);
+                  }
+                }}
+              />
+              <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                <kbd className="hidden sm:flex px-2 py-1 bg-slate-50 rounded-lg text-[10px] font-black text-slate-400 border border-slate-100">⌘K</kbd>
+                {featureSearchTerm && (
+                  <button 
+                    onClick={() => setFeatureSearchTerm("")}
+                    className="p-1 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Results Popover */}
+            <AnimatePresence>
+              {featureSearchTerm.trim() !== "" && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                  className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] border border-slate-100 overflow-hidden"
+                >
+                  <div className="p-4 max-h-[60vh] overflow-y-auto elegant-scrollbar">
+                    <div className="space-y-1">
+                      {filteredFeatures.map((f, i) => (
+                        <button 
+                          key={i}
+                          onClick={() => navigateToFeature(f)}
+                          className="w-full p-4 rounded-2xl flex items-center justify-between hover:bg-blue-50/50 transition-all text-left group"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all shadow-sm">
+                              {f.icon}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{f.title}</p>
+                              <p className="text-xs text-slate-400 font-medium">In {f.tab === 'settings' ? 'Global Configs' : f.tab}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Jump to</span>
+                            <ArrowRight className="w-4 h-4 text-blue-600" />
+                          </div>
+                        </button>
+                      ))}
+                      {filteredFeatures.length === 0 && (
+                        <div className="p-12 text-center text-slate-500 italic flex flex-col items-center gap-4">
+                          <Search className="w-12 h-12 text-slate-100" />
+                          <p>No matching features found for "{featureSearchTerm}"</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between px-8">
+                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Tip: Press ESC to clear search</p>
+                     <div className="flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-slate-200 text-[10px] font-black text-slate-500 uppercase">
+                        Administrative Console
+                      </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Navigation Tabs - Moved below search as per screenshot context */}
           <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 rounded-[28px] border border-slate-100 shadow-xl shadow-slate-100/50 overflow-x-auto no-scrollbar snap-x touch-pan-x max-w-full">
             <div className="flex items-center gap-2 pr-4">
               <TabButton active={activeTab === "users"} onClick={() => handleTabChange("users")} icon={<Users className="w-4 h-4" />} label="Users" />
@@ -1255,6 +1480,7 @@ export default function AdminDashboard() {
               <TabButton active={activeTab === "logs"} onClick={() => handleTabChange("logs")} icon={<FileText className="w-4 h-4" />} label="Audit" />
               <TabButton active={activeTab === "security"} onClick={() => handleTabChange("security")} icon={<Key className="w-4 h-4" />} label="API Keys" />
               <TabButton active={activeTab === "analytics"} onClick={() => handleTabChange("analytics")} icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
+              <TabButton active={activeTab === "insights"} onClick={() => handleTabChange("insights")} icon={<Sparkles className="w-4 h-4" />} label="Insights" />
             </div>
           </div>
         </div>
@@ -1299,6 +1525,7 @@ export default function AdminDashboard() {
                       <>
                         <option value="homeowner">HOMEOWNERS</option>
                         <option value="tradesperson">TRADERS</option>
+                        <option value="business">BUSINESS</option>
                         <option value="pending">PENDING KYC</option>
                         <option value="verified">VERIFIED</option>
                       </>
@@ -1306,9 +1533,11 @@ export default function AdminDashboard() {
                     {activeTab === "jobs" && (
                       <>
                         <option value="posted">NEW POSTS</option>
+                        <option value="emergency">EMERGENCY</option>
                         <option value="quoting">QUOTING</option>
                         <option value="in_progress">ACTIVE</option>
                         <option value="disputed">DISPUTES</option>
+                        <option value="completed">COMPLETED</option>
                       </>
                     )}
                   </select>
@@ -1355,7 +1584,7 @@ export default function AdminDashboard() {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        const visibleUsers = isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 2);
+                        const visibleUsers = isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3);
                         const allVisibleIds = visibleUsers.map(u => u.id);
                         setSelectedUserIds(Array.from(new Set([...selectedUserIds, ...allVisibleIds])));
                       }}
@@ -1397,9 +1626,9 @@ export default function AdminDashboard() {
                         <input 
                           type="checkbox" 
                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-                          checked={selectedUserIds.length > 0 && (isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 2)).every(u => selectedUserIds.includes(u.id))}
+                          checked={selectedUserIds.length > 0 && (isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).every(u => selectedUserIds.includes(u.id))}
                           onChange={(e) => {
-                            const visibleUsers = isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 2);
+                            const visibleUsers = isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3);
                             if (e.target.checked) {
                               const newSelected = Array.from(new Set([...selectedUserIds, ...visibleUsers.map(u => u.id)]));
                               setSelectedUserIds(newSelected);
@@ -1415,11 +1644,20 @@ export default function AdminDashboard() {
                       <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest">Tier</th>
                       <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
                       <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest">Joined</th>
-                      <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                      <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest text-right flex items-center justify-end gap-2">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setIsUsersExpanded(!isUsersExpanded); }}
+                          className="hover:text-blue-600 transition-colors p-1"
+                          title={isUsersExpanded ? "Show Top 3 Only" : "Show All Users"}
+                        >
+                          {isUsersExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100/50">
-                    {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 2)).map(u => (
+                    {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).map(u => (
                   <tr key={u.id} className={cn(
                     "hover:bg-slate-50/30 transition-colors cursor-pointer",
                     selectedUserIds.includes(u.id) && "bg-blue-50/50"
@@ -1547,6 +1785,14 @@ export default function AdminDashboard() {
                             )}
                             
                             <button 
+                              onClick={(e) => { e.stopPropagation(); exportUserPerformanceReport(u); }}
+                              className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all shadow-sm"
+                              title="Download Activity Report"
+                            >
+                              <BarChart3 className="w-4 h-4" />
+                            </button>
+
+                            <button 
                               onClick={(e) => { e.stopPropagation(); handleToggleStaffStatus(u.id, u.isDisabled || false); }}
                               className={cn(
                                 "p-2 rounded-xl transition-all shadow-sm",
@@ -1568,8 +1814,24 @@ export default function AdminDashboard() {
                 </table>
 
                 {/* Mobile View Cards */}
-                <div className="md:hidden divide-y divide-slate-100">
-                  {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 2)).map(u => (
+                <div className="md:hidden">
+                  <div className="p-4 flex justify-between items-center bg-white border-b border-slate-100">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">User Directory</h3>
+                    {filteredUsers.length > 3 && (
+                      <button 
+                        onClick={() => setIsUsersExpanded(!isUsersExpanded)}
+                        className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition-all tracking-widest"
+                      >
+                        {isUsersExpanded ? (
+                          <>HIDE <ChevronUp className="w-3 h-3" /></>
+                        ) : (
+                          <>SHOW ALL ({filteredUsers.length}) <ChevronDown className="w-3 h-3" /></>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).map(u => (
                     <div key={u.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-4">
@@ -1639,6 +1901,12 @@ export default function AdminDashboard() {
                         ) : (
                           <>
                             <button 
+                              onClick={() => { exportUserPerformanceReport(u); }}
+                              className="w-14 h-14 flex items-center justify-center bg-blue-50 text-blue-600 rounded-2xl border border-blue-100 active:scale-90 transition-all shadow-sm"
+                            >
+                              <BarChart3 className="w-5 h-5" />
+                            </button>
+                            <button 
                               onClick={() => handleToggleStaffStatus(u.id, u.isDisabled || false)}
                               className={cn(
                                 "flex-1 py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all tracking-widest",
@@ -1658,42 +1926,34 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
               </div>
             )}
 
           {activeTab === "jobs" && (
             <div className="flex flex-col">
-              <div className="p-4 flex justify-end md:hidden">
-                {filteredJobs.length > 2 && (
-                  <button 
-                    onClick={() => setIsJobsExpanded(!isJobsExpanded)}
-                    className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-2 rounded-xl hover:bg-blue-100 transition-all"
-                  >
-                    {isJobsExpanded ? (
-                      <>
-                        See Less <ChevronUp className="w-3 h-3" />
-                      </>
-                    ) : (
-                      <>
-                        See More ({filteredJobs.length - 2}) <ChevronDown className="w-3 h-3" />
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse hidden md:table">
               <thead>
                 <tr className="bg-slate-50/50">
                   <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Job Title</th>
                   <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Category</th>
                   <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                   <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Posted</th>
-                  <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                  <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right flex items-center justify-end gap-2">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setIsJobsExpanded(!isJobsExpanded); }}
+                      className="hover:text-blue-600 transition-colors p-1"
+                      title={isJobsExpanded ? "Show Top 3 Only" : "Show All Jobs"}
+                    >
+                      {isJobsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                    Actions
+                  </th>
                 </tr>
               </thead>
                 <tbody className="divide-y divide-slate-100/50">
-                  {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 5)).map(j => (
+                  {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 3)).map(j => (
                     <tr key={j.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
                       <td className="p-4">
                         <div className="flex items-center gap-2 mb-1">
@@ -1745,8 +2005,24 @@ export default function AdminDashboard() {
               </table>
 
               {/* Mobile View Cards */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 5)).map(j => (
+              <div className="md:hidden">
+                <div className="p-4 flex justify-between items-center bg-white border-b border-slate-100">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Jobs Directory</h3>
+                  {filteredJobs.length > 3 && (
+                    <button 
+                      onClick={() => setIsJobsExpanded(!isJobsExpanded)}
+                      className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition-all tracking-widest"
+                    >
+                      {isJobsExpanded ? (
+                        <>HIDE <ChevronUp className="w-3 h-3" /></>
+                      ) : (
+                        <>SHOW ALL ({filteredJobs.length}) <ChevronDown className="w-3 h-3" /></>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 3)).map(j => (
                   <div key={j.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
@@ -1789,33 +2065,30 @@ export default function AdminDashboard() {
                     </button>
                   </div>
                 ))}
-              </div>
-
-              {filteredJobs.length > 5 && (
-                <div className="p-6 border-t border-slate-50">
-                  <button 
-                    onClick={() => setIsJobsExpanded(!isJobsExpanded)}
-                    className="w-full py-4 rounded-2xl bg-slate-50 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all flex items-center justify-center gap-2 border border-slate-100"
-                  >
-                    {isJobsExpanded ? (
-                      <>
-                        <ChevronUp className="w-4 h-4" /> Show Less
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4" /> View {filteredJobs.length - 5} More Jobs
-                      </>
-                    )}
-                  </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
-          {activeTab === "disputes" && (
-            <div className="p-4 space-y-4">
-              {jobs.filter(j => j.status === "disputed").map(j => (
-                <div key={j.id} className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
+            {activeTab === "disputes" && (
+              <div className="p-4 space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Active Disputes</h3>
+                  {jobs.filter(j => j.status === "disputed").length > 3 && (
+                    <button 
+                      onClick={() => setIsDisputesExpanded(!isDisputesExpanded)}
+                      className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition-all tracking-widest"
+                    >
+                      {isDisputesExpanded ? (
+                        <>HIDE DISPUTES <ChevronUp className="w-3 h-3" /></>
+                      ) : (
+                        <>SHOW ALL DISPUTES <ChevronDown className="w-3 h-3" /></>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {(isDisputesExpanded ? jobs.filter(j => j.status === "disputed") : jobs.filter(j => j.status === "disputed").slice(0, 3)).map(j => (
+                  <div key={j.id} className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <AlertTriangle className="w-6 h-6 text-red-500" />
@@ -3265,7 +3538,7 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
                   {/* Fee Tiers Section */}
-                  <div className="space-y-4">
+                  <div id="fee-tiers" className="space-y-4 scroll-mt-20">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Trade Provider Tiers</h4>
@@ -3664,7 +3937,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Trust & Fairness Engine */}
-                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                  <div id="fairness-engine" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 scroll-mt-20">
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="w-5 h-5 text-emerald-500" />
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Trust & Fairness Engine</h4>
@@ -3753,7 +4026,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* System Status */}
-                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                  <div id="maintenance-control" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 scroll-mt-20">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">System Status</h4>
                     
                     <div className="space-y-4">
@@ -3783,7 +4056,7 @@ export default function AdminDashboard() {
                       </div>
 
                       {/* Global Monetization Mode */}
-                      <div id="monetization-control" className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 outline outline-2 outline-transparent hover:outline-blue-600/10 transition-all">
+                      <div id="monetization-control" className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 outline outline-2 outline-transparent hover:outline-blue-600/10 transition-all scroll-mt-20">
                         <div className="flex items-center gap-3">
                           <div className={cn(
                             "w-10 h-10 rounded-xl flex items-center justify-center", 
@@ -3843,7 +4116,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Scheduled Maintenance */}
-                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                  <div id="scheduled-maintenance" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 scroll-mt-20">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Scheduled Maintenance</h4>
                       <button 
@@ -3906,63 +4179,195 @@ export default function AdminDashboard() {
                     )}
                   </div>
 
-                  {/* Quick Actions */}
-                  <div className="bg-slate-900 p-6 rounded-3xl shadow-xl space-y-4">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Actions</h4>
-                    <div className="space-y-2">
-                      <button 
-                        onClick={() => {
-                          showToast("Cache Cleared", "System cache has been purged and data refreshed.", "success");
-                          // Simple way to "refresh" data in this context
-                          window.location.reload();
-                        }}
-                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
-                      >
-                        <span className="text-sm font-bold text-white">Clear Cache</span>
-                        <Clock className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
-                      </button>
-                      <button 
-                        onClick={() => exportUsersCSV()}
-                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
-                      >
-                        <span className="text-sm font-bold text-white">Export All Users</span>
-                        <FileText className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const role = prompt("Enter role to export (homeowner, tradesperson, admin):");
-                          if (role) exportUsersCSV(role.toLowerCase());
-                        }}
-                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
-                      >
-                        <span className="text-sm font-bold text-white">Export Users by Role</span>
-                        <Users className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
-                      </button>
-                      <button 
-                        onClick={() => exportJobsCSV()}
-                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
-                      >
-                        <span className="text-sm font-bold text-white">Export All Jobs</span>
-                        <Briefcase className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const cat = prompt("Enter category to export (e.g. Plumbing, Electrical):");
-                          if (cat) exportJobsCSV(cat);
-                        }}
-                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
-                      >
-                        <span className="text-sm font-bold text-white">Export Jobs by Category</span>
-                        <Tag className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
-                      </button>
-                      <button 
-                        onClick={() => setShowFlushLogsModal(true)}
-                        className="w-full flex items-center justify-between p-3 bg-red-500/10 hover:bg-red-500/20 rounded-xl transition-all group"
-                      >
-                        <span className="text-sm font-bold text-red-400">Flush Audit Logs</span>
-                        <Trash2 className="w-4 h-4 text-red-500/50 group-hover:text-red-400 transition-colors" />
-                      </button>
+                  {/* Global Master Command Center */}
+                  <div id="quick-actions" className="bg-white/95 backdrop-blur-2xl p-8 sm:p-10 rounded-[48px] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.1)] space-y-10 scroll-mt-20 border border-slate-200/60 overflow-hidden relative group">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">Master Command Center</h4>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">Administrative Data oversight & specialized global exports</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="px-4 py-2 bg-slate-100 rounded-2xl border border-slate-200/50 flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          <span className="text-[10px] font-black text-slate-600 uppercase">Superuser Mode</span>
+                        </div>
+                      </div>
                     </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-10 relative z-10">
+                      {/* Left Column: System & Compliance */}
+                      <div className="space-y-8">
+                        <div className="space-y-5">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
+                            <Settings2 className="w-3 h-3" /> System Health
+                          </p>
+                          <div className="grid grid-cols-2 gap-4">
+                            <button 
+                              onClick={() => {
+                                showToast("Cache Cleared", "Platform data has been force-refreshed.", "success");
+                                setTimeout(() => window.location.reload(), 1500);
+                              }}
+                              className="flex flex-col items-center gap-3 p-6 bg-slate-50 hover:bg-white hover:shadow-xl hover:shadow-blue-500/10 rounded-3xl transition-all group border border-slate-100"
+                            >
+                              <div className="w-12 h-12 rounded-[20px] bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                <RefreshCw className="w-6 h-6" />
+                              </div>
+                              <span className="text-xs font-black text-slate-700">Purge Cache</span>
+                            </button>
+
+                            <button 
+                              onClick={() => setShowFlushLogsModal(true)}
+                              className="flex flex-col items-center gap-3 p-6 bg-slate-50 hover:bg-white hover:shadow-xl hover:shadow-red-500/10 rounded-3xl transition-all group border border-slate-100"
+                            >
+                              <div className="w-12 h-12 rounded-[20px] bg-red-50 flex items-center justify-center text-red-600 group-hover:scale-110 transition-transform">
+                                <Trash2 className="w-6 h-6" />
+                              </div>
+                              <span className="text-xs font-black text-slate-700">Flush Logs</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-5">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
+                            <BarChart3 className="w-3 h-3" /> Specialized Reporting
+                          </p>
+                          <div className="space-y-3">
+                            <button 
+                              onClick={() => exportDisputesCSV()}
+                              className="w-full flex items-center justify-between p-5 bg-indigo-50 hover:bg-white hover:shadow-xl hover:shadow-indigo-500/10 rounded-3xl transition-all group border border-indigo-100/50"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-50">
+                                  <AlertTriangle className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-sm font-black text-indigo-900">Legal & Disputes</p>
+                                  <p className="text-[9px] text-indigo-500 font-bold uppercase">Mediation outcomes & case history</p>
+                                </div>
+                              </div>
+                              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-all shadow-lg shadow-indigo-200">
+                                <Download className="w-4 h-4" />
+                              </div>
+                            </button>
+
+                            <button 
+                              onClick={() => exportEcosystemCSV()}
+                              className="w-full flex items-center justify-between p-5 bg-emerald-50 hover:bg-white hover:shadow-xl hover:shadow-emerald-500/10 rounded-3xl transition-all group border border-emerald-100/50"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-emerald-600 shadow-sm border border-emerald-50">
+                                  <Globe className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-sm font-black text-emerald-900">Ecosystem Growth</p>
+                                  <p className="text-[9px] text-emerald-500 font-bold uppercase">Referral metrics & verified users</p>
+                                </div>
+                              </div>
+                              <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-all shadow-lg shadow-emerald-200">
+                                <Download className="w-4 h-4" />
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Dynamic Data Hub */}
+                      <div className="space-y-8">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
+                          <Database className="w-3 h-3" /> Database Extraction (CSV)
+                        </p>
+                        
+                        <div className="space-y-6">
+                          {/* Export Users Segment */}
+                          <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 space-y-5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-900 uppercase tracking-widest">User Database</span>
+                              <button 
+                                onClick={() => exportUsersCSV()}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black rounded-xl transition-all shadow-lg shadow-blue-200 active:scale-95"
+                              >
+                                Export Full DB
+                              </button>
+                            </div>
+                            <div className="flex gap-2">
+                              <select 
+                                value={exportRole}
+                                onChange={(e) => setExportRole(e.target.value)}
+                                className="flex-1 bg-white border border-slate-200 text-slate-900 text-xs font-bold rounded-2xl px-5 py-3 focus:ring-4 focus:ring-blue-500/5 focus:border-blue-600 outline-none appearance-none cursor-pointer shadow-sm"
+                              >
+                                <option value="homeowner">🏡 Homeowners</option>
+                                <option value="tradesperson">🛠️ Tradespeople</option>
+                                <option value="business">🏢 Business Partners</option>
+                                <option value="admin">👮 Staff Members</option>
+                              </select>
+                              <button 
+                                onClick={() => exportUsersCSV(exportRole)}
+                                className="w-12 h-12 flex items-center justify-center bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white rounded-2xl transition-all border border-blue-100 active:scale-90"
+                              >
+                                <Download className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Export Jobs Segment */}
+                          <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 space-y-5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-900 uppercase tracking-widest">Marketplace History</span>
+                              <button 
+                                onClick={() => exportJobsCSV()}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black rounded-xl transition-all shadow-lg shadow-purple-200 active:scale-95"
+                              >
+                                Export Jobs
+                              </button>
+                            </div>
+                            <div className="flex gap-2">
+                              <select 
+                                value={exportCategory}
+                                onChange={(e) => setExportCategory(e.target.value)}
+                                className="flex-1 bg-white border border-slate-200 text-slate-900 text-xs font-bold rounded-2xl px-5 py-3 focus:ring-4 focus:ring-purple-500/5 focus:border-purple-600 outline-none appearance-none cursor-pointer shadow-sm"
+                              >
+                                {TRADE_CATEGORIES.map(cat => (
+                                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                ))}
+                              </select>
+                              <button 
+                                onClick={() => exportJobsCSV(exportCategory)}
+                                className="w-12 h-12 flex items-center justify-center bg-purple-50 hover:bg-purple-600 text-purple-600 hover:text-white rounded-2xl transition-all border border-purple-100 active:scale-90"
+                              >
+                                <Download className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
+                       <div className="flex items-center gap-3">
+                         <div className="flex -space-x-2">
+                            {[1,2,3].map(i => (
+                              <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200" />
+                            ))}
+                         </div>
+                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Auto-purging inactive accounts</p>
+                       </div>
+                       
+                       <div className="flex items-center gap-6">
+                         <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                           <Shield className="w-4 h-4 text-slate-300" /> Secure Protocol v4.2
+                         </div>
+                         <div className="px-4 py-2 bg-slate-900 rounded-2xl text-[10px] font-black text-white uppercase tracking-[0.2em] shadow-lg shadow-slate-200">
+                           System Active
+                         </div>
+                       </div>
+                    </div>
+
+                    {/* Background Decorative Gradient to fix overlapping & improve focus */}
+                    <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-500/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
+                    <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-500/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
                   </div>
                 </div>
               </div>
