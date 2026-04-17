@@ -1,0 +1,9 @@
+{
+  "name": "AnyTrader",
+  "description": "AnyTrader: Place for every skill. UK marketplace for homeowners to post jobs, get AI price estimates, and hire verified tradespeople or community helpers.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

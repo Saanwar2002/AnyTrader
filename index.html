@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AnyTrader | Place for every skill</title>
+    <meta name="description" content="AnyTrader is the UK's leading marketplace for professional trades and community help. Post jobs, get AI estimates, and hire verified experts." />
+    <meta name="keywords" content="tradespeople, handyman, furniture assembly, plumber, electrician, UK trades, local help, AnyTrader" />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="icon" href="/mask-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/mask-icon.svg" />
+    <link rel="mask-icon" href="/mask-icon.svg" color="#2563eb" />
+    <script>
+      // Defensive guard against libraries trying to overwrite window.fetch
+      (function() {
+        const nativeFetch = window.fetch;
+        try {
+          Object.defineProperty(window, 'fetch', {
+            get: function() { return nativeFetch; },
+            set: function(v) { 
+              console.warn('Attempt to overwrite fetch ignored:', v); 
+            },
+            configurable: true
+          });
+        } catch (e) {
+          console.warn("Could not lock window.fetch:", e);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

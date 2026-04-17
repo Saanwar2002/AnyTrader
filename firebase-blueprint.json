@@ -1,0 +1,522 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information for homeowners and tradespeople.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["homeowner", "tradesperson", "admin"] },
+        "permissions": { "type": "array", "items": { "type": "string" } },
+        "name": { "type": "string" },
+        "postcode": { "type": "string" },
+        "avatarUrl": { "type": "string", "format": "uri" },
+        "bio": { "type": "string" },
+        "rating": { "type": "number" },
+        "totalReviews": { "type": "integer" },
+        "totalRecommendations": { "type": "integer" },
+        "totalJobsDone": { "type": "integer" },
+        "homeownerRating": { "type": "number" },
+        "totalHomeownerReviews": { "type": "integer" },
+        "responseRate": { "type": "number" },
+        "trustScore": { "type": "number" },
+        "trades": { "type": "array", "items": { "type": "string" } },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "badges": { "type": "array", "items": { "type": "string" } },
+        "searchFeedBadges": { "type": "array", "items": { "type": "string" } },
+        "services": { "type": "array", "items": { "type": "string" } },
+        "isTopTradesperson": { "type": "boolean" },
+        "isEstablishedTradesperson": { "type": "boolean" },
+        "isAcceptingRequests": { "type": "boolean" },
+        "isDisabled": { "type": "boolean" },
+        "verificationStatus": { "type": "string", "enum": ["unverified", "pending", "verified", "rejected"] },
+        "verificationDocs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+              "fileUrl": { "type": "string" },
+              "expiryDate": { "type": "string", "format": "date" },
+              "rejectionReason": { "type": "string" }
+            }
+          }
+        },
+        "portfolio": { "type": "array", "items": { "type": "string" } },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "referralBoostUntil": { "type": "string", "format": "date-time" },
+        "referralRewardProcessed": { "type": "boolean" },
+        "notificationSettings": {
+          "type": "object",
+          "properties": {
+            "quietHoursEnabled": { "type": "boolean" },
+            "quietHoursStart": { "type": "string" },
+            "quietHoursEnd": { "type": "string" },
+            "pushEnabled": { "type": "boolean" },
+            "emailEnabled": { "type": "boolean" }
+          }
+        },
+        "savedFilters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "searchTerm": { "type": "string" },
+              "categories": { "type": "array", "items": { "type": "string" } },
+              "sortBy": { "type": "string", "enum": ["newest", "urgency", "completion"] },
+              "showMatchedOnly": { "type": "boolean" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "name"]
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "deviceId": { "type": "string" },
+        "ipAddress": { "type": "string" }
+      },
+      "required": ["uid", "role", "name"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "A job posted by a homeowner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jobNo": { "type": "string", "description": "Human-readable job number (e.g., AT-123456)." },
+        "homeownerId": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "postcode": { "type": "string" },
+        "urgency": { "type": "string" },
+        "status": { "type": "string", "enum": ["posted", "quoting", "accepted", "in_progress", "completed", "cancelled", "disputed"] },
+        "dispute": {
+          "type": "object",
+          "properties": {
+            "raisedBy": { "type": "string" },
+            "reason": { "type": "string" },
+            "photos": { "type": "array", "items": { "type": "string" } },
+            "status": { "type": "string", "enum": ["open", "resolved", "mediated"] },
+            "createdAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "estimateMin": { "type": "number" },
+        "estimateMax": { "type": "number" },
+        "photos": { "type": "array", "items": { "type": "string" } },
+        "videos": { "type": "array", "items": { "type": "string" } },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "url": { "type": "string", "format": "uri" }
+            }
+          }
+        },
+        "paymentPreference": { "type": "string", "enum": ["fixed_price", "hourly", "negotiable"] },
+        "quoteScope": { "type": "string", "enum": ["labor_only", "complete_package"] },
+        "hasReview": { "type": "boolean" },
+        "hasTradespersonReview": { "type": "boolean" },
+        "scheduledDate": { "type": "string", "format": "date" },
+        "isConfirmedByTradesperson": { "type": "boolean" },
+        "rescheduleProposal": {
+          "type": "object",
+          "properties": {
+            "proposedDate": { "type": "string", "format": "date" },
+            "reason": { "type": "string" },
+            "proposedBy": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+            "createdAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "postedDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "homeownerId", "category", "title", "description", "postcode", "status", "postedDate", "createdAt"]
+    },
+    "Quote": {
+      "title": "Quote",
+      "description": "A quote submitted by a tradesperson for a job.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jobId": { "type": "string" },
+        "tradespersonId": { "type": "string" },
+        "amount": { "type": "number" },
+        "message": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "isImmediateStart": { "type": "boolean" },
+        "estimatedTimeline": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "requote_requested"] },
+        "requoteMessage": { "type": "string" },
+        "pendingRevision": {
+          "type": "object",
+          "properties": {
+            "amount": { "type": "number" },
+            "message": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+            "createdAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "amount": { "type": "number" },
+              "message": { "type": "string" },
+              "quoteScope": { "type": "string" },
+              "paymentPreference": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "revisionCount": { "type": "integer" }
+      },
+      "required": ["id", "jobId", "tradespersonId", "amount", "status", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A message in a conversation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "audioUrl": { "type": "string", "format": "uri" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "conversationId", "senderId", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A conversation between a homeowner and a tradesperson.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "jobId": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "deletedBy": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "participants", "jobId", "jobTitle", "updatedAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A review left by a homeowner for a tradesperson.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jobId": { "type": "string" },
+        "reviewerId": { "type": "string" },
+        "revieweeId": { "type": "string" },
+        "type": { "type": "string", "enum": ["tradesperson_review", "homeowner_review"] },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string" },
+        "recommended": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "jobId", "reviewerId", "revieweeId", "rating", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notification for users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["quote", "message", "status", "system"] },
+        "link": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "message", "type", "read", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Log of administrative actions for accountability.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "adminId": { "type": "string" },
+        "action": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["user", "job", "quote", "review"] },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "adminId", "action", "targetId", "targetType", "createdAt"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "An invitation for a new staff member or admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string" },
+        "permissions": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["pending", "accepted", "expired"] },
+        "invitedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "role", "permissions", "status", "invitedBy", "createdAt"]
+    },
+    "Broadcast": {
+      "title": "Broadcast",
+      "description": "A mass message sent to platform users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["announcement", "offer", "greeting", "update"] },
+        "targetSegments": { "type": "array", "items": { "type": "string" } },
+        "targetTrades": { "type": "array", "items": { "type": "string" } },
+        "sentBy": { "type": "string" },
+        "recipientCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "content", "type", "targetSegments", "sentBy", "createdAt"]
+    },
+    "SecurityAlert": {
+      "title": "SecurityAlert",
+      "description": "Alert for potential security threats like phishing or hacking attempts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["message", "job", "user"] },
+        "threatType": { "type": "string", "enum": ["phishing", "hacking", "pii", "other"] },
+        "riskScore": { "type": "number" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "resolved": { "type": "boolean" }
+      },
+      "required": ["id", "targetId", "targetType", "threatType", "riskScore", "createdAt", "resolved"]
+    },
+    "RecurringSchedule": {
+      "title": "RecurringSchedule",
+      "description": "A recurring job arrangement between a homeowner and a tradesperson.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "originalJobId": { "type": "string" },
+        "homeownerId": { "type": "string" },
+        "tradespersonId": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "frequency": { "type": "string", "enum": ["weekly", "fortnightly", "monthly"] },
+        "status": { "type": "string", "enum": ["pending_approval", "active", "paused", "cancelled"] },
+        "proposedBy": { "type": "string" },
+        "amount": { "type": "number" },
+        "lastJobGeneratedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "originalJobId", "homeownerId", "tradespersonId", "category", "title", "frequency", "status", "proposedBy", "amount", "createdAt"]
+    },
+    "ShopOrder": {
+      "title": "ShopOrder",
+      "description": "Purchase record from the AI Smart Shop.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "jobId": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "items": { 
+          "type": "array", 
+          "items": { "type": "string" } 
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "totalAmount", "createdAt"]
+    },
+    "Asset": {
+      "title": "Asset",
+      "description": "A property or asset managed by a business user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string", "description": "e.g. Building A, Flat 4" },
+        "address": { "type": "string" },
+        "postcode": { "type": "string" },
+        "type": { "type": "string", "enum": ["residential", "commercial", "industrial", "retail"] },
+        "notes": { "type": "string" },
+        "photos": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "address", "postcode", "type"]
+    },
+    "PlatformConfig": {
+      "title": "PlatformConfig",
+      "description": "Global platform settings and fee structures.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "maintenanceMode": { "type": "boolean" },
+        "feeTiers": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["percentage", "fixed"] },
+              "value": { "type": "number" },
+              "description": { "type": "string" },
+              "maxJobValue": { "type": "number" },
+              "jobPostsLimit": { "type": "integer" }
+            }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" },
+        "referralBoostDays": { "type": "integer" }
+      }
+    },
+    "Partner": {
+      "title": "Partner",
+      "description": "Affiliate partners for monetization (Insurance, Finance, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["Insurance", "Finance", "Vehicle", "Health", "Supplies", "Other"] },
+        "description": { "type": "string" },
+        "logoUrl": { "type": "string", "format": "uri" },
+        "trackingUrl": { "type": "string", "format": "uri" },
+        "commissionRate": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "category", "status", "createdAt"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Monetization campaigns and offers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "partnerId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "targetRole": { "type": "string", "enum": ["homeowner", "tradesperson", "both"] },
+        "targetTrades": { "type": "array", "items": { "type": "string" } },
+        "triggerType": { "type": "string", "enum": ["expiry", "behavior", "seasonal", "manual"] },
+        "status": { "type": "string", "enum": ["draft", "active", "paused"] },
+        "clicks": { "type": "integer" },
+        "leads": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "partnerId", "title", "status", "createdAt"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "A lead generated for a partner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "partnerId": { "type": "string" },
+        "campaignId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userRole": { "type": "string", "enum": ["homeowner", "tradesperson"] },
+        "status": { "type": "string", "enum": ["new", "contacted", "converted", "rejected"] },
+        "data": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "partnerId", "userId", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/jobs/{jobId}": {
+      "schema": "Job",
+      "description": "Job posting documents."
+    },
+    "/jobs/{jobId}/quotes/{quoteId}": {
+      "schema": "Quote",
+      "description": "Quotes for a specific job."
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Conversation metadata."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages within a conversation."
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Reviews for tradespeople."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications."
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Administrative audit logs."
+    },
+    "/invitations/{invitationId}": {
+      "schema": "Invitation",
+      "description": "Staff and admin invitations."
+    },
+    "/broadcasts/{broadcastId}": {
+      "schema": "Broadcast",
+      "description": "Platform-wide broadcasts."
+    },
+    "/recurring_schedules/{scheduleId}": {
+      "schema": "RecurringSchedule",
+      "description": "Recurring job schedules."
+    },
+    "/security_alerts/{alertId}": {
+      "schema": "SecurityAlert",
+      "description": "Security alerts for phishing or hacking attempts."
+    },
+    "/shop_orders/{orderId}": {
+      "schema": "ShopOrder",
+      "description": "Purchase record from the AI Smart Shop."
+    },
+    "/assets/{assetId}": {
+      "schema": { "$ref": "#/entities/Asset" },
+      "description": "Properties and assets managed by business users."
+    },
+    "/platform_config/{configId}": {
+      "schema": "PlatformConfig",
+      "description": "Global platform settings."
+    },
+    "/partners/{partnerId}": {
+      "schema": "Partner",
+      "description": "Affiliate partner documents."
+    },
+    "/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Monetization campaign documents."
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Lead documents for partners."
+    }
+  }
+}
