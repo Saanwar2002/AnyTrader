@@ -17,6 +17,7 @@ import {
   Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import AdminTierManager from "./AdminTierManager";
 import GuestJobs from "./GuestJobs";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -3217,14 +3218,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {/* Tradesperson Tiers Comparison */}
-                {tempConfig.feeTiers.map((tier: any) => (
-                  <TierComparisonCard key={tier.name} tier={tier} type="provider" />
-                ))}
-                {/* Business Tiers Comparison */}
-                {(tempConfig.businessTiers || []).map((tier: any) => (
-                  <TierComparisonCard key={tier.name} tier={tier} type="business" />
-                ))}
+                <AdminTierManager />
               </div>
             </section>
 

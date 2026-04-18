@@ -7,6 +7,7 @@ import admin from "firebase-admin";
 import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
 import { GoogleGenAI } from "@google/genai";
 import jwt from "jsonwebtoken";
+import cron from "node-cron";
 
 dotenv.config();
 
@@ -22,15 +23,61 @@ try {
   });
   console.log("Firebase Admin initialized successfully.");
   
+  // Initialize with specific databaseId
   db = admin.firestore(app);
-  // Note: admin.firestore() doesn't directly take a databaseId in the same way as the client SDK.
-  // For now, we use the default database.
-  console.log("Firestore initialized.");
-  console.log("Firestore database ID:", db.databaseId);
+  console.log("Firestore initialized with database ID:", firebaseConfig.firestoreDatabaseId);
 } catch (error) {
   console.error("Error initializing Firebase:", error);
   // Do not exit, allow server to start even if Firebase fails
 }
+
+// Scheduled task: Daily Profitability Aggregation
+async function runDailyAggregation() {
+  if (!db) return;
+  console.log("Running daily profitability aggregation...");
+  try {
+    // Only fetch tradespeople
+    const usersSnapshot = await db.collection("users")
+      .where("role", "==", "tradesperson")
+      .get();
+    
+    for (const userDoc of usersSnapshot.docs) {
+      const uid = userDoc.id;
+      
+      // Calculate Revenue
+      let totalRevenue = 0;
+      const quotesSnapshot = await db.collectionGroup("quotes")
+        .where("tradespersonId", "==", uid)
+        .where("status", "==", "accepted")
+        .get();
+      quotesSnapshot.forEach(doc => { totalRevenue += doc.data().amount || 0; });
+
+      // Calculate Spend
+      let totalSpend = 0;
+      const ordersSnapshot = await db.collection("shop_orders")
+        .where("userId", "==", uid)
+        .get();
+      ordersSnapshot.forEach(doc => { totalSpend += doc.data().totalAmount || 0; });
+
+      try {
+        await db.collection("user_profitability_daily").doc(uid).set({
+          totalRevenue,
+          totalSpend,
+          netProfit: totalRevenue - totalSpend,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (e) {
+        console.error(`Error updating profitability for ${uid}:`, e);
+      }
+    }
+    console.log("Daily profitability aggregation completed.");
+  } catch (error) {
+    console.error("Error in daily aggregation:", error);
+  }
+}
+
+// Schedule: 00:30 every day
+cron.schedule("30 0 * * *", runDailyAggregation);
 
 // Matching logic listener
 const startMatchingSystem = async () => {
@@ -52,8 +99,8 @@ const startMatchingSystem = async () => {
           .where("processed", "==", false)
           .get();
       } catch (err: any) {
-        if (err.code === 5) { // NOT_FOUND
-          console.info("trader_notifications collection not found (expected if empty).");
+        if (err.code === 5 || err.code === 'not-found' || err.message.includes('NOT_FOUND') || err.message.includes('not-found')) { // NOT_FOUND
+          console.info("trader_notifications collection not found (expected if empty or not created).");
         } else {
           console.error("Error querying trader_notifications:", err);
         }
@@ -374,31 +421,31 @@ async function startServer() {
         // If Stripe is not set up, just fake the redirect back and update the database directly for local testing
         if (db) {
            if (metadata.isExclusiveAddon === 'true') {
-             await db.collection("users").doc(userId).update({
+             await db.collection("users").doc(userId).set({
                hasExclusiveAddon: true,
                isExclusiveActive: true,
                exclusiveSubscriptionId: "mock_sub_" + Math.random().toString(36).substring(7),
                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             });
+             }, { merge: true });
            }
            else if (mode === 'subscription') {
-             await db.collection("users").doc(userId).update({
+             await db.collection("users").doc(userId).set({
                 tierId: tierName || "Pro",
                 subscriptionStatus: "active",
                 subscriptionId: "mock_sub_" + Math.random().toString(36).substring(7),
                 currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             });
+             }, { merge: true });
            } else if (mode === 'payment') {
              // For one-off payments like job boosts
              if (metadata.jobId && metadata.type === 'boost') {
                 const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
-                await db.collection("jobs").doc(metadata.jobId).update({
+                await db.collection("jobs").doc(metadata.jobId).set({
                   isBoosted: true,
                   boostExpiresAt,
                   postedDate: admin.firestore.FieldValue.serverTimestamp(),
                   retryCount: 0
-                });
+                }, { merge: true });
              }
            }
         }
@@ -453,24 +500,51 @@ async function startServer() {
       const defaultBusinessTier = { name: "Trial", jobPostsLimit: 10, limitPeriod: "lifetime" };
       const tierId = userData?.tierId || (isBusiness ? "Business Basic" : "Basic");
       
-      const platformConfig = (await db.collection("platform_config").doc("global").get()).data();
+      // Platform Configuration
+      const platformConfigDoc = await db.collection("platform_config").doc("global").get();
+      const platformConfig = platformConfigDoc.data();
+      
+      const globalTiersDoc = await db.collection("platform_config").doc("global_tiers").get();
+      const globalTiers = globalTiersDoc.exists ? globalTiersDoc.data() : null;
       
       if (platformConfig?.paywallEnabled === false) {
         return res.json({ allowed: true, count: 0, limit: Infinity, betaMode: true });
       }
 
       let tier;
-      if (isBusiness) {
-        if (!hasActiveSubscription) {
-          tier = defaultBusinessTier;
-        } else {
-          tier = platformConfig?.businessTiers?.find((t: any) => t.name === tierId);
+      let limit = 0;
+
+      if (globalTiers && userData?.subscription?.providerModel) {
+        const model = userData.subscription.providerModel;
+        const tierId = userData.subscription.tierId || "basic";
+        const tierConfig = globalTiers.providerModels?.[model]?.tiers?.[tierId];
+        
+        if (tierConfig) {
+          tier = { 
+            name: tierId, 
+            jobPostsLimit: tierConfig.maxQuotes,
+            limitPeriod: "monthly" // Simplified to monthly for now
+          };
+          limit = tier.jobPostsLimit;
         }
-      } else {
-        tier = platformConfig?.feeTiers?.find((t: any) => t.name === tierId);
+      }
+
+      // Legacy fallback
+      if (!tier) {
+        const tierId = userData?.tierId || (isBusiness ? "Business Basic" : "Basic");
+        if (isBusiness) {
+          if (!hasActiveSubscription) {
+            tier = defaultBusinessTier;
+          } else {
+            tier = platformConfig?.businessTiers?.find((t: any) => t.name === tierId);
+          }
+        } else {
+          tier = platformConfig?.feeTiers?.find((t: any) => t.name === tierId);
+        }
+        limit = tier?.jobPostsLimit || Infinity;
       }
       
-      if (!tier) return res.json({ allowed: true }); // No tier found, allow by default or handle as needed
+      if (!tier) return res.json({ allowed: true });
 
       const isLifetime = tier.limitPeriod === "lifetime";
       const startOfMonth = new Date();
@@ -537,6 +611,7 @@ async function startServer() {
 
       const userData = userDoc.data() || {};
       const platformConfig = (await db.collection("platform_config").doc("global").get()).data();
+      const globalTiers = (await db.collection("platform_config").doc("global_tiers").get()).data();
       
       // 1. Check Exclusive Job Constraints First
       let isJobExclusive = false;
@@ -571,34 +646,51 @@ async function startServer() {
         }
       }
 
-      // 2. Check Standard Tier Limits
-      const tierId = userData.tierId || "Basic";
-      
+      // 2. Determine Tier and Limit
       if (platformConfig?.paywallEnabled === false) {
         return res.json({ allowed: true, count: 0, limit: Infinity, betaMode: true, isJobExclusive });
       }
 
-      const tier = platformConfig?.feeTiers?.find((t: any) => t.name === tierId);
-      
-      if (!tier || !tier.maxQuotes) return res.json({ allowed: true, isJobExclusive }); // No limit defined
+      let tier;
+      let limitValue = 0;
+
+      // New schema check
+      if (globalTiers && userData.subscription?.providerModel) {
+        const model = userData.subscription.providerModel;
+        const tierId = userData.subscription.tierId || "basic";
+        const tierConfig = globalTiers.providerModels?.[model]?.tiers?.[tierId];
+        
+        if (tierConfig) {
+          tier = {
+            name: tierId,
+            maxQuotes: tierConfig.maxQuotes,
+            limitPeriod: "monthly"
+          };
+          limitValue = tier.maxQuotes;
+        }
+      }
+
+      // Legacy fallback
+      if (!tier) {
+        const tierId = userData.tierId || "Basic";
+        tier = platformConfig?.feeTiers?.find((t: any) => t.name === tierId);
+        limitValue = tier?.maxQuotes || Infinity;
+      }
+
+      if (!tier || limitValue === Infinity) return res.json({ allowed: true, isJobExclusive });
 
       const isLifetime = tier.limitPeriod === "lifetime";
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      // Count quotes
-      let quotesQuery = db.collection("quotes")
-        .where("tradespersonId", "==", userId);
-      
-      if (!isLifetime) {
-        quotesQuery = quotesQuery.where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startOfMonth));
-      }
-
-      const quotesSnapshot = await quotesQuery.get();
+      const quotesSnapshot = await db.collection("quotes")
+        .where("tradespersonId", "==", userId)
+        .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(isLifetime ? new Date(0) : startOfMonth))
+        .get();
 
       const count = quotesSnapshot.size;
-      res.json({ allowed: count < tier.maxQuotes, count, limit: tier.maxQuotes, isJobExclusive });
+      res.json({ allowed: count < limitValue, count, limit: limitValue, isJobExclusive });
     } catch (error: any) {
       console.error("Quote Limit Check Error:", error);
       res.status(500).json({ error: error.message || "Failed to check quote limit" });
@@ -753,55 +845,47 @@ Return a RAW JSON array (no markdown block, no markdown formatting) of 3 objects
          return res.status(500).json({ error: "Database not initialized" });
       }
 
-      // 1. Get accepted quotes (Revenue)
-      let totalRevenue = 0;
-      let quoteCount = 0;
+      console.log("Fetching profitability for UID:", uid);
+      // Read pre-aggregated data
+      const colRef = db.collection("user_profitability_daily");
+      console.log("Collection reference:", colRef.path);
+      const docRef = colRef.doc(uid);
+      console.log("Document reference:", docRef.path);
+      
+      let doc;
       try {
-        const quotesSnapshot = await db.collectionGroup("quotes")
-          .where("tradespersonId", "==", uid)
-          .where("status", "==", "accepted")
-          .get();
-        
-        quotesSnapshot.forEach(doc => {
-          totalRevenue += doc.data().amount || 0;
-        });
-        quoteCount = quotesSnapshot.size;
-      } catch (e: any) {
-        if (e.code === 5) {
-          console.info("Info: Collections for analytics not found (expected for new accounts).");
+        doc = await docRef.get();
+        console.log("Document fetch successful, exists:", doc.exists);
+      } catch (err: any) {
+        if (err.code === 5 || err.message?.includes("NOT_FOUND")) {
+            console.warn("Analytics document truly not found (expected behavior):", uid);
+            doc = { exists: false };
         } else {
-          console.warn("Error fetching quotes for analytics:", e);
+            console.error("Unexpected error fetching analytics:", err);
+            throw err; // Re-throw if it's not a simple not_found
         }
       }
-
-      // 2. Get shop orders (Expenses)
-      let totalSpend = 0;
-      let orderCount = 0;
-      try {
-        const ordersSnapshot = await db.collection("shop_orders")
-          .where("userId", "==", uid)
-          .get();
-        
-        ordersSnapshot.forEach(doc => {
-          totalSpend += doc.data().totalAmount || 0;
+      if (doc.exists && (doc as any).data) {
+        const data = (doc as any).data();
+        res.json({
+          totalRevenue: data?.totalRevenue || 0,
+          totalSpend: data?.totalSpend || 0,
+          netProfit: data?.netProfit || 0,
+          orderCount: 0, // Simplified, as pre-agg doesn't store this yet
+          quoteCount: 0,
+          replenishmentAlert: (data?.totalSpend || 0) > 500
         });
-        orderCount = ordersSnapshot.size;
-      } catch (e: any) {
-        if (e.code === 5) {
-          console.info("Info: Shop orders collection not found (expected for new accounts).");
-        } else {
-          console.warn("Error fetching shop orders for analytics:", e);
-        }
+      } else {
+        // Fallback for new accounts
+        res.json({
+          totalRevenue: 0,
+          totalSpend: 0,
+          netProfit: 0,
+          orderCount: 0,
+          quoteCount: 0,
+          replenishmentAlert: false
+        });
       }
-
-      res.json({
-        totalRevenue,
-        totalSpend,
-        netProfit: totalRevenue - totalSpend,
-        orderCount,
-        quoteCount,
-        replenishmentAlert: totalSpend > 500
-      });
     } catch (error: any) {
       console.error("Analytics Error:", error);
       res.status(500).json({ error: "Failed to generate analytics" });

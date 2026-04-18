@@ -87,3 +87,10 @@ If the apps become desynchronized or "Missing Permissions" errors appear globall
 ## 📝 Next Agent Checklist
 1. Review `ROADMAP.md` for the next logical feature set (e.g. Community Forums or ATS refinements).
 2. The Fast Pass feature logic in `server.ts` relies on `notificationSettings.quietHoursEnabled` and specific match structures. If refactoring scheduling, ensure `visibleAt` exclusivity timestamps are preserved in `db.collection("notifications")`.
+
+### Recent UI Updates (April 18, 2026)
+*   **Toggle Optimization**: Merged "Emergency Offers" and "Priority Offers" toggles into a single, compact UI container in `TradesDashboard.tsx` with reduced container (`h-9`) and toggle button sizing to fit mobile viewports better.
+*   **Label Refinement**: 
+    *   "Emergency" -> "Emergency Offers"
+    *   "Fast Pass" -> "Priority Offers"
+*   **Engagement**: Enhanced the activation flow for "Priority Offers" with an inline explanation toast, and resized the Checkout/Unlock modal (`max-h-[70vh]` with sticky footer) for superior accessibility and scrollability on mobile screens.

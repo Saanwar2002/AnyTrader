@@ -49,6 +49,21 @@
         "referredBy": { "type": "string" },
         "referralBoostUntil": { "type": "string", "format": "date-time" },
         "referralRewardProcessed": { "type": "boolean" },
+        "subscription": {
+          "type": "object",
+          "properties": {
+            "tierId": { "type": "string" },
+            "providerModel": { "type": "string" },
+            "nextRenewalDate": { "type": "string", "format": "date-time" },
+            "capacity": {
+              "type": "object",
+              "properties": {
+                "maxQuotes": { "type": "integer" },
+                "usedQuotes": { "type": "integer" }
+              }
+            }
+          }
+        },
         "notificationSettings": {
           "type": "object",
           "properties": {
@@ -372,40 +387,32 @@
       "properties": {
         "id": { "type": "string" },
         "maintenanceMode": { "type": "boolean" },
-        "feeTiers": {
-          "type": "array",
-          "items": {
+        "providerModels": {
+          "type": "object",
+          "additionalProperties": {
             "type": "object",
             "properties": {
-              "name": { "type": "string" },
-              "price": { "type": "number" },
-              "maxQuotes": { "type": "integer" },
-              "maxAcceptedQuotes": { "type": "integer" },
-              "commission": { "type": "number" },
-              "leadFee": { "type": "number" },
-              "description": { "type": "string" },
-              "limitPeriod": { "type": "string", "enum": ["monthly", "lifetime"] },
-              "includesRecommendation": { "type": "boolean" }
-            }
-          }
-        },
-        "businessTiers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "price": { "type": "number" },
-              "jobPostsLimit": { "type": "integer" },
-              "commission": { "type": "number" },
-              "description": { "type": "string" },
-              "limitPeriod": { "type": "string", "enum": ["monthly", "lifetime"] }
+              "tiers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "price": { "type": "number" },
+                    "maxQuotes": { "type": "integer" },
+                    "maxAcceptedQuotes": { "type": "integer" },
+                    "commission": { "type": "number" },
+                    "leadFee": { "type": "number" },
+                    "description": { "type": "string" },
+                    "features": { "type": "array", "items": { "type": "string" } },
+                    "color": { "type": "string", "description": "Hex or Tailwind color class for UI identification" }
+                  }
+                }
+              }
             }
           }
         },
         "updatedAt": { "type": "string", "format": "date-time" },
-        "updatedBy": { "type": "string" },
-        "referralBoostDays": { "type": "integer" }
+        "updatedBy": { "type": "string" }
       }
     },
     "Partner": {

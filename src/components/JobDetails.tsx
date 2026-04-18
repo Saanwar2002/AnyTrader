@@ -422,7 +422,8 @@ export default function JobDetails() {
           updateData.jobNo = job.jobNo;
         }
 
-        await updateDoc(doc(db, "jobs", id, "quotes", existingQuote.id), updateData);
+        const quoteRef = doc(db, "jobs", id, "quotes", existingQuote.id);
+        await updateDoc(quoteRef, updateData);
       } else {
         const quoteRef = doc(collection(db, "jobs", id, "quotes"));
         const quoteData: any = {
@@ -447,13 +448,42 @@ export default function JobDetails() {
         }
         
         await setDoc(quoteRef, quoteData);
-
-        // Increment quote count on job document
         const { increment } = await import("firebase/firestore");
         await updateDoc(doc(db, "jobs", id), {
-          quoteCount: increment(1)
+            quoteCount: increment(1)
         });
       }
+
+      
+      const quoteRef = existingQuote ? doc(db, "jobs", id, "quotes", existingQuote.id) : doc(collection(db, "jobs", id, "quotes"));
+      
+      const quoteData: any = {
+          amount: parseFloat(quoteAmount),
+          message: quoteMessage,
+          startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
+          isImmediateStart,
+          estimatedTimeline,
+          paymentPreference,
+          quoteScope,
+          status: "pending",
+          jobTitle: job.title || ""
+      };
+
+      if(existingQuote) {
+        quoteData.updatedAt = serverTimestamp();
+        quoteData.requoteMessage = deleteField();
+      } else {
+        quoteData.id = quoteRef.id;
+        quoteData.jobId = id;
+        quoteData.tradespersonId = user.uid;
+        quoteData.homeownerId = job.homeownerId;
+        quoteData.createdAt = serverTimestamp();
+      }
+
+      if (job.jobNo !== undefined) {
+        quoteData.jobNo = job.jobNo;
+      }
+
       
       // Notify homeowner
       await sendNotification(
@@ -475,7 +505,7 @@ export default function JobDetails() {
         });
 
         // Trigger Finalization Window for Materials
-        setFinalizingQuoteId(existingQuote ? existingQuote.id : quoteRef.id);
+        setFinalizingQuoteId(quoteRef.id);
         setIsFinalizingMaterials(true);
       }
 
