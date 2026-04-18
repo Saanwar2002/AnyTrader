@@ -54,6 +54,18 @@ export default function JobFeed() {
   const [newFilterName, setNewFilterName] = useState("");
   const [isSavingFilter, setIsSavingFilter] = useState(false);
   const [hasSyncedFromCloud, setHasSyncedFromCloud] = useState(false);
+  const [sysConfig, setSysConfig] = useState<any>(null);
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, "platform_config", "global"), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        setSysConfig(docSnapshot.data());
+      } else {
+        setSysConfig({ paywallEnabled: true });
+      }
+    });
+    return () => unsubConfig();
+  }, []);
 
   useEffect(() => {
     setHasSyncedFromCloud(false);
@@ -214,6 +226,15 @@ export default function JobFeed() {
   }, [user]);
 
   const filteredJobs = jobs.filter(job => {
+    // Time-Gate Security Check
+    const jobExclusiveUntil = job.exclusiveUntil?.toDate ? job.exclusiveUntil.toDate() : (job.exclusiveUntil ? new Date(job.exclusiveUntil) : null);
+    const isCurrentlyExclusive = jobExclusiveUntil && jobExclusiveUntil > new Date();
+    
+    // Hide if it's currently exclusive and the user DOES NOT have the fast pass AND the paywall is active
+    if (isCurrentlyExclusive && profile?.hasExclusiveAddon !== true && sysConfig?.paywallEnabled !== false) {
+      return false;
+    }
+
     const searchLower = searchTerm.toLowerCase();
     const normalizedSearch = searchLower.replace(/[^a-z0-9]/g, '');
     const jobNoNormalized = job.jobNo?.toLowerCase().replace(/[^a-z0-9]/g, '') || "";
@@ -895,6 +916,24 @@ export default function JobFeed() {
                     </div>
                   </div>
                   
+                  {(() => {
+                    const jobExclusiveUntil = job.exclusiveUntil?.toDate ? job.exclusiveUntil.toDate() : (job.exclusiveUntil ? new Date(job.exclusiveUntil) : null);
+                    const isCurrentlyExclusive = jobExclusiveUntil && jobExclusiveUntil > new Date();
+                    
+                    if (isCurrentlyExclusive) {
+                      const minutesRemaining = Math.max(0, Math.floor((jobExclusiveUntil.getTime() - Date.now()) / 60000));
+                      return (
+                        <div className="mb-3">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-[10px] font-black uppercase text-white shadow-sm ring-1 ring-amber-500/50">
+                            <Zap className="w-3.5 h-3.5 fill-current" />
+                            Exclusive Access: {minutesRemaining}m remaining
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   <p className="text-sm text-slate-500 line-clamp-2 mb-4">{job.description}</p>
                   
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-600">

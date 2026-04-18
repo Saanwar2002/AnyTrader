@@ -283,7 +283,11 @@ export default function Onboarding() {
         name,
         phone: cleanPhone,
         role: finalRole,
-        tierId: selectedTier || (platformConfig?.feeTiers?.[0]?.name || "Basic"),
+        tierId: selectedTier || (
+          role === "homeowner" 
+            ? (homeownerType === "business" ? "Business Professional" : "Standard Homeowner")
+            : (platformConfig?.feeTiers?.[0]?.name || "Free Explorer")
+        ),
         subscriptionType: role === "homeowner" ? homeownerType : null,
         businessCategory: homeownerType === "business" ? businessCategory : null,
         permissions: finalPermissions,
@@ -814,6 +818,43 @@ export default function Onboarding() {
                     </div>
                   </div>
 
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Select Subscription Tier</p>
+                    <div className="grid grid-cols-1 gap-3">
+                      {(platformConfig?.businessTiers || []).map((tier: any) => (
+                        <button
+                          key={tier.name}
+                          onClick={() => setSelectedTier(tier.name)}
+                          className={cn(
+                            "p-4 rounded-2xl border-2 text-left transition-all relative",
+                            selectedTier === tier.name 
+                              ? "bg-primary/5 border-primary shadow-sm" 
+                              : "bg-white border-slate-100 hover:border-slate-200"
+                          )}
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <p className="font-black text-slate-900 leading-none">{tier.name}</p>
+                            <p className="text-sm font-black text-primary">£{tier.price}</p>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mb-2 font-medium leading-tight">{tier.description}</p>
+                          <div className="flex items-center gap-2">
+                            <div className="px-2 py-0.5 bg-blue-100 rounded text-[8px] font-black text-blue-700 uppercase tracking-wider">
+                              {tier.commission || 0}% Comm
+                            </div>
+                            {tier.jobPostsLimit && (
+                              <div className="px-2 py-0.5 bg-slate-100 rounded text-[8px] font-black text-slate-600 uppercase tracking-wider">
+                                {tier.jobPostsLimit === 9999 ? "Unlimited" : tier.jobPostsLimit} Posts
+                              </div>
+                            )}
+                          </div>
+                          {selectedTier === tier.name && (
+                            <CheckCircle2 className="absolute top-4 right-4 w-4 h-4 text-primary" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="flex gap-4">
                     <button
                       onClick={() => {
@@ -826,7 +867,7 @@ export default function Onboarding() {
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedTier("Business Free Trial");
+                        if (!selectedTier) setSelectedTier("Business Professional");
                         setTimeout(() => handleSubmit(), 100);
                       }}
                       disabled={loading}

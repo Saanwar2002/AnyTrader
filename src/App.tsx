@@ -29,6 +29,7 @@ import Analytics from "./components/Analytics";
 import Availability from "./components/Availability";
 import FindTrades from "./components/FindTrades";
 import Portfolio from "./components/Portfolio";
+import BusinessTeamManagement from "./components/BusinessTeamManagement";
 import AdminDashboard from "./components/AdminDashboard";
 import EcosystemAdmin from "./components/EcosystemAdmin";
 import { RecurringJobManager } from "./components/RecurringJobManager";
@@ -114,6 +115,7 @@ export default function App() {
               <Route path="profile/:id" element={<PublicProfile />} />
               <Route path="availability" element={<Availability />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="team" element={<BusinessTeamManagement />} />
               <Route path="find-trades" element={<FindTrades />} />
               <Route path="admin" element={<AdminDashboard />} />
               <Route path="ecosystem" element={<EcosystemAdmin />} />

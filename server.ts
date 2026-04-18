@@ -60,7 +60,20 @@ const startMatchingSystem = async () => {
         return; // Skip this iteration if collection not found or other error
       }
         
-      console.log(`Found ${snapshot.docs.length} notifications.`);
+      if (snapshot.docs.length > 0) {
+        console.log(`Found ${snapshot.docs.length} notifications.`);
+      }
+
+      // Fetch global config for monetization check
+      let globalConfig: any = { paywallEnabled: true };
+      try {
+        const configDoc = await db.collection("platform_config").doc("global").get();
+        if (configDoc.exists) {
+          globalConfig = configDoc.data();
+        }
+      } catch (err) {
+        console.error("Error fetching global config:", err);
+      }
       
       for (const doc of snapshot.docs) {
         const notification = doc.data();
@@ -154,17 +167,52 @@ const startMatchingSystem = async () => {
             console.log(`Trader ${trader.uid} is in Quiet Hours. Notification will be available in feed.`);
           }
 
+          // Evaluate Fast Pass (Exclusive Leads) logic
+          let visibleAt = admin.firestore.FieldValue.serverTimestamp();
+          let isExclusiveNotification = false;
+
+          if (globalConfig.paywallEnabled !== false && jobData?.exclusiveUntil) {
+            const exclusiveUntil = jobData.exclusiveUntil.toDate ? jobData.exclusiveUntil.toDate() : new Date(jobData.exclusiveUntil);
+            if (exclusiveUntil > new Date()) {
+              // Determine if the user holds an active Fast Pass
+              if (trader.hasExclusiveAddon && trader.isExclusiveActive !== false) {
+                // Determine fairness limit (Have they hit the 3 quotes per day?)
+                const lastQuoteDate = trader.lastExclusiveQuoteDate?.toDate ? trader.lastExclusiveQuoteDate.toDate() : (trader.lastExclusiveQuoteDate ? new Date(trader.lastExclusiveQuoteDate) : new Date(0));
+                const today = new Date();
+                const isSameDay = lastQuoteDate.getDate() === today.getDate() && lastQuoteDate.getMonth() === today.getMonth() && lastQuoteDate.getFullYear() === today.getFullYear();
+                
+                const usedToday = isSameDay ? (trader.exclusiveSlotsUsedToday || 0) : 0;
+                const cooldownUntil = trader.exclusiveCooldownUntil?.toDate ? trader.exclusiveCooldownUntil.toDate() : (trader.exclusiveCooldownUntil ? new Date(trader.exclusiveCooldownUntil) : new Date(0));
+
+                if (usedToday < 3 && cooldownUntil <= new Date()) {
+                  isExclusiveNotification = true;
+                } else {
+                  // Delay until exclusivity goes away
+                  visibleAt = admin.firestore.Timestamp.fromDate(exclusiveUntil);
+                }
+              } else {
+                // Standard User - Delay notification until exclusive window ends
+                visibleAt = admin.firestore.Timestamp.fromDate(exclusiveUntil);
+              }
+            }
+          }
+
+          let notificationTitle = shouldNotifyNow ? "New Job Match!" : "New Job Match (Quiet Mode) 🌙";
+          if (notification.urgency === "emergency") notificationTitle = shouldNotifyNow ? "New Emergency Job Match! 🚨" : "New Emergency Job (Quiet Mode) 🌙";
+          if (isExclusiveNotification) notificationTitle = "⚡ FAST PASS DIRECT LEAD ⚡";
+
           // Create a notification in the notifications collection for the trader
           try {
             await db.collection("notifications").add({
               userId: trader.uid,
-              title: shouldNotifyNow ? "New Emergency Job Match! 🚨" : "New Job Match (Quiet Mode) 🌙",
+              title: notificationTitle,
               message: `A new ${notification.category} job matches your services in ${notification.postcode}.`,
               type: "system",
               link: `/job/${notification.jobId}`,
               read: false,
               silent: !shouldNotifyNow, // Flag for client-side to suppress sound/vibration if they implement it
-              createdAt: admin.firestore.FieldValue.serverTimestamp()
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              visibleAt
             });
           } catch (err) {
             console.error(`Error sending notification to trader ${trader.uid}:`, err);
@@ -237,7 +285,15 @@ async function startServer() {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.client_reference_id;
         
-        if (session.mode === 'subscription') {
+        if (session.metadata?.isExclusiveAddon === 'true' && userId && db) {
+          await db.collection("users").doc(userId).update({
+             hasExclusiveAddon: true,
+             isExclusiveActive: true,
+             exclusiveSubscriptionId: session.subscription as string || session.id, // Depending on mode
+             updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+        else if (session.mode === 'subscription') {
           const subscriptionId = session.subscription as string;
           if (userId && db) {
             await db.collection("users").doc(userId).update({
@@ -317,7 +373,15 @@ async function startServer() {
         console.warn("Stripe is not configured. Mocking successful checkout flow.");
         // If Stripe is not set up, just fake the redirect back and update the database directly for local testing
         if (db) {
-           if (mode === 'subscription') {
+           if (metadata.isExclusiveAddon === 'true') {
+             await db.collection("users").doc(userId).update({
+               hasExclusiveAddon: true,
+               isExclusiveActive: true,
+               exclusiveSubscriptionId: "mock_sub_" + Math.random().toString(36).substring(7),
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
+             });
+           }
+           else if (mode === 'subscription') {
              await db.collection("users").doc(userId).update({
                 tierId: tierName || "Pro",
                 subscriptionStatus: "active",
@@ -465,24 +529,58 @@ async function startServer() {
   // Check quote limit for tradespeople
   app.post("/api/check-quote-limit", async (req, res) => {
     try {
-      const { userId } = req.body;
+      const { userId, jobId } = req.body;
       if (!db) return res.status(500).json({ error: "Database not initialized" });
 
       const userDoc = await db.collection("users").doc(userId).get();
       if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
 
-      const userData = userDoc.data();
-      const tierId = userData?.tierId || "Basic";
-      
+      const userData = userDoc.data() || {};
       const platformConfig = (await db.collection("platform_config").doc("global").get()).data();
       
+      // 1. Check Exclusive Job Constraints First
+      let isJobExclusive = false;
+      if (jobId && platformConfig?.paywallEnabled !== false) {
+        const jobDoc = await db.collection("jobs").doc(jobId).get();
+        if (jobDoc.exists) {
+          const jobData = jobDoc.data() || {};
+          const exclusiveUntil = jobData.exclusiveUntil?.toDate ? jobData.exclusiveUntil.toDate() : (jobData.exclusiveUntil ? new Date(jobData.exclusiveUntil) : null);
+          
+          if (exclusiveUntil && exclusiveUntil > new Date()) {
+            isJobExclusive = true;
+            
+            if (!userData.hasExclusiveAddon) {
+              return res.json({ allowed: false, error: "This job is currently exclusive to Fast Pass members. Please wait or upgrade." });
+            }
+
+            // Check if midnight reset is needed
+            const lastQuoteDate = userData.lastExclusiveQuoteDate?.toDate ? userData.lastExclusiveQuoteDate.toDate() : (userData.lastExclusiveQuoteDate ? new Date(userData.lastExclusiveQuoteDate) : new Date(0));
+            const today = new Date();
+            const isSameDay = lastQuoteDate.getDate() === today.getDate() && lastQuoteDate.getMonth() === today.getMonth() && lastQuoteDate.getFullYear() === today.getFullYear();
+            
+            const usedToday = isSameDay ? (userData.exclusiveSlotsUsedToday || 0) : 0;
+            if (usedToday >= 3) {
+              return res.json({ allowed: false, error: "You have used your 3 exclusive quotes for today. You can quote on this job when it goes public." });
+            }
+
+            const cooldownUntil = userData.exclusiveCooldownUntil?.toDate ? userData.exclusiveCooldownUntil.toDate() : (userData.exclusiveCooldownUntil ? new Date(userData.exclusiveCooldownUntil) : new Date(0));
+            if (cooldownUntil > new Date()) {
+              return res.json({ allowed: false, error: "You must wait 2 hours between exclusive quotes to ensure fairness. You can quote on this job when it goes public." });
+            }
+          }
+        }
+      }
+
+      // 2. Check Standard Tier Limits
+      const tierId = userData.tierId || "Basic";
+      
       if (platformConfig?.paywallEnabled === false) {
-        return res.json({ allowed: true, count: 0, limit: Infinity, betaMode: true });
+        return res.json({ allowed: true, count: 0, limit: Infinity, betaMode: true, isJobExclusive });
       }
 
       const tier = platformConfig?.feeTiers?.find((t: any) => t.name === tierId);
       
-      if (!tier || !tier.maxQuotes) return res.json({ allowed: true }); // No limit defined
+      if (!tier || !tier.maxQuotes) return res.json({ allowed: true, isJobExclusive }); // No limit defined
 
       const isLifetime = tier.limitPeriod === "lifetime";
       const startOfMonth = new Date();
@@ -500,7 +598,7 @@ async function startServer() {
       const quotesSnapshot = await quotesQuery.get();
 
       const count = quotesSnapshot.size;
-      res.json({ allowed: count < tier.maxQuotes, count, limit: tier.maxQuotes });
+      res.json({ allowed: count < tier.maxQuotes, count, limit: tier.maxQuotes, isJobExclusive });
     } catch (error: any) {
       console.error("Quote Limit Check Error:", error);
       res.status(500).json({ error: error.message || "Failed to check quote limit" });
@@ -616,8 +714,23 @@ Return a RAW JSON array (no markdown block, no markdown formatting) of 3 objects
         return res.status(500).json({ error: "SSO secret not configured" });
       }
 
+      // Fetch user's subscription discount from platform config
+      let discount = 0;
+      try {
+        const userDoc = await db.collection("users").doc(uid).get();
+        const userData = userDoc.data();
+        const tierId = userData?.tierId || (userData?.role === "tradesperson" ? "Basic" : "Standard");
+        
+        const platformConfig = (await db.collection("platform_config").doc("global").get()).data();
+        const tiers = userData?.role === "tradesperson" ? platformConfig?.feeTiers : platformConfig?.businessTiers;
+        const tier = tiers?.find((t: any) => t.name === tierId);
+        discount = tier?.shopDiscount || 0;
+      } catch (tierErr) {
+        console.warn("Could not fetch tier for discount:", tierErr);
+      }
+
       const token = jwt.sign(
-        { uid, role, email, category, iat: Math.floor(Date.now() / 1000) },
+        { uid, role, email, category, discount, iat: Math.floor(Date.now() / 1000) },
         secret,
         { expiresIn: "5m" } // Token strictly valid for 5 minutes
       );

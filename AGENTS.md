@@ -1,5 +1,10 @@
 # Project State & Instructions
 
+## Core Directive
+- **CRITICAL**: This is a multi-portal ecosystem (Home + Rides) sharing one database.
+- **MANDATORY**: You **MUST** read `DEVELOPMENT.md` before modifying any shared services, database schemas (`firebase-blueprint.json`), or security rules (`firestore.rules`). Failure to do so will break cross-portal synchronization.
+- **DOCUMENTATION**: You **MUST** update `DEVELOPMENT.md` after completing your work to capture any architecture or schema changes for the next agent.
+
 ## Current Status
 - **Last Updated**: 2026-04-15
 - **Working State**: The application is fully functional and production-ready.
@@ -13,10 +18,11 @@
   - **Admin API Key Management** for secure platform configuration.
   - **Polished Mock Checkout** for subscription tiers.
   - **Universal Calendar Integration** (Google, Outlook, Apple).
+  - **AnyTrader Rides Integration**: Full ecosystem synchronization with a dedicated Taxi portal, including shared auth, role mapping, and real-time emergency dispatch ingestion.
 
 ## Active Task
-- All planned AI features from `ROADMAP.md` have been implemented.
-- The application is in a highly advanced state with full-stack AI integration.
+- Integration with AnyTrader Rides completed.
+- The application is now a multi-portal ecosystem with home services and transport services unified.
 
 ## Project Conventions
 - **Styling**: Tailwind CSS with a "Modern Professional" aesthetic.
@@ -30,9 +36,10 @@
 
 ## Recovery Instructions
 If you need to revive the project or understand the current architecture:
-1. Check `firebase-blueprint.json` for the data model.
-2. Check `ROADMAP.md` for planned features.
-3. The main entry point is `App.tsx`, and the core business logic is in `JobFeed.tsx`, `JobDetails.tsx`, and `PostJobWizard.tsx`.
+1. **Read `DEVELOPMENT.md`** first to understand the multi-portal synchronization rules.
+2. Check `firebase-blueprint.json` for the shared data model.
+3. Check `ROADMAP.md` for planned features.
+4. The main entry point is `App.tsx`, and the core transport logic is in `src/services/taxiIntegrationService.ts`.
 
 ## Pending Verification
 - All pending verifications completed. The AI Job Recommendations system correctly handles guest traders and expired emergency jobs.

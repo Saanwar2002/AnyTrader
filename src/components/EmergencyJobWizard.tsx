@@ -177,6 +177,7 @@ export default function EmergencyJobWizard() {
         photos: formData.photos,
         postedDate: serverTimestamp(),
         createdAt: serverTimestamp(),
+        exclusiveUntil: new Date(Date.now() + 5 * 60000),
         paymentPreference: "negotiable",
         quoteScope: "complete_package",
         isBoosted: paidBoost,

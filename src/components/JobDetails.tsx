@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion } from "@/src/firebase";
-import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost } from "@/src/services/gemini";
+import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { useAuth } from "./AuthProvider";
 import { motion } from "motion/react";
@@ -103,6 +103,13 @@ export default function JobDetails() {
   const [isMediating, setIsMediating] = useState(false);
   const [disputeResolution, setDisputeResolution] = useState<any>(null);
   const [materialList, setMaterialList] = useState<string[]>([]);
+  
+  // Fast Pass - Material List Finalization Window Logic
+  const [isFinalizingMaterials, setIsFinalizingMaterials] = useState(false);
+  const [finalizingQuoteId, setFinalizingQuoteId] = useState<string | null>(null);
+  const [editableMaterialItem, setEditableMaterialItem] = useState("");
+  const [windowExpirationTimer, setWindowExpirationTimer] = useState<string | null>(null);
+
   const [hasAutoDrafted, setHasAutoDrafted] = useState(false);
   const [hasRecurringSchedule, setHasRecurringSchedule] = useState(false);
   const [showMap, setShowMap] = useState(true);
@@ -375,7 +382,7 @@ export default function JobDetails() {
       const limitResponse = await fetch("/api/check-quote-limit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid })
+        body: JSON.stringify({ userId: user.uid, jobId: id })
       });
       
       const limitData = await limitResponse.json();
@@ -383,7 +390,7 @@ export default function JobDetails() {
       const existingQuote = quotes.find(q => q.tradespersonId === user.uid);
       
       if (!existingQuote && !limitData.allowed) {
-        setError(`You have reached your monthly limit of ${limitData.limit} quotes. Please upgrade your tier to quote on more jobs.`);
+        setError(limitData.error || `You have reached your monthly limit of ${limitData.limit} quotes. Please upgrade your tier to quote on more jobs.`);
         setIsSubmittingQuote(false);
         return;
       }
@@ -456,6 +463,21 @@ export default function JobDetails() {
         "quote",
         `/job/${id}`
       );
+
+      // Track exclusive limits if applicable
+      if (limitData.isJobExclusive) {
+        const { increment } = await import("firebase/firestore");
+        const cooldownDate = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
+        await updateDoc(doc(db, "users", user.uid), {
+          exclusiveSlotsUsedToday: increment(1),
+          exclusiveCooldownUntil: cooldownDate,
+          lastExclusiveQuoteDate: serverTimestamp()
+        });
+
+        // Trigger Finalization Window for Materials
+        setFinalizingQuoteId(existingQuote ? existingQuote.id : quoteRef.id);
+        setIsFinalizingMaterials(true);
+      }
 
       setQuoteAmount("");
       setQuoteMessage("");
@@ -589,6 +611,30 @@ export default function JobDetails() {
       
       // Refresh local job state
       setJob((prev: any) => ({ ...prev, status: "accepted" }));
+
+      // 5. Ecosystem Synergy: Trigger AI equipment alerts for high-tier traders
+      const acceptedTraderDoc = await getDoc(doc(db, "users", quote.tradespersonId));
+      if (acceptedTraderDoc.exists()) {
+        const traderData = acceptedTraderDoc.data();
+        const tier = traderData.subscriptionType; // Simplified tier check
+        if (tier === "Gold Elite" || tier === "Platinum Enterprise") {
+          try {
+            const recommendations = await getEquipmentRecommendations(job.title, job.description, job.category);
+            if (recommendations.length > 0) {
+              const recText = recommendations.map(r => `• ${r.item}: ${r.reason}`).join("\n");
+              await sendNotification(
+                quote.tradespersonId,
+                "AI Tool Recommendations",
+                `Based on this job scope, we recommend: \n${recText}`,
+                "status",
+                `/chat/${id}` // Or link to shop
+              );
+            }
+          } catch (aiErr) {
+            console.error("Failed to generate equipment alerts:", aiErr);
+          }
+        }
+      }
     } catch (err) {
       console.error("Error accepting quote:", err);
       try {
@@ -692,6 +738,27 @@ export default function JobDetails() {
       console.error("Error starting job:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFinalizeMaterialList = async () => {
+    if (!id || !finalizingQuoteId) return;
+    setIsProcessing(true);
+    try {
+      await updateDoc(doc(db, "jobs", id, "quotes", finalizingQuoteId), {
+        materialsFinalized: true,
+        materialList: materialList.length > 0 ? materialList : [],
+        updatedAt: serverTimestamp()
+      });
+      // Allow homeowner to immediately see it.
+      setQuotes(prev => prev.map(q => q.id === finalizingQuoteId ? { ...q, materialsFinalized: true, materialList } : q));
+      setIsFinalizingMaterials(false);
+      setFinalizingQuoteId(null);
+    } catch (err) {
+      console.error("Error finalizing material list:", err);
+      alert("Failed to save material list. Please try again.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -2289,6 +2356,104 @@ export default function JobDetails() {
           initialIndex={initialMediaIndex}
         />
 
+        {/* Material Finalization Modal (Fast Pass Feature) */}
+        {!isHomeowner && isFinalizingMaterials && finalizingQuoteId && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b border-slate-100 bg-amber-50">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Finalize Materials List</h3>
+                    <p className="text-xs font-bold text-amber-700">Fast Pass Exclusive - Lock in your quote structure</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600">
+                  Your quote has been secured! You now have a strict 10-minute window to finalize your material list before the homeowner reviews your bid.
+                </p>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Itemized List</h4>
+                  {materialList.length > 0 ? (
+                    <ul className="space-y-2">
+                      {materialList.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-xl">
+                          <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                          <span className="flex-1">{item}</span>
+                          <button 
+                            onClick={() => setMaterialList(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-500 p-1 hover:bg-red-100 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200 text-center text-slate-500 text-xs">
+                      No materials added yet. Add items below or generate an AI list if Labour Only.
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editableMaterialItem}
+                    onChange={(e) => setEditableMaterialItem(e.target.value)}
+                    placeholder="E.g. 5x Plasterboard sheets..."
+                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && editableMaterialItem.trim()) {
+                        setMaterialList(prev => [...prev, editableMaterialItem.trim()]);
+                        setEditableMaterialItem("");
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (editableMaterialItem.trim()) {
+                        setMaterialList(prev => [...prev, editableMaterialItem.trim()]);
+                        setEditableMaterialItem("");
+                      }
+                    }}
+                    className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800"
+                  >
+                    Add
+                  </button>
+                </div>
+                
+                <div className="pt-4 border-t border-slate-100">
+                   <button 
+                      onClick={handleGenerateMaterialList}
+                      disabled={isGeneratingMaterials}
+                      className="w-full text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center justify-center gap-2 p-2 border border-blue-100 rounded-xl hover:bg-blue-50 transition-colors disabled:opacity-50"
+                    >
+                      {isGeneratingMaterials ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      {materialList.length > 0 ? "Regenerate AI List" : "Auto-Generate AI List (Labour Only)"}
+                    </button>
+                </div>
+
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
+                <button
+                  onClick={handleFinalizeMaterialList}
+                  disabled={isProcessing}
+                  className="flex-1 bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Finalize & Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <QuoteComparisonModal
           isOpen={isComparisonModalOpen}
           onClose={() => setIsComparisonModalOpen(false)}
@@ -2329,6 +2494,37 @@ export default function JobDetails() {
             {/* Show actual quotes for homeowner or the tradesperson's own quote */}
             {sortedQuotes.map((quote) => {
               const tpProfile = tradespersonProfiles[quote.tradespersonId];
+              
+              // Check if tradesperson is currently within their material editing window (10 mins)
+              let isInFinalizationWindow = false;
+              let windowExpiresAt = null;
+              if (quote.createdAt) {
+                const createdAt = quote.createdAt?.toDate ? quote.createdAt.toDate() : new Date(quote.createdAt);
+                windowExpiresAt = new Date(createdAt.getTime() + 10 * 60000); // 10 mins
+                if (windowExpiresAt > new Date() && !quote.materialsFinalized) {
+                  isInFinalizationWindow = true;
+                }
+              }
+
+              // Hide detailed info from the homeowner if the window is open
+              if (isHomeowner && isInFinalizationWindow) {
+                 return (
+                  <div key={quote.id} className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm flex items-start justify-between gap-4 animate-pulse">
+                     <div className="flex-1 space-y-3">
+                       <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center">
+                           <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                         </div>
+                         <div>
+                           <span className="font-bold text-slate-900 block">Quote Secured</span>
+                           <span className="text-[10px] font-bold text-slate-500">Tradesperson is finalizing itemized material list...</span>
+                         </div>
+                       </div>
+                     </div>
+                  </div>
+                 );
+              }
+
               return (
                 <div key={quote.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-3">
@@ -2445,6 +2641,23 @@ export default function JobDetails() {
                           <span className="font-bold">Labour Only Quote:</span> This price covers the tradesperson's time and labour only. You are responsible for purchasing and providing all necessary materials and tools for this job.
                         </div>
                       </div>
+                    )}
+
+                    {quote.materialList && quote.materialList.length > 0 && (
+                       <div className="mt-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                         <div className="flex items-center gap-2 mb-3">
+                           <Sparkles className="w-4 h-4 text-blue-600" />
+                           <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Finalized Material List</h4>
+                         </div>
+                         <ul className="space-y-1.5">
+                           {quote.materialList.map((item: string, idx: number) => (
+                             <li key={idx} className="flex flex-wrap items-start gap-2 text-xs text-slate-700">
+                               <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
+                               <span>{item}</span>
+                             </li>
+                           ))}
+                         </ul>
+                       </div>
                     )}
 
                     {quote.pendingRevision && (

@@ -14,7 +14,7 @@ import {
   Settings, Settings2, BarChart3, PieChart, DollarSign, Percent, Clock, MapPin, CreditCard,
   AlertCircle, Zap, Sparkles, ShieldAlert, ShieldCheck, RefreshCw,
   Plus, Edit2, Calendar, Award, Info, Key, Building2, Globe, Database, Download,
-  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight
+  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import GuestJobs from "./GuestJobs";
@@ -33,12 +33,12 @@ export default function AdminDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const tabFromUrl = searchParams.get("tab") as any;
-  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories"].includes(tabFromUrl) ? tabFromUrl : "users";
+  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization"].includes(tabFromUrl) ? tabFromUrl : "users";
   
-  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs">(initialTab as any);
+  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization">(initialTab as any);
   
   useEffect(() => {
-    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs"].includes(tabFromUrl) ? tabFromUrl : "users";
+    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization"].includes(tabFromUrl) ? tabFromUrl : "users";
     if (validTab !== activeTab) {
       setActiveTab(validTab);
       setFilter(validTab === "jobs" ? "emergency" : "all");
@@ -289,14 +289,16 @@ export default function AdminDashboard() {
             message: "Scheduled maintenance will occur on [Date] at [Time]. The platform will be temporarily offline."
           },
           feeTiers: [
-            { name: "Free Trial", price: 0, maxQuotes: 50, maxAcceptedQuotes: 10, limitPeriod: "lifetime", description: "Start risk-free and test the platform", includesRecommendation: false },
-            { name: "Starter", price: 29, maxQuotes: 20, maxAcceptedQuotes: 5, limitPeriod: "monthly", description: "Perfect for part-time tradespeople", includesRecommendation: false },
-            { name: "Pro", price: 79, maxQuotes: 100, maxAcceptedQuotes: 20, limitPeriod: "monthly", description: "For active professionals", includesRecommendation: true }
+            { name: "Free Explorer", price: 0, maxQuotes: 5, maxAcceptedQuotes: 2, limitPeriod: "monthly", description: "Start risk-free and test the platform", includesRecommendation: false },
+            { name: "Silver Professional", price: 45, maxQuotes: 30, maxAcceptedQuotes: 10, limitPeriod: "monthly", description: "Perfect for active tradespeople", includesRecommendation: false },
+            { name: "Gold Elite", price: 95, maxQuotes: 9999, maxAcceptedQuotes: 9999, limitPeriod: "monthly", description: "For top professionals with priority alerts", includesRecommendation: true },
+            { name: "Platinum Enterprise", price: 245, maxQuotes: 9999, maxAcceptedQuotes: 9999, limitPeriod: "monthly", description: "Multi-seat management for teams", includesRecommendation: true }
           ],
           businessTiers: [
-            { name: "Business Basic", price: 49, jobPostsLimit: 10, limitPeriod: "monthly", description: "For small property portfolios" },
-            { name: "Business Pro", price: 149, jobPostsLimit: 50, limitPeriod: "monthly", description: "For active management firms" },
-            { name: "Business Enterprise", price: 499, jobPostsLimit: 500, limitPeriod: "monthly", description: "Unlimited scale for large enterprises" }
+            { name: "Standard Homeowner", price: 0, jobPostsLimit: 9999, limitPeriod: "lifetime", description: "Free for individual homeowners" },
+            { name: "Premium Landlord", price: 19, jobPostsLimit: 50, limitPeriod: "monthly", description: "Asset tracking and priority support" },
+            { name: "Business Professional", price: 125, jobPostsLimit: 200, limitPeriod: "monthly", description: "For active management firms & teams" },
+            { name: "Enterprise Powerhouse", price: 595, jobPostsLimit: 9999, limitPeriod: "monthly", description: "Unlimited scale for large enterprises" }
           ]
         };
         setPlatformConfig(defaultConfig);
@@ -490,25 +492,38 @@ export default function AdminDashboard() {
   };
 
   const handleSaveSettings = async () => {
-    if (!user) return;
+    if (!user || !tempConfig) return;
     
+    // Safety check for arrays
+    const feeTiers = tempConfig.feeTiers || [];
+    const businessTiers = tempConfig.businessTiers || [];
+
     // Validation
-    if (tempConfig.feeTiers.length === 0) {
-      alert("At least one fee tier is required.");
+    if (feeTiers.length === 0) {
+      alert("At least one provider fee tier is required.");
       return;
     }
 
-    for (const tier of tempConfig.feeTiers) {
-      if (!tier.name.trim()) {
-        alert("All tiers must have a name.");
+    for (const tier of feeTiers) {
+      if (!tier.name?.trim()) {
+        alert("All provider tiers must have a name.");
         return;
       }
-      if (isNaN(tier.value) || tier.value < 0) {
-        alert(`Invalid fee value for tier: ${tier.name}`);
+      const price = parseFloat(String(tier.price));
+      if (isNaN(price) || price < 0) {
+        alert(`Invalid price for tier: ${tier.name}`);
         return;
       }
-      if (tier.type === "percentage" && tier.value > 100) {
-        alert(`Percentage fee cannot exceed 100% for tier: ${tier.name}`);
+    }
+
+    for (const tier of businessTiers) {
+      if (!tier.name?.trim()) {
+        alert("All business tiers must have a name.");
+        return;
+      }
+      const price = parseFloat(String(tier.price));
+      if (isNaN(price) || price < 0) {
+        alert(`Invalid price for business tier: ${tier.name}`);
         return;
       }
     }
@@ -517,6 +532,8 @@ export default function AdminDashboard() {
     try {
       await setDoc(doc(db, "platform_config", "global"), {
         ...tempConfig,
+        feeTiers,
+        businessTiers,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid
       });
@@ -525,7 +542,7 @@ export default function AdminDashboard() {
       showToast("Success", "Settings saved successfully.");
     } catch (err) {
       console.error(err);
-      showToast("Error", "Failed to save settings.", "error");
+      showToast("Error", "Failed to save settings. Please check your connection.", "error");
     } finally {
       setIsSavingSettings(false);
     }
@@ -1253,6 +1270,108 @@ export default function AdminDashboard() {
     }
   };
 
+  const syncWithUnifiedPricing = () => {
+    if (!tempConfig) return;
+    const unifiedConfig = {
+      ...tempConfig,
+      feeTiers: [
+        { 
+          name: "Free Explorer", 
+          price: 0, 
+          maxQuotes: 5, 
+          maxAcceptedQuotes: 2, 
+          commission: 15,
+          leadFee: 0,
+          shopDiscount: 0,
+          limitPeriod: "monthly", 
+          description: "Start risk-free. 15% Platform Commission. Standard Lead Priority. Basic AI Insights.", 
+          includesRecommendation: false 
+        },
+        { 
+          name: "Silver Professional", 
+          price: 45, 
+          maxQuotes: 30, 
+          maxAcceptedQuotes: 10, 
+          commission: 10,
+          leadFee: 0,
+          shopDiscount: 5,
+          limitPeriod: "monthly", 
+          description: "For active pros. 10% Platform Commission. Priority Support. Performance Badge (5% Shop Discount).", 
+          includesRecommendation: false 
+        },
+        { 
+          name: "Gold Elite", 
+          price: 95, 
+          maxQuotes: 9999, 
+          maxAcceptedQuotes: 9999, 
+          commission: 5,
+          leadFee: 0,
+          shopDiscount: 10,
+          limitPeriod: "monthly", 
+          description: "Top Tier. 5% Platform Commission. Instant Lead Alerts. High-Trust Badge (10% Shop Discount).", 
+          includesRecommendation: true 
+        },
+        { 
+          name: "Platinum Enterprise", 
+          price: 245, 
+          maxQuotes: 9999, 
+          maxAcceptedQuotes: 9999, 
+          commission: 2.5,
+          leadFee: 0,
+          shopDiscount: 15,
+          limitPeriod: "monthly", 
+          description: "Teams & Scale. 2.5% Platform Commission. Multi-seat Dashboard (15% Shop Discount).", 
+          includesRecommendation: true 
+        }
+      ],
+      businessTiers: [
+        { 
+          name: "Standard Homeowner", 
+          price: 0, 
+          jobPostsLimit: 3, 
+          commission: 0, 
+          shopDiscount: 0,
+          hasTeamManagement: false,
+          limitPeriod: "monthly", 
+          description: "Regular homeowners. 3 Active Job Posts per month. Standard support. AI Scope Refiner included." 
+        },
+        { 
+          name: "Premium Landlord", 
+          price: 19, 
+          jobPostsLimit: 20, 
+          commission: 1, 
+          shopDiscount: 2,
+          hasTeamManagement: false,
+          limitPeriod: "monthly", 
+          description: "Asset management. 20 Job Posts per month. 1% Service Fee. Priority Trader Matching. Property Portfolio tools." 
+        },
+        { 
+          name: "Business Professional", 
+          price: 125, 
+          jobPostsLimit: 9999, 
+          commission: 0.5, 
+          shopDiscount: 5,
+          hasTeamManagement: true,
+          limitPeriod: "monthly", 
+          description: "Property PM Firms. Unlimited Job Posts. 0.5% Service Fee. Multi-user accounts. Team coordination dashboard." 
+        },
+        { 
+          name: "Enterprise Powerhouse", 
+          price: 595, 
+          jobPostsLimit: 9999, 
+          commission: 0.1, 
+          shopDiscount: 10,
+          hasTeamManagement: true,
+          limitPeriod: "monthly", 
+          description: "Large Scale Operations. 0.1% Service Fee. Custom API Ingestion. Dedicated scale-up manager. White-label reports." 
+        }
+      ]
+    };
+    setTempConfig(unifiedConfig);
+    setHasUnsavedChanges(true);
+    showToast("Sync Successful", "Tiers updated to Unified Pricing Model. Click 'Save Changes' to push to database.");
+  };
+
   if (profile?.role !== "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -1481,6 +1600,7 @@ export default function AdminDashboard() {
               <TabButton active={activeTab === "security"} onClick={() => handleTabChange("security")} icon={<Key className="w-4 h-4" />} label="API Keys" />
               <TabButton active={activeTab === "analytics"} onClick={() => handleTabChange("analytics")} icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
               <TabButton active={activeTab === "insights"} onClick={() => handleTabChange("insights")} icon={<Sparkles className="w-4 h-4" />} label="Insights" />
+              <TabButton active={activeTab === "monetization"} onClick={() => handleTabChange("monetization")} icon={<DollarSign className="w-4 h-4" />} label="Tiers" />
             </div>
           </div>
         </div>
@@ -3020,6 +3140,356 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {activeTab === "monetization" && tempConfig && (
+          <div className="p-6 space-y-12">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Monetization & Tier Matrix</h3>
+                <p className="text-sm text-slate-500">Manage pricing tiers, commissions, and platform monetization status.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button 
+                  onClick={syncWithUnifiedPricing}
+                  className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl font-bold text-xs hover:bg-blue-100 transition-all border border-blue-100 whitespace-nowrap"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Sync with Unified Pricing
+                </button>
+                <button 
+                  onClick={handleSaveSettings}
+                  disabled={isSavingSettings}
+                  className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all shadow-lg disabled:opacity-50"
+                >
+                  {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                  Save Changes
+                </button>
+              </div>
+            </div>
+
+            {/* Comparison Grid */}
+            <section className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Global Paywall Control</h4>
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center", 
+                    tempConfig.paywallEnabled === false ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
+                  )}>
+                    {tempConfig.paywallEnabled === false ? <Sparkles className="w-6 h-6" /> : <DollarSign className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-slate-900">Platform Monetization Mode</p>
+                    <p className="text-xs text-slate-500">
+                      {tempConfig.paywallEnabled === false 
+                        ? "Beta Mode enabled: All tiers are free and paywalls are bypassed." 
+                        : "Monetization enabled: Users must subscribe and pay commission as per their tier."}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleTogglePaywall}
+                  className={cn(
+                    "px-8 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95",
+                    tempConfig.paywallEnabled === false 
+                      ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200" 
+                      : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200"
+                  )}
+                >
+                  {tempConfig.paywallEnabled === false ? "Switch to Monetized Mode" : "Return to Beta Mode"}
+                </button>
+              </div>
+            </section>
+
+            <section className="space-y-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-slate-600" />
+                </div>
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Tier Perks & Privilege Matrix</h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {/* Tradesperson Tiers Comparison */}
+                {tempConfig.feeTiers.map((tier: any) => (
+                  <TierComparisonCard key={tier.name} tier={tier} type="provider" />
+                ))}
+                {/* Business Tiers Comparison */}
+                {(tempConfig.businessTiers || []).map((tier: any) => (
+                  <TierComparisonCard key={tier.name} tier={tier} type="business" />
+                ))}
+              </div>
+            </section>
+
+            <div className="pt-12 border-t border-slate-100 space-y-12">
+               {/* PROVIDER TIERS MANAGEMENT */}
+               <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Trade Provider Tier Management</h4>
+                    <p className="text-xs text-slate-500">Edit core parameters and quote limits for tradespeople.</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const newTiers = [...tempConfig.feeTiers, { 
+                        name: "New Tier", 
+                        price: 0, 
+                        maxQuotes: 10, 
+                        maxAcceptedQuotes: 5,
+                        limitPeriod: "monthly",
+                        description: "Description here", 
+                        includesRecommendation: false,
+                        commission: 10,
+                        leadFee: 0
+                      }];
+                      setTempConfig({ ...tempConfig, feeTiers: newTiers });
+                    }}
+                    className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" /> Add Provider Tier
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {tempConfig.feeTiers.map((tier: any, index: number) => {
+                    const isEditing = editingTiers.includes(index);
+                    return (
+                      <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 font-bold text-slate-900">
+                            {isEditing ? (
+                              <input 
+                                className="px-2 py-1 rounded bg-slate-50 border-none focus:ring-2 focus:ring-blue-600 text-lg w-full"
+                                value={tier.name}
+                                onChange={(e) => {
+                                  const newTiers = [...tempConfig.feeTiers];
+                                  newTiers[index].name = e.target.value;
+                                  setTempConfig({ ...tempConfig, feeTiers: newTiers });
+                                }}
+                              />
+                            ) : <span className="text-lg">{tier.name}</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => setEditingTiers(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index])}
+                              className={cn("p-2 rounded-lg transition-colors", isEditing ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-50")}
+                            >
+                              {isEditing ? <CheckCircle2 className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                            </button>
+                            <button 
+                              onClick={() => {
+                                const newTiers = tempConfig.feeTiers.filter((_: any, i: number) => i !== index);
+                                setTempConfig({ ...tempConfig, feeTiers: newTiers });
+                              }}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monthly Price</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">£</span>
+                              <input 
+                                type="number" 
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
+                                value={tier.price}
+                                onChange={(e) => {
+                                  const newTiers = [...tempConfig.feeTiers];
+                                  newTiers[index].price = parseFloat(e.target.value);
+                                  setTempConfig({ ...tempConfig, feeTiers: newTiers });
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Max Quotes</label>
+                            <input 
+                              type="number" 
+                              className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
+                              value={tier.maxQuotes}
+                              onChange={(e) => {
+                                const newTiers = [...tempConfig.feeTiers];
+                                newTiers[index].maxQuotes = parseInt(e.target.value);
+                                setTempConfig({ ...tempConfig, feeTiers: newTiers });
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Comm (%)</label>
+                            <input 
+                              type="number" 
+                              className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
+                              value={tier.commission || 0}
+                              onChange={(e) => {
+                                const newTiers = [...tempConfig.feeTiers];
+                                newTiers[index].commission = parseFloat(e.target.value);
+                                setTempConfig({ ...tempConfig, feeTiers: newTiers });
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Description / Perks List</label>
+                          <textarea 
+                            className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-xs font-medium h-20 resize-none"
+                            value={tier.description || ""}
+                            onChange={(e) => {
+                              const newTiers = [...tempConfig.feeTiers];
+                              newTiers[index].description = e.target.value;
+                              setTempConfig({ ...tempConfig, feeTiers: newTiers });
+                            }}
+                            placeholder="List perks separated by commas or on new lines..."
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+               </div>
+
+               {/* BUSINESS TIERS MANAGEMENT */}
+               <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Business Hirer Tier Management</h4>
+                    <p className="text-xs text-slate-500">Configure professional tiers for property managers and large businesses.</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const newTiers = [...(tempConfig.businessTiers || []), { 
+                        name: "New Business Tier", 
+                        price: 99, 
+                        jobPostsLimit: 20,
+                        limitPeriod: "monthly",
+                        description: "Description here",
+                        commission: 5
+                      }];
+                      setTempConfig({ ...tempConfig, businessTiers: newTiers });
+                    }}
+                    className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" /> Add Business Tier
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {(tempConfig.businessTiers || []).map((tier: any, index: number) => {
+                    const tierId = index + 100;
+                    const isEditing = editingTiers.includes(tierId);
+                    return (
+                      <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 font-bold text-slate-900">
+                            {isEditing ? (
+                              <input 
+                                className="px-2 py-1 rounded bg-slate-50 border-none focus:ring-2 focus:ring-indigo-600 text-lg w-full"
+                                value={tier.name}
+                                onChange={(e) => {
+                                  const newTiers = [...tempConfig.businessTiers];
+                                  newTiers[index].name = e.target.value;
+                                  setTempConfig({ ...tempConfig, businessTiers: newTiers });
+                                }}
+                              />
+                            ) : <span className="text-lg">{tier.name}</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => setEditingTiers(prev => prev.includes(tierId) ? prev.filter(i => i !== tierId) : [...prev, tierId])}
+                              className={cn("p-2 rounded-lg transition-colors", isEditing ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-50")}
+                            >
+                              {isEditing ? <CheckCircle2 className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                            </button>
+                            <button 
+                              onClick={() => {
+                                const newTiers = tempConfig.businessTiers.filter((_: any, i: number) => i !== index);
+                                setTempConfig({ ...tempConfig, businessTiers: newTiers });
+                              }}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monthly Price</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">£</span>
+                              <input 
+                                type="number" 
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
+                                value={tier.price}
+                                onChange={(e) => {
+                                  const newTiers = [...tempConfig.businessTiers];
+                                  newTiers[index].price = parseFloat(e.target.value);
+                                  setTempConfig({ ...tempConfig, businessTiers: newTiers });
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Post Limit</label>
+                            <input 
+                              type="number" 
+                              className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
+                              value={tier.jobPostsLimit}
+                              onChange={(e) => {
+                                const newTiers = [...tempConfig.businessTiers];
+                                newTiers[index].jobPostsLimit = parseInt(e.target.value);
+                                setTempConfig({ ...tempConfig, businessTiers: newTiers });
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Comm (%)</label>
+                            <input 
+                              type="number" 
+                              className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
+                              value={tier.commission || 0}
+                              onChange={(e) => {
+                                const newTiers = [...tempConfig.businessTiers];
+                                newTiers[index].commission = parseFloat(e.target.value);
+                                setTempConfig({ ...tempConfig, businessTiers: newTiers });
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Description / Perks List</label>
+                          <textarea 
+                            className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-xs font-medium h-20 resize-none"
+                            value={tier.description || ""}
+                            onChange={(e) => {
+                              const newTiers = [...tempConfig.businessTiers];
+                              newTiers[index].description = e.target.value;
+                              setTempConfig({ ...tempConfig, businessTiers: newTiers });
+                            }}
+                            placeholder="Describe the target business and specific perks..."
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+               </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "subscriptions" && (() => {
           const tradespeople = users.filter(u => u.role === "tradesperson");
           const activeSubscribers = tradespeople.filter(u => u.subscriptionStatus === "active");
@@ -3103,10 +3573,10 @@ export default function AdminDashboard() {
                     <span>Subscribers</span>
                   </div>
                   {[
-                    { name: "Standard", count: homeowners.filter(u => u.subscriptionType === "standard").length },
-                    { name: "Landlord - Starter", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Starter").length },
-                    { name: "Landlord - Pro", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Pro").length },
-                    { name: "Landlord - Enterprise", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Enterprise").length },
+                    { name: "Standard Homeowner", count: homeowners.filter(u => u.subscriptionType === "standard").length },
+                    { name: "Premium Landlord", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Premium Landlord").length },
+                    { name: "Business Professional", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Business Professional").length },
+                    { name: "Enterprise Powerhouse", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Enterprise Powerhouse").length },
                   ].map(tier => (
                     <div key={tier.name} className="flex justify-between p-3 border-b border-slate-100 text-sm">
                       <span className="font-medium text-slate-700">{tier.name}</span>
@@ -3525,333 +3995,43 @@ export default function AdminDashboard() {
                   <h3 className="text-lg font-bold text-slate-900">Platform Configuration</h3>
                   <p className="text-sm text-slate-500">Manage fees, tiers, and global system settings.</p>
                 </div>
-                <button 
-                  onClick={handleSaveSettings}
-                  disabled={isSavingSettings}
-                  className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all shadow-lg disabled:opacity-50"
-                >
-                  {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                  Save Changes
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button 
+                    onClick={syncWithUnifiedPricing}
+                    className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl font-bold text-xs hover:bg-blue-100 transition-all border border-blue-100 whitespace-nowrap"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Sync with Unified Pricing
+                  </button>
+                  <button 
+                    onClick={handleSaveSettings}
+                    disabled={isSavingSettings}
+                    className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                    Save Changes
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
-                  {/* Fee Tiers Section */}
-                  <div id="fee-tiers" className="space-y-4 scroll-mt-20">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Trade Provider Tiers</h4>
-                        <p className="text-[10px] text-slate-500">Configure how much tradespeople pay and their quote limits.</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Active Tiers: {tempConfig.feeTiers.length}</span>
-                        {tempConfig.feeTiers.length < 5 && (
-                          <button 
-                            onClick={() => {
-                              const newTiers = [...tempConfig.feeTiers, { 
-                                name: "New Tier", 
-                                price: 0, 
-                                maxQuotes: 10, 
-                                maxAcceptedQuotes: 5,
-                                limitPeriod: "monthly",
-                                description: "Description here", 
-                                includesRecommendation: false
-                              }];
-                              setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                            }}
-                            className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-bold hover:bg-blue-700 transition-all shadow-sm"
-                          >
-                            <Plus className="w-3 h-3" /> Add Tier
-                          </button>
-                        )}
-                      </div>
+                  {/* Tiers and Monetization moved to the 'Tiers' tab */}
+                  <div className="p-12 bg-blue-50/30 rounded-[40px] border border-blue-100 border-dashed text-center space-y-4">
+                    <div className="w-16 h-16 rounded-3xl bg-blue-600 text-white flex items-center justify-center mx-auto shadow-xl shadow-blue-100">
+                      <DollarSign className="w-8 h-8" />
                     </div>
-                    
-                    <div className="grid grid-cols-1 gap-4">
-                      {tempConfig.feeTiers.map((tier: any, index: number) => {
-                        const isEditing = editingTiers.includes(index);
-                        return (
-                          <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 relative group">
-                            {/* Header */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center">
-                                  {index === 0 ? <Star className="w-5 h-5 text-slate-400" /> : 
-                                   index === 1 ? <TrendingUp className="w-5 h-5 text-blue-600" /> : 
-                                   <Shield className="w-5 h-5 text-purple-600" />}
-                                </div>
-                                <div className="space-y-1">
-                                  {isEditing ? (
-                                    <>
-                                      <input 
-                                        type="text"
-                                        value={tier.name}
-                                        onChange={(e) => {
-                                          const newTiers = [...tempConfig.feeTiers];
-                                          newTiers[index].name = e.target.value;
-                                          setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                                          setHasUnsavedChanges(true);
-                                        }}
-                                        className="font-bold text-slate-900 bg-transparent border-none focus:ring-0 p-0 text-lg block"
-                                        placeholder="Tier Name"
-                                      />
-                                      {!tier.name.trim() && <p className="text-[10px] text-red-500 font-bold">Name is required</p>}
-                                    </>
-                                  ) : (
-                                    <h4 className="font-bold text-slate-900 text-lg">{tier.name}</h4>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl">
-                                    <button 
-                                      onClick={() => {
-                                        const newTiers = [...tempConfig.feeTiers];
-                                        newTiers[index].limitPeriod = "monthly";
-                                        setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                                      }}
-                                      className={cn("px-3 py-1 text-[10px] font-bold rounded-lg transition-all", tier.limitPeriod === "monthly" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500")}
-                                    >
-                                      <Calendar className="w-3 h-3 inline mr-1" /> Monthly
-                                    </button>
-                                    <button 
-                                      onClick={() => {
-                                        const newTiers = [...tempConfig.feeTiers];
-                                        newTiers[index].limitPeriod = "lifetime";
-                                        setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                                      }}
-                                      className={cn("px-3 py-1 text-[10px] font-bold rounded-lg transition-all", tier.limitPeriod === "lifetime" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500")}
-                                    >
-                                      <Clock className="w-3 h-3 inline mr-1" /> Lifetime
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl">
-                                    <span className="px-3 py-1 text-[10px] font-bold rounded-lg bg-white text-blue-600 shadow-sm">
-                                      {tier.limitPeriod === "monthly" ? "Monthly" : "Lifetime"}
-                                    </span>
-                                  </div>
-                                )}
-                                
-                                <button 
-                                  onClick={() => {
-                                    if (isEditing) {
-                                      setEditingTiers(editingTiers.filter(i => i !== index));
-                                    } else {
-                                      setEditingTiers([...editingTiers, index]);
-                                    }
-                                  }}
-                                  className={cn("p-2 rounded-lg transition-colors", isEditing ? "bg-blue-50 text-blue-600" : "text-slate-400 hover:bg-slate-50 hover:text-blue-600")}
-                                >
-                                  {isEditing ? <CheckCircle2 className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
-                                </button>
-                                <button 
-                                  onClick={() => {
-                                    const newTiers = tempConfig.feeTiers.filter((_: any, i: number) => i !== index);
-                                    setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                  className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {isEditing ? (
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Price (£)</label>
-                                  <input 
-                                    type="number"
-                                    value={tier.price}
-                                    onChange={(e) => {
-                                      const newTiers = [...tempConfig.feeTiers];
-                                      newTiers[index].price = parseFloat(e.target.value);
-                                      setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                                    }}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Max Quotes</label>
-                                  <input 
-                                    type="number"
-                                    value={tier.maxQuotes}
-                                    onChange={(e) => {
-                                      const newTiers = [...tempConfig.feeTiers];
-                                      newTiers[index].maxQuotes = parseInt(e.target.value);
-                                      setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                                    }}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Max Accepted</label>
-                                  <input 
-                                    type="number"
-                                    value={tier.maxAcceptedQuotes}
-                                    onChange={(e) => {
-                                      const newTiers = [...tempConfig.feeTiers];
-                                      newTiers[index].maxAcceptedQuotes = parseInt(e.target.value);
-                                      setTempConfig({ ...tempConfig, feeTiers: newTiers });
-                                    }}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-3 gap-4">
-                                <div className="bg-slate-50 p-3 rounded-2xl">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Price</p>
-                                  <p className="text-lg font-black text-slate-900">£{tier.price}</p>
-                                </div>
-                                <div className="bg-slate-50 p-3 rounded-2xl">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Quotes</p>
-                                  <p className="text-lg font-black text-slate-900">{tier.maxQuotes}</p>
-                                </div>
-                                <div className="bg-slate-50 p-3 rounded-2xl">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Accepted</p>
-                                  <p className="text-lg font-black text-slate-900">{tier.maxAcceptedQuotes}</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                    <div className="space-y-1">
+                      <h4 className="text-xl font-black text-slate-900">Monetization Settings Moved</h4>
+                      <p className="text-sm text-slate-500 max-w-sm mx-auto">To provide a more comprehensive overview and easier management, all subscription tiers and paywall controls have been relocated.</p>
                     </div>
-                  </div>
-
-                  {/* Business Tiers Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Business Hirer Tiers</h4>
-                        <p className="text-[10px] text-slate-500">Configure limits for professional clients and property managers.</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">Active: {tempConfig.businessTiers?.length || 0}</span>
-                        {(tempConfig.businessTiers?.length || 0) < 5 && (
-                          <button 
-                            onClick={() => {
-                              const newTiers = [...(tempConfig.businessTiers || []), { 
-                                name: "New Business Tier", 
-                                price: 99, 
-                                jobPostsLimit: 20,
-                                limitPeriod: "monthly",
-                                description: "Description here"
-                              }];
-                              setTempConfig({ ...tempConfig, businessTiers: newTiers });
-                            }}
-                            className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-bold hover:bg-indigo-700 transition-all shadow-sm"
-                          >
-                            <Plus className="w-3 h-3" /> Add Business Tier
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 gap-4">
-                      {(tempConfig.businessTiers || []).map((tier: any, index: number) => {
-                        const isEditing = editingTiers.includes(index + 100); // Offset for business tiers
-                        return (
-                          <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 relative group">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                                  <Building2 className="w-5 h-5 text-indigo-600" />
-                                </div>
-                                <div className="space-y-1">
-                                  {isEditing ? (
-                                    <input 
-                                      type="text"
-                                      value={tier.name}
-                                      onChange={(e) => {
-                                        const newTiers = [...tempConfig.businessTiers];
-                                        newTiers[index].name = e.target.value;
-                                        setTempConfig({ ...tempConfig, businessTiers: newTiers });
-                                        setHasUnsavedChanges(true);
-                                      }}
-                                      className="font-bold text-slate-900 bg-transparent border-none focus:ring-0 p-0 text-lg block"
-                                    />
-                                  ) : (
-                                    <h4 className="font-bold text-slate-900 text-lg">{tier.name}</h4>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <button 
-                                  onClick={() => {
-                                    if (isEditing) {
-                                      setEditingTiers(editingTiers.filter(i => i !== index + 100));
-                                    } else {
-                                      setEditingTiers([...editingTiers, index + 100]);
-                                    }
-                                  }}
-                                  className={cn("p-2 rounded-lg transition-colors", isEditing ? "bg-indigo-50 text-indigo-600" : "text-slate-400 hover:bg-slate-50 hover:text-indigo-600")}
-                                >
-                                  {isEditing ? <CheckCircle2 className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
-                                </button>
-                                <button 
-                                  onClick={() => {
-                                    const newTiers = tempConfig.businessTiers.filter((_: any, i: number) => i !== index);
-                                    setTempConfig({ ...tempConfig, businessTiers: newTiers });
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                  className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {isEditing ? (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Monthly Price (£)</label>
-                                  <input 
-                                    type="number"
-                                    value={tier.price}
-                                    onChange={(e) => {
-                                      const newTiers = [...tempConfig.businessTiers];
-                                      newTiers[index].price = parseFloat(e.target.value);
-                                      setTempConfig({ ...tempConfig, businessTiers: newTiers });
-                                    }}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Job Posts Limit</label>
-                                  <input 
-                                    type="number"
-                                    value={tier.jobPostsLimit}
-                                    onChange={(e) => {
-                                      const newTiers = [...tempConfig.businessTiers];
-                                      newTiers[index].jobPostsLimit = parseInt(e.target.value);
-                                      setTempConfig({ ...tempConfig, businessTiers: newTiers });
-                                    }}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold"
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-indigo-50/50 p-3 rounded-2xl">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Price</p>
-                                  <p className="text-lg font-black text-indigo-900">£{tier.price}</p>
-                                </div>
-                                <div className="bg-indigo-50/50 p-3 rounded-2xl">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Monthly Posts</p>
-                                  <p className="text-lg font-black text-indigo-900">{tier.jobPostsLimit}</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <button 
+                      onClick={() => handleTabChange("monetization")}
+                      className="inline-flex items-center gap-2 bg-white px-6 py-2.5 rounded-2xl border border-slate-200 text-slate-900 font-bold text-sm hover:border-blue-600 hover:text-blue-600 transition-all shadow-sm group"
+                    >
+                      Open Tiers Tab
+                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                    </button>
                   </div>
                 </div>
 
@@ -4056,46 +4236,12 @@ export default function AdminDashboard() {
                       </div>
 
                       {/* Global Monetization Mode */}
-                      <div id="monetization-control" className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 outline outline-2 outline-transparent hover:outline-blue-600/10 transition-all scroll-mt-20">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center", 
-                            tempConfig.paywallEnabled === false ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"
-                          )}>
-                            {tempConfig.paywallEnabled === false ? <Sparkles className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">Global Monetization Mode</p>
-                            <p className="text-[10px] text-slate-500">
-                              {tempConfig.paywallEnabled === false ? "Beta Mode (Free Access)" : "Monetized (Subscription Active)"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {tempConfig.paywallEnabled === false && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-tighter animate-pulse">
-                              Beta Mode
-                            </span>
-                          )}
-                          <button 
-                            onClick={handleTogglePaywall}
-                            className={cn(
-                              "w-12 h-6 rounded-full relative transition-all",
-                              tempConfig.paywallEnabled === false ? "bg-amber-500" : "bg-blue-600"
-                            )}
-                          >
-                            <div className={cn(
-                              "absolute top-1 w-4 h-4 bg-white rounded-full transition-all flex items-center justify-center overflow-hidden",
-                              tempConfig.paywallEnabled === false ? "left-1" : "right-1"
-                            )}>
-                              {tempConfig.paywallEnabled === false ? (
-                                <Sparkles className="w-2 h-2 text-amber-600" />
-                              ) : (
-                                <DollarSign className="w-2 h-2 text-blue-600" />
-                              )}
-                            </div>
-                          </button>
-                        </div>
+                      <div className="lg:col-span-3 p-8 bg-blue-50/30 rounded-[32px] border border-blue-100 border-dashed text-center space-y-3">
+                         <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-200">
+                            <DollarSign className="w-6 h-6" />
+                         </div>
+                         <h5 className="font-bold text-slate-900">Monetization Controls have moved.</h5>
+                         <p className="text-xs text-slate-500 max-w-md mx-auto">The Global Paywall toggle and Tier Management are now centralized in the <span className="font-bold text-blue-600 uppercase tracking-widest text-[10px]">Tiers</span> tab for a better management experience.</p>
                       </div>
                     </div>
 
@@ -5566,6 +5712,108 @@ function StatCard({ label, value, icon, color, onClick }: {
     </div>
   );
 }
+
+// Side-by-side comparison card for Monetization Tiers
+const TierComparisonCard = ({ tier, type }: { tier: any, type: 'provider' | 'business', key?: any }) => {
+  return (
+    <div className={cn(
+      "p-6 rounded-[32px] border-2 bg-white flex flex-col h-full transition-all hover:shadow-2xl hover:-translate-y-1 group",
+      type === 'provider' ? "border-blue-50/50 hover:border-blue-100" : "border-indigo-50/50 hover:border-indigo-100"
+    )}>
+      <div className="mb-6">
+        <div className={cn(
+          "w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110",
+          type === 'provider' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+        )}>
+          {type === 'provider' ? <Star className="w-6 h-6" /> : <Building2 className="w-6 h-6" />}
+        </div>
+        <h4 className="text-xl font-black text-slate-900 leading-tight">{tier.name}</h4>
+        <div className="flex items-center gap-2 mt-2">
+          <span className={cn(
+            "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter",
+            type === 'provider' ? "bg-blue-50 text-blue-600" : "bg-indigo-50 text-indigo-600"
+          )}>
+            {type === 'provider' ? 'Trade Provider' : 'Business Hirer'}
+          </span>
+          {tier.price === 0 && (
+            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 uppercase tracking-tighter">
+              Free Tier
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-6">
+        <div className="space-y-1">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Base Pricing</p>
+           <div className="flex items-baseline gap-1">
+             <span className="text-2xl font-black text-slate-900">£{tier.price}</span>
+             <span className="text-xs font-bold text-slate-400 lowercase">/ {tier.limitPeriod || 'monthly'}</span>
+           </div>
+        </div>
+
+        <div className="space-y-3">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Key Limits & Perks</p>
+           <ul className="space-y-2.5">
+             <li className="flex items-start gap-2 text-xs font-bold text-slate-600">
+               <div className="w-4 h-4 rounded-full bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                 <CheckCircle2 className="w-2.5 h-2.5 text-slate-400" />
+               </div>
+               {type === 'provider' ? `${tier.maxQuotes} Quotes per cycle` : `${tier.jobPostsLimit} Job posts per cycle`}
+             </li>
+             {type === 'provider' && (
+               <li className="flex items-start gap-2 text-xs font-bold text-slate-600">
+                 <div className="w-4 h-4 rounded-full bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                   <CheckCircle2 className="w-2.5 h-2.5 text-slate-400" />
+                 </div>
+                 {tier.maxAcceptedQuotes} Accepted Quotes
+               </li>
+             )}
+             <li className="flex items-start gap-2 text-xs font-bold text-slate-600">
+               <div className="w-4 h-4 rounded-full bg-blue-50/50 flex items-center justify-center shrink-0 mt-0.5">
+                 <Percent className="w-2.5 h-2.5 text-blue-600" />
+               </div>
+               {tier.commission}% Platform Commission
+             </li>
+             {(tier.shopDiscount || 0) > 0 && (
+               <li className="flex items-start gap-2 text-xs font-bold text-slate-600">
+                 <div className="w-4 h-4 rounded-full bg-orange-50/50 flex items-center justify-center shrink-0 mt-0.5">
+                   <ShoppingBag className="w-2.5 h-2.5 text-orange-600" />
+                 </div>
+                 {tier.shopDiscount}% Shop Discount
+               </li>
+             )}
+             {type === 'business' && tier.hasTeamManagement && (
+               <li className="flex items-start gap-2 text-xs font-bold text-slate-600">
+                 <div className="w-4 h-4 rounded-full bg-purple-50/50 flex items-center justify-center shrink-0 mt-0.5">
+                   <Users className="w-2.5 h-2.5 text-purple-600" />
+                 </div>
+                 Multi-seat Team Management
+               </li>
+             )}
+             {type === 'provider' && (tier.leadFee || 0) > 0 && (
+               <li className="flex items-start gap-2 text-xs font-bold text-slate-600">
+                 <div className="w-4 h-4 rounded-full bg-emerald-50/50 flex items-center justify-center shrink-0 mt-0.5">
+                   <DollarSign className="w-2.5 h-2.5 text-emerald-600" />
+                 </div>
+                 £{tier.leadFee} Lead Fee
+               </li>
+             )}
+           </ul>
+        </div>
+
+        {tier.description && (
+          <div className="pt-4 border-t border-slate-50">
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Privileges & Description</p>
+             <p className="text-[11px] font-medium text-slate-500 italic leading-relaxed">
+               "{tier.description}"
+             </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 function UserIcon(props: any) {
   return (

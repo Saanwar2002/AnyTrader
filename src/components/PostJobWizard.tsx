@@ -950,6 +950,8 @@ export default function PostJobWizard() {
         if (editJob) {
           await updateDoc(currentJobRef, cleanData);
         } else {
+          // Time-Gate leads logic for new jobs
+          cleanData.exclusiveUntil = new Date(Date.now() + (formData.urgency === 'emergency' ? 5 : 15) * 60000);
           await setDoc(currentJobRef, cleanData);
         
           // Handle specific tradesperson invitation (only for first job if bulk)

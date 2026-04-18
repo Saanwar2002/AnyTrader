@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Briefcase, Clock, MessageSquare, CheckCircle2, 
   ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus,
-  Image as ImageIcon, Video as VideoIcon, Loader2, MapPin, Share2, Calendar
+  Image as ImageIcon, Video as VideoIcon, Loader2, MapPin, Share2, Calendar, X
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
@@ -44,6 +44,62 @@ export default function TradesDashboard() {
   const [confirmingEmergency, setConfirmingEmergency] = useState(false);
   const [showEmergencyToast, setShowEmergencyToast] = useState(false);
   const [profitability, setProfitability] = useState<any>(null);
+
+  // Exclusive Job Offers State
+  const [showExclusiveModal, setShowExclusiveModal] = useState(false);
+  const [isProcessingExclusive, setIsProcessingExclusive] = useState(false);
+  const [exclusiveCheckoutError, setExclusiveCheckoutError] = useState<string | null>(null);
+
+  const [sysConfig, setSysConfig] = useState<any>(null);
+
+  const getExclusivePrice = () => {
+    const tier = profile?.tierId || "Basic";
+    if (tier === "Basic") return 25;
+    if (tier.includes("Enterprise") || tier.includes("Highest")) return 10;
+    return 15; // Standard/Pro
+  };
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, "platform_config", "global"), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        setSysConfig(docSnapshot.data());
+      } else {
+        setSysConfig({ paywallEnabled: true });
+      }
+    });
+    return () => unsubConfig();
+  }, []);
+
+  const handleExclusiveCheckout = async () => {
+    if (!user || !profile) return;
+    setIsProcessingExclusive(true);
+    setExclusiveCheckoutError(null);
+    try {
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.uid,
+          tierName: "Exclusive Leads Add-on",
+          priceId: "price_mock_exclusive_addon", // Replace with real price in prod
+          successUrl: `${window.location.origin}/dashboard?exclusive_success=true`,
+          cancelUrl: `${window.location.origin}/dashboard`,
+          metadata: { isExclusiveAddon: "true" }
+        }),
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Failed to initiate checkout");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setExclusiveCheckoutError(err.message);
+      setIsProcessingExclusive(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -343,6 +399,36 @@ export default function TradesDashboard() {
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${profile?.isAvailableForEmergency ? 'translate-x-9' : 'translate-x-1'}`} />
             </button>
           </div>
+
+          {/* Exclusive Job Offers Toggle */}
+          {sysConfig?.paywallEnabled !== false && (
+            <div className="flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50 px-3 h-11 rounded-2xl border border-amber-200 shadow-sm relative overflow-hidden">
+              <div className="absolute inset-0 bg-white/40" />
+              <Zap className="w-4 h-4 text-amber-500 relative z-10 fill-current" />
+              <span className="text-[11px] font-black uppercase text-amber-900 relative z-10 tracking-tight">Fast Pass</span>
+              <button 
+                type="button"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!profile?.hasExclusiveAddon) {
+                    setShowExclusiveModal(true);
+                  } else {
+                    try {
+                      await updateDoc(doc(db, "users", user!.uid), {
+                        isExclusiveActive: profile?.isExclusiveActive === false ? true : false
+                      });
+                    } catch (error) {
+                      console.error("Error toggling exclusive status", error);
+                    }
+                  }
+                }}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none z-10 ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'bg-amber-500' : 'bg-slate-300'}`}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          )}
 
           {/* Share Button */}
           <button 
@@ -791,6 +877,88 @@ export default function TradesDashboard() {
             <Zap className="w-5 h-5 text-amber-400" />
             <p className="text-sm font-bold">Tap again to confirm change</p>
           </motion.div>
+        )}
+
+        {showExclusiveModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setShowExclusiveModal(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white max-w-lg w-full rounded-3xl overflow-hidden shadow-2xl relative z-10 border border-amber-200"
+            >
+              <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-8 text-center relative overflow-hidden">
+                <div className="absolute top-4 right-4">
+                  <button onClick={() => setShowExclusiveModal(false)} className="bg-black/20 hover:bg-black/30 text-white rounded-full p-2 transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
+                  <Zap className="w-8 h-8 text-amber-50 fill-current" />
+                </div>
+                <h2 className="text-3xl font-black text-white tracking-tight">Unlock Fast Pass</h2>
+                <p className="text-amber-100 font-medium mt-2 max-w-sm mx-auto">Beat the competition by getting notified up to 15 minutes before jobs hit the public feed.</p>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">Time-Gated Leads</h4>
+                      <p className="text-sm text-slate-500">Access emergency jobs 5 mins early and normal jobs 15 mins early.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Zap className="w-5 h-5 text-amber-600 fill-current" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">Top 5 Quote Guarantee</h4>
+                      <p className="text-sm text-slate-500">Submit your quote while others are locked out. Use up to 3 exclusive skips per day.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
+                  <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">Add-on Price</p>
+                  <p className="text-4xl font-black text-slate-900">£{getExclusivePrice()}<span className="text-base text-slate-500 font-medium">/mo</span></p>
+                </div>
+
+                {exclusiveCheckoutError && (
+                  <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold text-center">
+                    {exclusiveCheckoutError}
+                  </div>
+                )}
+
+                <button 
+                  onClick={handleExclusiveCheckout}
+                  disabled={isProcessingExclusive}
+                  className="w-full h-14 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-2xl font-black text-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  {isProcessingExclusive ? (
+                    <>
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      Loading Secure Checkout...
+                    </>
+                  ) : (
+                    <>
+                      Unlock Fast Pass
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-center text-slate-400 font-medium">Cancel anytime. Applied to your existing subscription.</p>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

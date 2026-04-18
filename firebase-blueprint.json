@@ -374,16 +374,32 @@
         "maintenanceMode": { "type": "boolean" },
         "feeTiers": {
           "type": "array",
-          "maxItems": 3,
           "items": {
             "type": "object",
             "properties": {
               "name": { "type": "string" },
-              "type": { "type": "string", "enum": ["percentage", "fixed"] },
-              "value": { "type": "number" },
+              "price": { "type": "number" },
+              "maxQuotes": { "type": "integer" },
+              "maxAcceptedQuotes": { "type": "integer" },
+              "commission": { "type": "number" },
+              "leadFee": { "type": "number" },
               "description": { "type": "string" },
-              "maxJobValue": { "type": "number" },
-              "jobPostsLimit": { "type": "integer" }
+              "limitPeriod": { "type": "string", "enum": ["monthly", "lifetime"] },
+              "includesRecommendation": { "type": "boolean" }
+            }
+          }
+        },
+        "businessTiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "price": { "type": "number" },
+              "jobPostsLimit": { "type": "integer" },
+              "commission": { "type": "number" },
+              "description": { "type": "string" },
+              "limitPeriod": { "type": "string", "enum": ["monthly", "lifetime"] }
             }
           }
         },

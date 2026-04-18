@@ -1189,3 +1189,56 @@ export async function getMonetizationOpportunities(
     return [];
   }
 }
+
+export interface EquipmentRecommendation {
+  item: string;
+  reason: string;
+  category: "Safety" | "Performance" | "Efficiency";
+  estimatedPrice?: string;
+}
+
+export async function getEquipmentRecommendations(
+  jobTitle: string,
+  jobDescription: string,
+  tradeCategory: string
+): Promise<EquipmentRecommendation[]> {
+  const prompt = `
+    As an expert trade equipment specialist, suggest 3 critical pieces of equipment, specialized tools, or high-performance gear that a ${tradeCategory} would need for this specific job:
+    Job: ${jobTitle}
+    Scope: ${jobDescription}
+    
+    Focus on items that improve safety, speed, or quality specifically for this task.
+    
+    Return a JSON array of:
+    {
+      "item": "specific tool or gear name",
+      "reason": "why this is crucial specifically for this job description",
+      "category": "Safety" | "Performance" | "Efficiency",
+      "estimatedPrice": "£XX - £XX"
+    }
+  `;
+
+  try {
+    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            item: { type: Type.STRING },
+            reason: { type: Type.STRING },
+            category: { type: Type.STRING, enum: ["Safety", "Performance", "Efficiency"] },
+            estimatedPrice: { type: Type.STRING }
+          },
+          required: ["item", "reason", "category"]
+        }
+      }
+    });
+
+    return result || [];
+  } catch (error) {
+    console.error("Gemini Equipment Rec Error:", error);
+    return [];
+  }
+}

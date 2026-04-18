@@ -896,7 +896,7 @@ export default function Profile() {
       )}
 
       {/* Subscription Plan Card */}
-      {profile.role === "tradesperson" && platformConfig && (
+      {(profile.role === "tradesperson" || (profile.role === "homeowner" && profile.subscriptionType === "business")) && platformConfig && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
           {platformConfig.paywallEnabled === false && (
             <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center gap-4">
@@ -916,11 +916,11 @@ export default function Profile() {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Subscription Plan</h3>
-                <p className="text-xs text-slate-500">Manage your platform fee structure</p>
+                <p className="text-xs text-slate-500">Manage your platform structure</p>
               </div>
             </div>
-            <div className="px-3 py-1 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-              {profile.tierId || "Free Trial"}
+            <div id="tier-badge" className="px-3 py-1 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+              {profile.tierId || (profile.role === "homeowner" ? "Standard Homeowner" : "Free Explorer")}
               {profile.subscriptionStatus === 'active' && !profile.cancelAtPeriodEnd && (
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="Active Subscription" />
               )}
@@ -948,7 +948,7 @@ export default function Profile() {
           )}
 
           <div className="grid grid-cols-1 gap-3">
-            {platformConfig.feeTiers.map((tier: any) => (
+            {(profile.role === "homeowner" ? (platformConfig.businessTiers || []) : (platformConfig.feeTiers || [])).map((tier: any) => (
               <button
                 key={tier.name}
                 onClick={() => {
@@ -958,7 +958,8 @@ export default function Profile() {
                   } else {
                     if (confirm(`Switch to the ${tier.name} plan?`)) {
                       setShowCheckoutForTier(tier);
-                      handleSubscribe(); // Auto-subscribe for free tiers
+                      // In a real app we'd call handleSubscribe directly here if price is 0
+                      // or show a simplified checkout
                     }
                   }
                 }}
@@ -975,27 +976,47 @@ export default function Profile() {
                     </span>
                     {tier.price > 0 && (
                       <span className="text-[10px] text-slate-400 block font-bold uppercase">
-                        Per Month
+                        {tier.limitPeriod === "monthly" ? "Per Month" : "Lifetime"}
                       </span>
                     )}
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 mb-2">{tier.description}</p>
+                
                 <div className="flex items-center gap-2 flex-wrap mb-4">
-                  <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
-                    {tier.maxQuotes} Quotes / {tier.limitPeriod === "lifetime" ? "Lifetime" : "Month"}
-                  </div>
-                  <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
-                    {tier.maxAcceptedQuotes} Accepted / {tier.limitPeriod === "lifetime" ? "Lifetime" : "Month"}
-                  </div>
-                  {tier.includesRecommendation && (
-                    <div className="px-2 py-0.5 bg-orange-100 rounded text-[9px] font-bold text-orange-700 flex items-center gap-1">
-                      <Award className="w-3 h-3" /> Includes Recommended Status
+                  {profile.role === "tradesperson" ? (
+                    <>
+                      <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
+                        {tier.maxQuotes} Quotes / {tier.limitPeriod === "lifetime" ? "Lifetime" : "Month"}
+                      </div>
+                      <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
+                        {tier.maxAcceptedQuotes} Accepted / {tier.limitPeriod === "lifetime" ? "Lifetime" : "Month"}
+                      </div>
+                      {tier.includesRecommendation && (
+                        <div className="px-2 py-0.5 bg-orange-100 rounded text-[9px] font-bold text-orange-700 flex items-center gap-1">
+                          <Award className="w-3 h-3" /> Includes Recommended Status
+                        </div>
+                      )}
+                      <div className="px-2 py-0.5 bg-blue-100 rounded text-[9px] font-bold text-blue-700">
+                        {tier.commission || 0}% Comm
+                      </div>
+                      <div className="px-2 py-0.5 bg-emerald-100 rounded text-[9px] font-bold text-emerald-700">
+                        £{tier.leadFee || 0} Lead Fee
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
+                        {tier.jobPostsLimit === 9999 ? "Unlimited" : tier.jobPostsLimit} Job Posts
+                      </div>
+                      <div className="px-2 py-0.5 bg-blue-100 rounded text-[9px] font-bold text-blue-700">
+                        {tier.commission || 0}% Comm
+                      </div>
                     </div>
                   )}
                 </div>
                 
-                {profile.tierId === tier.name && (
+                {profile.role === "tradesperson" && profile.tierId === tier.name && (
                   <div className="space-y-3 pt-4 border-t border-slate-100">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-bold">
@@ -1034,7 +1055,6 @@ export default function Profile() {
                   </div>
                 )}
               </button>
-
             ))}
           </div>
         </div>

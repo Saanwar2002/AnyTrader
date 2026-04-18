@@ -1,3 +1,4 @@
+import { getEmergencyRideRequestsQuery } from "@/src/services/taxiIntegrationService";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import MediaGalleryModal from "./MediaGalleryModal";
@@ -36,6 +37,21 @@ export default function Dashboard() {
   const [recentQuotes, setRecentQuotes] = useState<any[]>([]);
   const [maintenancePredictions, setMaintenancePredictions] = useState<any[]>([]);
   const [isGeneratingPredictions, setIsGeneratingPredictions] = useState(false);
+  const [emergencyRides, setEmergencyRides] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user || !profile || profile.role !== 'admin') return;
+
+    const query = getEmergencyRideRequestsQuery();
+    const unsubscribe = onSnapshot(query, (snapshot) => {
+      const rides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setEmergencyRides(rides);
+    }, (error) => {
+      console.error("Error fetching taxi emergency requests:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user, profile]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -297,6 +313,35 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Emergency Taxi Requests Section */}
+        {emergencyRides.length > 0 && (
+          <div className="space-y-6 lg:col-span-2 bg-red-50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm">
+            <h2 className="text-2xl font-bold text-red-900 flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                <EmergencyIcon className="w-5 h-5 text-red-600 animate-pulse" />
+              </div>
+              Active Emergency Ride Requests
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {emergencyRides.map(ride => (
+                <div key={ride.id} className="bg-white p-6 rounded-3xl border border-red-100 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Emergency Ride</span>
+                    <span className="text-[10px] font-bold text-slate-400">£{ride.fare}</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">Pickup</h4>
+                    <p className="text-xs text-slate-600 truncate">{ride.pickupLocation?.address || "Location unavailable"}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">Drop off</h4>
+                    <p className="text-xs text-slate-600 truncate">{ride.destinationLocation?.address || "Location unavailable"}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Active Jobs List */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">

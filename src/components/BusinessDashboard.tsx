@@ -10,7 +10,7 @@ import {
   Search, BarChart3, Zap, Bot,
   MapPin, ShieldCheck, Building2, LayoutGrid,
   TrendingUp, Users2, FileText, Activity,
-  CreditCard, ArrowUpCircle
+  CreditCard, ArrowUpCircle, Users
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
@@ -93,7 +93,7 @@ export default function BusinessDashboard() {
               "text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider",
               (!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "bg-orange-500" : "bg-blue-600"
             )}>
-              {(!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "Trial Account" : "Professional Account"}
+              {(!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "Standard" : "Professional"}
             </div>
             <span className="text-slate-400 text-xs font-bold">• {profile?.businessCategory || "General Business"}</span>
           </div>
@@ -106,7 +106,7 @@ export default function BusinessDashboard() {
           <div className="text-right">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Plan</p>
             <p className="text-sm font-bold text-blue-600">
-              {(!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "Business Trial (10 Posts)" : (profile?.tierId || "Business Starter")}
+              {(!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "Homeowner/Standard" : (profile?.tierId || "Business Professional")}
             </p>
           </div>
           <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center border border-blue-100">
@@ -142,7 +142,7 @@ export default function BusinessDashboard() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-slate-900">{profile?.tierId || "Business Basic"} Plan</h3>
+                <h3 className="font-bold text-slate-900">{profile?.tierId || "Business Professional"} Plan</h3>
                 <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Active</span>
               </div>
               <div className="mt-2 w-full md:w-64">
@@ -215,16 +215,26 @@ export default function BusinessDashboard() {
           <p className="text-slate-500 text-sm">Track spend and performance</p>
         </Link>
 
-        <button 
-          onClick={() => setIsTradeBotOpen(true)}
-          className="bg-indigo-600 p-6 rounded-[32px] text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all group text-left"
-        >
-          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Bot className="w-6 h-6" />
-          </div>
-          <h3 className="font-bold text-xl mb-1">AI Project Planner</h3>
-          <p className="text-indigo-100 text-sm">Get professional scope advice</p>
-        </button>
+        {(profile?.subscriptionType === 'Business Professional' || profile?.subscriptionType === 'Enterprise Powerhouse') ? (
+          <Link to="/team" className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:border-indigo-600 transition-all group">
+            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-indigo-50 transition-colors">
+              <Users className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
+            </div>
+            <h3 className="font-bold text-xl text-slate-900 mb-1">Team Management</h3>
+            <p className="text-slate-500 text-sm">Manage seats and members</p>
+          </Link>
+        ) : (
+          <button 
+            onClick={() => setIsTradeBotOpen(true)}
+            className="bg-indigo-600 p-6 rounded-[32px] text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all group text-left"
+          >
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Bot className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-xl mb-1">AI Project Planner</h3>
+            <p className="text-indigo-100 text-sm">Get professional scope advice</p>
+          </button>
+        )}
       </div>
 
       {/* Active Portfolio Section */}

@@ -23,6 +23,14 @@ service cloud.firestore {
       );
     }
 
+    function isDriverAuthorized() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tradesperson' &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.trades.hasAny(['Taxi & Transport']) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'verified';
+    }
+
     function isValidJob(data) {
       return data.keys().hasAll(['id', 'homeownerId', 'category', 'title', 'description', 'postcode', 'status', 'postedDate', 'createdAt', 'paymentPreference', 'quoteScope', 'urgency']) &&
              data.id is string &&
@@ -253,6 +261,43 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isEcosystemManager();
       allow delete: if isAdmin();
+    }
+
+    // --- AnyTrader Rides Integration (Taxi App) ---
+
+    match /ride_requests/{rideId} {
+      allow read: if isAuthenticated() && (
+        resource.data.passengerId == request.auth.uid || 
+        resource.data.driverId == request.auth.uid || 
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.passengerId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        (resource.data.passengerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])) ||
+        (isDriverAuthorized() && request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'driverId'])) ||
+        isAdmin()
+      );
+    }
+
+    match /live_tracking/{rideId} {
+      allow read: if isAuthenticated() && (
+        resource.data.passengerId == request.auth.uid || 
+        resource.data.driverId == request.auth.uid || 
+        isAdmin()
+      );
+      allow update: if isDriverAuthorized() && 
+        request.resource.data.updatedAt == request.time && // Prevents time-travel spoofing
+        request.resource.data.driverId == request.auth.uid;
+    }
+
+    match /dispatches/{dispatchId} {
+        allow read: if isDriverAuthorized() || isAdmin();
+        allow write: if isAdmin(); // Only admins can create/update dispatches
+    }
+
+    match /driver_status/{driverId} {
+        allow read: if isDriverAuthorized() || isAdmin();
+        allow update: if isDriverAuthorized() && driverId == request.auth.uid;
     }
   }
 }
