@@ -93,6 +93,16 @@ export const getTraderBadges = (profile: any): Badge[] => {
       bgColor: "bg-amber-100",
       description: "Highest trust level: Work physically inspected and approved by AnyTrader experts"
     });
+    
+    // GUARANTEE SIGNAL
+    badges.push({
+      id: "guarantee_1k",
+      label: "£1,000 Guarantee",
+      icon: <ShieldCheck className="w-3 h-3 text-emerald-600 fill-emerald-500" />,
+      color: "text-emerald-700",
+      bgColor: "bg-emerald-50",
+      description: "PLATFORM GUARANTEE: Any work by this pro is covered up to £1,000 against defects."
+    });
   } else if (profile.verificationStatus === "vetted") {
     badges.push({
       id: "vetted_pro",
@@ -101,6 +111,16 @@ export const getTraderBadges = (profile: any): Badge[] => {
       color: "text-emerald-700",
       bgColor: "bg-emerald-100",
       description: "Enhanced trust level: Multiple references checked and past work reviewed"
+    });
+
+    // GUARANTEE SIGNAL
+    badges.push({
+      id: "guarantee_500",
+      label: "£500 Guarantee",
+      icon: <ShieldCheck className="w-3 h-3 text-blue-600 fill-blue-500" />,
+      color: "text-blue-700",
+      bgColor: "bg-blue-50",
+      description: "PLATFORM GUARANTEE: Any work by this pro is covered up to £500 against defects."
     });
   } else if (profile.verificationStatus === "verified") {
     badges.push({
@@ -133,7 +153,7 @@ export const BadgeOverlay = ({ badges, className = "" }: { badges: Badge[], clas
 
   return (
     <div className={`flex flex-wrap gap-1 ${className}`}>
-      {badges.slice(0, 2).map((badge) => (
+      {badges.slice(0, 3).map((badge) => (
         <div 
           key={badge.id}
           className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${badge.bgColor} ${badge.color} border border-current/10 shadow-sm`}

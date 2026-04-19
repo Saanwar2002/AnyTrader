@@ -32,10 +32,25 @@
         "isDisabled": { "type": "boolean" },
         "isFoundingMember": { "type": "boolean", "description": "Tag for the first 100 verified traders." },
         "joinedDuringBeta": { "type": "boolean", "description": "Flag for users who joined during the early launch phase." },
+        "stripeAccountId": { "type": "string", "description": "Connected Stripe Express/Custom account ID for payouts." },
+        "stripeOnboardingComplete": { "type": "boolean", "description": "Whether the trader has completed the KYC onboarding flow." },
+        "payoutsEnabled": { "type": "boolean", "description": "Whether the Stripe account is restricted or active." },
+        "fairnessScore": { "type": "number", "description": "0-100 score tracking fairness in disputes (homeowners start at 100)." },
+        "totalDisputesRaised": { "type": "integer", "description": "Historical count of disputes raised by this homeowner." },
         "phantomFeesSaved": { "type": "number", "description": "Running total of fees saved during free beta period for ROI tracking." },
         "memberId": { "type": "string", "description": "Human-readable ID with prefix (T-10001, H-10002, etc)." },
         "memberSequence": { "type": "integer", "description": "Numerical part of the member ID for easier searching." },
         "verificationStatus": { "type": "string", "enum": ["unverified", "pending", "verified", "vetted", "auditioned", "rejected"] },
+        "insurance": {
+          "type": "object",
+          "properties": {
+            "provider": { "type": "string" },
+            "policyNumber": { "type": "string" },
+            "expiryDate": { "type": "string", "format": "date" },
+            "verified": { "type": "boolean" },
+            "verifiedAt": { "type": "string", "format": "date-time" }
+          }
+        },
         "verificationDocs": {
           "type": "array",
           "items": {
@@ -120,6 +135,19 @@
           "properties": {
             "raisedBy": { "type": "string" },
             "reason": { "type": "string" },
+            "isPropertyDamage": { "type": "boolean", "description": "Whether the dispute involves physical damage to property." },
+            "isHandshakeVerified": { "type": "boolean", "description": "True if the job was completed via QR handshake, restricting frivolous claims." },
+            "mediationStakePaid": { "type": "boolean", "description": "Whether the £15 friction fee has been paid for this mediation." },
+            "technicalFaultReport": { "type": "string", "description": "Mandatory technical explanation for non-cosmetic disputes." },
+            "pliClaim": {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "enum": ["none", "requested", "initiated", "rejected", "settled"] },
+                "provider": { "type": "string" },
+                "policyNumber": { "type": "string" },
+                "initiatedAt": { "type": "string", "format": "date-time" }
+              }
+            },
             "photos": { "type": "array", "items": { "type": "string" } },
             "status": { "type": "string", "enum": ["open", "resolved", "mediated"] },
             "createdAt": { "type": "string", "format": "date-time" }
@@ -200,7 +228,29 @@
             }
           }
         },
-        "revisionCount": { "type": "integer" }
+        "revisionCount": { "type": "integer" },
+        "paymentTrack": { "type": "string", "enum": ["quick", "project"] },
+        "guaranteeExpiresAt": { "type": "string", "format": "date-time" },
+        "netPayoutValue": { "type": "number", "description": "The final amount the trader receives after all fees (estimated/actual)." },
+        "stripeFeeAmount": { "type": "number", "description": "Processing fee (higher for cards, capped for bank transfers)." },
+        "platformCommission": { "type": "number", "description": "The AnyTrader platform cut based on the user's tier and any commission caps." },
+        "paymentRail": { "type": "string", "enum": ["card", "bank_transfer"], "description": "The rail used (Bank used for jobs > £400)." },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "amount": { "type": "number" },
+              "status": { "type": "string", "enum": ["draft", "pending_funding", "funded", "work_completed", "funds_released", "disputed"] },
+              "releaseDate": { "type": "string", "format": "date-time" },
+              "fundedAt": { "type": "string", "format": "date-time" },
+              "stripePaymentIntentId": { "type": "string" }
+            },
+            "required": ["id", "title", "amount", "status"]
+          }
+        }
       },
       "required": ["id", "jobId", "tradespersonId", "amount", "status", "createdAt"]
     },

@@ -581,34 +581,34 @@ export default function TradesDashboard() {
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-[#1e3a5f] to-[#2c5282] p-4 rounded-[2rem] text-white shadow-xl relative overflow-hidden group"
+        className="bg-gradient-to-br from-[#1e3a5f] to-[#2c5282] py-3 px-4 rounded-3xl text-white shadow-xl relative overflow-hidden group"
       >
         {/* Decorative Elements */}
         <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all" />
         <div className="absolute -left-8 -bottom-8 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl" />
         
         <div className="relative z-10">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded shadow-lg shadow-orange-500/20">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="bg-orange-500 text-white text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded shadow-sm shadow-orange-500/20">
                   {profile?.joinedDuringBeta ? "Free Beta Member" : "Active Member"}
                 </span>
                 {profile?.isFoundingMember && (
-                  <div className="flex items-center gap-1 text-blue-200 text-[9px] font-bold uppercase tracking-widest bg-white/10 px-1.5 py-0.5 rounded">
-                    <Award className="w-2.5 h-2.5 text-orange-400" />
+                  <div className="flex items-center gap-1 text-blue-200 text-[8px] font-bold uppercase tracking-widest bg-white/10 px-1.5 py-0.5 rounded">
+                    <Award className="w-2 h-2 text-orange-400" />
                     Founding Member
                   </div>
                 )}
-                <div className="flex items-center gap-1 text-blue-200 text-[9px] font-bold uppercase tracking-widest">
-                  <CheckCircle2 className="w-2.5 h-2.5" />
+                <div className="flex items-center gap-1 text-blue-200 text-[8px] font-bold uppercase tracking-widest">
+                  <CheckCircle2 className="w-2 h-2" />
                   {profile?.verificationStatus === "auditioned" ? "Auditioned Pro" : 
                    profile?.verificationStatus === "vetted" ? "Vetted Pro" : 
                    profile?.verificationStatus === "verified" ? "Verified Status" : "Onboarding"}
                 </div>
               </div>
               
-              <h3 className="text-xl md:text-2xl font-display font-black tracking-tight leading-tight">
+              <h3 className="text-base md:text-lg font-display font-black tracking-tight leading-snug">
                 You've saved <span className="text-orange-400">£{(profile?.phantomFeesSaved || 0).toFixed(2)}</span> in platform fees!
               </h3>
             </div>
@@ -618,9 +618,9 @@ export default function TradesDashboard() {
                 setShowSavingsInfo(!showSavingsInfo);
                 setUserInteractedWithSavings(true);
               }}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all shrink-0"
+              className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition-all shrink-0"
             >
-              {showSavingsInfo ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              {showSavingsInfo ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
           </div>
 

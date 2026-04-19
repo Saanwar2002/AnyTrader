@@ -10,7 +10,7 @@ import {
   MessageSquare, PoundSterling, Calendar, Loader2, User as UserIcon, Video, Star,
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
-  BarChart3
+  BarChart3, ShieldCheck, Info, QrCode, TrendingDown
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
@@ -19,8 +19,14 @@ import { AnimatePresence } from "motion/react";
 import MediaGalleryModal from "./MediaGalleryModal";
 import QuoteComparisonModal from "./QuoteComparisonModal";
 import { SEO } from "./SEO";
+import { 
+  calculatePayoutBreakdown, 
+  getStripeOnboardingLink, 
+  type PayoutBreakdown 
+} from "@/src/services/stripeIntegrationService";
 import { RECURRING_CATEGORIES } from "@/src/constants";
 import { format, addHours, parseISO } from 'date-fns';
+import { TrustPulse } from "./TrustPulse";
 
 // Helper to generate Google Calendar link
 const generateGoogleCalendarLink = (job: any, quote: any) => {
@@ -395,6 +401,8 @@ export default function JobDetails() {
         return;
       }
 
+      const payoutBreakdown = calculatePayoutBreakdown(parseFloat(quoteAmount), profile?.tier || 'payg');
+
       if (existingQuote) {
         const updateData: any = {
           history: arrayUnion({
@@ -406,6 +414,10 @@ export default function JobDetails() {
             reason: "Manual Update"
           }),
           amount: parseFloat(quoteAmount),
+          netPayoutValue: payoutBreakdown.netPayout,
+          stripeFeeAmount: payoutBreakdown.stripeFee,
+          platformCommission: payoutBreakdown.platformCommission,
+          paymentRail: payoutBreakdown.paymentRail,
           message: quoteMessage,
           startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
           isImmediateStart,
@@ -433,6 +445,10 @@ export default function JobDetails() {
           tradespersonId: user.uid,
           homeownerId: job.homeownerId,
           amount: parseFloat(quoteAmount),
+          netPayoutValue: payoutBreakdown.netPayout,
+          stripeFeeAmount: payoutBreakdown.stripeFee,
+          platformCommission: payoutBreakdown.platformCommission,
+          paymentRail: payoutBreakdown.paymentRail,
           message: quoteMessage,
           startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
           isImmediateStart,
@@ -455,10 +471,26 @@ export default function JobDetails() {
       }
 
       
+      const amountValue = parseFloat(quoteAmount);
+      const isQuickTrack = amountValue < 400;
+      
+      const defaultMilestones = !isQuickTrack ? [
+        { id: "m1", title: "Commencement & Materials", amount: Math.floor(amountValue * 0.3), status: "pending_funding" },
+        { id: "m2", title: "Mid-way Progress", amount: Math.floor(amountValue * 0.4), status: "pending_funding" },
+        { id: "m3", title: "Final Completion & Handover", amount: amountValue - Math.floor(amountValue * 0.3) - Math.floor(amountValue * 0.4), status: "pending_funding" }
+      ] : [
+        { id: "m1", title: "Service Delivery", amount: amountValue, status: "pending_funding" }
+      ];
+
       const quoteRef = existingQuote ? doc(db, "jobs", id, "quotes", existingQuote.id) : doc(collection(db, "jobs", id, "quotes"));
       
       const quoteData: any = {
-          amount: parseFloat(quoteAmount),
+          id: quoteRef.id,
+          jobId: id,
+          jobTitle: job.title || "",
+          tradespersonId: user.uid,
+          homeownerId: job.homeownerId,
+          amount: amountValue,
           message: quoteMessage,
           startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
           isImmediateStart,
@@ -466,18 +498,29 @@ export default function JobDetails() {
           paymentPreference,
           quoteScope,
           status: "pending",
-          jobTitle: job.title || ""
+          paymentTrack: isQuickTrack ? "quick" : "project",
+          milestones: defaultMilestones,
+          updatedAt: serverTimestamp(),
+          createdAt: existingQuote ? existingQuote.createdAt : serverTimestamp()
       };
 
       if(existingQuote) {
-        quoteData.updatedAt = serverTimestamp();
+        quoteData.history = arrayUnion({
+          amount: existingQuote.amount,
+          message: existingQuote.message,
+          timestamp: new Date().toISOString(),
+          reason: "Quote Update"
+        });
         quoteData.requoteMessage = deleteField();
-      } else {
-        quoteData.id = quoteRef.id;
-        quoteData.jobId = id;
-        quoteData.tradespersonId = user.uid;
-        quoteData.homeownerId = job.homeownerId;
-        quoteData.createdAt = serverTimestamp();
+      }
+
+      await setDoc(quoteRef, quoteData, { merge: true });
+      
+      if (!existingQuote) {
+        const { increment } = await import("firebase/firestore");
+        await updateDoc(doc(db, "jobs", id), {
+            quoteCount: increment(1)
+        });
       }
 
       if (job.jobNo !== undefined) {
@@ -903,6 +946,66 @@ export default function JobDetails() {
     doc.save(`Quote_${job.title.replace(/\s+/g, '_')}.pdf`);
   };
 
+  const handleFundMilestone = async (quote: any, milestone: any) => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.uid,
+          priceId: "price_mock_milestone", // Mock price ID
+          mode: "payment",
+          metadata: {
+            type: "milestone_funding",
+            jobId: id,
+            quoteId: quote.id,
+            milestoneId: milestone.id
+          },
+          successUrl: `${window.location.origin}/job/${id}?funding_success=true`,
+          cancelUrl: `${window.location.origin}/job/${id}`
+        }),
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error("Funding Error:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReleaseMilestone = async (quote: any, milestone: any) => {
+    if (!user || !id) return;
+    if (!window.confirm(`Are you sure you want to release £${milestone.amount} to the tradesperson? This confirms you are happy with this stage of work.`)) return;
+    
+    setIsProcessing(true);
+    try {
+      const response = await fetch("/api/release-milestone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: id,
+          quoteId: quote.id,
+          milestoneId: milestone.id,
+          userId: user.uid
+        }),
+      });
+
+      if (response.ok) {
+        // Local state update via quotes listener will handle refresh
+      }
+    } catch (err) {
+      console.error("Release Error:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [showTradespersonReviewForm, setShowTradespersonReviewForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -920,6 +1023,12 @@ export default function JobDetails() {
   const [revisionPaymentPreference, setRevisionPaymentPreference] = useState<"fixed_price" | "hourly" | "negotiable">("fixed_price");
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
+  const [technicalFaultReport, setTechnicalFaultReport] = useState("");
+  const [mediationStakePaid, setMediationStakePaid] = useState(false);
+  const [isPropertyDamage, setIsPropertyDamage] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [isProcessingQr, setIsProcessingQr] = useState(false);
   const [withdrawingQuote, setWithdrawingQuote] = useState<any | null>(null);
   const [withdrawReason, setWithdrawReason] = useState("");
   const [disputePhotos, setDisputePhotos] = useState<File[]>([]);
@@ -933,9 +1042,37 @@ export default function JobDetails() {
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleReason, setRescheduleReason] = useState("");
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [payoutSummary, setPayoutSummary] = useState<PayoutBreakdown | null>(null);
+  
+  useEffect(() => {
+    const amount = parseFloat(quoteAmount);
+    if (!isNaN(amount) && amount > 0) {
+      const summary = calculatePayoutBreakdown(amount, profile?.tier || 'payg');
+      setPayoutSummary(summary);
+    } else {
+      setPayoutSummary(null);
+    }
+  }, [quoteAmount, profile?.tier]);
 
   const handleRaiseDispute = async () => {
     if (!id || !user || !disputeReason) return;
+    
+    // Fairness Engine Enforcement
+    if (!mediationStakePaid) {
+      alert("To raise a dispute, you must authorize a £15 Mediation Stake. This is refunded if the claim is valid, but compensated to the trader if the claim is frivolous.");
+      return;
+    }
+
+    if (disputePhotos.length === 0) {
+      alert("Mandatory Requirement Failure: You must provide photo evidence of the issue to raise a dispute under our Fairness Policy.");
+      return;
+    }
+
+    if (!technicalFaultReport.trim() && !isPropertyDamage) {
+      alert("Please provide a technical explanation of the fault. General dissatisfaction or 'petty' reasons are not eligible for platform protection.");
+      return;
+    }
+
     setIsProcessing(true);
     setIsUploadingDispute(true);
     try {
@@ -947,16 +1084,35 @@ export default function JobDetails() {
         photoUrls.push(url);
       }
 
+      const isHandshakeVerified = job.paymentStatus === "handshake_complete";
+
       await updateDoc(doc(db, "jobs", id), {
         status: "disputed",
         dispute: {
           raisedBy: user.uid,
           reason: disputeReason,
+          technicalFaultReport,
+          isHandshakeVerified,
+          mediationStakePaid,
+          isPropertyDamage,
+          pliClaim: isPropertyDamage ? {
+            status: "requested",
+            initiatedAt: serverTimestamp()
+          } : { status: "none" },
           photos: photoUrls,
           status: "open",
           createdAt: serverTimestamp()
-        }
+        },
+        // Log to homeowner profile as well
+        totalDisputesRaised: increment(1)
       });
+      
+      // Impact fairness score (simulated impact for now)
+      if (isHandshakeVerified && !isPropertyDamage) {
+          await updateDoc(doc(db, "users", user.uid), {
+             fairnessScore: increment(-5)
+          });
+      }
 
       // Notify other party
       const otherUserId = isHomeowner ? quotes.find(q => q.status === "accepted")?.tradespersonId : job.homeownerId;
@@ -1012,6 +1168,56 @@ export default function JobDetails() {
       console.error("Error proposing reschedule:", err);
     } finally {
       setIsRescheduling(false);
+    }
+  };
+
+  const handleGenerateQr = async (quote: any) => {
+    setIsProcessingQr(true);
+    try {
+      // Simulate calling an API to generate a signed payout token
+      const token = `pay_qr_${id}_${quote.id}_${Date.now()}`;
+      setQrCodeData(token);
+      setShowQrModal(true);
+    } catch (err) {
+      console.error("QR Generation failed:", err);
+    } finally {
+      setIsProcessingQr(false);
+    }
+  };
+
+  const handleSimulateScan = async (quote: any) => {
+    if (!qrCodeData) return;
+    setIsProcessingQr(true);
+    try {
+      const { updateDoc, doc, serverTimestamp } = await import("firebase/firestore");
+      
+      const quoteRef = doc(db, "jobs", id!, "quotes", quote.id);
+      const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await updateDoc(quoteRef, {
+        "milestones.0.status": "funds_released",
+        "milestones.0.releasedAt": serverTimestamp(),
+        guaranteeExpiresAt: guaranteeExpiry.toISOString(),
+        paymentStatus: "handshake_complete"
+      });
+
+      // Notify homeowner about the 24-hour limit
+      await sendNotification(
+        job.homeownerId,
+        "Work Verified via QR",
+        `Handshake complete for ${job.title}. Your 24-hour platform guarantee is now active.`,
+        "status",
+        `/job/${id}`
+      );
+
+      setShowQrModal(false);
+      setQrCodeData(null);
+      // Refresh local job state
+      setJob((prev: any) => ({ ...prev, updatedAt: new Date() }));
+    } catch (err) {
+      console.error("QR Handshake failed:", err);
+    } finally {
+      setIsProcessingQr(false);
     }
   };
 
@@ -1814,10 +2020,37 @@ export default function JobDetails() {
                 <p className="text-xs text-red-600">Mediation is required to proceed</p>
               </div>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-red-50 space-y-3">
+            <div className="bg-white p-4 rounded-2xl border border-red-50 space-y-4">
               <div className="space-y-1">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reason for Dispute</p>
-                <p className="text-sm text-slate-700 leading-relaxed">{job.dispute?.reason}</p>
+                <p className="text-sm text-slate-700 leading-relaxed font-medium">{job.dispute?.reason}</p>
+                
+                {job.dispute?.isPropertyDamage && (
+                  <div className="mt-3 p-4 bg-red-50 rounded-2xl border border-red-100 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-red-600" />
+                      <h4 className="text-[10px] font-black text-red-900 uppercase tracking-widest">Insurance Claim Active</h4>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-red-400 uppercase">Process Status</p>
+                        <p className="text-sm font-black text-red-900 capitalize italic">{job.dispute?.pliClaim?.status || 'Initiated'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-red-400 uppercase tracking-tight">Claim Reference</p>
+                        <p className="text-sm font-black text-red-900 font-mono">#{id?.substring(0, 6).toUpperCase()}-CLAIM</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-red-700">
+                      This dispute involves property damage. We are facilitating a claim against the trader's policy: 
+                      {job.dispute?.pliClaim?.provider ? (
+                        <span className="font-bold"> {job.dispute.pliClaim.provider} ({job.dispute.pliClaim.policyNumber})</span>
+                      ) : (
+                        <span className="italic"> [Verification in Progress]</span>
+                      )}
+                    </p>
+                  </div>
+                )}
                 
                 {disputeResolution ? (
                   <motion.div 
@@ -2578,7 +2811,7 @@ export default function JobDetails() {
                           className="absolute -bottom-1 -left-1 -right-1 justify-center z-10 scale-75" 
                         />
                       </div>
-                      <div>
+                      <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-900 block">{tpProfile?.name || "Tradesperson"}</span>
                           {quote.id === fastestStartId && (
@@ -2588,6 +2821,13 @@ export default function JobDetails() {
                             </span>
                           )}
                         </div>
+                        {tpProfile?.verificationStatus && tpProfile.verificationStatus !== 'unverified' && (
+                          <TrustPulse 
+                            status={tpProfile.verificationStatus} 
+                            traderId={quote.tradespersonId} 
+                            className="mt-0.5"
+                          />
+                        )}
                         <div className="flex items-center gap-1">
                           <Star className="w-3 h-3 text-amber-400 fill-current" />
                           <span className="text-[10px] font-bold text-slate-500">
@@ -2809,13 +3049,144 @@ export default function JobDetails() {
                         </div>
 
                         {quote.status === "accepted" && (
-                          <button 
-                            onClick={() => handleDownloadQuote(quote)}
-                            className="flex items-center gap-1.5 text-xs font-bold text-green-600 hover:text-green-700 transition-colors bg-green-50 self-start px-3 py-1.5 rounded-lg border border-green-100"
-                          >
-                            <Download className="w-4 h-4" />
-                            Download Agreed Quote (PDF)
-                          </button>
+                          <div className="flex flex-col gap-3">
+                            <button 
+                              onClick={() => handleDownloadQuote(quote)}
+                              className="flex items-center gap-1.5 text-xs font-bold text-green-600 hover:text-green-700 transition-colors bg-green-50 self-start px-3 py-1.5 rounded-lg border border-green-100"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download Agreed Quote (PDF)
+                            </button>
+
+                            {/* Milestones & Escrow Section */}
+                            <div className="mt-4 p-4 bg-[#1e3a5f]/5 border border-[#1e3a5f]/10 rounded-2xl space-y-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <ShieldCheck className="w-5 h-5 text-[#1e3a5f]" />
+                                  <h4 className="text-sm font-black text-[#1e3a5f] uppercase tracking-wider">
+                                    {quote.paymentTrack === 'quick' ? 'Quick Settle Protected' : 'Escrow Protection Active'}
+                                  </h4>
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Funds Secured by AnyTrader</span>
+                              </div>
+
+                              {quote.paymentTrack === 'quick' ? (
+                                <div className="space-y-4">
+                                  <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                                        <QrCode className="w-6 h-6" />
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-bold text-slate-900">Digital Handshake</p>
+                                        <p className="text-[10px] font-medium text-slate-500">Scan QR code at completion</p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-lg font-black text-[#1e3a5f]">£{quote.amount}</p>
+                                      <p className="text-[10px] text-slate-400 uppercase font-bold">Single Payout</p>
+                                    </div>
+                                  </div>
+
+                                  {!isHomeowner ? (
+                                    <button 
+                                      onClick={() => handleGenerateQr(quote)}
+                                      disabled={isProcessingQr || quote.milestones?.[0]?.status === 'funds_released'}
+                                      className="w-full bg-[#1e3a5f] text-white p-3 rounded-xl text-xs font-bold hover:bg-[#162a45] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                      {isProcessingQr ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                                      {quote.milestones?.[0]?.status === 'funds_released' ? 'Handshake Complete' : 'Generate Completion QR'}
+                                    </button>
+                                  ) : (
+                                    quote.milestones?.[0]?.status !== 'funds_released' && (
+                                      <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-2">
+                                        <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                                        <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
+                                          To finalize this service, scan the QR code on the tradesperson's phone once the work is done. This initiates the immediate payout process.
+                                        </p>
+                                      </div>
+                                    )
+                                  )}
+
+                                  {quote.milestones?.[0]?.status === 'funds_released' && (
+                                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                                        <Clock className="w-4 h-4 text-amber-600" />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <p className="text-xs font-bold text-amber-900">24-Hour Guarantee Window Active</p>
+                                        <p className="text-[10px] text-amber-800 leading-tight">
+                                          Your payment has been captured. You have until **{quote.guaranteeExpiresAt ? format(new Date(quote.guaranteeExpiresAt), 'hh:mm a, dd MMM') : '24 hours'}** to raise any quality concerns. After this, the platform guarantee will expire.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  {(quote.milestones || []).map((milestone: any, idx: number) => (
+                                    <div key={milestone.id} className="bg-white p-3 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                                      <div className="flex items-center gap-3">
+                                        <div className={cn(
+                                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                                          milestone.status === 'funded' ? "bg-green-100 text-green-600" :
+                                          milestone.status === 'funds_released' ? "bg-blue-100 text-blue-600" :
+                                          "bg-slate-100 text-slate-400"
+                                        )}>
+                                          {idx + 1}
+                                        </div>
+                                        <div>
+                                          <p className="text-xs font-bold text-slate-900">{milestone.title}</p>
+                                          <p className="text-[10px] font-medium text-slate-500 capitalize">{milestone.status.replace('_', ' ')}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-4">
+                                        <p className="text-sm font-black text-slate-900">£{milestone.amount}</p>
+                                        {isHomeowner ? (
+                                          milestone.status === 'pending_funding' ? (
+                                            <button 
+                                              onClick={() => handleFundMilestone(quote, milestone)}
+                                              disabled={isProcessing}
+                                              className="bg-[#1e3a5f] text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-[#162a45] transition-all"
+                                            >
+                                              Fund Escrow
+                                            </button>
+                                          ) : milestone.status === 'funded' ? (
+                                            <button 
+                                              onClick={() => handleReleaseMilestone(quote, milestone)}
+                                              disabled={isProcessing}
+                                              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-green-700 transition-all"
+                                            >
+                                              Release Funds
+                                            </button>
+                                          ) : (
+                                            <div className="flex items-center gap-1 text-blue-600">
+                                              <CheckCircle2 className="w-3.5 h-3.5" />
+                                              <span className="text-[10px] font-bold uppercase">Paid</span>
+                                            </div>
+                                          )
+                                        ) : (
+                                          <div className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 text-slate-400">
+                                            {milestone.status === 'pending_funding' ? "Awaiting Deposit" : 
+                                             milestone.status === 'funded' ? "Ready to Release" : "Disbursed"}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="bg-[#1e3a5f] p-3 rounded-xl flex items-start gap-2">
+                                <Info className="w-4 h-4 text-white flex-shrink-0 mt-0.5" />
+                                <p className="text-[10px] text-blue-50 font-medium leading-relaxed">
+                                  {quote.paymentTrack === 'quick' 
+                                    ? "Small jobs under £400 use our Handshake Protocol. Payout is initiated immediately upon scan, with a high-priority 24-hour guarantee window for quality verification."
+                                    : "Our **Platform Guarantee** ensures that funds held in escrow are only released once you confirm satisfaction. Released funds are subject to a 7-day cooling-off period before final payout to the trader."}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
@@ -3176,6 +3547,35 @@ export default function JobDetails() {
                     onChange={(e) => setQuoteAmount(e.target.value)}
                   />
                 </div>
+                {payoutSummary && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-2"
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                      <span>Platform Fee ({(profile?.tier === 'pro' ? '10%' : profile?.tier === 'premium' ? '5%' : '15%')})</span>
+                      <span>-£{payoutSummary.platformCommission.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                      <span>Stripe Fee ({payoutSummary.paymentRail === 'bank_transfer' ? 'Open Banking' : 'Card Rail'})</span>
+                      <span>-£{payoutSummary.stripeFee.toFixed(2)}</span>
+                    </div>
+                    <div className="h-px bg-slate-200 my-1" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700">Estimated Net Payout</span>
+                      <span className="text-sm font-black text-green-600">£{payoutSummary.netPayout.toFixed(2)}</span>
+                    </div>
+                    {payoutSummary.paymentRail === 'bank_transfer' && (
+                      <div className="mt-2 flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                        <TrendingDown className="w-3 h-3 text-blue-600" />
+                        <p className="text-[9px] font-bold text-blue-700 leading-tight">
+                          Large job detected. Fee capped via secure Bank Transfer to maximize your profit.
+                        </p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
@@ -3521,19 +3921,74 @@ export default function JobDetails() {
                 </div>
 
                 <div className="space-y-4">
+                  {job?.paymentStatus === "handshake_complete" && (
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start gap-3">
+                      <Zap className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-orange-900 leading-tight">Handshake Verified Job</p>
+                        <p className="text-[10px] text-orange-800 leading-normal mt-1">
+                          Since this work was verified via Digital Handshake at completion, disputes are **restricted to safety or technical failures**. Cosmetic or punctuality concerns are not eligible for refunds.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Reason for Disagreement</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Summary of Issue</label>
                     <textarea 
-                      rows={4}
+                      rows={3}
                       className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 resize-none text-sm leading-relaxed"
-                      placeholder="Please explain the situation clearly. This will be reviewed by our team..."
+                      placeholder="High-level reason for this dispute..."
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Evidence Photos</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Technical Fault Description (Mandatory)</label>
+                    <textarea 
+                      rows={4}
+                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 resize-none text-sm leading-relaxed"
+                      placeholder="Describe exactly what isn't working. Frivolous or non-technical claims will be rejected..."
+                      value={technicalFaultReport}
+                      onChange={(e) => setTechnicalFaultReport(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                    <input 
+                      type="checkbox"
+                      id="mediationStake"
+                      checked={mediationStakePaid}
+                      onChange={(e) => setMediationStakePaid(e.target.checked)}
+                      className="mt-1 w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="mediationStake" className="space-y-1 cursor-pointer">
+                      <p className="text-sm font-bold text-blue-900 leading-tight">Authorize £15 Mediation Stake</p>
+                      <p className="text-[10px] text-blue-700 leading-normal">
+                        To prevent frivolous claims, you must stake £15. This is **refunded** if the dispute is valid. If the dispute is found to be unreasonable (petty), the stake will be released to the trader as Inconvenience Pay.
+                      </p>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-4 bg-red-50 rounded-2xl border border-red-100/50">
+                    <input 
+                      type="checkbox"
+                      id="propertyDamage"
+                      checked={isPropertyDamage}
+                      onChange={(e) => setIsPropertyDamage(e.target.checked)}
+                      className="mt-1 w-4 h-4 text-red-600 border-slate-300 rounded focus:ring-red-500"
+                    />
+                    <label htmlFor="propertyDamage" className="space-y-1 cursor-pointer">
+                      <p className="text-sm font-bold text-red-900 leading-tight">This involves Physical Property Damage</p>
+                      <p className="text-[10px] text-red-700 leading-normal">
+                        Checking this authorizes AnyTrader to facilitate a claim against the tradesperson's **Public Liability Insurance** as per our T&Cs for property damage incidents.
+                      </p>
+                    </label>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Evidence Photos (Burden of Proof Required)</label>
                     <div className="grid grid-cols-4 gap-2">
                       {disputePhotos.map((file, i) => (
                         <div key={i} className="aspect-square rounded-xl bg-slate-100 relative overflow-hidden group">
@@ -3725,6 +4180,84 @@ export default function JobDetails() {
                 >
                   {isRescheduling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                   Send Proposal
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* QR Code Modal for Handshake */}
+      <AnimatePresence>
+        {showQrModal && qrCodeData && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowQrModal(false)}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-sm bg-white rounded-[32px] overflow-hidden shadow-2xl p-8 text-center space-y-6"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
+                  <QrCode className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900">Digital Handshake</h3>
+                <p className="text-xs text-slate-500 px-4">Show this to the homeowner to initiate the secure payout for your session.</p>
+              </div>
+
+              <div className="aspect-square bg-slate-50 rounded-3xl border-4 border-slate-100 p-6 flex items-center justify-center relative overflow-hidden group">
+                {/* Simulated QR Code */}
+                <div className="w-full h-full border-2 border-slate-900 flex flex-wrap p-2 gap-1">
+                  {Array.from({ length: 64 }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "w-4 h-4 rounded-sm",
+                        Math.random() > 0.5 ? "bg-slate-900" : "bg-transparent"
+                      )} 
+                    />
+                  ))}
+                  {/* QR Core Blocks */}
+                  <div className="absolute top-8 left-8 w-12 h-12 border-4 border-slate-900 bg-white" />
+                  <div className="absolute top-8 right-8 w-12 h-12 border-4 border-slate-900 bg-white" />
+                  <div className="absolute bottom-8 left-8 w-12 h-12 border-4 border-slate-900 bg-white" />
+                </div>
+                
+                {/* Simulated Scan Overlay for Demo */}
+                {!isHomeowner && (
+                  <div 
+                    onClick={() => {
+                        const q = quotes.find(q => q.status === 'accepted');
+                        if(q) handleSimulateScan(q);
+                    }}
+                    className="absolute inset-0 bg-blue-600/0 hover:bg-blue-600/10 cursor-pointer flex items-center justify-center group-hover:opacity-100 transition-all opacity-0"
+                  >
+                    <div className="bg-white px-4 py-2 rounded-full shadow-lg text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Simulate Handshake Scan
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Secure Token Reference</p>
+                  <p className="text-xs font-mono text-slate-600 truncate">{qrCodeData}</p>
+                </div>
+                
+                <button 
+                  onClick={() => setShowQrModal(false)}
+                  className="w-full text-slate-400 text-xs font-bold hover:text-slate-600 transition-colors"
+                >
+                  Close Code
                 </button>
               </div>
             </motion.div>

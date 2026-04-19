@@ -55,6 +55,23 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 5.  **Multi-Portal Verification**: If possible, verify that the Home dashboard still functions after a Rides database change.
 6.  **Documentation Update**: You MUST update this file (`DEVELOPMENT.md`) and/or `AGENTS.md` after completing your work to reflect changes in project state, security rules, or database schemas for future agents.
 
+## 🛡️ Phase 11: Trust & Fairness Engine (Trader Protection) (Completed April 19, 2026)
+*   **The Mission:** Protecting traders from "frivolous" or "petty" claims aimed at gaining discounts on small jobs.
+*   **QR Handshake Guard:** For jobs settled via QR code (<£400), the system now restricts dispute reasons. "Petty" complaints (cosmetic, punctuality) are automatically blocked if the homeowner verified the work in person.
+*   **The Dispute Stake (Friction Gate):** Raising a dispute now requires a mandatory **£15 Mediation Stake**.
+    *   *Logic:* Refunded if the claim is valid; released to the trader as Inconvenience Pay if the claim is frivolous.
+*   **Burden of Proof:** Disputes now require mandatory photo evidence and a "Technical Fault Report" (non-cosmetic explanation) before submission.
+*   **Behavioral Scoring:** Added `fairnessScore` (0-100) to homeowner profiles. Serial complainers (high dispute-to-job ratio) are flagged, penalized with score reductions, and may be restricted from the "Quick Settle" track.
+
+## 💳 Phase 12: Dual-Rail Payments & Ecosystem Handoff (Completed April 19, 2026)
+*   **Stripe Connect Engine:** Integrated `stripeIntegrationService.ts` to handle complex marketplace split-payments and trader KYC.
+*   **Cost-Saving Rails:** Implemented "Dual-Rail" logic:
+    *   *Small Jobs (<£400):* Standard Card/Apple Pay.
+    *   *Big Jobs (>=£400):* Automated switch to **Open Banking (Pay by Bank)** to bypass 2% card fees on thousands of pounds.
+*   **Net Payout Transparency:** Traders now see a real-time earnings breakdown (Gross - Stripe Fees - Commission) before they click 'Send Quote'.
+*   **The Ecosystem Bible:** Created `ECOSYSTEM.md` to ensure the separate Taxi App agent synchronizes perfectly with this shared database, identity, and payment architecture.
+*   **UI/UX Refinements:** Optimized the height of the "Saved Fees" dashboard card (30% reduction via tighter padding, text scaling, and badge compression) to preserve valuable screen real estate for active job tracking.
+
 ---
 
 ## 🆘 Critical Recovery

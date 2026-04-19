@@ -366,6 +366,35 @@ async function startServer() {
               postedDate: admin.firestore.FieldValue.serverTimestamp(),
               retryCount: 0
             });
+          } else if (session.metadata?.type === 'milestone_funding' && session.metadata?.jobId && session.metadata?.quoteId && session.metadata?.milestoneId && db) {
+            // Log successful funding of a milestone
+            const { jobId, quoteId, milestoneId } = session.metadata;
+            const quoteRef = db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
+            const quoteDoc = await quoteRef.get();
+            
+            if (quoteDoc.exists) {
+              const quoteData = quoteDoc.data();
+              const milestones = quoteData?.milestones || [];
+              const updatedMilestones = milestones.map((m: any) => {
+                if (m.id === milestoneId) {
+                  return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: session.payment_intent as string };
+                }
+                return m;
+              });
+              
+              await quoteRef.update({ milestones: updatedMilestones });
+              
+              // Notify trader
+              await db.collection("notifications").add({
+                userId: quoteData?.tradespersonId,
+                title: "Milestone Funded! 💰",
+                message: `Homeowner funded "${milestones.find((m: any) => m.id === milestoneId)?.title}". You can now start work!`,
+                type: "status",
+                link: `/job/${jobId}`,
+                read: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
           }
         }
       } else if (event.type === 'customer.subscription.updated') {
@@ -482,6 +511,50 @@ async function startServer() {
     } catch (error: any) {
       console.error("Stripe Checkout Error:", error);
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
+    }
+  });
+
+  // Milestone Release Route
+  app.post("/api/release-milestone", async (req, res) => {
+    try {
+      const { jobId, quoteId, milestoneId, userId } = req.body;
+      if (!db) return res.status(500).json({ error: "Database not initialized" });
+
+      const jobRef = db.collection("jobs").doc(jobId);
+      const jobDoc = await jobRef.get();
+      if (!jobDoc.exists || jobDoc.data()?.homeownerId !== userId) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const quoteRef = jobRef.collection("quotes").doc(quoteId);
+      const quoteDoc = await quoteRef.get();
+      if (!quoteDoc.exists) return res.status(404).json({ error: "Quote not found" });
+
+      const quoteData = quoteDoc.data();
+      const updatedMilestones = (quoteData?.milestones || []).map((m: any) => {
+        if (m.id === milestoneId) {
+          return { ...m, status: 'funds_released', releaseDate: new Date().toISOString() };
+        }
+        return m;
+      });
+
+      await quoteRef.update({ milestones: updatedMilestones });
+
+      // Notify Trader
+      await db.collection("notifications").add({
+        userId: quoteData?.tradespersonId,
+        title: "Funds Released! 💸",
+        message: `The homeowner has released funds for milestone: "${quoteData?.milestones.find((m: any) => m.id === milestoneId)?.title}".`,
+        type: "status",
+        link: `/job/${jobId}`,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Milestone Release Error:", error);
+      res.status(500).json({ error: error.message || "Failed to release milestone" });
     }
   });
 
