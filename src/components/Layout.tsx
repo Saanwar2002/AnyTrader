@@ -209,9 +209,15 @@ export default function Layout() {
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
   ];
 
+  const driverNav = [
+    { name: "Terminal", path: "/driver-terminal", icon: Zap, isCta: false },
+    { name: "Earnings", path: "/billing", icon: PoundSterling, isCta: false },
+    { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+  ];
+
   const navItems = profile?.role === "admin" 
     ? adminNav 
-    : (profile?.role === "ecosystem_manager" ? ecosystemNav : (profile?.subscriptionType === "business" ? businessNav : (profile?.role === "tradesperson" ? tradespersonNav : homeownerNav)));
+    : (profile?.role === "ecosystem_manager" ? ecosystemNav : (profile?.role === "fleet_driver" ? driverNav : (profile?.subscriptionType === "business" ? businessNav : (profile?.role === "tradesperson" ? tradespersonNav : homeownerNav))));
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">

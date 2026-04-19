@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { db, doc, updateDoc, setDoc, onSnapshot } from "@/src/firebase";
 import { Loader2, Plus, Trash2, Save, AlertCircle, Edit2, X, Check } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 
 interface Tier {
@@ -25,11 +26,13 @@ export default function AdminTierManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<EditingState | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "platform_config", "global_tiers"), (snapshot) => {
       if (snapshot.exists()) {
         setConfig(snapshot.data());
+        setHasUnsavedChanges(false);
       }
       setLoading(false);
     });
@@ -45,6 +48,7 @@ export default function AdminTierManager() {
       return newConfig;
     });
     setEditing(null);
+    setHasUnsavedChanges(true); // Mark as unsaved
   };
 
   const handleDeleteTier = (model: string, tierKey: string) => {
@@ -55,6 +59,7 @@ export default function AdminTierManager() {
       delete newConfig.providerModels[model].tiers[tierKey];
       return newConfig;
     });
+    setHasUnsavedChanges(true); // Mark as unsaved
   };
 
   const handleAddTier = (model: string) => {
@@ -91,13 +96,24 @@ export default function AdminTierManager() {
     }));
 
     setEditing({ model, tierKey, data: newTier });
+    setHasUnsavedChanges(true); // Mark as unsaved
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await setDoc(doc(db, "platform_config", "global_tiers"), config);
-      alert("Tiers updated successfully");
+      
+      // Auto-sync Commission down to Rides Command Center
+      const taxiCommission = config?.providerModels?.on_demand_transport?.tiers?.standard?.commission;
+      if (typeof taxiCommission === 'number') {
+        await setDoc(doc(db, "platform_config", "ride_fees"), {
+          fees: { platformCommission: taxiCommission * 100 }
+        }, { merge: true });
+      }
+
+      setHasUnsavedChanges(false); // Reset unsaved changes
+      alert("Tiers updated successfully and synced with ecosystem!");
     } catch (error) {
       console.error("Error saving tiers:", error);
       alert("Failed to save tiers");
@@ -128,7 +144,7 @@ export default function AdminTierManager() {
                 },
                 on_demand_transport: {
                   tiers: {
-                    standard: { price: 0, maxQuotes: 9999, maxAcceptedQuotes: 9999, commission: 0.2, leadFee: 0, description: "Standard Taxi", features: ["Unlimited work"], color: "bg-green-50 border-green-200" }
+                    standard: { price: 0, maxQuotes: 9999, maxAcceptedQuotes: 9999, commission: 0.12, leadFee: 0, description: "Standard Taxi", features: ["Unlimited work"], color: "bg-green-50 border-green-200" }
                   }
                 }
               }
@@ -170,7 +186,7 @@ export default function AdminTierManager() {
                         <label className="text-[10px] font-bold uppercase text-slate-400">Description</label>
                         <input 
                           type="text" 
-                          value={editing.data.description} 
+                          value={editing.data.description ?? ""} 
                           onChange={(e) => setEditing({...editing, data: {...editing.data, description: e.target.value}})}
                           className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
                         />
@@ -180,8 +196,12 @@ export default function AdminTierManager() {
                           <label className="text-[10px] font-bold uppercase text-slate-400">Price (£)</label>
                           <input 
                             type="number" 
-                            value={editing.data.price} 
-                            onChange={(e) => setEditing({...editing, data: {...editing.data, price: parseFloat(e.target.value)}})}
+                            step="0.01"
+                            value={editing.data.price ?? 0} 
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setEditing({...editing, data: {...editing.data, price: isNaN(val) ? 0 : val}});
+                            }}
                             className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
                           />
                         </div>
@@ -189,8 +209,12 @@ export default function AdminTierManager() {
                           <label className="text-[10px] font-bold uppercase text-slate-400">Comm (%)</label>
                           <input 
                             type="number" 
-                            value={editing.data.commission * 100} 
-                            onChange={(e) => setEditing({...editing, data: {...editing.data, commission: parseFloat(e.target.value) / 100}})}
+                            step="0.1"
+                            value={(editing.data.commission ?? 0) * 100} 
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setEditing({...editing, data: {...editing.data, commission: isNaN(val) ? 0 : val / 100}});
+                            }}
                             className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
                           />
                         </div>
@@ -199,15 +223,18 @@ export default function AdminTierManager() {
                         <label className="text-[10px] font-bold uppercase text-slate-400">Max Quotes</label>
                         <input 
                           type="number" 
-                          value={editing.data.maxQuotes} 
-                          onChange={(e) => setEditing({...editing, data: {...editing.data, maxQuotes: parseInt(e.target.value)}})}
+                          value={editing.data.maxQuotes ?? 0} 
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setEditing({...editing, data: {...editing.data, maxQuotes: isNaN(val) ? 0 : val}});
+                          }}
                           className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
                         />
                       </div>
                       <div>
                         <label className="text-[10px] font-bold uppercase text-slate-400">Features (comma separated)</label>
                         <textarea 
-                          value={editing.data.features.join(", ")} 
+                          value={(editing.data.features || []).join(", ")} 
                           onChange={(e) => setEditing({...editing, data: {...editing.data, features: e.target.value.split(",").map(f => f.trim())}})}
                           className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500 h-16"
                         />
@@ -221,16 +248,18 @@ export default function AdminTierManager() {
                 <div key={tierKey} className={cn("group p-6 rounded-2xl border shadow-sm transition-all hover:shadow-md relative", tier.color || "bg-white border-slate-200")}>
                   <div className="flex justify-between items-start mb-4">
                     <h4 className="font-bold text-lg">{tierKey.toUpperCase()}</h4>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-3 transition-opacity">
                       <button 
                         onClick={() => setEditing({ model, tierKey, data: { ...tier } })}
-                        className="p-1 text-slate-400 hover:text-blue-500"
+                        className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors border border-blue-100"
+                        title="Edit Tier"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDeleteTier(model, tierKey)}
-                        className="p-1 text-slate-400 hover:text-red-500"
+                        className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors border border-red-100"
+                        title="Delete Tier"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -260,16 +289,34 @@ export default function AdminTierManager() {
           </div>
         </div>
       ))}
-      <div className="sticky bottom-6 flex justify-center">
-        <button 
-          onClick={handleSave}
-          disabled={saving || editing !== null}
-          className="flex items-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:bg-slate-800 disabled:opacity-50 transition-all active:scale-95"
-        >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-          {editing ? "Save Changes First" : "Deploy Tier Updates to Platform"}
-        </button>
-      </div>
+      <AnimatePresence>
+        {(hasUnsavedChanges || editing) && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex justify-center"
+          >
+            <div className="bg-orange-600 shadow-2xl shadow-orange-600/30 text-white rounded-full p-2 pr-6 pl-4 flex items-center gap-4">
+              <div className="bg-white/20 p-2 rounded-full">
+                <AlertCircle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-sm">Unsaved Changes</p>
+                <p className="text-orange-100 text-xs">Don't forget to deploy your tier updates</p>
+              </div>
+              <button 
+                onClick={handleSave}
+                disabled={saving || editing !== null}
+                className="ml-4 flex items-center gap-2 bg-white text-orange-600 px-5 py-2 rounded-full font-bold shadow-sm hover:bg-orange-50 disabled:opacity-50 transition-all active:scale-95 whitespace-nowrap"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {editing ? "Finish Editing..." : "Deploy Now"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

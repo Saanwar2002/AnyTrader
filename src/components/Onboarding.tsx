@@ -18,7 +18,7 @@ export default function Onboarding() {
   const { categories } = useCategories();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
-  const [role, setRole] = useState<"homeowner" | "tradesperson" | "admin" | null>(null);
+  const [role, setRole] = useState<"homeowner" | "tradesperson" | "admin" | "fleet_driver" | null>(null);
   const [homeownerType, setHomeownerType] = useState<"homeowner" | "business" | null>(null);
   const [businessCategory, setBusinessCategory] = useState<string | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
@@ -66,7 +66,10 @@ export default function Onboarding() {
       return certs;
     });
 
-  const uniqueRequiredCerts = Array.from(new Set(requiredCerts));
+  const uniqueRequiredCerts = Array.from(new Set([
+    ...requiredCerts,
+    ...(role === "fleet_driver" ? ["Driver License", "Private Hire Vehicle (PHV) Licence", "MOT / Vehicle Insurance"] : [])
+  ]));
 
   useEffect(() => {
     const checkInvitation = async () => {
@@ -479,6 +482,41 @@ export default function Onboarding() {
                       {role === "tradesperson" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                     </div>
                   </button>
+
+                  <button
+                    onClick={() => {
+                      setRole("fleet_driver");
+                      setHomeownerType(null);
+                      setBusinessCategory(null);
+                      setSelectedTier(null);
+                      // Force set trades so they can go to verification
+                      setSelectedTrades(["Transport & Rides"]);
+                      setSelectedSubcategories(["AnyTrader Rides"]);
+                    }}
+                    className={cn(
+                      "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
+                      role === "fleet_driver" 
+                        ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
+                        : "border-slate-100 bg-white hover:border-slate-200"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
+                      role === "fleet_driver" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                    )}>
+                      <svg className="w-7 h-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-black text-lg text-slate-900 block tracking-tight">Driver (AnyTrader Rides)</span>
+                      <span className="text-sm text-slate-500 block leading-tight">Drive passengers & trades, earn with fair commissions</span>
+                    </div>
+                    <div className={cn(
+                      "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                      role === "fleet_driver" ? "border-orange-500" : "border-slate-200"
+                    )}>
+                      {role === "fleet_driver" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -516,7 +554,7 @@ export default function Onboarding() {
               )}
 
               {/* Personal Info Fields */}
-              {(role === "tradesperson" || (role === "homeowner" && homeownerType)) && (
+              {(role === "tradesperson" || role === "fleet_driver" || (role === "homeowner" && homeownerType)) && (
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -612,9 +650,13 @@ export default function Onboarding() {
               <button
                 onClick={() => {
                   console.log("Button clicked. Role:", role, "HomeownerType:", homeownerType);
+                  if (role === "fleet_driver") {
+                    setStep(3); // Go straight to verification
+                    return;
+                  }
+                  
                   if (platformConfig?.paywallEnabled === false) {
                     // In beta mode, skip complex setup and go straight to submission
-                    // Or at least skip tier selection later
                     handleSubmit();
                   } else {
                     if (role === "tradesperson") {
@@ -639,7 +681,7 @@ export default function Onboarding() {
                   <Loader2 className="w-6 h-6 animate-spin" />
                 ) : (
                   <>
-                    {role === "tradesperson" || (role === "homeowner" && homeownerType === "business") ? "Continue" : "Complete Setup"}
+                    {role === "tradesperson" || role === "fleet_driver" || (role === "homeowner" && homeownerType === "business") ? "Continue" : "Complete Setup"}
                     <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
@@ -946,7 +988,7 @@ export default function Onboarding() {
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(role === "fleet_driver" ? 1 : 2)}
                   className="w-full sm:w-auto p-5 rounded-[2rem] border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                 >
                   <ChevronLeft className="w-5 h-5" /> Back

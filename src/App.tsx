@@ -39,6 +39,8 @@ import { ReviewReminder } from "./components/ReviewReminder";
 import { PlusCircle, Briefcase, MessageSquare, User as UserIcon, Bell, ChevronRight, PoundSterling, Search, Lock } from "lucide-react";
 import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "@/src/firebase";
 
+import DriverTerminal from "./components/driver/DriverTerminal";
+
 export default function App() {
   const { user, profile, isAuthReady } = useAuth();
   const [platformConfig, setPlatformConfig] = useState<any>(null);
@@ -97,10 +99,13 @@ export default function App() {
           ) : (
             <Route path="/" element={<Layout />}>
               <Route index element={
-                profile.role === "homeowner" 
-                  ? (profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />)
-                  : <TradesDashboard />
+                profile.role === "fleet_driver"
+                  ? <DriverTerminal />
+                  : profile.role === "homeowner" 
+                    ? (profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />)
+                    : <TradesDashboard />
               } />
+              <Route path="driver-terminal" element={<DriverTerminal />} />
               <Route path="dashboard" element={profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />} />
               <Route path="trades-dashboard" element={<TradesDashboard />} />
               <Route path="job-feed" element={<JobFeed />} />
