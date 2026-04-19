@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown } from "lucide-react";
+import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
@@ -175,6 +175,7 @@ export default function Layout() {
     { name: "Post Job", path: "/post-job", icon: PlusCircle, isCta: true },
     { name: "My Jobs", path: "/my-jobs", icon: Briefcase, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+    { name: "Billing", path: "/billing", icon: PoundSterling, isCta: false },
   ];
 
   const tradespersonNav = [
@@ -183,6 +184,7 @@ export default function Layout() {
     { name: "Hire Trades", path: "/find-trades", icon: Search, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
     { name: "My Quotes", path: "/my-quotes?mode=active", icon: PoundSterling, isCta: false },
+    { name: "Billing", path: "/billing", icon: CreditCard, isCta: false },
   ];
 
   const adminNav = [

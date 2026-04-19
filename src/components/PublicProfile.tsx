@@ -7,11 +7,12 @@ import {
 import { useAuth } from "./AuthProvider";
 import { 
   Star, MapPin, Calendar, Shield, Check, Briefcase, Clock, Zap, MessageSquare, ChevronLeft, Loader2, Image as ImageIcon, Users, ChevronDown,
-  ShieldCheck, CheckCircle, Heart, FileText, AlertTriangle, X, Send, ChevronRight, Award, Share2, UserPlus, HelpCircle
+  ShieldCheck, CheckCircle, Heart, FileText, AlertTriangle, X, Send, ChevronRight, Award, Share2, UserPlus, HelpCircle, Medal
 } from "lucide-react";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PROFESSIONAL_BADGES } from "@/src/constants";
+import { getTraderBadges } from "@/src/lib/badges";
 import { format } from "date-fns";
 import { SEO } from "./SEO";
 import { Logo } from "./Logo";
@@ -378,6 +379,11 @@ export default function PublicProfile() {
           </div>
           
           <div className="text-center">
+            {profile.memberId && (
+              <span className="text-[10px] font-black tracking-[0.2em] text-[#1e3a5f] bg-[#1e3a5f]/5 px-2 py-1 rounded-lg border border-[#1e3a5f]/10 mb-4 inline-block">
+                {profile.memberId}
+              </span>
+            )}
             <div className="flex items-center justify-center gap-2 mb-1">
               <h2 className="text-2xl font-bold text-slate-900">{profile.name}</h2>
               {profile.isAcceptingRequests === false && (
@@ -456,6 +462,21 @@ export default function PublicProfile() {
                   Accepting Emergency Jobs
                 </div>
               )}
+              {getTraderBadges(profile).map((badge: any) => (
+                <div 
+                  key={badge.id} 
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold shadow-sm transition-all hover:shadow-md",
+                    badge.bgColor,
+                    badge.color,
+                    "border-current/10"
+                  )}
+                  title={badge.description}
+                >
+                  {badge.icon}
+                  {badge.label}
+                </div>
+              ))}
               {profile.badges && profile.badges.length > 0 && profile.badges.map((badgeId: string) => {
                   const badge = PROFESSIONAL_BADGES.find(b => b.id === badgeId);
                   if (!badge) return null;
@@ -543,10 +564,20 @@ export default function PublicProfile() {
               </div>
             </div>
             <div className="bg-green-50 p-4 rounded-2xl flex items-center gap-3 border border-green-100">
-              <Check className="w-8 h-8 text-green-600" />
+              {profile.verificationStatus === "auditioned" ? <Medal className="w-8 h-8 text-amber-600 fill-amber-500/20" /> :
+               profile.verificationStatus === "vetted" ? <ShieldCheck className="w-8 h-8 text-emerald-600 fill-emerald-500/20" /> :
+               <Shield className="w-8 h-8 text-blue-600" />}
               <div>
-                <p className="font-bold text-slate-900 text-lg">Verified</p>
-                <p className="text-xs text-slate-600">Identity & Trade checked</p>
+                <p className="font-bold text-slate-900 text-lg">
+                  {profile.verificationStatus === "auditioned" ? "Auditioned Pro" :
+                   profile.verificationStatus === "vetted" ? "Vetted Pro" : 
+                   profile.verificationStatus === "verified" ? "Verified Pro" : "Unverified"}
+                </p>
+                <p className="text-xs text-slate-600">
+                  {profile.verificationStatus === "auditioned" ? "Physical work inspection passed" :
+                   profile.verificationStatus === "vetted" ? "References & work reviewed" :
+                   profile.verificationStatus === "verified" ? "Identity & Insurance checked" : "Onboarding in progress"}
+                </p>
               </div>
             </div>
             <div className="bg-amber-50 p-4 rounded-2xl flex items-center gap-3 border border-amber-100">

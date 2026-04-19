@@ -5,6 +5,7 @@ import { useAuth } from "./AuthProvider";
 import { useCategories } from "../lib/CategoryProvider";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { motion, AnimatePresence } from "motion/react";
+import { assignFoundingId } from "../services/memberIdService";
 import { 
   Users, Briefcase, AlertTriangle, Shield, Search, Filter, 
   CheckCircle2, XCircle, MoreVertical, Trash2, Eye, 
@@ -12,7 +13,7 @@ import {
   UserCheck, UserX, MessageSquare, Star, UserPlus, Mail,
   Lock, Unlock, CheckSquare, Square, X, Megaphone, Send, Tag, Tags, Gift,
   Settings, Settings2, BarChart3, PieChart, DollarSign, Percent, Clock, MapPin, CreditCard,
-  AlertCircle, Zap, Sparkles, ShieldAlert, ShieldCheck, RefreshCw,
+  AlertCircle, Zap, Sparkles, ShieldAlert, ShieldCheck, RefreshCw, Medal,
   Plus, Edit2, Calendar, Award, Info, Key, Building2, Globe, Database, Download,
   Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag
 } from "lucide-react";
@@ -721,7 +722,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleVerifyTradesperson = async (userId: string, status: "verified" | "rejected") => {
+  const handleVerifyTradesperson = async (userId: string, status: "verified" | "rejected" | "vetted" | "auditioned") => {
     try {
       const userRef = doc(db, "users", userId);
       const userSnap = await getDoc(userRef);
@@ -730,6 +731,27 @@ export default function AdminDashboard() {
         verificationStatus: status,
         updatedAt: serverTimestamp()
       });
+
+      // Handle Founding Member ID Assignment if upgraded to at least verified
+      if (status !== "rejected" && userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.role === "tradesperson" && !userData.isFoundingMember) {
+          const foundingId = await assignFoundingId(userId);
+          if (foundingId) {
+            console.log(`Assigned Founding ID ${foundingId} to ${userData.name}`);
+            // Also notify the user about their prestigious status
+            await addDoc(collection(db, "notifications"), {
+              userId,
+              title: "🎉 Founding Member Status!",
+              message: `Congratulations! You have been verified as one of our first 100 traders. Your new Elite Member ID is ${foundingId}.`,
+              type: "system",
+              read: false,
+              createdAt: serverTimestamp(),
+              link: "/profile"
+            });
+          }
+        }
+      }
 
       // Handle Referral Reward if verified
       if (status === "verified" && userSnap.exists()) {
@@ -1834,18 +1856,31 @@ export default function AdminDashboard() {
                           </div>
                         </td>
                     <td className="p-4">
-                      <span className={cn(
-                        "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full",
-                        u.role === "admin" ? "bg-red-50 text-red-600" : 
-                        u.role === "tradesperson" ? "bg-blue-50 text-blue-600" : 
-                        "bg-slate-50 text-slate-600"
-                      )}>
-                        {u.role}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className={cn(
+                          "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full w-fit",
+                          u.role === "admin" ? "bg-red-50 text-red-600" : 
+                          u.role === "tradesperson" ? "bg-blue-50 text-blue-600" : 
+                          "bg-slate-50 text-slate-600"
+                        )}>
+                          {u.role}
+                        </span>
+                        {u.memberId && (
+                          <span className="text-[9px] font-black tracking-widest text-[#1e3a5f] bg-[#1e3a5f]/5 px-1.5 py-0.5 rounded border border-[#1e3a5f]/10 w-fit">
+                            {u.memberId}
+                          </span>
+                        )}
+                        {u.isFoundingMember && (
+                          <span className="text-[9px] font-black uppercase text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100 flex items-center gap-1 w-fit">
+                            <Award className="w-2.5 h-2.5 fill-current" />
+                            Founding
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4">
                       {u.role === "tradesperson" ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-1.5">
                           <select
                             value={u.tierId || "Basic"}
                             onClick={(e) => e.stopPropagation()}
@@ -1869,6 +1904,11 @@ export default function AdminDashboard() {
                               <option value={u.tierId || "Basic"}>{u.tierId || "Basic"}</option>
                             )}
                           </select>
+                          {u.phantomFeesSaved > 0 && (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 w-fit">
+                              ROI: £{u.phantomFeesSaved.toFixed(2)}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-[10px] text-slate-400">-</span>
@@ -1878,8 +1918,10 @@ export default function AdminDashboard() {
                       {u.role === "tradesperson" && (
                         <span className={cn(
                           "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full",
-                          u.verificationStatus === "verified" ? "bg-green-50 text-green-600" : 
-                          u.verificationStatus === "pending" ? "bg-amber-50 text-amber-600" : 
+                          u.verificationStatus === "auditioned" ? "bg-amber-100 text-amber-700 border border-amber-200" :
+                          u.verificationStatus === "vetted" ? "bg-emerald-100 text-emerald-700 border border-emerald-200" :
+                          u.verificationStatus === "verified" ? "bg-indigo-50 text-indigo-600 border border-indigo-100" : 
+                          u.verificationStatus === "pending" ? "bg-orange-50 text-orange-600 border border-orange-100" : 
                           "bg-slate-50 text-slate-400"
                         )}>
                           {u.verificationStatus || "unverified"}
@@ -1894,17 +1936,52 @@ export default function AdminDashboard() {
                     </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {u.verificationStatus === "pending" && (
+                            {u.role === "tradesperson" && (
                               <div className="flex items-center gap-1 border-r border-slate-100 pr-2 mr-2">
-                                <button onClick={(e) => { e.stopPropagation(); handleVerifyTradesperson(u.id, "verified"); }} className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all shadow-sm" title="Approve Identity">
-                                  <UserCheck className="w-4 h-4" />
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleVerifyTradesperson(u.id, "rejected"); }} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm" title="Reject Identity">
-                                  <UserX className="w-4 h-4" />
-                                </button>
+                                {u.verificationStatus === "pending" && (
+                                  <>
+                                    <button onClick={(e) => { e.stopPropagation(); handleVerifyTradesperson(u.id, "verified"); }} className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all shadow-sm" title="Approve Identity">
+                                      <UserCheck className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleVerifyTradesperson(u.id, "rejected"); }} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm" title="Reject Identity">
+                                      <UserX className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                                {(u.verificationStatus === "verified" || u.verificationStatus === "pending") && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleVerifyTradesperson(u.id, "vetted"); }} className="p-2 text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-xl transition-all shadow-sm" title="Mark as Vetted">
+                                    <ShieldCheck className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {(u.verificationStatus === "vetted" || u.verificationStatus === "verified" || u.verificationStatus === "pending") && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleVerifyTradesperson(u.id, "auditioned"); }} className="p-2 text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-xl transition-all shadow-sm" title="Mark as Auditioned">
+                                    <Medal className="w-4 h-4" />
+                                  </button>
+                                )}
                               </div>
                             )}
                             
+                            <button 
+                              onClick={async (e) => { 
+                                e.stopPropagation(); 
+                                const isCurrentlyFounding = u.isFoundingMember || false;
+                                try {
+                                  await updateDoc(doc(db, "users", u.id), { isFoundingMember: !isCurrentlyFounding });
+                                  showToast("Success", `${isCurrentlyFounding ? 'Removed' : 'Added'} Founding Member status for ${u.name}`);
+                                } catch (err) {
+                                  console.error(err);
+                                  showToast("Error", "Failed to update Founding status", "error");
+                                }
+                              }} 
+                              className={cn(
+                                "p-2 rounded-xl transition-all shadow-sm",
+                                u.isFoundingMember ? "text-orange-600 bg-orange-50 hover:bg-orange-100" : "text-slate-400 bg-slate-50 hover:bg-slate-100"
+                              )}
+                              title={u.isFoundingMember ? "Remove Founding Status" : "Make Founding Member"}
+                            >
+                              <Award className="w-4 h-4" />
+                            </button>
+
                             <button 
                               onClick={(e) => { e.stopPropagation(); exportUserPerformanceReport(u); }}
                               className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all shadow-sm"
@@ -2005,8 +2082,10 @@ export default function AdminDashboard() {
                           <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">KYC STATUS</p>
                           <p className={cn(
                             "text-[13px] font-black uppercase",
-                            u.verificationStatus === "verified" ? "text-emerald-500" : 
-                            u.verificationStatus === "pending" ? "text-amber-500" : "text-slate-400"
+                            u.verificationStatus === "auditioned" ? "text-amber-500" :
+                            u.verificationStatus === "vetted" ? "text-emerald-500" :
+                            u.verificationStatus === "verified" ? "text-indigo-500" : 
+                            u.verificationStatus === "pending" ? "text-orange-500" : "text-slate-400"
                           )}>
                             {u.verificationStatus || "Pending"}
                           </p>
@@ -2014,12 +2093,23 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {u.verificationStatus === "pending" ? (
-                          <>
-                            <button onClick={() => handleVerifyTradesperson(u.id, "verified")} className="flex-1 bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-200 active:scale-95 transition-all text-xs uppercase tracking-widest">Verify</button>
-                            <button onClick={() => handleVerifyTradesperson(u.id, "rejected")} className="px-6 bg-red-50 text-red-600 font-black py-4 rounded-2xl border border-red-100 active:scale-95 transition-all text-xs uppercase tracking-widest">Deny</button>
-                          </>
-                        ) : (
+                        {u.role === "tradesperson" && (
+                          <div className="flex-1 flex gap-2">
+                            {u.verificationStatus === "pending" && (
+                              <>
+                                <button onClick={() => handleVerifyTradesperson(u.id, "verified")} className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-100 active:scale-95 transition-all text-xs uppercase tracking-widest">Verify</button>
+                                <button onClick={() => handleVerifyTradesperson(u.id, "rejected")} className="px-4 bg-red-50 text-red-600 font-black py-4 rounded-2xl border border-red-100 active:scale-95 transition-all text-xs uppercase tracking-widest">Deny</button>
+                              </>
+                            )}
+                            {(u.verificationStatus === "verified" || u.verificationStatus === "pending") && (
+                              <button onClick={() => handleVerifyTradesperson(u.id, "vetted")} className="flex-1 bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-100 active:scale-95 transition-all text-[10px] uppercase tracking-widest">Vet Pro</button>
+                            )}
+                            {(u.verificationStatus === "vetted" || u.verificationStatus === "verified" || u.verificationStatus === "pending") && (
+                              <button onClick={() => handleVerifyTradesperson(u.id, "auditioned")} className="flex-1 bg-amber-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-amber-100 active:scale-95 transition-all text-[10px] uppercase tracking-widest">Audition</button>
+                            )}
+                          </div>
+                        )}
+                        {u.role !== "tradesperson" && (
                           <>
                             <button 
                               onClick={() => { exportUserPerformanceReport(u); }}

@@ -54,15 +54,22 @@ async function runDailyAggregation() {
 
       // Calculate Spend
       let totalSpend = 0;
+      let shopSavings = 0;
       const ordersSnapshot = await db.collection("shop_orders")
         .where("userId", "==", uid)
         .get();
-      ordersSnapshot.forEach(doc => { totalSpend += doc.data().totalAmount || 0; });
+      ordersSnapshot.forEach(doc => { 
+        const orderData = doc.data();
+        totalSpend += orderData.totalAmount || 0;
+        shopSavings += orderData.savingsAmount || 0; // Track shop-specific savings
+      });
 
       try {
         await db.collection("user_profitability_daily").doc(uid).set({
           totalRevenue,
           totalSpend,
+          shopSavings,
+          orderCount: ordersSnapshot.size,
           netProfit: totalRevenue - totalSpend,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
@@ -867,13 +874,29 @@ Return a RAW JSON array (no markdown block, no markdown formatting) of 3 objects
       }
       if (doc.exists && (doc as any).data) {
         const data = (doc as any).data();
+        
+        // Fetch user for tier info to calculate pulse
+        const userDoc = await db.collection("users").doc(uid).get();
+        const userData = userDoc.data() || {};
+        const tier = userData.tierId || "Basic";
+        
+        // Calculate dynamic pulse metrics
+        const discountRate = tier === "Gold Elite" ? 0.15 : tier === "Silver Professional" ? 0.10 : 0.05;
+        const projectedSavings = (data?.totalSpend || 0) * discountRate;
+
         res.json({
           totalRevenue: data?.totalRevenue || 0,
           totalSpend: data?.totalSpend || 0,
           netProfit: data?.netProfit || 0,
-          orderCount: 0, // Simplified, as pre-agg doesn't store this yet
+          orderCount: data?.orderCount || 0,
           quoteCount: 0,
-          replenishmentAlert: (data?.totalSpend || 0) > 500
+          shopSavings: data?.shopSavings || projectedSavings,
+          replenishmentAlert: (data?.totalSpend || 0) > 500,
+          pulse: {
+            score: Math.min(100, (data?.totalSpend || 0) / 10),
+            status: (data?.totalSpend || 0) > 1000 ? "Power Buyer" : "Active Restocking",
+            nextPerk: 1000 - (data?.totalSpend || 0) > 0 ? `Spend £${(1000 - (data.totalSpend || 0)).toFixed(2)} more for VIP shipping` : "VIP Shipping Unlocked!"
+          }
         });
       } else {
         // Fallback for new accounts
@@ -883,7 +906,13 @@ Return a RAW JSON array (no markdown block, no markdown formatting) of 3 objects
           netProfit: 0,
           orderCount: 0,
           quoteCount: 0,
-          replenishmentAlert: false
+          shopSavings: 0,
+          replenishmentAlert: false,
+          pulse: {
+            score: 0,
+            status: "New Buyer",
+            nextPerk: "Spend £100 to earn your first loyalty badge"
+          }
         });
       }
     } catch (error: any) {

@@ -9,6 +9,7 @@ import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { useCategories } from "../lib/CategoryProvider";
 import { lookupPostcode } from "@/src/services/postcodeService";
+import { generateMemberId } from "@/src/services/memberIdService";
 import { BLOCKED_DOMAINS, UNSORTED_TRADE_CATEGORIES } from "@/src/constants";
 import { performInitialPublicRecordCheck } from "../services/verificationService";
 
@@ -254,6 +255,9 @@ export default function Onboarding() {
 
       const deviceId = btoa(navigator.userAgent + navigator.language + screen.width + screen.height);
       
+      // Generate Member ID
+      const { memberId, memberSequence } = await generateMemberId(isBusiness ? (role === "tradesperson" ? "tradesperson" : "business") : "homeowner");
+
       // Fraud Detection: Check for existing accounts with same Device ID or IP
       let accountFlags: string[] = [];
       try {
@@ -294,6 +298,10 @@ export default function Onboarding() {
         deviceId,
         ipAddress: detectedIp,
         accountFlags,
+        memberId,
+        memberSequence,
+        joinedDuringBeta: true,
+        phantomFeesSaved: 0,
         postcode: postcode.toUpperCase().replace(/\s/g, ""),
         city,
         county,

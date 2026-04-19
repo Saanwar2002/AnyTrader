@@ -84,9 +84,64 @@ If the apps become desynchronized or "Missing Permissions" errors appear globall
     *   Trigger is tied to `quote.materialsFinalized` state.
 *   **Notifications Adjustment:** Standard `trader_notifications` matched via `server.ts` are automatically delayed using `visibleAt` to the exact timestamp the exclusive window expires. Fast Pass members receive instant priority matching.
 
-## 📝 Next Agent Checklist
-1. Review `ROADMAP.md` for the next logical feature set (e.g. Community Forums or ATS refinements).
-2. The Fast Pass feature logic in `server.ts` relies on `notificationSettings.quietHoursEnabled` and specific match structures. If refactoring scheduling, ensure `visibleAt` exclusivity timestamps are preserved in `db.collection("notifications")`.
+## 📈 Phase 9.4: Personalized Shop Pulse & Analytics (Completed April 19, 2026)
+*   **The Widget:** A high-end `BusinessInsightsWidget` in `TradesDashboard.tsx` that consolidates multiple metrics into a tabbed interface.
+*   **Low-Clutter Optimization:** Implemented a "Minimizable Insights Bar" that defaults to a slim summary ribbon after 8 seconds, preserving vertical space while keeping key numbers (Net Profit, Vitality) visible.
+*   **Pulse Score:** A dynamic calculation based on shop activity vs. spending thresholds, providing a "Vitality" metric for the user's business health.
+*   **Savings Tracking:** Real-time tracking of discounts earned via subscription tiers.
+*   **Tier Synergy:** Logic in `server.ts` (/api/analytics/profitability) now calculates custom discount rates (5%-15%) based on the user's `tierId`.
+*   **Replenishment AI:** Integrated alerts that trigger when spending exceeds specific milestones, prompting users to restock via the AI Shop.
+
+## 📝 Completed Monetization Implementation (April 19, 2026)
+- **Unified Member ID System**: Shared atomic sequence counter (starts 10001).
+- **Founding Member Range**: First 100 verified traders (T-001 to T-100).
+- **Automated Verification Flow**: Founding IDs are auto-assigned by Admin upon verification.
+- **Revenue Switch Readiness**: Logic for future PAYG (15%) and Professional (£19.99/mo) setup.
+- **Founding Reward**: Elite access to Pro Plan for £9.99/mo Forever.
+- **Billing Manager**: Dedicated UI (`/billing`) for traders to manage tiers and view "Beta Savings" ROI.
+
+---
+
+## 💰 Hybrid Monetization Roadmap (PAYG + Subscription)
+
+### Phase 1: Free Beta (Current)
+- **Status**: Active
+- **Pricing**: £0/mo, 0% fees for all Early Adopters.
+- **Goal**: Supply Liquidity. Build a massive pool of verified traders.
+- **ROI Tracking**: Implement "Phantom Billing" to track how much each trader is saving.
+
+### Phase 2: The Revenue Switch (Future)
+- **Trigger**: 500 Active Traders or Platform Milestone.
+- **Tier 1: PAYG (Default)**: £0/mo + 15% Success Fee. Zero risk for newcomers.
+- **Tier 2: Pro Subscription**: £19.99/mo + 10% Success Fee. High-volume discount.
+- **The Founding Reward**: Users with `isFoundingMember: true` get the **Pro Subscription for £9.99/mo FOREVER**, provided they don't cancel.
+- **Visual Badge**: The "Founding Member" badge MUST be visible on Search Result Cards and Public Profiles.
+
+### Phase 3: Engagement Nudges
+- **Logic**: If total monthly PAYG fees > £20, send a "Save by Subscribing" notification with the math proof.
+
+---
+
+## 🆔 Unified Member ID System
+
+To ensure professional identification and efficient support, every user is assigned a **Human-Readable Member ID** upon registration.
+
+### 1. The Prefix System
+The prefix is determined by the user's primary registration role:
+- **T-** : Trader / Professional / Service Provider / Talent
+- **H-** : Homeowner
+- **B-** : Business Customer
+- **D-** : AnyTrader Rides Driver
+
+### 2. The Shared Sequence
+- **Logic**: All roles share a single atomic sequence counter (`platform_counters/member_id`).
+- **Founding Range**: The first 100 verified traders use IDs `T-001` through `T-100`.
+- **Standard Range**: Standard registrations start at `10001` (e.g., `H-10001`, `T-10002`).
+
+### 3. Data Storage & Search
+- **Storage**: Profiles MUST store both `memberId` (the string) and `memberSequence` (the number).
+- **Searchability**: The Admin Panel and Search API MUST allow lookups using both fields. This ensures a user can be found by typing "T-10005" OR simply "10005".
+- **Rule**: If a user's role changes (e.g., a Homeowner becomes a Trader), the numeric `memberSequence` remains permanent, but the `memberId` prefix is updated to reflect their active business role.
 
 ### Recent UI Updates (April 18, 2026)
 *   **Toggle Optimization**: Merged "Emergency Offers" and "Priority Offers" toggles into a single, compact UI container in `TradesDashboard.tsx` with reduced container (`h-9`) and toggle button sizing to fit mobile viewports better.
@@ -94,3 +149,17 @@ If the apps become desynchronized or "Missing Permissions" errors appear globall
     *   "Emergency" -> "Emergency Offers"
     *   "Fast Pass" -> "Priority Offers"
 *   **Engagement**: Enhanced the activation flow for "Priority Offers" with an inline explanation toast, and resized the Checkout/Unlock modal (`max-h-[70vh]` with sticky footer) for superior accessibility and scrollability on mobile screens.
+
+## 🏅 Phase 10: Ecosystem Expansion & Consumer Trust (Completed April 19, 2026)
+*   **Tiered Verification Badges (Phase 10.1):** 
+    *   Implemented a 3-tier trust system in `src/lib/badges.tsx`:
+        *   **Verified Pro (Indigo):** Base level. Identity and insurance verified.
+        *   **Vetted Pro (Emerald):** Mid level. References checked and past work reviewed. Features a `ShieldCheck` icon.
+        *   **Auditioned Pro (Amber/Gold):** Top level. Physical work inspection by AnyTrader experts. Features a `Medal` icon with gold fills.
+    *   Updated `TradesDashboard.tsx` to dynamically display the specific tier label in the top banner and greeting section.
+    *   Expanded `verificationStatus` enum in `firebase-blueprint.json` to include `vetted` and `auditioned`.
+*   **Regional Demand Heatmaps (Phase 10.2):**
+    *   **The Engine:** Created `src/services/demandHeatmapService.ts` to aggregate active job postings by outward postcode (e.g., SW1A).
+    *   **The Insight:** Added a "Demand Map" tab to the `BusinessInsightsWidget`.
+    *   **Visualization:** Implemented a real-time heatmap visualization showing job density, "Heat Intensity" bars (Rose styling), top categories per zone, and estimated cluster value.
+    *   **Auto-Update:** Data fetches automatically based on the trader's primary category to show relevant hotspots.

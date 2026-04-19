@@ -30,7 +30,12 @@
         "isEstablishedTradesperson": { "type": "boolean" },
         "isAcceptingRequests": { "type": "boolean" },
         "isDisabled": { "type": "boolean" },
-        "verificationStatus": { "type": "string", "enum": ["unverified", "pending", "verified", "rejected"] },
+        "isFoundingMember": { "type": "boolean", "description": "Tag for the first 100 verified traders." },
+        "joinedDuringBeta": { "type": "boolean", "description": "Flag for users who joined during the early launch phase." },
+        "phantomFeesSaved": { "type": "number", "description": "Running total of fees saved during free beta period for ROI tracking." },
+        "memberId": { "type": "string", "description": "Human-readable ID with prefix (T-10001, H-10002, etc)." },
+        "memberSequence": { "type": "integer", "description": "Numerical part of the member ID for easier searching." },
+        "verificationStatus": { "type": "string", "enum": ["unverified", "pending", "verified", "vetted", "auditioned", "rejected"] },
         "verificationDocs": {
           "type": "array",
           "items": {
@@ -528,6 +533,15 @@
     "/platform_config/{configId}": {
       "schema": "PlatformConfig",
       "description": "Global platform settings."
+    },
+    "/platform_counters/{counterId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "currentValue": { "type": "integer" }
+        }
+      },
+      "description": "Atomic counters for member IDs and job numbers."
     },
     "/partners/{partnerId}": {
       "schema": "Partner",

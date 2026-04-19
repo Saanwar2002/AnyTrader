@@ -39,6 +39,8 @@ interface Tradesperson {
   isDisabled?: boolean;
   tierId?: string;
   isAvailableForEmergency?: boolean;
+  memberId?: string;
+  isFoundingMember?: boolean;
 }
 
 export default function FindTrades() {
@@ -653,7 +655,11 @@ export default function FindTrades() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <h3 className="font-bold text-slate-900 text-sm truncate">{tp.name}</h3>
-                        {tp.verificationStatus === 'verified' && <CheckCircle className="w-3 h-3 text-green-500 fill-green-500/10" />}
+                        {tp.memberId && (
+                          <span className="text-[9px] font-black tracking-widest text-[#1e3a5f] bg-[#1e3a5f]/5 px-1.5 py-0.5 rounded border border-[#1e3a5f]/10 ml-auto">
+                            {tp.memberId}
+                          </span>
+                        )}
                       </div>
                       {tp.isAcceptingRequests === false && !tp.isAvailableForEmergency && (
                         <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider border border-red-700 shadow-sm shrink-0">

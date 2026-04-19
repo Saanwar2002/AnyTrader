@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion } from "@/src/firebase";
+import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment } from "@/src/firebase";
 import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { useAuth } from "./AuthProvider";
@@ -807,16 +807,22 @@ export default function JobDetails() {
       // Notify tradesperson and update their stats
       const acceptedQuote = quotes.find(q => q.status === "accepted");
       if (acceptedQuote) {
+        // Phantom Billing Calculation
+        const potentialFee = (acceptedQuote.amount || 0) * 0.15; // 15% Success Fee (PAYG rate)
+        
+        const tpRef = doc(db, "users", acceptedQuote.tradespersonId);
+        const tpUpdateData: any = {};
+
+        if (potentialFee > 0) {
+          tpUpdateData.phantomFeesSaved = increment(potentialFee);
+        }
+
         if (job.isBoosted && job.urgency === 'emergency') {
-          // Increment boosted emergency jobs counter
-          const tpRef = doc(db, "users", acceptedQuote.tradespersonId);
-          const tpDoc = await getDoc(tpRef);
-          if (tpDoc.exists()) {
-            const currentCount = tpDoc.data().boostedEmergencyJobsDone || 0;
-            await updateDoc(tpRef, {
-              boostedEmergencyJobsDone: currentCount + 1
-            });
-          }
+          tpUpdateData.boostedEmergencyJobsDone = increment(1);
+        }
+
+        if (Object.keys(tpUpdateData).length > 0) {
+          await updateDoc(tpRef, tpUpdateData);
         }
 
         await sendNotification(

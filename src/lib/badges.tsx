@@ -1,5 +1,5 @@
 import React from "react";
-import { Star, Zap, CheckCircle2, Trophy, Clock, MapPin, Award } from "lucide-react";
+import { Star, Zap, CheckCircle2, Trophy, Clock, MapPin, Award, ShieldCheck, ShieldAlert, Medal } from "lucide-react";
 
 export interface Badge {
   id: string;
@@ -12,6 +12,18 @@ export interface Badge {
 
 export const getTraderBadges = (profile: any): Badge[] => {
   const badges: Badge[] = [];
+
+  // 0. Founding Member (Highest Priority)
+  if (profile.isFoundingMember) {
+    badges.push({
+      id: "founding_member",
+      label: "Founding Member",
+      icon: <Award className="w-3 h-3 text-orange-600 fill-orange-500" />,
+      color: "text-orange-700",
+      bgColor: "bg-orange-100",
+      description: "One of the first 100 verified traders on AnyTrader"
+    });
+  }
 
   // Performance Badges
   if (profile.rating >= 4.8 && (profile.totalReviews || 0) >= 5) {
@@ -71,8 +83,26 @@ export const getTraderBadges = (profile: any): Badge[] => {
     });
   }
 
-  // Verification Badge
-  if (profile.verificationStatus === "verified") {
+  // Verification Badge (Tiered)
+  if (profile.verificationStatus === "auditioned") {
+    badges.push({
+      id: "auditioned_pro",
+      label: "Auditioned Pro",
+      icon: <Medal className="w-3 h-3 text-amber-600 fill-amber-500" />,
+      color: "text-amber-700",
+      bgColor: "bg-amber-100",
+      description: "Highest trust level: Work physically inspected and approved by AnyTrader experts"
+    });
+  } else if (profile.verificationStatus === "vetted") {
+    badges.push({
+      id: "vetted_pro",
+      label: "Vetted Pro",
+      icon: <ShieldCheck className="w-3 h-3 text-emerald-600 fill-emerald-500" />,
+      color: "text-emerald-700",
+      bgColor: "bg-emerald-100",
+      description: "Enhanced trust level: Multiple references checked and past work reviewed"
+    });
+  } else if (profile.verificationStatus === "verified") {
     badges.push({
       id: "verified_pro",
       label: "Verified Pro",
