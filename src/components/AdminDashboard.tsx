@@ -1569,9 +1569,9 @@ export default function AdminDashboard() {
                 >
                   <div className="p-4 max-h-[60vh] overflow-y-auto elegant-scrollbar">
                     <div className="space-y-1">
-                      {filteredFeatures.map((f, i) => (
+                      {filteredFeatures.map((f) => (
                         <button 
-                          key={i}
+                          key={`${f.tab}-${f.title}`}
                           onClick={() => navigateToFeature(f)}
                           className="w-full p-4 rounded-2xl flex items-center justify-between hover:bg-blue-50/50 transition-all text-left group"
                         >
@@ -1584,7 +1584,7 @@ export default function AdminDashboard() {
                               <p className="text-xs text-slate-400 font-medium">In {f.tab === 'settings' ? 'Global Configs' : f.tab}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Jump to</span>
                             <ArrowRight className="w-4 h-4 text-blue-600" />
                           </div>
@@ -1803,7 +1803,7 @@ export default function AdminDashboard() {
                   </thead>
                   <tbody className="divide-y divide-slate-100/50">
                     {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).map(u => (
-                  <tr key={u.id} className={cn(
+                  <tr key={`desktop-${u.id}`} className={cn(
                     "hover:bg-slate-50/30 transition-colors cursor-pointer",
                     selectedUserIds.includes(u.id) && "bg-blue-50/50"
                   )} onClick={() => window.open(`/profile/${u.id}`, '_blank')}>
@@ -2032,7 +2032,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="divide-y divide-slate-100">
                     {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).map(u => (
-                    <div key={u.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100">
+                    <div key={`mobile-${u.id}`} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-4">
                           <div className="w-14 h-14 rounded-2xl bg-white shadow-xl shadow-slate-200 overflow-hidden border border-slate-100">
@@ -2167,7 +2167,7 @@ export default function AdminDashboard() {
               </thead>
                 <tbody className="divide-y divide-slate-100/50">
                   {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 3)).map(j => (
-                    <tr key={j.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
+                    <tr key={`desktop-job-${j.id}`} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
                       <td className="p-4">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-black text-slate-900 text-sm group-hover:text-blue-600 transition-colors">{j.title}</p>
@@ -2236,7 +2236,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="divide-y divide-slate-100">
                   {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 3)).map(j => (
-                  <div key={j.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
+                  <div key={`mobile-job-${j.id}`} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -2301,7 +2301,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
                 {(isDisputesExpanded ? jobs.filter(j => j.status === "disputed") : jobs.filter(j => j.status === "disputed").slice(0, 3)).map(j => (
-                  <div key={j.id} className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
+                  <div key={`dispute-${j.id}`} className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <AlertTriangle className="w-6 h-6 text-red-500" />
@@ -2424,7 +2424,7 @@ export default function AdminDashboard() {
               {riskAlerts.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
                   {riskAlerts.map((alert, idx) => (
-                    <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-5">
+                    <div key={`risk-alert-${alert.targetId}-${idx}`} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-5">
                       <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-xl min-w-[100px]">
                         <div className={cn(
                           "text-2xl font-black",
@@ -3138,8 +3138,8 @@ export default function AdminDashboard() {
               </div>
             ) : categorySuggestions.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {categorySuggestions.map((suggestion, index) => (
-                  <div key={index} className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
+                {categorySuggestions.map((suggestion) => (
+                  <div key={`suggestion-${suggestion.category}`} className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h3 className="font-bold text-slate-900 text-lg leading-tight">{suggestion.category}</h3>
@@ -3349,7 +3349,7 @@ export default function AdminDashboard() {
                   {tempConfig.feeTiers.map((tier: any, index: number) => {
                     const isEditing = editingTiers.includes(index);
                     return (
-                      <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                      <div key={`provider-tier-${tier.name}-${index}`} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3 font-bold text-slate-900">
                             {isEditing ? (
@@ -3477,7 +3477,7 @@ export default function AdminDashboard() {
                     const tierId = index + 100;
                     const isEditing = editingTiers.includes(tierId);
                     return (
-                      <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                      <div key={`business-tier-${tier.name}-${index}`} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3 font-bold text-slate-900">
                             {isEditing ? (
@@ -4050,7 +4050,7 @@ export default function AdminDashboard() {
                       
                       <div className="mt-4 flex flex-wrap gap-1.5">
                         {(expandedCategories.includes(cat.docId) ? cat.subcategories : cat.subcategories?.slice(0, 5)).map((sub: string, i: number) => (
-                          <span key={i} className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md border border-slate-100">
+                          <span key={`${cat.docId}-sub-${i}`} className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md border border-slate-100">
                             {sub}
                           </span>
                         ))}
@@ -4167,8 +4167,8 @@ export default function AdminDashboard() {
                         <div className="space-y-2">
                           <label className="text-[10px] font-bold text-slate-400 uppercase">Allowed Postcodes</label>
                           <div className="flex flex-wrap gap-2 mb-2">
-                            {(tempConfig.allowedPostcodes || []).map((p: string) => (
-                              <div key={p} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold">
+                            {(tempConfig.allowedPostcodes || []).map((p: string, pIdx: number) => (
+                              <div key={`${p}-${pIdx}`} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold">
                                 {p}
                                 <button onClick={() => setTempConfig({ ...tempConfig, allowedPostcodes: tempConfig.allowedPostcodes.filter((pc: string) => pc !== p) })}>
                                   <X className="w-3 h-3" />

@@ -2601,7 +2601,7 @@ export default function JobDetails() {
                 <div key={`video-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-slate-100 bg-slate-900 flex items-center justify-center relative group shadow-sm">
                   <video 
                     src={url} 
-                    className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    className="w-full h-full object-cover opacity-100 md:opacity-50 md:group-hover:opacity-100 transition-opacity cursor-pointer"
                     onClick={() => {
                       setInitialMediaIndex((job.photos?.length || 0) + i);
                       setIsMediaModalOpen(true);
@@ -3999,7 +3999,7 @@ export default function JobDetails() {
                           />
                           <button 
                             onClick={() => setDisputePhotos(prev => prev.filter((_, idx) => idx !== i))}
-                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -4237,7 +4237,7 @@ export default function JobDetails() {
                         const q = quotes.find(q => q.status === 'accepted');
                         if(q) handleSimulateScan(q);
                     }}
-                    className="absolute inset-0 bg-blue-600/0 hover:bg-blue-600/10 cursor-pointer flex items-center justify-center group-hover:opacity-100 transition-all opacity-0"
+                    className="absolute inset-0 bg-blue-600/0 md:hover:bg-blue-600/10 cursor-pointer flex items-center justify-center md:group-hover:opacity-100 transition-all opacity-100 md:opacity-0"
                   >
                     <div className="bg-white px-4 py-2 rounded-full shadow-lg text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
                       <Zap className="w-4 h-4" />

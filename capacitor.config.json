@@ -1,0 +1,9 @@
+{
+  "appId": "uk.tradequote.anytrader",
+  "appName": "AnyTrader",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

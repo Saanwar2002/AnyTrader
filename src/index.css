@@ -37,10 +37,37 @@
   }
 }
 
-body {
-  @apply bg-surface text-slate-900 font-sans antialiased;
-}
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    /* Keep 100% height for consistent layout */
+    min-height: 100%;
+    /* Prevent mobile text scaling by system */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Native tap behavior */
+    -webkit-tap-highlight-color: transparent;
+    cursor: default;
+  }
 
-h1, h2, h3, .font-display {
-  @apply font-display tracking-tight;
+  body {
+    @apply bg-surface text-slate-900 font-sans antialiased;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    /* Prevent horizontal bounce */
+    overflow-x: hidden;
+  }
+
+  /* Force font-size to 16px for inputs to prevent iOS auto-zoom */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+
+  h1, h2, h3, .font-display {
+    @apply font-display tracking-tight;
+  }
 }

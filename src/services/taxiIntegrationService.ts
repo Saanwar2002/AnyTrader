@@ -1,4 +1,4 @@
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/src/firebase';
 import ngeohash from 'ngeohash';
 
@@ -12,6 +12,77 @@ export function getEmergencyRideRequestsQuery() {
     where('status', '==', 'pending'),
     orderBy('createdAt', 'desc')
   );
+}
+
+/**
+ * Assigns a driver to a ride request.
+ */
+export async function assignDriverToRide(rideId: string, driverId: string) {
+  const rideRef = doc(db, 'ride_requests', rideId);
+  const driverRef = doc(db, 'driver_status', driverId);
+
+  await updateDoc(rideRef, {
+    driverId,
+    status: 'accepted',
+    assignedAt: serverTimestamp(),
+  });
+
+  await updateDoc(driverRef, {
+    status: 'busy',
+    currentRideId: rideId,
+    lastActiveAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Marks a ride as 'in_transit' after pickup.
+ */
+export async function pickupRider(rideId: string) {
+  const rideRef = doc(db, 'ride_requests', rideId);
+  await updateDoc(rideRef, {
+    status: 'in_transit',
+    pickedUpAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Completes a ride (Handshake simulation).
+ */
+export async function completeRideWithHandshake(rideId: string, driverId: string) {
+  const rideRef = doc(db, 'ride_requests', rideId);
+  const driverRef = doc(db, 'driver_status', driverId);
+
+  await updateDoc(rideRef, {
+    status: 'completed',
+    completedAt: serverTimestamp(),
+    handshakeVerified: true,
+  });
+
+  await updateDoc(driverRef, {
+    status: 'online',
+    currentRideId: null,
+    lastActiveAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Cancels a ride request.
+ */
+export async function cancelRide(rideId: string, driverId?: string) {
+  const rideRef = doc(db, 'ride_requests', rideId);
+  await updateDoc(rideRef, {
+    status: 'cancelled',
+    cancelledAt: serverTimestamp(),
+  });
+
+  if (driverId) {
+    const driverRef = doc(db, 'driver_status', driverId);
+    await updateDoc(driverRef, {
+      status: 'online',
+      currentRideId: null,
+      lastActiveAt: serverTimestamp(),
+    });
+  }
 }
 
 /**

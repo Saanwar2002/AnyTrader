@@ -5,7 +5,7 @@ import { logout, db, doc, updateDoc, handleFirestoreError, OperationType, storag
 import { 
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
-  ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles
+  ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -68,12 +68,12 @@ function SortablePortfolioItem({ url, onRemove }: any) {
           className="w-full h-full object-cover transition-transform group-hover:scale-110" 
           referrerPolicy="no-referrer"
         />
-        <div className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
-          <GripVertical className="w-4 h-4 text-slate-400" />
+        <div className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shadow-sm text-slate-400">
+          <GripVertical className="w-4 h-4" />
         </div>
       </div>
       
-      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+      <div className="absolute inset-0 bg-black/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
         <button 
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -252,6 +252,8 @@ export default function Profile() {
     pushEnabled: true,
     emailEnabled: true
   });
+  const [newEmergencyContact, setNewEmergencyContact] = useState({ name: "", phone: "" });
+  const [isAddingEmergency, setIsAddingEmergency] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
@@ -689,6 +691,37 @@ export default function Profile() {
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAddEmergencyContact = async () => {
+    if (!user || !newEmergencyContact.name || !newEmergencyContact.phone) return;
+    setIsSaving(true);
+    try {
+      const updatedContacts = [...(profile.emergencyContacts || []), newEmergencyContact];
+      await updateDoc(doc(db, "users", user.uid), {
+        emergencyContacts: updatedContacts
+      });
+      setProfile((prev: any) => ({ ...prev, emergencyContacts: updatedContacts }));
+      setNewEmergencyContact({ name: "", phone: "" });
+      setIsAddingEmergency(false);
+    } catch (err) {
+      console.error("Error adding emergency contact:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveEmergencyContact = async (index: number) => {
+    if (!user) return;
+    try {
+      const updatedContacts = (profile.emergencyContacts || []).filter((_: any, i: number) => i !== index);
+      await updateDoc(doc(db, "users", user.uid), {
+        emergencyContacts: updatedContacts
+      });
+      setProfile((prev: any) => ({ ...prev, emergencyContacts: updatedContacts }));
+    } catch (err) {
+      console.error("Error removing emergency contact:", err);
     }
   };
 
@@ -1592,6 +1625,99 @@ export default function Profile() {
         </div>
       )}
 
+      {/* Safety & Emergency Section */}
+      {profile.role === "homeowner" && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8" id="safety">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Safety & Emergency Contacts</h3>
+            </div>
+            {!isAddingEmergency ? (
+              <button 
+                onClick={() => setIsAddingEmergency(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-all text-[11px] font-black uppercase tracking-wider border border-orange-100"
+              >
+                <Plus className="w-3 h-3" />
+                Add Contact
+              </button>
+            ) : (
+              <button 
+                onClick={() => setIsAddingEmergency(false)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all text-[11px] font-black uppercase tracking-wider border border-slate-200"
+              >
+                <X className="w-3 h-3" />
+                Cancel
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            {isAddingEmergency && (
+              <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input 
+                    type="text" 
+                    placeholder="Contact Name"
+                    className="p-3 bg-white border border-orange-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                    value={newEmergencyContact.name}
+                    onChange={(e) => setNewEmergencyContact({ ...newEmergencyContact, name: e.target.value })}
+                  />
+                  <input 
+                    type="tel" 
+                    placeholder="Phone Number"
+                    className="p-3 bg-white border border-orange-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                    value={newEmergencyContact.phone}
+                    onChange={(e) => setNewEmergencyContact({ ...newEmergencyContact, phone: e.target.value })}
+                  />
+                </div>
+                <button 
+                  onClick={handleAddEmergencyContact}
+                  disabled={isSaving || !newEmergencyContact.name || !newEmergencyContact.phone}
+                  className="w-full py-3 bg-orange-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Save Emergency Contact"}
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(profile.emergencyContacts || []).length === 0 ? (
+                <div className="col-span-full py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                    <Phone className="w-6 h-6 text-slate-300" />
+                  </div>
+                  <p className="text-slate-500 text-sm font-medium">No emergency contacts listed.</p>
+                  <p className="text-slate-400 text-xs mt-1">Add trusted contacts for emergency dispatch shared with drivers.</p>
+                </div>
+              ) : (
+                profile.emergencyContacts.map((contact: any, index: number) => (
+                  <div key={index} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-orange-500">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{contact.name}</p>
+                        <p className="text-[10px] text-slate-500 font-bold">{contact.phone}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleRemoveEmergencyContact(index)}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Phase 3: Grouped Menu List */}
       <div className="space-y-6 mb-8">
         {menuGroups.map((group) => (
@@ -2422,7 +2548,7 @@ export default function Profile() {
                             <Info className="w-4 h-4 text-slate-400 cursor-help" />
                             <div className={cn(
                               "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-xl shadow-xl transition-all z-50 pointer-events-none text-left",
-                              showBadgeInfo ? "opacity-100 visible" : "opacity-0 invisible group-hover:opacity-100 group-hover:visible"
+                              showBadgeInfo ? "opacity-100 visible" : "opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible"
                             )}>
                               <p className="font-bold mb-1">How to use badges:</p>
                               <ul className="list-disc pl-4 space-y-1 text-slate-300">

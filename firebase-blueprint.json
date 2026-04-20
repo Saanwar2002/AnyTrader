@@ -112,7 +112,43 @@
         },
         "createdAt": { "type": "string", "format": "date-time" },
         "deviceId": { "type": "string" },
-        "ipAddress": { "type": "string" }
+        "ipAddress": { "type": "string" },
+        "favoriteAddresses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "address": { "type": "string" }
+            }
+          }
+        },
+        "regularJourneys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "from": { "type": "string" },
+              "to": { "type": "string" },
+              "comments": { "type": "string" }
+            }
+          }
+        },
+        "blockedDrivers": { "type": "array", "items": { "type": "string" }, "description": "UIDs of drivers this user has blocked." },
+        "preferredDrivers": { "type": "array", "items": { "type": "string" }, "description": "UIDs of favorite drivers." },
+        "emergencyContacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "phone": { "type": "string" }
+            }
+          }
+        }
       },
       "required": ["uid", "role", "name"]
     },
@@ -381,6 +417,51 @@
       },
       "required": ["id", "targetId", "targetType", "threatType", "riskScore", "createdAt", "resolved"]
     },
+    "RidesConfig": {
+      "title": "RidesConfig",
+      "description": "Configuration for the Rides/Taxi portal.",
+      "type": "object",
+      "properties": {
+        "baseFare": { "type": "number" },
+        "distanceRate": { "type": "number" },
+        "timeRate": { "type": "number" },
+        "minFare": { "type": "number" },
+        "commission": { "type": "number" },
+        "vehicleTypes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "multiplier": { "type": "number" }
+            }
+          }
+        },
+        "peakMultipliers": {
+          "type": "object",
+          "properties": {
+            "morning": { "type": "number" },
+            "evening": { "type": "number" },
+            "lateNight": { "type": "number" }
+          }
+        },
+        "surcharges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "amount": { "type": "number" },
+              "type": { "type": "string", "enum": ["flat"] },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
     "RecurringSchedule": {
       "title": "RecurringSchedule",
       "description": "A recurring job arrangement between a homeowner and a tradesperson.",
@@ -518,6 +599,10 @@
         "dropoff": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "accepted", "in_transit", "completed", "cancelled"] },
         "totalFare": { "type": "number" },
+        "rideType": { "type": "string", "enum": ["standard", "hourly"] },
+        "duration": { "type": "integer", "description": "Duration in hours for hourly bookings." },
+        "waitTolerance": { "type": "integer", "enum": [10, 20, 30], "description": "Max wait time in minutes for ASAP requests." },
+        "comments": { "type": "string" },
         "scheduledAt": { "type": "string", "format": "date-time", "description": "Optional future date for pre-booked rides." },
         "createdAt": { "type": "string", "format": "date-time" }
       },

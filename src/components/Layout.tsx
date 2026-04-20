@@ -1,12 +1,15 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard } from "lucide-react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info } from "lucide-react";
 import { cn } from "@/src/lib/utils";
-import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc } from "@/src/firebase";
+import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc, updateDoc, arrayRemove, orderBy, limit, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
+import { toast } from "sonner";
 import React, { useEffect, useState, useRef } from "react";
 import { TradeBot } from "./TradeBot";
 import { Logo } from "./Logo";
+import MagicBubble from "./MagicBubble";
 import { AnimatePresence, motion } from "motion/react";
+import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
 
 const getIconComponent = (iconName: string) => {
   const icons: any = { Wrench, Hammer, HardHat, Shield, Zap, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, Briefcase, PenTool, Box };
@@ -15,9 +18,51 @@ const getIconComponent = (iconName: string) => {
 
 export default function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, profile, isAnonymous, isTradeBotOpen, setIsTradeBotOpen } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadTypes, setUnreadTypes] = useState<Set<string>>(new Set());
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [favorites, setFavorites] = useState<any[]>([]);
+  const [journeys, setJourneys] = useState<any[]>([]);
+  const [preferredDrivers, setPreferredDrivers] = useState<any[]>([]);
+  const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
+  const [recentRides, setRecentRides] = useState<any[]>([]);
+  const [blockedDrivers, setBlockedDrivers] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(doc(db, "users", user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setFavorites(data.favoriteAddresses || []);
+        setJourneys(data.regularJourneys || []);
+        setPreferredDrivers(data.preferredDrivers || []);
+        setEmergencyContacts(data.emergencyContacts || []);
+        setBlockedDrivers(data.blockedDrivers || []);
+      }
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, "ride_requests"),
+      where("riderId", "==", user.uid),
+      orderBy("createdAt", "desc"),
+      limit(5)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setRecentRides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching recent rides:", error);
+    });
+    return () => unsubscribe();
+  }, [user]);
+  useEffect(() => {
+    setNativeStatusBar(false); // Light mode status bar for the light-themed app
+  }, []);
+
   const [platformConfig, setPlatformConfig] = useState<any>(null);
   const [showMaintenanceBanner, setShowMaintenanceBanner] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -255,8 +300,17 @@ export default function Layout() {
 
       {/* Header */}
       <header className="glass sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-8">
+          <div className="max-w-7xl auto px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-4 sm:gap-8">
+              <button 
+                onClick={() => {
+                  triggerHaptic();
+                  setIsMenuOpen(true);
+                }}
+                className="p-2 -ml-2 text-slate-500 hover:text-slate-900 transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
               <Link to="/" className="flex items-center gap-3 group">
                 <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform duration-500">
                   <Logo size={32} className="text-white" />
@@ -470,6 +524,229 @@ export default function Layout() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 sm:pb-6">
         <Outlet />
       </main>
+
+      <MagicBubble />
+
+      {/* Sandwich Menu Sidebar */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMenuOpen(false)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[60]"
+            />
+            <motion.div 
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-80 bg-white shadow-2xl z-[70] overflow-y-auto"
+            >
+              <div className="p-6 space-y-8">
+                <div className="flex items-center justify-between">
+                  <Logo className="h-6" />
+                  <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-slate-50 rounded-xl transition-colors">
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Account Health Section */}
+                  <div className="bg-slate-900 rounded-[28px] p-5 text-white shadow-xl shadow-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Passenger Rating</span>
+                      <ShieldAlert className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="flex items-end gap-2">
+                       <span className="text-4xl font-black">⭐ {profile?.homeownerRating || "5.0"}</span>
+                       <span className="text-xs font-bold opacity-60 pb-1.5">/ 5.0</span>
+                    </div>
+                    <p className="text-[10px] font-bold text-emerald-400 mt-2 uppercase tracking-widest">
+                       Account Status: Elite Helper
+                    </p>
+                  </div>
+
+                  {/* Favorites Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-slate-400 px-2">
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Saved Places</span>
+                    </div>
+                    <div className="space-y-2">
+                      {favorites.length === 0 && journeys.length === 0 && (
+                        <p className="text-xs text-slate-400 font-medium px-2 italic">Nothing saved yet.</p>
+                      )}
+                      
+                      {favorites.slice(0, 3).map((fav) => (
+                        <button 
+                          key={fav.id}
+                          onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(fav.address)}`); setIsMenuOpen(false); }}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-slate-100 transition-all group"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
+                            <MapPin className="w-4 h-4 text-indigo-500" />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 text-xs truncate">{fav.name}</p>
+                          </div>
+                        </button>
+                      ))}
+
+                      {journeys.slice(0, 2).map((j) => (
+                        <button 
+                          key={j.id}
+                          onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(j.from)}&dropoff=${encodeURIComponent(j.to)}&comments=${encodeURIComponent(j.comments || "")}`); setIsMenuOpen(false); }}
+                          className="w-full p-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-100 transition-all group"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm text-indigo-500">
+                            <Repeat className="w-4 h-4" />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 text-xs truncate whitespace-pre-wrap leading-tight">{j.name}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Preferred Drivers Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-slate-400 px-2">
+                      <Heart className="w-4 h-4 fill-red-400 text-red-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Favorite Drivers</span>
+                    </div>
+                    {preferredDrivers.length === 0 ? (
+                      <p className="text-xs text-slate-400 font-medium px-2 italic">Add drivers after 5-star rides.</p>
+                    ) : (
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-1">
+                        {preferredDrivers.map((driver) => (
+                          <button 
+                            key={driver.uid}
+                            onClick={() => navigate(`/profile/${driver.uid}`)}
+                            className="shrink-0 flex flex-col items-center gap-1.5 p-2 bg-slate-50 border border-slate-100 rounded-2xl min-w-[70px]"
+                          >
+                            <img src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${driver.name}`} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt={driver.name} referrerPolicy="no-referrer" />
+                            <span className="text-[10px] font-bold text-slate-700 truncate w-full text-center">{driver.name.split(' ')[0]}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recent Trips Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between px-2">
+                       <div className="flex items-center gap-2 text-slate-400">
+                         <Car className="w-4 h-4 text-blue-500" />
+                         <span className="text-[10px] font-black uppercase tracking-widest">Recent Activity</span>
+                       </div>
+                    </div>
+                    <div className="space-y-2">
+                       {recentRides.map((ride) => (
+                         <div key={ride.id} className="p-3 bg-white border border-slate-100 rounded-2xl space-y-2 group relative">
+                            <div className="flex items-center justify-between">
+                               <span className={cn(
+                                 "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
+                                 ride.status === "completed" ? "bg-emerald-100 text-emerald-700" : (ride.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700")
+                               )}>
+                                 {ride.status}
+                               </span>
+                               <span className="text-[9px] font-bold text-slate-400">{ride.createdAt?.toDate ? new Date(ride.createdAt.toDate()).toLocaleDateString() : 'Pending'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                               <div className="w-6 h-6 bg-slate-50 rounded flex items-center justify-center text-[10px] font-black text-slate-400">#</div>
+                               <p className="text-[10px] font-bold text-slate-600 truncate flex-1">{ride.rideType === "hourly" ? `${ride.duration}h Hourly Ride` : ride.dropoff}</p>
+                            </div>
+                            <div className="flex items-center gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 bottom-2">
+                               <button onClick={() => toast.success("Receipt downloaded!")} className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:text-blue-500 transition-colors" title="Download Receipt">
+                                  <Download className="w-3 h-3" />
+                               </button>
+                               <button onClick={() => navigate(`/profile/${ride.driverId}`)} className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors" title="View Driver">
+                                  <Users className="w-3 h-3" />
+                               </button>
+                               <button 
+                                 onClick={async () => {
+                                   if (!user || !ride.driverId) return;
+                                   if (confirm("Block this driver from future rides?")) {
+                                     await updateDoc(doc(db, "users", user.uid), { blockedDrivers: arrayUnion(ride.driverId) });
+                                     toast.success("Driver blocked");
+                                   }
+                                 }} 
+                                 className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors" 
+                                 title="Block Driver"
+                               >
+                                  <Ban className="w-3 h-3" />
+                               </button>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+
+                  {/* Safety Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-slate-400 px-2">
+                      <ShieldAlert className="w-4 h-4 text-orange-500" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Safety & Emergency</span>
+                    </div>
+                    {emergencyContacts.length === 0 ? (
+                      <button 
+                        onClick={() => navigate("/profile")}
+                        className="w-full p-3 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-3 text-orange-700"
+                      >
+                         <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
+                            <Phone className="w-4 h-4" />
+                         </div>
+                         <div className="text-left">
+                            <p className="font-bold text-xs">Add Emergency Contacts</p>
+                            <p className="text-[9px] opacity-70 uppercase tracking-widest font-black">Safety First</p>
+                         </div>
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        {emergencyContacts.map((contact, i) => (
+                           <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                              <p className="font-bold text-slate-900 text-xs">{contact.name}</p>
+                              <a href={`tel:${contact.phone}`} className="p-2 bg-white rounded-xl shadow-sm text-blue-600">
+                                 <Phone className="w-3 h-3" />
+                              </a>
+                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100">
+                     <button 
+                       onClick={() => toast.info("Lost & Found report service coming soon. Please contact live support for immediate assistance.")}
+                       className="w-full p-3 flex items-center gap-3 text-slate-500 hover:text-slate-900 transition-colors"
+                     >
+                        <Info className="w-4 h-4 text-slate-400" />
+                        <span className="text-xs font-bold">Lost & Found</span>
+                     </button>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-slate-100">
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setShowLogoutConfirm(true);
+                    }}
+                    className="w-full p-4 flex items-center gap-3 text-red-500 font-bold hover:bg-red-50 rounded-2xl transition-colors"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
 

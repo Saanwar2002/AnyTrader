@@ -180,3 +180,43 @@ The prefix is determined by the user's primary registration role:
     *   **The Insight:** Added a "Demand Map" tab to the `BusinessInsightsWidget`.
     *   **Visualization:** Implemented a real-time heatmap visualization showing job density, "Heat Intensity" bars (Rose styling), top categories per zone, and estimated cluster value.
     *   **Auto-Update:** Data fetches automatically based on the trader's primary category to show relevant hotspots.
+
+## 🚕 Phase 11: Rides Synchronization & Pricing Logic (Completed April 20, 2026)
+*   **Engine Dials Sync Engine:** Implemented a real-time "Unsaved Changes" detector in the Rides Command Center.
+    *   *Notification:* A sticky, backdrop-blurred sync bar slides up when local edits differ from the `platform_config/rides` Firestore document.
+    *   *Logic:* Targeted field-by-field comparison (Base Fare, Rates, Multipliers) ensures the notification closes precisely upon successful database synchronization.
+*   **Geofenced Surcharge Engine (Phase 11.1):** 
+    *   Implemented management and simulation for fixed-fee surcharges (Airports, ULEZ, Congestion).
+    *   *Direct-to-Driver Logic:* Engineered the payout formula so surcharges bypass the platform's 12% commission rail entirely, delivering 100% of the fee to the driver as reimbursement.
+*   **Advanced Fare Simulator Redesign:**
+    *   *High-Fidelity Simulation:* Completely redesigned inputs for Surge (up to 5x), Peak Periods (Morning/Evening/Late Night), and 5 distinct Vehicle Classes.
+    *   *Surcharge Testing:* Added interactive surcharge toggles to the simulator to test complex "Airport drop-offs during Peak times" scenarios.
+    *   *Sanitization:* Standardized numeric handling across all dials and inputs to prevent `NaN` errors and ensure database strictly stores valid currency/rate numbers.
+    *   *Layout:* Mobile-optimized 2-column input grid with reduced padding and text scaling for accessibility on small viewports.
+*   **Vehicle Class Logic:** Standardized multipliers for AnyTrader Standard (1.0), Executive (1.5), XL (1.4), Pro Van (1.8), and VIP Luxury (2.2) to ensure platform-wide pricing consistency.
+*   **QR Dispatch & Ride Ingestion (Phase 11.2):**
+    *   *Operational Dashboard:* Enhanced the Fleet Monitor with actionable dispatch states.
+    *   *Dispatch Modal:* Implemented a high-fidelity driver assignment modal that filters for 'Online' fleet capacity and performs atomic status handshakes.
+    *   *QR Handshake Simulation:* Added a verification UI for 'In-Transit' jobs, simulating the 4-digit or QR code handshake required to securely complete rides.
+    *   *Lifecycle Management:* Integrated state-managed buttons for Pickup, Complete, and Cancel, ensuring driver status (Online/Busy) stays synchronized with ride progress.
+*   **Touch Responsiveness & Persistent Visibility (Phase 11.3):**
+    *   **The Problem:** Many critical action buttons (Delete, Edit, Verify, Jump, Dispatch) were hidden behind hover states (`opacity-0 group-hover:opacity-100`), making them inaccessible on mobile/touch devices.
+    *   **The Solution:** Implemented a "Mobile-First Visibility" pattern (`opacity-100 md:opacity-0 md:group-hover:opacity-100`) across all major portals (Admin, Rides, Home, Profile, Jobs).
+    *   **Outcome:** Hover-reveal effects are preserved for desktop users to maintain a clean UI, while touch-screen users now see all interactive icons persistently, ensuring full functional accessibility on mobile.
+    *   **Coverage:** Applied to Ride Actions, Admin Search Results, Job Media Management, Dispute Evidence, Portfolio Handling, and decorative flair.
+    *   **Sanitization:** Hardened numeric inputs in the Rides Dials to prevent `NaN` attributes in React rendering by implementing strict fallback values (`0`) and parseFloat safety checks.
+
+## 🚕 Phase 11.4: Taxi Passenger Loyalty & Safety (Completed April 20, 2026)
+*   **Passenger Trust Score:** Integrated a "Passenger Rating" system into the main sandwich menu, providing immediate feedback on account health and "Elite Helper" status.
+*   **Safety & Emergency Contacts:** 
+    *   *Implementation:* New `emergencyContacts` array in `User` entity.
+    *   *Dispatch Sync:* These contacts are designed for high-priority injection into driver dispatch feeds during active rides.
+    *   *UI:* Centralized management interface in `Profile.tsx` with one-tap calling from the app sidebar.
+*   **The "Block & Prefer" Algorithm:**
+    *   *Driver Blocking:* Implemented an "Anti-Match" system. Drivers blocked by a user via the Job History sidebar are strictly filtered out of that specific user's future simulations and dispatch rounds.
+    *   *Preferred Drivers:* Added a "Favorite Drivers" horizontal strip to the sidebar, allowing quick access to high-rated drivers from previous trips.
+*   **Recent Activity & Receipts:** 
+    *   *The Feed:* Integrated a real-time `ride_requests` listener into the sidebar to show the 5 most recent trips with status-badges.
+    *   *Instant Actions:* Integrated mock receipt downloading and driver profile deep-linking directly from the sidebar feed.
+*   **Capacitor Optimization:** Ensured all new interaction patterns (blocking, favoriting) trigger native haptic feedback and respect mobile safe-area insets.
+

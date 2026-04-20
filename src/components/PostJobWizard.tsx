@@ -2003,7 +2003,7 @@ export default function PostJobWizard() {
                         <img src={url} alt={`Job photo ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         <button 
                           onClick={() => setFormData({ ...formData, photos: formData.photos.filter((_, idx) => idx !== i) })}
-                          className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2012,7 +2012,7 @@ export default function PostJobWizard() {
                     {formData.videos.map((url, i) => (
                       <div key={`video-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group bg-slate-900 flex items-center justify-center shadow-sm">
                         <video src={url} className="w-full h-full object-cover opacity-60" />
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-black/40">
                           <button 
                             onClick={() => {
                               setFormData(prev => ({ ...prev, videos: prev.videos.filter((_, idx) => idx !== i) }));

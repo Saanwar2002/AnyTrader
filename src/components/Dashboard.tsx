@@ -305,7 +305,7 @@ export default function Dashboard() {
                 </div>
                 
                 {/* Decorative background element */}
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-50 rounded-full blur-2xl opacity-50 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-50 rounded-full blur-2xl opacity-100 md:opacity-50 md:group-hover:opacity-100 transition-opacity" />
               </div>
             ))}
           </div>

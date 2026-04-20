@@ -2,11 +2,18 @@ import React, { useState, useEffect } from "react";
 import { db, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, collection, orderBy, limit, where } from "@/src/firebase";
 import { 
   Car, MapPin, DollarSign, Clock, Globe, AlertCircle, Save, Loader2, 
-  Settings2, Activity, Play, CheckCircle2, Calendar, ClipboardList, TrendingUp, Users, X
+  Settings2, Activity, Play, CheckCircle2, Calendar, ClipboardList, TrendingUp, Users, X,
+  Map, Navigation, Send, CheckCircle, Trash2, QrCode
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
+import { 
+  assignDriverToRide, 
+  pickupRider, 
+  completeRideWithHandshake, 
+  cancelRide 
+} from "@/src/services/taxiIntegrationService";
 
 export default function RidesCommandCenter() {
   const [activeTab, setActiveTab] = useState<"monitor" | "drivers" | "dials" | "simulator">("monitor");
@@ -29,7 +36,12 @@ export default function RidesCommandCenter() {
       morning: 1.2,
       evening: 1.3,
       lateNight: 1.5
-    }
+    },
+    surcharges: [
+      { id: "airport", name: "Airport Drop-off", amount: 5.0, description: "Standard airport terminal entry fee", type: "flat" },
+      { id: "ulez", name: "ULEZ Charge", amount: 12.5, description: "Ultra Low Emission Zone fee", type: "flat" },
+      { id: "congestion", name: "Congestion Charge", amount: 15, description: "London central zone fee", type: "flat" }
+    ]
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,6 +53,9 @@ export default function RidesCommandCenter() {
   const [simSurge, setSimSurge] = useState("1.0");
   const [simVehicleType, setSimVehicleType] = useState("standard");
   const [simPeakMode, setSimPeakMode] = useState<"none" | "morning" | "evening" | "lateNight">("none");
+  const [simSelectedSurcharges, setSimSelectedSurcharges] = useState<string[]>([]);
+  const [dispatchingRide, setDispatchingRide] = useState<any | null>(null);
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
 
   useEffect(() => {
     // 1. Listen for rides
@@ -64,7 +79,12 @@ export default function RidesCommandCenter() {
 
         const merged = {
           ...data,
-          vehicleTypes: data.vehicleTypes || defaultVehicles
+          vehicleTypes: data.vehicleTypes || defaultVehicles,
+          surcharges: data.surcharges || [
+            { id: "airport", name: "Airport Drop-off", amount: 5.0, description: "Standard airport terminal entry fee", type: "flat" },
+            { id: "ulez", name: "ULEZ Charge", amount: 12.5, description: "Ultra Low Emission Zone fee", type: "flat" },
+            { id: "congestion", name: "Congestion Charge", amount: 15, description: "London central zone fee", type: "flat" }
+          ]
         };
 
         setServerConfig(merged);
@@ -94,7 +114,7 @@ export default function RidesCommandCenter() {
 
   const isConfigEqual = (c1: any, c2: any) => {
     if (!c1 || !c2) return false;
-    const keys = ['baseFare', 'distanceRate', 'timeRate', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers'];
+    const keys = ['baseFare', 'distanceRate', 'timeRate', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges'];
     return keys.every(key => JSON.stringify(c1[key]) === JSON.stringify(c2[key]));
   };
 
@@ -119,7 +139,11 @@ export default function RidesCommandCenter() {
           morning: Number(config.peakMultipliers?.morning) || 1,
           evening: Number(config.peakMultipliers?.evening) || 1,
           lateNight: Number(config.peakMultipliers?.lateNight) || 1,
-        }
+        },
+        surcharges: (config.surcharges || []).map((s: any) => ({
+          ...s,
+          amount: Number(s.amount) || 0
+        }))
       };
 
       await setDoc(doc(db, "platform_config", "rides"), {
@@ -140,21 +164,75 @@ export default function RidesCommandCenter() {
   const selectedVehicle = config.vehicleTypes?.find((v: any) => v.id === simVehicleType) || { multiplier: 1.0 };
   const peakMultiplier = simPeakMode === "none" ? 1.0 : (config.peakMultipliers?.[simPeakMode] || 1.0);
   
-  const rawFare = (parseFloat(simDistance) * config.distanceRate) + 
-                  (parseFloat(simTime) * config.timeRate) + 
+  const rawFare = (parseFloat(simDistance || "0") * config.distanceRate) + 
+                  (parseFloat(simTime || "0") * config.timeRate) + 
                   config.baseFare;
                   
-  const finalPassengerPrice = (rawFare * selectedVehicle.multiplier * parseFloat(simSurge) * peakMultiplier);
-  const displayedPrice = Math.max(finalPassengerPrice, config.minFare * selectedVehicle.multiplier);
-  const finalDriverPayout = displayedPrice * (1 - config.commission / 100);
+  const simulationSurchargeTotal = (config.surcharges || [])
+    .filter((s: any) => simSelectedSurcharges.includes(s.id))
+    .reduce((acc: number, s: any) => acc + s.amount, 0);
+
+  const finalPassengerTransitPrice = (rawFare * selectedVehicle.multiplier * parseFloat(simSurge || "1.0") * peakMultiplier);
+  const transitPriceWithGuardrail = Math.max(finalPassengerTransitPrice, config.minFare * selectedVehicle.multiplier);
+  
+  const displayedPrice = transitPriceWithGuardrail + simulationSurchargeTotal;
+  const platformFee = transitPriceWithGuardrail * (config.commission / 100);
+  const finalDriverPayout = displayedPrice - platformFee;
 
   // Filtered Job Lists
   const filters = {
     pending: rideRequests.filter(r => r.status === "pending" && !r.scheduledAt),
     live: rideRequests.filter(r => ["accepted", "in_transit"].includes(r.status)),
     scheduled: rideRequests.filter(r => r.status === "pending" && r.scheduledAt),
-    completed: rideRequests.filter(r => r.status === "completed"),
-    cancelled: rideRequests.filter(r => r.status === "cancelled")
+    completed: rideRequests.filter(r => r.status === "completed").slice(0, 5),
+    cancelled: rideRequests.filter(r => r.status === "cancelled").slice(0, 5)
+  };
+
+  const handleDispatch = async (driverId: string) => {
+    if (!dispatchingRide) return;
+    try {
+      setSaving(true);
+      await assignDriverToRide(dispatchingRide.id, driverId);
+      toast.success("Ride dispatched successfully");
+      setIsDispatchModalOpen(false);
+      setDispatchingRide(null);
+    } catch (error) {
+      toast.error("Failed to dispatch ride");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePickup = async (rideId: string) => {
+    try {
+      await pickupRider(rideId);
+      toast.success("Rider picked up");
+    } catch (error) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleComplete = async (rideId: string, driverId: string) => {
+    try {
+      // Phase 11.2: Simulating QR Handshake
+      toast.info("Verifying QR Handshake...");
+      setTimeout(async () => {
+        await completeRideWithHandshake(rideId, driverId);
+        toast.success("Ride completed & verified via QR");
+      }, 1500);
+    } catch (error) {
+      toast.error("Verification failed");
+    }
+  };
+
+  const handleCancelClick = async (rideId: string, driverId?: string) => {
+    if (!confirm("Are you sure you want to cancel this ride?")) return;
+    try {
+      await cancelRide(rideId, driverId);
+      toast.success("Ride cancelled");
+    } catch (error) {
+      toast.error("Failed to cancel ride");
+    }
   };
 
   return (
@@ -249,6 +327,7 @@ export default function RidesCommandCenter() {
                           <th className="px-6 py-4">Status</th>
                           <th className="px-6 py-4">Driver</th>
                           <th className="px-6 py-4">Time</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -256,20 +335,28 @@ export default function RidesCommandCenter() {
                           <tr key={ride.id} className="hover:bg-slate-50/50 transition-colors group">
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 overflow-hidden relative">
+                                  {ride.status === 'in_transit' && (
+                                    <div className="absolute inset-0 bg-emerald-500/20 animate-pulse" />
+                                  )}
                                   {ride.riderId?.slice(0, 2).toUpperCase()}
                                 </div>
-                                <span className="text-xs font-bold text-slate-900">{ride.riderId?.slice(0, 8)}</span>
+                                <div>
+                                  <div className="text-xs font-bold text-slate-900">{ride.riderId?.slice(0, 8)}</div>
+                                  {ride.urgency === 'emergency' && (
+                                    <span className="text-[8px] font-black uppercase text-rose-500 tracking-tighter">Emergency</span>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="space-y-1">
-                                <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-700">
+                                  <MapPin className="w-2.5 h-2.5 text-emerald-500" />
                                   <span className="truncate max-w-[150px]">{ride.pickup}</span>
                                 </div>
-                                <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                                <div className="flex items-center gap-2 text-[10px] font-medium text-slate-500">
+                                  <Navigation className="w-2.5 h-2.5 text-slate-300" />
                                   <span className="truncate max-w-[150px]">{ride.dropoff}</span>
                                 </div>
                               </div>
@@ -289,13 +376,62 @@ export default function RidesCommandCenter() {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="text-xs font-medium text-slate-500">
-                                {ride.driverId ? ride.driverId.slice(0, 8) : "—"}
-                              </span>
+                              {ride.driverId ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center text-[8px] font-black text-blue-600 border border-blue-100">
+                                    {drivers.find(d => d.id === ride.driverId)?.name?.slice(0, 1) || "D"}
+                                  </div>
+                                  <span className="text-xs font-medium text-slate-500">
+                                    {drivers.find(d => d.id === ride.driverId)?.name || ride.driverId.slice(0, 8)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs font-medium text-slate-400">—</span>
+                              )}
                             </td>
-                            <td className="px-6 py-4 text-xs font-bold text-slate-400">
+                            <td className="px-6 py-4 text-[10px] font-bold text-slate-400">
                               {ride.scheduledAt ? new Date(ride.scheduledAt.toDate?.() || ride.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
                                (ride.createdAt?.toDate?.() || new Date(ride.createdAt)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                {ride.status === 'pending' && (
+                                  <button 
+                                    onClick={() => { setDispatchingRide(ride); setIsDispatchModalOpen(true); }}
+                                    className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                    title="Dispatch Driver"
+                                  >
+                                    <Send className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {ride.status === 'accepted' && (
+                                  <button 
+                                    onClick={() => handlePickup(ride.id)}
+                                    className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                    title="Mark Picked Up"
+                                  >
+                                    <Clock className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {ride.status === 'in_transit' && (
+                                  <button 
+                                    onClick={() => handleComplete(ride.id, ride.driverId)}
+                                    className="p-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200"
+                                    title="Verify QR Handshake"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {['pending', 'accepted'].includes(ride.status) && (
+                                  <button 
+                                    onClick={() => handleCancelClick(ride.id, ride.driverId)}
+                                    className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                                    title="Cancel Ride"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -494,8 +630,9 @@ export default function RidesCommandCenter() {
                           type="text" 
                           value={vt.name}
                           onChange={e => {
-                            const newTypes = [...config.vehicleTypes];
-                            newTypes[idx].name = e.target.value;
+                            const newTypes = config.vehicleTypes.map((vt: any, i: number) => 
+                              i === idx ? { ...vt, name: e.target.value } : vt
+                            );
                             setConfig({...config, vehicleTypes: newTypes});
                           }}
                           placeholder="e.g. Executive"
@@ -511,8 +648,9 @@ export default function RidesCommandCenter() {
                           value={isNaN(vt.multiplier) ? "" : vt.multiplier}
                           onChange={e => {
                             const val = parseFloat(e.target.value);
-                            const newTypes = [...config.vehicleTypes];
-                            newTypes[idx].multiplier = isNaN(val) ? 1 : val;
+                            const newTypes = config.vehicleTypes.map((vt: any, i: number) => 
+                              i === idx ? { ...vt, multiplier: isNaN(val) ? 1 : val } : vt
+                            );
                             setConfig({...config, vehicleTypes: newTypes});
                           }}
                           className="w-full bg-white border border-slate-100 rounded-xl px-3 py-2 text-xs font-black text-slate-900 focus:border-emerald-500 outline-none transition-all"
@@ -547,6 +685,83 @@ export default function RidesCommandCenter() {
                           });
                         }}
                         className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-6 pt-6 border-t border-slate-50">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Geofenced Surcharges</h4>
+                  <button 
+                    onClick={() => {
+                      const id = `surcharge_${Date.now()}`;
+                      const newSurcharges = [...(config.surcharges || []), { id, name: "New Surcharge", amount: 0, type: "flat", description: "" }];
+                      setConfig({...config, surcharges: newSurcharges});
+                    }}
+                    className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 px-2 py-1 rounded-lg transition-colors"
+                  >
+                    + Add Surcharge
+                  </button>
+                </div>
+                <p className="text-[9px] font-medium text-slate-500 italic pb-2">These fees bypass platform commission and go 100% to the driver (e.g. Airport fees, ULEZ).</p>
+                
+                <div className="space-y-3">
+                  {(config.surcharges || []).map((s: any, idx: number) => (
+                    <div key={s.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-3 relative group/s">
+                      <button 
+                        onClick={() => {
+                          const newSurcharges = config.surcharges.filter((_: any, i: number) => i !== idx);
+                          setConfig({...config, surcharges: newSurcharges});
+                        }}
+                        className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Name</label>
+                          <input 
+                            type="text" 
+                            value={s.name}
+                            onChange={e => {
+                              const newS = config.surcharges.map((s: any, i: number) => 
+                                i === idx ? { ...s, name: e.target.value } : s
+                              );
+                              setConfig({...config, surcharges: newS});
+                            }}
+                            className="w-full bg-white border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Amount (£)</label>
+                          <input 
+                            type="number" 
+                            value={isNaN(s.amount) ? "" : s.amount}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value);
+                              const newS = config.surcharges.map((s: any, i: number) => 
+                                i === idx ? { ...s, amount: isNaN(val) ? 0 : val } : s
+                              );
+                              setConfig({...config, surcharges: newS});
+                            }}
+                            className="w-full bg-white border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+                      <input 
+                        type="text" 
+                        value={s.description}
+                        onChange={e => {
+                          const newS = config.surcharges.map((s: any, i: number) => 
+                            i === idx ? { ...s, description: e.target.value } : s
+                          );
+                          setConfig({...config, surcharges: newS});
+                        }}
+                        placeholder="Short description..."
+                        className="w-full bg-white border border-slate-100 rounded-xl px-3 py-2 text-xs text-slate-500"
                       />
                     </div>
                   ))}
@@ -662,6 +877,33 @@ export default function RidesCommandCenter() {
                           ))}
                         </div>
                       </div>
+
+                      <div className="space-y-3 pt-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Geofenced Surcharges</label>
+                        <div className="flex flex-wrap gap-2">
+                          {(config.surcharges || []).map((s: any) => (
+                            <button
+                              key={s.id}
+                              onClick={() => {
+                                setSimSelectedSurcharges(prev => 
+                                  prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]
+                                );
+                              }}
+                              className={cn(
+                                "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                                simSelectedSurcharges.includes(s.id)
+                                  ? "bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/20"
+                                  : "bg-white/5 border-white/5 text-slate-400 hover:bg-white/10"
+                              )}
+                            >
+                              {s.name} (£{s.amount})
+                            </button>
+                          ))}
+                        </div>
+                        {(!config.surcharges || config.surcharges.length === 0) && (
+                          <p className="text-[9px] text-slate-500 italic pb-2">No surcharges configured in Engine Dials.</p>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="flex flex-col justify-center gap-10 bg-white/5 rounded-[32px] p-8 border border-white/10">
@@ -722,6 +964,80 @@ export default function RidesCommandCenter() {
                 </button>
               </div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Dispatch Modal */}
+        <AnimatePresence>
+          {isDispatchModalOpen && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsDispatchModalOpen(false)}
+                className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              />
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="relative w-full max-w-md bg-white rounded-[40px] shadow-2xl overflow-hidden"
+              >
+                <div className="p-8 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Dispatch Driver</h2>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Assign available fleet capacity</p>
+                    </div>
+                    <button 
+                      onClick={() => setIsDispatchModalOpen(false)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                    >
+                      <X className="w-6 h-6 text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center shadow-sm">
+                      <Navigation className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Request</p>
+                      <p className="text-sm font-bold text-slate-900 truncate">{dispatchingRide?.pickup}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Online Drivers ({drivers.filter(d => d.status === 'online').length})</h3>
+                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                      {drivers.filter(d => d.status === 'online').map(driver => (
+                        <button
+                          key={driver.id}
+                          onClick={() => handleDispatch(driver.id)}
+                          className="w-full flex items-center gap-4 p-4 rounded-[24px] border border-slate-50 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all group text-left"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-xs font-black text-slate-400 group-hover:text-emerald-500 shadow-sm transition-colors uppercase">
+                            {driver.name?.slice(0, 2).toUpperCase() || "DR"}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs font-black text-slate-900">{driver.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{driver.vehicleType || "Standard"}</p>
+                          </div>
+                          <Send className="w-4 h-4 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                      {drivers.filter(d => d.status === 'online').length === 0 && (
+                        <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-[24px]">
+                          <Users className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-[10px] font-black uppercase tracking-widest">No available drivers found</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
       </AnimatePresence>
