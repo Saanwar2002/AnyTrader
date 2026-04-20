@@ -1,0 +1,39 @@
+src/components/driver/PassengerBooking.tsx:                {stops.map((stop, i) => stop.coords && <Marker key={`stop-marker-${i}`} position={stop.coords} />)}
+src/components/driver/PassengerBooking.tsx:                        <div key={`stop-input-${stop.address}-${i}`} className="space-y-2 relative">
+src/components/driver/PassengerBooking.tsx:                              <button key={`suggestion-${s.label}-${idx}`} onClick={() => selectSuggestion(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center gap-3 transition-colors border-b border-slate-50 last:border-0">
+src/components/driver/PassengerBooking.tsx:                           <button key={`category-${category.id}-${idx}`} onClick={() => setSelectedCategory(category.id)} className={cn("flex-none w-[88px] snap-start flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all", selectedCategory === category.id ? "border-slate-900 bg-slate-900 shadow-lg text-white transform scale-105" : "border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50")}>
+src/components/Analytics.tsx:                    <Cell key={`cell-${index}`} fill={entry.name === "Mar" ? "#1e293b" : "#334155"} />
+src/components/JobDetails.tsx:                <div key={`photo-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-slate-100 shadow-sm">
+src/components/JobDetails.tsx:                <div key={`video-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-slate-100 bg-slate-900 flex items-center justify-center relative group shadow-sm">
+src/components/JobDetails.tsx:                  <div key={`blind-${i}`} className="bg-slate-50/50 p-6 rounded-3xl border border-dashed border-slate-200 flex items-center justify-between gap-4 opacity-70">
+src/components/EmergencyJobWizard.tsx:                  <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group shadow-sm">
+src/components/PostJobWizard.tsx:                    key={`${formData.category}-${sub}`}
+src/components/PostJobWizard.tsx:                      <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group shadow-sm">
+src/components/PostJobWizard.tsx:                      <div key={`video-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group bg-slate-900 flex items-center justify-center shadow-sm">
+src/components/RidesCommandCenter.tsx:                          <tr key={`${section.status}-${ride.id}`} className="hover:bg-slate-50/50 transition-colors group">
+src/components/RidesCommandCenter.tsx:                    <div key={`vt-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 relative group/vt">
+src/components/RidesCommandCenter.tsx:                    <div key={`surcharge-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-3 relative group/s">
+src/components/RidesCommandCenter.tsx:                            <option key={`sim-vt-${idx}`} value={v.id} className="bg-slate-900">{v.name} (x{v.multiplier})</option>
+src/components/RidesCommandCenter.tsx:                              key={`sim-s-${idx}`}
+src/components/AdminDashboard.tsx:                          key={`${f.tab}-${f.title}`}
+src/components/AdminDashboard.tsx:                  <tr key={`desktop-${u.id}`} className={cn(
+src/components/AdminDashboard.tsx:                    <div key={`mobile-${u.id}`} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100">
+src/components/AdminDashboard.tsx:                    <tr key={`desktop-job-${j.id}`} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
+src/components/AdminDashboard.tsx:                  <div key={`mobile-job-${j.id}`} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
+src/components/AdminDashboard.tsx:                  <div key={`dispute-${j.id}`} className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
+src/components/AdminDashboard.tsx:                    <div key={`risk-alert-${alert.targetId}-${idx}`} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-5">
+src/components/AdminDashboard.tsx:                  <div key={`suggestion-${suggestion.category}`} className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
+src/components/AdminDashboard.tsx:                      <div key={`provider-tier-${tier.name}-${index}`} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+src/components/AdminDashboard.tsx:                      <div key={`business-tier-${tier.name}-${index}`} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+src/components/AdminDashboard.tsx:                            <Cell key={`cell-${index}`} fill={entry.color} />
+src/components/AdminDashboard.tsx:                          <span key={`${cat.docId}-sub-${i}`} className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md border border-slate-100">
+src/components/AdminDashboard.tsx:                              <div key={`${p}-${pIdx}`} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold">
+src/components/Profile.tsx:                <div key={`base-${idx}`} className="p-4 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-3">
+src/components/Availability.tsx:                              <option key={`start-${time}`} value={time}>{time}</option>
+src/components/Availability.tsx:                              <option key={`end-${time}`} value={time}>{time}</option>
+src/components/Layout.tsx:                          key={`fav-${idx}`}
+src/components/Layout.tsx:                          key={`journey-${idx}`}
+src/components/Layout.tsx:                            key={`driver-${idx}`}
+src/components/Layout.tsx:                         <div key={`ride-${idx}`} className="p-3 bg-white border border-slate-100 rounded-2xl space-y-2 group relative">
+src/components/Layout.tsx:                           <div key={`contact-${i}`} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+src/components/Layout.tsx:              key={`nav-${idx}-${item.path}`}

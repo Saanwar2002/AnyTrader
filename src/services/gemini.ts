@@ -207,7 +207,7 @@ export async function getJobEstimate(
     });
 
     const text = response.text;
-    if (!text) throw new Error("Empty response from Gemini");
+    if (!text || text === "undefined") throw new Error("Empty response from Gemini");
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Estimate Error:", error);
@@ -338,7 +338,7 @@ export async function summarizeDisputeChat(
     });
 
     const text = response.text;
-    if (!text) throw new Error("Empty response from Gemini");
+    if (!text || text === "undefined") throw new Error("Empty response from Gemini");
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Dispute Summary Error:", error);
@@ -434,7 +434,7 @@ export async function analyzeFraudRisk(
     });
 
     const text = response.text;
-    if (!text) throw new Error("Empty response from Gemini");
+    if (!text || text === "undefined") throw new Error("Empty response from Gemini");
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Fraud Risk Error:", error);

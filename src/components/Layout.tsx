@@ -383,6 +383,7 @@ export default function Layout() {
                 <AnimatePresence>
                   {showShopPopover && (
                     <motion.div
+                      key="shop-popover"
                       initial={{ opacity: 0, y: 10, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -414,7 +415,7 @@ export default function Layout() {
                               const RecommendationIcon = getIconComponent(rec.icon);
                               return (
                                 <button 
-                                  key={idx}
+                                  key={`rec-${idx}-${rec.name}`}
                                   onClick={() => enterShop(rec.name)}
                                   className="flex items-start gap-3 p-3 rounded-xl hover:bg-blue-50 transition-colors group cursor-pointer w-full"
                                 >
@@ -530,22 +531,25 @@ export default function Layout() {
       {/* Sandwich Menu Sidebar */}
       <AnimatePresence>
         {isMenuOpen && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[60]"
-            />
-            <motion.div 
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 left-0 w-80 bg-white shadow-2xl z-[70] overflow-y-auto"
-            >
-              <div className="p-6 space-y-8">
+          <motion.div 
+            key="drawer-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMenuOpen(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[60]"
+          />
+        )}
+        {isMenuOpen && (
+          <motion.div 
+            key="drawer-content"
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed inset-y-0 left-0 w-80 bg-white shadow-2xl z-[70] overflow-y-auto"
+          >
+            <div className="p-6 space-y-8">
                 <div className="flex items-center justify-between">
                   <Logo className="h-6" />
                   <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-slate-50 rounded-xl transition-colors">
@@ -744,7 +748,6 @@ export default function Layout() {
                 </div>
               </div>
             </motion.div>
-          </>
         )}
       </AnimatePresence>
 

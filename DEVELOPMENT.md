@@ -55,6 +55,19 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 5.  **Multi-Portal Verification**: If possible, verify that the Home dashboard still functions after a Rides database change.
 6.  **Documentation Update**: You MUST update this file (`DEVELOPMENT.md`) and/or `AGENTS.md` after completing your work to reflect changes in project state, security rules, or database schemas for future agents.
 
+## 🚀 The Super App Strategy: Phase 1-4 Architecture (Planned April 20, 2026)
+*   **The Mission:** Transition the monolithic application into a "Super App" model featuring Two Portals (Home Services & Rides) managed under one unified account and database structure. 
+*   **The Global Context Switcher:** Introduction of the `PortalContext` and a floating `PlatformSwitcher` widget to hot-swap navigation layouts based on `activePortal` ('anytrader' vs 'anyride') without losing state or forcing re-authentication.
+*   **The Entitlements Engine:** Replacing hardcoded tier IDs with a centralized logic core (`entitlements.ts`) to validate dynamically: Lead Fee Discounts (0-50%), Commission Rates (8-15%), and Feature Gates (Quote Limits, Access Delays) based on the user's Subscription Tier (PAYG vs. Pro vs. Elite vs. Enterprise).
+*   **Monetization Preservation:** Existing localized upsells (e.g., £5 Emergency Boosts, Priority Offers toggles) will NOT be overwritten but will be organically wrapped and managed by the new Entitlements Engine.
+*   **Implementation Sequence:**
+    *   *Step 1:* Context Shell Refactor (`PortalContext`, Widget, `Layout.tsx` Split).
+    *   *Step 2:* AnyRide Isolation (Map-First UX Routing).
+    *   *Step 3:* AnyTrader Bifurcation (Customer vs. Trader specific landing dashboards).
+    *   *Step 4:* The Entitlements & Billing Engine hookup.
+
+---
+
 ## 🛡️ Phase 11: Trust & Fairness Engine (Trader Protection) (Completed April 19, 2026)
 *   **The Mission:** Protecting traders from "frivolous" or "petty" claims aimed at gaining discounts on small jobs.
 *   **QR Handshake Guard:** For jobs settled via QR code (<£400), the system now restricts dispute reasons. "Petty" complaints (cosmetic, punctuality) are automatically blocked if the homeowner verified the work in person.

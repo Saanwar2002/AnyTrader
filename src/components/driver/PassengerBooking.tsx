@@ -219,7 +219,7 @@ export default function PassengerBooking() {
         }
       });
 
-      const result = response.text ? JSON.parse(response.text) : {};
+      const result = response.text && response.text !== "undefined" ? JSON.parse(response.text) : {};
       if (result.pickup) setPickup(result.pickup);
       if (result.dropoff) setDropoff(result.dropoff);
       if (result.comments) setComments(result.comments);

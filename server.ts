@@ -916,7 +916,7 @@ Return a RAW JSON array (no markdown block, no markdown formatting) of 3 objects
       
       let recommendations = [];
       try {
-        if (result.text) {
+        if (result.text && result.text !== "undefined") {
           recommendations = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
         }
       } catch (parseError) {
@@ -1077,7 +1077,10 @@ Description: ${description}`;
         config: { responseMimeType: "application/json" }
       });
 
-      const parsedResult = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+      let parsedResult = [];
+      if (result.text && result.text !== "undefined") {
+        parsedResult = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+      }
       res.json({ materials: parsedResult });
     } catch (error: any) {
       console.error("Procure Materials Error:", error);

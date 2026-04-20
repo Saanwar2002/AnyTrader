@@ -1,0 +1,214 @@
+src/components/BusinessDashboard.tsx:184:          <div key={i} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+src/components/BusinessDashboard.tsx:269:                key={job.id} 
+src/components/driver/PassengerBooking.tsx:456:                {stops.map((stop, i) => stop.coords && <Marker key={`stop-marker-${i}`} position={stop.coords} />)}
+src/components/driver/PassengerBooking.tsx:509:                        <div key={`stop-input-${stop.address}-${i}`} className="space-y-2 relative">
+src/components/driver/PassengerBooking.tsx:569:                              <button key={`suggestion-${s.label}-${idx}`} onClick={() => selectSuggestion(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center gap-3 transition-colors border-b border-slate-50 last:border-0">
+src/components/driver/PassengerBooking.tsx:587:                           <button key={`category-${category.id}-${idx}`} onClick={() => setSelectedCategory(category.id)} className={cn("flex-none w-[88px] snap-start flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all", selectedCategory === category.id ? "border-slate-900 bg-slate-900 shadow-lg text-white transform scale-105" : "border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50")}>
+src/components/EcosystemAdmin.tsx:232:              key={tab.id}
+src/components/EcosystemAdmin.tsx:274:                <div key={trader.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-md transition-all space-y-4">
+src/components/EcosystemAdmin.tsx:299:                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+src/components/EcosystemAdmin.tsx:339:              <div key={partner.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+src/components/EcosystemAdmin.tsx:404:                <div key={campaign.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+src/components/EcosystemAdmin.tsx:493:                    <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors">
+src/components/EcosystemAdmin.tsx:587:                <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4 group">
+src/components/EcosystemAdmin.tsx:668:                      {["Insurance", "Finance", "Vehicle", "Health", "Supplies", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
+src/components/EcosystemAdmin.tsx:702:                      {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+src/components/EcosystemAdmin.tsx:825:                      <li key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
+src/components/Analytics.tsx:242:                    <Cell key={`cell-${index}`} fill={entry.name === "Mar" ? "#1e293b" : "#334155"} />
+src/components/Analytics.tsx:259:              <div key={cat.name} className="space-y-2">
+src/components/Onboarding.tsx:728:                  <div key={t.id} className="space-y-2">
+src/components/Onboarding.tsx:766:                            <label key={sub} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-slate-200 group">
+src/components/Onboarding.tsx:843:                          key={cat.id}
+src/components/Onboarding.tsx:888:                          key={tier.name}
+src/components/Onboarding.tsx:977:                  <div key={idx} className="p-5 rounded-[2rem] border-2 border-slate-100 bg-slate-50/50 space-y-4">
+src/components/JobTimeline.tsx:202:            <div key={step.id} className="flex gap-4 relative">
+src/components/Notifications.tsx:97:                key={notification.id}
+src/components/HomeownerPerks.tsx:130:            key={perk.id}
+src/components/JobDetails.tsx:2100:                      key={i} 
+src/components/JobDetails.tsx:2450:                            <li key={idx} className="flex items-start gap-2 text-xs text-slate-700">
+src/components/JobDetails.tsx:2561:                    key={idx} 
+src/components/JobDetails.tsx:2587:                <div key={`photo-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-slate-100 shadow-sm">
+src/components/JobDetails.tsx:2601:                <div key={`video-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-slate-100 bg-slate-900 flex items-center justify-center relative group shadow-sm">
+src/components/JobDetails.tsx:2653:                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-xl">
+src/components/JobDetails.tsx:2781:                  <div key={quote.id} className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm flex items-start justify-between gap-4 animate-pulse">
+src/components/JobDetails.tsx:2798:                <div key={quote.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-start justify-between gap-4">
+src/components/JobDetails.tsx:2930:                             <li key={idx} className="flex flex-wrap items-start gap-2 text-xs text-slate-700">
+src/components/JobDetails.tsx:2951:                                    key={i} 
+src/components/JobDetails.tsx:3011:                                    key={i} 
+src/components/JobDetails.tsx:3128:                                    <div key={milestone.id} className="bg-white p-3 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+src/components/JobDetails.tsx:3205:                              <div key={idx} className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
+src/components/JobDetails.tsx:3373:                  <div key={`blind-${i}`} className="bg-slate-50/50 p-6 rounded-3xl border border-dashed border-slate-200 flex items-center justify-between gap-4 opacity-70">
+src/components/JobDetails.tsx:3525:                      key={time}
+src/components/JobDetails.tsx:3626:                    <li key={i} className="flex items-start gap-2 text-[11px] text-amber-800 font-medium">
+src/components/JobDetails.tsx:3994:                        <div key={i} className="aspect-square rounded-xl bg-slate-100 relative overflow-hidden group">
+src/components/JobDetails.tsx:4220:                      key={i} 
+src/components/EmergencyJobWizard.tsx:287:                key={cat.name}
+src/components/EmergencyJobWizard.tsx:361:                  <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group shadow-sm">
+src/components/ReviewForm.tsx:71:                key={star}
+src/components/PostJobWizard.tsx:1140:                          <div key={item.step} className="flex gap-4">
+src/components/PostJobWizard.tsx:1241:                        key={cat.docId || cat.id}
+src/components/PostJobWizard.tsx:1293:                      key={cat.docId || cat.id}
+src/components/PostJobWizard.tsx:1358:                    key={`${formData.category}-${sub}`}
+src/components/PostJobWizard.tsx:1405:                        key={asset.id}
+src/components/PostJobWizard.tsx:1620:                  <div key={idx} className="space-y-2">
+src/components/PostJobWizard.tsx:1804:                    key={level.id}
+src/components/PostJobWizard.tsx:1917:                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+src/components/PostJobWizard.tsx:2009:                      <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group shadow-sm">
+src/components/PostJobWizard.tsx:2020:                      <div key={`video-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group bg-slate-900 flex items-center justify-center shadow-sm">
+src/components/PostJobWizard.tsx:2289:                              <li key={i} className="flex items-start gap-2 text-xs text-green-800 font-medium">
+src/components/PartnerPerks.tsx:144:            key={perk.id}
+src/components/MediaGalleryModal.tsx:71:                key={currentIndex}
+src/components/MediaGalleryModal.tsx:119:                key={idx}
+src/components/Portfolio.tsx:142:                key={asset.id}
+src/components/TradesDashboard.tsx:251:              key={activeInsightTab}
+src/components/TradesDashboard.tsx:355:                        <div key={region.area} className="group relative bg-white border border-slate-100 rounded-2xl p-3 hover:border-rose-200 hover:shadow-md hover:shadow-rose-500/5 transition-all">
+src/components/TradesDashboard.tsx:895:                  key={job.id} 
+src/components/TradesDashboard.tsx:1055:                  key={job.id}
+src/components/TradesDashboard.tsx:1130:                  key={quote.id}
+src/components/TradesDashboard.tsx:1182:                key={job.id}
+src/components/MyJobs.tsx:194:                key={tab.id}
+src/components/MyJobs.tsx:252:                key={job.id}
+src/components/Logo.tsx:47:              key={angle}
+src/components/BusinessTeamManagement.tsx:198:                <div key={member.uid} className="p-8 flex items-center justify-between hover:bg-indigo-50/30 transition-colors group">
+src/components/BusinessTeamManagement.tsx:240:                <div key={invite.id} className="p-4 rounded-3xl bg-amber-50/50 border border-amber-100 flex items-center justify-between">
+src/components/RidesCommandCenter.tsx:258:              key={tab.id}
+src/components/RidesCommandCenter.tsx:291:                <div key={stat.label} className={cn("p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center bg-white", stat.bg)}>
+src/components/RidesCommandCenter.tsx:306:              <div key={section.status} className="space-y-4">
+src/components/RidesCommandCenter.tsx:335:                          <tr key={`${section.status}-${ride.id}`} className="hover:bg-slate-50/50 transition-colors group">
+src/components/RidesCommandCenter.tsx:488:                      <tr key={driver.id} className="hover:bg-slate-50/50 transition-colors">
+src/components/RidesCommandCenter.tsx:616:                    <div key={`vt-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 relative group/vt">
+src/components/RidesCommandCenter.tsx:671:                    <div key={peak} className="space-y-1">
+src/components/RidesCommandCenter.tsx:712:                    <div key={`surcharge-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-3 relative group/s">
+src/components/RidesCommandCenter.tsx:824:                            <option key={`sim-vt-${idx}`} value={v.id} className="bg-slate-900">{v.name} (x{v.multiplier})</option>
+src/components/RidesCommandCenter.tsx:866:                              key={mode.id}
+src/components/RidesCommandCenter.tsx:886:                              key={`sim-s-${idx}`}
+src/components/RidesCommandCenter.tsx:1016:                          key={driver.id}
+src/components/AdminDashboard.tsx:1574:                          key={`${f.tab}-${f.title}`}
+src/components/AdminDashboard.tsx:1806:                  <tr key={`desktop-${u.id}`} className={cn(
+src/components/AdminDashboard.tsx:1903:                              <option key={t.name} value={t.name}>{t.name}</option>
+src/components/AdminDashboard.tsx:2035:                    <div key={`mobile-${u.id}`} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100">
+src/components/AdminDashboard.tsx:2170:                    <tr key={`desktop-job-${j.id}`} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
+src/components/AdminDashboard.tsx:2239:                  <div key={`mobile-job-${j.id}`} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors active:bg-slate-100" onClick={() => window.open(`/job/${j.id}`, '_blank')}>
+src/components/AdminDashboard.tsx:2304:                  <div key={`dispute-${j.id}`} className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
+src/components/AdminDashboard.tsx:2328:                        <img key={i} src={url} className="w-20 h-20 rounded-lg object-cover border border-slate-200" referrerPolicy="no-referrer" />
+src/components/AdminDashboard.tsx:2369:                                <li key={idx} className="text-xs text-slate-700 flex items-start gap-2">
+src/components/AdminDashboard.tsx:2427:                    <div key={`risk-alert-${alert.targetId}-${idx}`} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-5">
+src/components/AdminDashboard.tsx:2511:                  <tr key={log.id} className="text-xs">
+src/components/AdminDashboard.tsx:2538:                    <div key={alert.id} className={cn(
+src/components/AdminDashboard.tsx:2586:                    <div key={key.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+src/components/AdminDashboard.tsx:2634:                          <div key={deviceId} className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+src/components/AdminDashboard.tsx:2638:                                <div key={u.id} className="flex justify-between text-sm">
+src/components/AdminDashboard.tsx:2678:                      <div key={u.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+src/components/AdminDashboard.tsx:2705:                            <div key={p} className="w-2 h-2 rounded-full bg-blue-400" title={p} />
+src/components/AdminDashboard.tsx:2736:                      <div key={invite.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+src/components/AdminDashboard.tsx:2791:                    <div key={b.id} className="bg-white p-6 rounded-2xl border border-slate-100 space-y-4 shadow-sm">
+src/components/AdminDashboard.tsx:2871:                          <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
+src/components/AdminDashboard.tsx:2882:                      <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+src/components/AdminDashboard.tsx:2911:                    <div key={query} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+src/components/AdminDashboard.tsx:2936:                  <div key={u.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+src/components/AdminDashboard.tsx:2954:                        <div key={idx} className="p-4 rounded-2xl border border-slate-50 bg-slate-50 space-y-4">
+src/components/AdminDashboard.tsx:3052:                                      <span key={i} className="text-[8px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase">
+src/components/AdminDashboard.tsx:3142:                  <div key={`suggestion-${suggestion.category}`} className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
+src/components/AdminDashboard.tsx:3183:                              <span key={kIndex} className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-medium border border-slate-200">
+src/components/AdminDashboard.tsx:3352:                      <div key={`provider-tier-${tier.name}-${index}`} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+src/components/AdminDashboard.tsx:3480:                      <div key={`business-tier-${tier.name}-${index}`} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+src/components/AdminDashboard.tsx:3669:                    <div key={tier.name} className="flex justify-between p-3 border-b border-slate-100 text-sm">
+src/components/AdminDashboard.tsx:3754:                        <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+src/components/AdminDashboard.tsx:3820:                    <button key={d} className={cn("px-3 py-1 text-[10px] font-bold rounded-lg transition-all", d === "30D" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+src/components/AdminDashboard.tsx:3905:                      <div key={c.name} className="space-y-1">
+src/components/AdminDashboard.tsx:3941:                            <Cell key={`cell-${index}`} fill={entry.color} />
+src/components/AdminDashboard.tsx:3950:                      <div key={l} className="flex items-center gap-1.5">
+src/components/AdminDashboard.tsx:4022:                    <div key={cat.docId || cat.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+src/components/AdminDashboard.tsx:4053:                          <span key={`${cat.docId}-sub-${i}`} className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md border border-slate-100">
+src/components/AdminDashboard.tsx:4171:                              <div key={`${p}-${pIdx}`} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold">
+src/components/AdminDashboard.tsx:4567:                                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+src/components/AdminDashboard.tsx:4586:                              <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200" />
+src/components/AdminDashboard.tsx:5069:                      <span key={index} className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-700 rounded-xl border border-slate-100 text-sm group">
+src/components/AdminDashboard.tsx:5276:                            key={t}
+src/components/AdminDashboard.tsx:5297:                            key={s.id}
+src/components/AdminDashboard.tsx:5333:                              key={t.id}
+src/components/AdminDashboard.tsx:5476:                          key={p.id}
+src/components/AdminDashboard.tsx:5625:                          key={cat.docId || cat.id}
+src/components/Conversations.tsx:177:              <div key={conv.id} className="relative group">
+src/components/AdminTierManager.tsx:166:        <div key={model} className="space-y-4">
+src/components/AdminTierManager.tsx:176:                  <div key={tierKey} className="p-6 rounded-2xl border shadow-lg bg-white border-blue-500 ring-2 ring-blue-500/20">
+src/components/AdminTierManager.tsx:248:                <div key={tierKey} className={cn("group p-6 rounded-2xl border shadow-sm transition-all hover:shadow-md relative", tier.color || "bg-white border-slate-200")}>
+src/components/AdminTierManager.tsx:276:                        {tier.features?.map((f: string) => <li key={f}>{f}</li>)}
+src/components/TradeBot.tsx:105:                key={i}
+src/components/PublicProfile.tsx:472:                  key={badge.id} 
+src/components/PublicProfile.tsx:502:                      key={badgeId} 
+src/components/PublicProfile.tsx:611:              <div key={index} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all">
+src/components/PublicProfile.tsx:638:            <span key={trade} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">
+src/components/PublicProfile.tsx:643:            <span key={tag} className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
+src/components/PublicProfile.tsx:696:              <div key={index} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+src/components/PublicProfile.tsx:722:              <div key={review.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+src/components/PublicProfile.tsx:727:                        key={i} 
+src/components/PublicProfile.tsx:840:                        key={job.id}
+src/components/Profile.tsx:986:                key={tier.name}
+src/components/Profile.tsx:1197:                  key={badge.id}
+src/components/Profile.tsx:1364:                  <div key={index} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all">
+src/components/Profile.tsx:1418:                  <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group">
+src/components/Profile.tsx:1500:                <span key={trade} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">
+src/components/Profile.tsx:1505:                <span key={tag} className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
+src/components/Profile.tsx:1552:                        key={badgeId} 
+src/components/Profile.tsx:1608:                      key={url} 
+src/components/Profile.tsx:1697:                  <div key={index} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group">
+src/components/Profile.tsx:1724:          <div key={group.title} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+src/components/Profile.tsx:1730:                    key={index}
+src/components/Profile.tsx:1744:                    key={index}
+src/components/Profile.tsx:1758:                    key={index}
+src/components/Profile.tsx:1858:                                <option key={time} value={time}>{time}</option>
+src/components/Profile.tsx:1879:                                <option key={time} value={time}>{time}</option>
+src/components/Profile.tsx:2052:                <div key={`base-${idx}`} className="p-4 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-3">
+src/components/Profile.tsx:2158:                  <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 space-y-3">
+src/components/Profile.tsx:2306:                <div key={schedule.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-3">
+src/components/Profile.tsx:2410:                <div key={review.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+src/components/Profile.tsx:2415:                          key={i} 
+src/components/Profile.tsx:2575:                              key={badge.id}
+src/components/Dashboard.tsx:266:              <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4 relative overflow-hidden group">
+src/components/Dashboard.tsx:327:                <div key={ride.id} className="bg-white p-6 rounded-3xl border border-red-100 shadow-sm space-y-3">
+src/components/Dashboard.tsx:376:                  key={job.id}
+src/components/Dashboard.tsx:541:                  key={quote.id}
+src/components/FindTrades.tsx:326:              key={filteredTradespeople.length}
+src/components/FindTrades.tsx:376:                key={cat}
+src/components/FindTrades.tsx:401:              key={opt}
+src/components/FindTrades.tsx:448:                    key={cat.docId || cat.id}
+src/components/FindTrades.tsx:486:                    key={tp.uid} 
+src/components/FindTrades.tsx:513:                  key={item.label}
+src/components/FindTrades.tsx:535:                  key={tp.uid} 
+src/components/FindTrades.tsx:622:            key={tp.uid}
+src/components/FindTrades.tsx:631:                    <div key={badge.id} className="flex items-center gap-1 shrink-0">
+src/components/FindTrades.tsx:719:                  <span key={trade} className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-lg text-[9px] font-bold border border-slate-200">
+src/components/FindTrades.tsx:741:                          <span key={service} className="px-2 py-1 bg-white border border-slate-200 text-slate-700 rounded-lg text-[9px] font-bold shadow-sm">
+src/components/FindTrades.tsx:884:                          key={val === null ? 'any' : val}
+src/components/Availability.tsx:364:                <div key={day} className="text-center text-xs font-bold text-slate-400 py-2">
+src/components/Availability.tsx:379:                    key={day.toString()}
+src/components/Availability.tsx:483:                  <div key={key} className="p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+src/components/Availability.tsx:514:                              <option key={`start-${time}`} value={time}>{time}</option>
+src/components/Availability.tsx:529:                              <option key={`end-${time}`} value={time}>{time}</option>
+src/components/JobFeed.tsx:404:                      <li key={i}>{doc.type} <span className="text-xs opacity-70">({doc.status})</span></li>
+src/components/JobFeed.tsx:537:              key={filter.id}
+src/components/JobFeed.tsx:655:                    key={filter.id}
+src/components/JobFeed.tsx:688:                  key={u.id}
+src/components/JobFeed.tsx:716:                  key={d.id}
+src/components/JobFeed.tsx:743:                  key={p.id}
+src/components/JobFeed.tsx:783:                  key={category.id}
+src/components/JobFeed.tsx:849:              key={job.id}
+src/components/BillingManager.tsx:221:              key={tier.name}
+src/components/BillingManager.tsx:261:                      <li key={feature} className="flex items-center gap-3 text-sm text-slate-600 font-medium">
+src/components/QuoteComparisonModal.tsx:123:                      key={quote.id} 
+src/components/MyQuotes.tsx:207:                key={f.id}
+src/components/MyQuotes.tsx:241:              <div key={schedule.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 group relative">
+src/components/MyQuotes.tsx:319:              key={quote.id}
+src/components/GuestJobs.tsx:65:              <tr key={j.id} className="hover:bg-slate-50/50 transition-colors group">
+src/components/GuestJobs.tsx:115:            <div key={j.id} className="p-5 bg-white mb-2 shadow-sm first:border-t hover:bg-slate-50 transition-colors">
+src/components/Layout.tsx:338:                      key={item.path}
+src/components/Layout.tsx:417:                                  key={idx}
+src/components/Layout.tsx:585:                          key={`fav-${idx}`}
+src/components/Layout.tsx:600:                          key={`journey-${idx}`}
+src/components/Layout.tsx:627:                            key={`driver-${idx}`}
+src/components/Layout.tsx:649:                         <div key={`ride-${idx}`} className="p-3 bg-white border border-slate-100 rounded-2xl space-y-2 group relative">
+src/components/Layout.tsx:711:                           <div key={`contact-${i}`} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+src/components/Layout.tsx:767:              key={`nav-${idx}-${item.path}`}
+src/components/Chat.tsx:366:              key={msg.id}
+src/lib/badges.tsx:158:          key={badge.id}

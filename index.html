@@ -19,7 +19,7 @@
           Object.defineProperty(window, 'fetch', {
             get: function() { return nativeFetch; },
             set: function(v) { 
-              console.warn('Attempt to overwrite fetch ignored:', v); 
+              console.warn('Attempt to overwrite fetch ignored'); 
             },
             configurable: true
           });
