@@ -90,8 +90,14 @@ export async function getPlatformHealthInsights(
     });
 
     const text = response.text;
-    if (!text) throw new Error("Empty response from Gemini");
-    return JSON.parse(text);
+    if (!text || text === "undefined") throw new Error("Empty or invalid response from Gemini");
+    
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Gemini response is not valid JSON:", text);
+      throw new Error("Invalid format from Gemini");
+    }
   } catch (error) {
     console.error("Gemini Platform Health Error:", error);
     return {

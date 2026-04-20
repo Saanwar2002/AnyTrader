@@ -141,13 +141,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
           setIsAuthReady(true);
         }, (error) => {
-          // Ignore permission-denied errors during logout
+          // Identify permission-denied errors which often happen shortly after logout
           if (error.code === 'permission-denied') {
-            console.log("Permission denied for profile listener, likely due to logout.");
-            return;
+            console.log("Permission denied for profile listener, likely due to logout or missing rules.");
+          } else {
+            console.error("Error fetching profile:", error);
+            try {
+              handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+            } catch (e) {
+              console.error("Failed to handle firestore error", e);
+            }
           }
-          console.error("Error fetching profile:", error);
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+          setProfile(null);
           setLoading(false);
           setIsAuthReady(true);
         });

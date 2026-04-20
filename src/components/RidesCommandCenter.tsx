@@ -288,7 +288,7 @@ export default function RidesCommandCenter() {
                 { label: "Scheduled", value: filters.scheduled.length, icon: Calendar, color: "text-blue-600", bg: "bg-blue-50" },
                 { label: "Today", value: filters.completed.length, icon: CheckCircle2, color: "text-slate-600", bg: "bg-slate-50" },
               ].map((stat, i) => (
-                <div key={i} className={cn("p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center bg-white", stat.bg)}>
+                <div key={stat.label} className={cn("p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center bg-white", stat.bg)}>
                   <stat.icon className={cn("w-6 h-6 mb-2", stat.color)} />
                   <p className="text-2xl font-black text-slate-900">{stat.value}</p>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</p>
@@ -332,7 +332,7 @@ export default function RidesCommandCenter() {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {section.data.map((ride) => (
-                          <tr key={ride.id} className="hover:bg-slate-50/50 transition-colors group">
+                          <tr key={`${section.status}-${ride.id}`} className="hover:bg-slate-50/50 transition-colors group">
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 overflow-hidden relative">
@@ -613,7 +613,7 @@ export default function RidesCommandCenter() {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {(config.vehicleTypes || []).map((vt: any, idx: number) => (
-                    <div key={vt.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 relative group/vt">
+                    <div key={`vt-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 relative group/vt">
                       <button 
                         onClick={() => {
                           const newTypes = config.vehicleTypes.filter((_: any, i: number) => i !== idx);
@@ -709,7 +709,7 @@ export default function RidesCommandCenter() {
                 
                 <div className="space-y-3">
                   {(config.surcharges || []).map((s: any, idx: number) => (
-                    <div key={s.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-3 relative group/s">
+                    <div key={`surcharge-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-3 relative group/s">
                       <button 
                         onClick={() => {
                           const newSurcharges = config.surcharges.filter((_: any, i: number) => i !== idx);
@@ -820,8 +820,8 @@ export default function RidesCommandCenter() {
                           onChange={e => setSimVehicleType(e.target.value)}
                           className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white font-bold focus:border-emerald-500 outline-none transition-all appearance-none cursor-pointer"
                         >
-                          {config.vehicleTypes?.map((v: any) => (
-                            <option key={v.id} value={v.id} className="bg-slate-900">{v.name} (x{v.multiplier})</option>
+                          {config.vehicleTypes?.map((v: any, idx: number) => (
+                            <option key={`sim-vt-${idx}`} value={v.id} className="bg-slate-900">{v.name} (x{v.multiplier})</option>
                           ))}
                         </select>
                       </div>
@@ -881,9 +881,9 @@ export default function RidesCommandCenter() {
                       <div className="space-y-3 pt-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Geofenced Surcharges</label>
                         <div className="flex flex-wrap gap-2">
-                          {(config.surcharges || []).map((s: any) => (
+                          {(config.surcharges || []).map((s: any, idx: number) => (
                             <button
-                              key={s.id}
+                              key={`sim-s-${idx}`}
                               onClick={() => {
                                 setSimSelectedSurcharges(prev => 
                                   prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]

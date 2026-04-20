@@ -74,11 +74,12 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 
 ---
 
-## 🆘 Critical Recovery
-If the apps become desynchronized or "Missing Permissions" errors appear globally:
-1.  Check `firestore.rules` for deleted blocks.
-2.  Compare `firebase-blueprint.json` against the live Firestore structure.
-3.  Ensure `firebase-applet-config.json` contains the correct `firestoreDatabaseId`.
+## 🆘 Final Pre-Launch Security Checklist (Must be completed before production)
+- [ ] **Reinstate Firestore Rules Security**: Explicitly revert the temporary relaxation of security rules for anonymous user onboarding in `firestore.rules`. Ensure `isValidUser` validation is strictly enforced for all user creation and update operations.
+- [ ] **Run Red Team Audit**: Re-execute the Red Team Audit (as specified in system instructions) on the final ruleset to ensure no "Shadow Updates" or other vulnerabilities exist.
+- [ ] **Run Firestore Rules Linting**: Re-run ESLint against the finalized security rules.
+- [ ] **Deploy Final Rules**: Ensure the hardened ruleset is successfully deployed to production.
+- [ ] **Audit Admin Emails**: Verify the admin email whitelist in `firestore.rules` is limited ONLY to the absolute necessary accounts for production management.
 
 ---
 
@@ -219,4 +220,10 @@ The prefix is determined by the user's primary registration role:
     *   *The Feed:* Integrated a real-time `ride_requests` listener into the sidebar to show the 5 most recent trips with status-badges.
     *   *Instant Actions:* Integrated mock receipt downloading and driver profile deep-linking directly from the sidebar feed.
 *   **Capacitor Optimization:** Ensured all new interaction patterns (blocking, favoriting) trigger native haptic feedback and respect mobile safe-area insets.
+*   **Passenger UI Layout Optimization (Phase 11.5):**
+    *   *Ultra-Compact Categories:* Drastically reduced vehicle selector cards (`w-[88px]`) to save screen real estate limit vertical overlap over map views. Reintroduced clear "MINS" labeling over simplified "m" without sacrificing height.
+    *   *Geometry-Driven Map Panning:* Redesigned `MapController` offset logic in `PassengerBooking.tsx`. To compensate for the bottom UI sheet, the camera uses `L.point(x, y + window.innerHeight * 0.25)` to dynamically shove the map focal point South, effectively pushing the targeted UI Pin comfortably upwards into the visible viewport overhead. 
+    *   *Intermediate Stops Engine:* Implemented full Multi-Leg routing. Sandwitched an inline "Add Stop" button (`bg-green-100` styling) allowing up to 3 intermediate waypoints. 
+    *   *Routing Polylines:* Fully integrated with OSRM. Any stops appended to the state trigger a multi-coordinate array rebuild and force a live visual recalculation of the blue routing polyline snaking across the Map container. 
+    *   *Google Maps Readiness:* These precise layout constraints (`55vh` max-heights, compressed spacing, shifted focal tracking, multi-lat-lng stop injection) are logged here and must be explicitly replicated 1:1 if the platform swaps `react-leaflet` OpenStreetMap components for `@react-google-maps/api` structures in the future.
 

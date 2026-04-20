@@ -63,20 +63,24 @@ export default function Login() {
   };
 
   const handleAdminGuestLogin = async () => {
+    console.log("Admin guest login triggered");
     setAdminGuestLoading(true);
     setError(null);
     try {
-      const { user } = await signInAsGuest();
-      if (user) {
+      const userCredential = await signInAsGuest();
+      console.log("Admin guest login success:", userCredential.user);
+      if (userCredential.user) {
         // We set a flag in sessionStorage so the onboarding or profile logic 
         // knows to set the role to admin for this specific test session
         sessionStorage.setItem("is_test_admin", "true");
+        console.log("is_test_admin set in sessionStorage");
       }
     } catch (error: any) {
       console.error("Admin guest login error:", error);
       setError(error.message || "An error occurred during admin guest login.");
     } finally {
       setAdminGuestLoading(false);
+      console.log("Admin guest loading set to false");
     }
   };
 

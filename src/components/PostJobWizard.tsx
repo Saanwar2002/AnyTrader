@@ -243,9 +243,16 @@ export default function PostJobWizard() {
       });
 
       const text = response.text;
-      if (!text) throw new Error("Empty response from AI");
+      if (!text || text === "undefined") throw new Error("Empty or invalid response from AI");
       
-      const parsedResult = JSON.parse(text);
+      let parsedResult;
+      try {
+        parsedResult = JSON.parse(text);
+      } catch (e) {
+        console.error("AI response is not valid JSON:", text);
+        throw new Error("Invalid response format from AI");
+      }
+
       setFormData(prev => ({
         ...prev,
         category: parsedResult.category,

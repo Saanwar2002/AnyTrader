@@ -807,6 +807,21 @@ export const UNSORTED_TRADE_CATEGORIES = [
     ]
   },
   {
+    id: 84,
+    name: "Bake N Cake",
+    icon: "🎂",
+    subcategories: [
+      "Birthday Cakes",
+      "Wedding Cakes",
+      "Cupcakes & Mini Treats",
+      "Dessert Tables",
+      "Celebration Cakes",
+      "Party Food Platters",
+      "Afternoon Tea",
+      "Bespoke Bakes"
+    ]
+  },
+  {
     id: 47,
     name: "Veterinary & Pet Health",
     icon: "🩺",

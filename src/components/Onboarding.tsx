@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { useSearchParams } from "react-router-dom";
-import { db, doc, setDoc, serverTimestamp, handleFirestoreError, OperationType, collection, query, where, getDocs, updateDoc, onSnapshot, auth } from "@/src/firebase";
+import { db, doc, setDoc, serverTimestamp, handleFirestoreError, OperationType, collection, query, where, getDocs, updateDoc, onSnapshot, auth, logout } from "@/src/firebase";
 import { RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
 import { motion } from "motion/react";
 import { User, Briefcase, Loader2, MapPin, Shield, CheckCircle2, ChevronRight, ChevronLeft, Upload, AlertCircle, Info, PoundSterling, Award, Gift, Home, Building2, Star } from "lucide-react";
@@ -212,10 +212,10 @@ export default function Onboarding() {
         console.error("Phone auth error:", err);
         if (err.code === "auth/credential-already-in-use") {
           setError("This phone number is already linked to another account. Please use a different number.");
-        } else if (err.code === "auth/operation-not-allowed") {
-           console.error("Phone Auth is disabled. Configuration needed in Firebase Console.");
-           setError("Phone Authentication is disabled. Please enable it in Firebase Console -> Authentication -> Sign-in method -> Phone.");
-           if (window.confirm("Phone Auth is not enabled in Firebase. Would you like to bypass this check? (This should only be done for local development testing)")) {
+        } else if (err.code === "auth/operation-not-allowed" || err.code === "auth/billing-not-enabled") {
+           console.error("Phone Auth is disabled or billing is missing in Firebase Console.");
+           setError("Phone Authentication requires billing to be enabled in Firebase. If you are developing, click 'Complete Setup' again to bypass.");
+           if (window.confirm("Phone Auth is missing or billing is not enabled in Firebase. Would you like to bypass this check? (This should only be done for local development testing)")) {
               setBypassPhoneAuth(true);
               setLoading(false);
               setTimeout(() => alert("Bypass enabled. Click 'Complete Setup' again to proceed."), 300);
@@ -321,18 +321,24 @@ export default function Onboarding() {
         })),
         createdAt: serverTimestamp(),
       };
+      console.log("Saving setDoc, user.uid:", user.uid);
       await setDoc(doc(db, "users", user.uid), profile);
+      console.log("setDoc success");
       
       // Trigger automated public record checks for each uploaded document
+      console.log("Checking verification docs");
       verificationDocs.forEach(d => {
         performInitialPublicRecordCheck(user.uid, d.type);
       });
+      console.log("Verification docs check skipped or finished");
 
       if (invitationId) {
+        console.log("Updating invitation");
         await updateDoc(doc(db, "invitations", invitationId), {
           status: "accepted",
           acceptedAt: serverTimestamp()
         });
+        console.log("Invitation updated");
       }
 
       console.log("Profile saved successfully.");
@@ -413,11 +419,17 @@ export default function Onboarding() {
         <motion.div 
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-white pt-12 px-8 pb-8 rounded-[3.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] space-y-8"
+          className="max-w-md w-full bg-white pt-12 px-8 pb-8 rounded-[3.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] space-y-8 relative"
         >
           {step === 1 && (
             <div className="space-y-6">
-              <div className="space-y-4">
+              <div 
+                onClick={() => logout()}
+                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2 z-[60] cursor-pointer bg-white rounded-full shadow-sm border border-slate-100"
+              >
+                  <ChevronLeft className="w-8 h-8" />
+              </div>
+              <div className="space-y-4 pt-10">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">I am a...</h2>
                 
                 <div className="grid grid-cols-1 gap-4">

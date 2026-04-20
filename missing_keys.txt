@@ -1,0 +1,309 @@
+src/components/AdminDashboard.tsx:231:      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:235:      setJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:241:        setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:246:      setInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:252:        setBroadcasts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:257:      setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:261:      setSearchLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:267:        setSecurityAlerts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/AdminDashboard.tsx:358:      const updatedDocs = userDoc.verificationDocs.map((d: any) => 
+src/components/AdminDashboard.tsx:381:      const updatedDocs = userDoc.verificationDocs.map((d: any) => 
+src/components/AdminDashboard.tsx:603:      const notificationPromises = targetUsers.map(u => 
+src/components/AdminDashboard.tsx:823:      const acceptedQuote = quotesSnapshot.docs.map(d => d.data()).find(q => q.status === "accepted");
+src/components/AdminDashboard.tsx:831:      const messages = messagesSnapshot.docs.map(d => d.data());
+src/components/AdminDashboard.tsx:862:        TRADE_CATEGORIES.map(c => c.name),
+src/components/AdminDashboard.tsx:973:        const updatedDocs = userData.verificationDocs?.map((d: any) => {
+src/components/AdminDashboard.tsx:1109:      const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+src/components/AdminDashboard.tsx:1124:    const rows = filteredUsers.map(u => [
+src/components/AdminDashboard.tsx:1135:      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+src/components/AdminDashboard.tsx:1193:    const rows = filteredJobs.map(j => [
+src/components/AdminDashboard.tsx:1204:      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+src/components/AdminDashboard.tsx:1223:    const rows = filtered.map(j => [
+src/components/AdminDashboard.tsx:1233:    const csvContent = [headers.join(","), ...rows.map(row => row.map(cell => `"${cell}"`).join(","))].join("\n");
+src/components/AdminDashboard.tsx:1244:    const rows = users.map(u => [
+src/components/AdminDashboard.tsx:1253:    const csvContent = [headers.join(","), ...rows.map(row => row.map(cell => `"${cell}"`).join(","))].join("\n");
+src/components/AdminDashboard.tsx:1572:                      {filteredFeatures.map((f) => (
+src/components/AdminDashboard.tsx:1733:                        const allVisibleIds = visibleUsers.map(u => u.id);
+src/components/AdminDashboard.tsx:1778:                              const newSelected = Array.from(new Set([...selectedUserIds, ...visibleUsers.map(u => u.id)]));
+src/components/AdminDashboard.tsx:1781:                              const visibleIds = visibleUsers.map(u => u.id);
+src/components/AdminDashboard.tsx:1805:                    {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).map(u => (
+src/components/AdminDashboard.tsx:1902:                            {(platformConfig?.feeTiers || []).map((t: any) => (
+src/components/AdminDashboard.tsx:2034:                    {(isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).map(u => (
+src/components/AdminDashboard.tsx:2169:                  {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 3)).map(j => (
+src/components/AdminDashboard.tsx:2238:                  {(isJobsExpanded ? filteredJobs : filteredJobs.slice(0, 3)).map(j => (
+src/components/AdminDashboard.tsx:2303:                {(isDisputesExpanded ? jobs.filter(j => j.status === "disputed") : jobs.filter(j => j.status === "disputed").slice(0, 3)).map(j => (
+src/components/AdminDashboard.tsx:2327:                      {j.dispute.photos.map((url: string, i: number) => (
+src/components/AdminDashboard.tsx:2368:                              {disputeSummaries[j.id].timeline.map((event, idx) => (
+src/components/AdminDashboard.tsx:2426:                  {riskAlerts.map((alert, idx) => (
+src/components/AdminDashboard.tsx:2510:                {logs.map(log => (
+src/components/AdminDashboard.tsx:2537:                  {securityAlerts.map(alert => (
+src/components/AdminDashboard.tsx:2585:                  ].map(key => (
+src/components/AdminDashboard.tsx:2633:                        {duplicateGroups.map(([deviceId, users]: any) => (
+src/components/AdminDashboard.tsx:2637:                              {users.map((u: any) => (
+src/components/AdminDashboard.tsx:2677:                    {users.filter(u => u.role === "admin" || u.role === "ecosystem_manager").map(u => (
+src/components/AdminDashboard.tsx:2704:                          {u.permissions?.map((p: string) => (
+src/components/AdminDashboard.tsx:2735:                    {invitations.filter(i => i.status === "pending").map(invite => (
+src/components/AdminDashboard.tsx:2790:                  {broadcasts.map(b => (
+src/components/AdminDashboard.tsx:2870:                        {platformInsights.improvements.map((imp, idx) => (
+src/components/AdminDashboard.tsx:2881:                    {platformInsights.performanceData.map((data, idx) => (
+src/components/AdminDashboard.tsx:2910:                  }, {})).filter(([_, count]) => (count as number) >= 10).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([query, count]) => (
+src/components/AdminDashboard.tsx:2935:                {users.filter(u => u.verificationStatus === "pending" || (u.verificationDocs && u.verificationDocs.some((d: any) => d.status === "pending"))).map(u => (
+src/components/AdminDashboard.tsx:2953:                      {u.verificationDocs?.map((doc: any, idx: number) => (
+src/components/AdminDashboard.tsx:3051:                                    {doc.aiVerification.flags.map((flag: string, i: number) => (
+src/components/AdminDashboard.tsx:3141:                {categorySuggestions.map((suggestion) => (
+src/components/AdminDashboard.tsx:3182:                            {suggestion.topKeywords.map((keyword, kIndex) => (
+src/components/AdminDashboard.tsx:3349:                  {tempConfig.feeTiers.map((tier: any, index: number) => {
+src/components/AdminDashboard.tsx:3476:                  {(tempConfig.businessTiers || []).map((tier: any, index: number) => {
+src/components/AdminDashboard.tsx:3594:          const tierBreakdown = platformConfig?.feeTiers?.map((tier: any) => ({
+src/components/AdminDashboard.tsx:3602:            const rows = tradespeople.map(u => [
+src/components/AdminDashboard.tsx:3613:              ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+src/components/AdminDashboard.tsx:3668:                  ].map(tier => (
+src/components/AdminDashboard.tsx:3753:                      {(isSubscribersExpanded ? filteredTradespeople : filteredTradespeople.slice(0, 5)).map(user => (
+src/components/AdminDashboard.tsx:3819:                  {["7D", "30D", "90D", "1Y"].map(d => (
+src/components/AdminDashboard.tsx:3904:                    ].map(c => (
+src/components/AdminDashboard.tsx:3940:                          ].map((entry, index) => (
+src/components/AdminDashboard.tsx:3949:                    {["Commission", "Lead Fees", "Subs"].map((l, i) => (
+src/components/AdminDashboard.tsx:4021:                  {categories.map((cat: any) => (
+src/components/AdminDashboard.tsx:4052:                        {(expandedCategories.includes(cat.docId) ? cat.subcategories : cat.subcategories?.slice(0, 5)).map((sub: string, i: number) => (
+src/components/AdminDashboard.tsx:4170:                            {(tempConfig.allowedPostcodes || []).map((p: string, pIdx: number) => (
+src/components/AdminDashboard.tsx:4566:                                {TRADE_CATEGORIES.map(cat => (
+src/components/AdminDashboard.tsx:4585:                            {[1,2,3].map(i => (
+src/components/AdminDashboard.tsx:5068:                    {catSubcategories.map((sub, index) => (
+src/components/AdminDashboard.tsx:5274:                        {["announcement", "offer", "greeting", "update"].map(t => (
+src/components/AdminDashboard.tsx:5295:                        ].map(s => (
+src/components/AdminDashboard.tsx:5331:                          {TRADE_CATEGORIES.map(t => (
+src/components/AdminDashboard.tsx:5474:                      {PERMISSIONS.map(p => (
+src/components/AdminDashboard.tsx:5621:                    {categories.map(cat => {
+src/components/AdminDashboard.tsx:5698:                      setEditingTiers(editingTiers.filter(i => i !== deleteTierConfirm).map(i => i > deleteTierConfirm ? i - 1 : i));
+src/components/AdminTierManager.tsx:165:      {Object.entries(config.providerModels || {}).map(([model, modelData]: [string, any]) => (
+src/components/AdminTierManager.tsx:171:            {Object.entries(modelData.tiers || {}).map(([tierKey, tier]: [string, any]) => {
+src/components/AdminTierManager.tsx:238:                          onChange={(e) => setEditing({...editing, data: {...editing.data, features: e.target.value.split(",").map(f => f.trim())}})}
+src/components/Analytics.tsx:34:      setJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/Analytics.tsx:47:      setQuotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/Analytics.tsx:241:                  {monthlyData.map((entry, index) => (
+src/components/Analytics.tsx:258:            {categoryData.map((cat) => (
+src/components/AuthProvider.tsx:83:            const updatedDocs = (data.verificationDocs || []).map((doc: any) => {
+src/components/Availability.tsx:363:              {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
+src/components/Availability.tsx:370:              {calendarDays.map((day, i) => {
+src/components/Availability.tsx:480:              {weekDays.map(({ key, label }) => {
+src/components/Availability.tsx:513:                            {timeOptions.map(time => (
+src/components/Availability.tsx:528:                            {timeOptions.map(time => (
+src/components/BillingManager.tsx:127:  const foundingTiers = standardTiers.map(t => {
+src/components/BillingManager.tsx:219:          {activeTiers.map((tier, idx) => (
+src/components/BillingManager.tsx:260:                    {tier.features.map(feature => (
+src/components/BusinessDashboard.tsx:38:      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/BusinessDashboard.tsx:52:      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+src/components/BusinessDashboard.tsx:183:        ].map((stat, i) => (
+src/components/BusinessDashboard.tsx:267:            {activeJobs.slice(0, 4).map((job) => (
+src/components/BusinessTeamManagement.tsx:51:      setMembers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as TeamMember)));
+src/components/BusinessTeamManagement.tsx:59:      setInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamInvitation)));
+src/components/BusinessTeamManagement.tsx:197:              {members.map(member => (
+src/components/BusinessTeamManagement.tsx:239:              {invitations.map(invite => (
+src/components/Chat.tsx:55:      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/Chat.tsx:364:          {messages.map((msg) => (
+src/components/Conversations.tsx:31:        .map(doc => ({ id: doc.id, ...doc.data() }))
+src/components/Conversations.tsx:97:      await Promise.all(selectedIds.map(id => 
+src/components/Conversations.tsx:171:          {conversations.map((conv) => {
+src/components/Dashboard.tsx:47:      const rides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/Dashboard.tsx:68:      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/Dashboard.tsx:83:      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+src/components/Dashboard.tsx:124:    const unsubscribes = activeJobs.map(job => {
+src/components/Dashboard.tsx:265:            {maintenancePredictions.map((prediction, idx) => (
+src/components/Dashboard.tsx:326:              {emergencyRides.map(ride => (
+src/components/Dashboard.tsx:374:              activeJobs.map((job) => (
+src/components/Dashboard.tsx:539:              {recentQuotes.map((quote) => (
+src/components/EcosystemAdmin.tsx:57:      setPartners(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/EcosystemAdmin.tsx:61:      setCampaigns(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/EcosystemAdmin.tsx:65:      setLeads(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/EcosystemAdmin.tsx:70:      const traders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/EcosystemAdmin.tsx:230:          ].map((tab) => (
+src/components/EcosystemAdmin.tsx:273:              {expiringTraders.map((trader) => (
+src/components/EcosystemAdmin.tsx:292:                    {trader.verificationDocs?.map((doc: any, idx: number) => {
+src/components/EcosystemAdmin.tsx:338:            {partners.map((partner) => (
+src/components/EcosystemAdmin.tsx:403:              {campaigns.map((campaign) => (
+src/components/EcosystemAdmin.tsx:492:                  {leads.map((lead) => (
+src/components/EcosystemAdmin.tsx:586:              {aiInsights.length > 0 ? aiInsights.map((insight, idx) => (
+src/components/EcosystemAdmin.tsx:824:                    ].map((item, i) => (
+src/components/EmergencyJobWizard.tsx:56:        const simulatedUrls = Array.from(files).map((_, i) => `https://placehold.co/600x400?text=Emergency+Photo+${i+1}`);
+src/components/EmergencyJobWizard.tsx:65:      const uploadPromises = Array.from(files as FileList).map(async (file: File) => {
+src/components/EmergencyJobWizard.tsx:285:            {filteredCategories.map(cat => (
+src/components/EmergencyJobWizard.tsx:360:                {formData.photos.map((url, i) => (
+src/components/FindTrades.tsx:160:    return ["All", ...categories.map(c => c.name).sort()];
+src/components/FindTrades.tsx:181:      const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Tradesperson));
+src/components/FindTrades.tsx:220:          const allowedParts = postcodeFilterValue.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+src/components/FindTrades.tsx:370:          {categoryNames.map(cat => {
+src/components/FindTrades.tsx:399:          {sortOptions.map(opt => (
+src/components/FindTrades.tsx:444:              {(isCategoriesExpanded ? categories : categories.slice(0, 12)).map(cat => {
+src/components/FindTrades.tsx:484:                {recentlyViewedTraders.map(tp => (
+src/components/FindTrades.tsx:511:              {hotSearches.map(item => (
+src/components/FindTrades.tsx:533:              {topRatedNearYou.map(tp => (
+src/components/FindTrades.tsx:610:        {filteredTradespeople.map(tp => {
+src/components/FindTrades.tsx:613:            .map(id => PROFESSIONAL_BADGES.find(b => b.id === id))
+src/components/FindTrades.tsx:628:                {searchFeedBadgeObjects.map((badge: any) => {
+src/components/FindTrades.tsx:718:                {tp.trades?.slice(0, 2).map(trade => (
+src/components/FindTrades.tsx:740:                        {tp.services.map(service => (
+src/components/FindTrades.tsx:882:                      {[null, 4, 4.5, 4.8].map(val => (
+src/components/GuestJobs.tsx:64:            {filteredGuestJobs.map(j => (
+src/components/GuestJobs.tsx:114:          {filteredGuestJobs.map(j => (
+src/components/HomeownerPerks.tsx:86:      setActiveCampaigns(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/HomeownerPerks.tsx:99:  const mappedCampaigns = activeCampaigns.map(c => ({
+src/components/HomeownerPerks.tsx:128:        {displayPerks.map((perk, idx) => (
+src/components/JobDetails.tsx:198:      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/JobDetails.tsx:242:              const reviewsData = reviewsSnap.docs.map(d => d.data());
+src/components/JobDetails.tsx:319:        setMaterialList(data.materials.map((m: any) => `${m.item} (${m.estimatedQuantity})`));
+src/components/JobDetails.tsx:332:      const formattedList = list.map(item => `- ${item}`).join('\n');
+src/components/JobDetails.tsx:667:      await Promise.all(otherQuotes.map(async (q) => {
+src/components/JobDetails.tsx:697:              const recText = recommendations.map(r => `• ${r.item}: ${r.reason}`).join("\n");
+src/components/JobDetails.tsx:827:      setQuotes(prev => prev.map(q => q.id === finalizingQuoteId ? { ...q, materialsFinalized: true, materialList } : q));
+src/components/JobDetails.tsx:2098:                  {job.dispute.photos.map((url: string, i: number) => (
+src/components/JobDetails.tsx:2449:                          {materialList.map((item, idx) => (
+src/components/JobDetails.tsx:2559:                {job.documents.map((doc: any, idx: number) => (
+src/components/JobDetails.tsx:2586:              {job.photos?.map((url: string, i: number) => (
+src/components/JobDetails.tsx:2600:              {job.videos?.map((url: string, i: number) => (
+src/components/JobDetails.tsx:2652:                      {materialList.map((item, idx) => (
+src/components/JobDetails.tsx:2764:            {sortedQuotes.map((quote) => {
+src/components/JobDetails.tsx:2929:                           {quote.materialList.map((item: string, idx: number) => (
+src/components/JobDetails.tsx:2949:                                {[1, 2, 3, 4, 5].map(i => (
+src/components/JobDetails.tsx:3009:                                {[1, 2, 3, 4, 5].map(i => (
+src/components/JobDetails.tsx:3127:                                  {(quote.milestones || []).map((milestone: any, idx: number) => (
+src/components/JobDetails.tsx:3204:                            {quote.history.map((h: any, idx: number) => (
+src/components/JobDetails.tsx:3372:                {Array.from({ length: Math.max(0, (job.quoteCount || 0) - quotes.length) }).map((_, i) => (
+src/components/JobDetails.tsx:3523:                  {["Half day", "1 day", "2 days", "3-5 days", "1-2 weeks", "2-4 weeks"].map((time) => (
+src/components/JobDetails.tsx:3625:                  ].map((tip, i) => (
+src/components/JobDetails.tsx:3993:                      {disputePhotos.map((file, i) => (
+src/components/JobDetails.tsx:4218:                  {Array.from({ length: 64 }).map((_, i) => (
+src/components/JobFeed.tsx:221:      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/JobFeed.tsx:403:                    {profile.verificationDocs.map((doc: any, i: number) => (
+src/components/JobFeed.tsx:535:          {profile.savedFilters.map((filter: any) => (
+src/components/JobFeed.tsx:653:                {profile.savedFilters.map((filter: any) => (
+src/components/JobFeed.tsx:686:              ].map((u) => (
+src/components/JobFeed.tsx:714:              ].map((d) => (
+src/components/JobFeed.tsx:741:              ].map((p) => (
+src/components/JobFeed.tsx:781:              {categories.map((category) => (
+src/components/JobFeed.tsx:847:          {filteredJobs.map((job) => (
+src/components/JobTimeline.tsx:45:      setQuotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/JobTimeline.tsx:201:          {steps.map((step, index) => (
+src/components/Layout.tsx:56:      setRecentRides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/Layout.tsx:326:                {navItems.map((item) => {
+src/components/Layout.tsx:413:                            {shopRecommendations.map((rec, idx) => {
+src/components/Layout.tsx:583:                      {favorites.slice(0, 3).map((fav) => (
+src/components/Layout.tsx:598:                      {journeys.slice(0, 2).map((j) => (
+src/components/Layout.tsx:625:                        {preferredDrivers.map((driver) => (
+src/components/Layout.tsx:648:                       {recentRides.map((ride) => (
+src/components/Layout.tsx:710:                        {emergencyContacts.map((contact, i) => (
+src/components/Layout.tsx:755:        {navItems.map((item) => {
+src/components/Logo.tsx:45:          {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => (
+src/components/MediaGalleryModal.tsx:24:    ...photos.map(url => ({ type: 'photo', url })),
+src/components/MediaGalleryModal.tsx:25:    ...videos.map(url => ({ type: 'video', url }))
+src/components/MediaGalleryModal.tsx:117:            {allMedia.map((item, idx) => (
+src/components/MyJobs.tsx:36:      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/MyJobs.tsx:143:    const unsubscribes = jobs.map(job => {
+src/components/MyJobs.tsx:192:            ].map((tab) => (
+src/components/MyJobs.tsx:250:            {displayJobs.map((job) => (
+src/components/MyQuotes.tsx:99:      const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/MyQuotes.tsx:116:      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+src/components/MyQuotes.tsx:134:      const jobIds = [...new Set(quotes.map(q => q.jobId as string).filter(Boolean))];
+src/components/MyQuotes.tsx:143:        await Promise.all(missingJobIds.map(async (jobId: string) => {
+src/components/MyQuotes.tsx:205:            {statusFilters.map((f) => (
+src/components/MyQuotes.tsx:240:            {recurringSchedules.map((schedule) => (
+src/components/MyQuotes.tsx:317:          {filteredQuotes.map((quote) => (
+src/components/Notifications.tsx:26:      const allNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/Notifications.tsx:95:            notifications.map((notification) => (
+src/components/Onboarding.tsx:316:        verificationDocs: verificationDocs.map(d => ({
+src/components/Onboarding.tsx:715:                {categories.map(t => (
+src/components/Onboarding.tsx:753:                          {t.subcategories.map(sub => (
+src/components/Onboarding.tsx:829:                      .map(cat => (
+src/components/Onboarding.tsx:874:                      {(platformConfig?.businessTiers || []).map((tier: any) => (
+src/components/Onboarding.tsx:964:                {uniqueRequiredCerts.map((cert, idx) => (
+src/components/PartnerPerks.tsx:97:      setActiveCampaigns(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/PartnerPerks.tsx:110:  const mappedCampaigns = activeCampaigns.map(c => ({
+src/components/PartnerPerks.tsx:142:        {displayPerks.map((perk, idx) => (
+src/components/Portfolio.tsx:45:      setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/Portfolio.tsx:138:          {filteredAssets.map((asset) => {
+src/components/PostJobWizard.tsx:134:          setUserAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/PostJobWizard.tsx:218:            - category (one of: ${categories.map(c => c.name).join(", ")})
+src/components/PostJobWizard.tsx:543:        const simulatedUrls = Array.from(files).map((_, i) => `https://placehold.co/600x400?text=Gallery+Photo+${i+1}`);
+src/components/PostJobWizard.tsx:552:      const uploadPromises = Array.from(files as FileList).map(async (file: File) => {
+src/components/PostJobWizard.tsx:598:      const uploadPromises = Array.from(files as FileList).map(async (file: File) => {
+src/components/PostJobWizard.tsx:815:      const fullDescription = `${formData.description}\n\nAdditional Details:\n${Object.entries(clarifyingAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n")}`;
+src/components/PostJobWizard.tsx:909:        .map(([q, a]) => `Q: ${q}\nA: ${a}`)
+src/components/PostJobWizard.tsx:1132:                        ].map((item) => (
+src/components/PostJobWizard.tsx:1230:                  {categories.slice(0, 6).map((cat) => {
+src/components/PostJobWizard.tsx:1282:                {filteredCategories.map((cat) => {
+src/components/PostJobWizard.tsx:1349:                {categories.find(c => c.name === formData.category)?.subcategories.map((sub) => (
+src/components/PostJobWizard.tsx:1396:                    {userAssets.map((asset) => (
+src/components/PostJobWizard.tsx:1612:                {clarifyingQuestions.map((question, idx) => (
+src/components/PostJobWizard.tsx:1795:                {URGENCY_LEVELS.filter(level => !targetTradespersonId || level.id !== "emergency").map((level) => (
+src/components/PostJobWizard.tsx:1909:                      {formData.documents.map((doc, idx) => (
+src/components/PostJobWizard.tsx:2001:                    {formData.photos.map((url, i) => (
+src/components/PostJobWizard.tsx:2012:                    {formData.videos.map((url, i) => (
+src/components/PostJobWizard.tsx:2281:                            {estimate.pricingInsights.costSavingTips.map((tip, i) => (
+src/components/Profile.tsx:335:        const fetchedReviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/Profile.tsx:407:        const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/Profile.tsx:429:        setHomeownerJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/Profile.tsx:647:      const tradesArray = editData.trades.split(",").map(t => t.trim()).filter(t => t !== "");
+src/components/Profile.tsx:648:      const tagsArray = editData.tags.split(",").map(t => t.trim()).filter(t => t !== "");
+src/components/Profile.tsx:984:            {(profile.role === "homeowner" ? (platformConfig.businessTiers || []) : (platformConfig.feeTiers || [])).map((tier: any) => (
+src/components/Profile.tsx:1195:              {getTraderBadges(profile).map((badge) => (
+src/components/Profile.tsx:1363:                profile.services.map((service: string, index: number) => (
+src/components/Profile.tsx:1417:                {tempServices.map((service: string, index: number) => (
+src/components/Profile.tsx:1499:              {profile.trades?.map((trade: string) => (
+src/components/Profile.tsx:1504:              {profile.tags?.map((tag: string) => (
+src/components/Profile.tsx:1535:                  {profile.badges.map((badgeId: string) => {
+src/components/Profile.tsx:1606:                  {profile.portfolio.map((url: string) => (
+src/components/Profile.tsx:1696:                profile.emergencyContacts.map((contact: any, index: number) => (
+src/components/Profile.tsx:1723:        {menuGroups.map((group) => (
+src/components/Profile.tsx:1727:              {group.items.map((item, index) => (
+src/components/Profile.tsx:1857:                              {TIME_OPTIONS.map(time => (
+src/components/Profile.tsx:1878:                              {TIME_OPTIONS.map(time => (
+src/components/Profile.tsx:2049:            {["Identity Verification (Passport/Driving License)", "Public Liability Insurance"].map((cert, idx) => {
+src/components/Profile.tsx:2155:              .map((cert, idx) => {
+src/components/Profile.tsx:2300:            {recurringSchedules.map((schedule) => {
+src/components/Profile.tsx:2409:              {reviews.map((review) => (
+src/components/Profile.tsx:2413:                      {[...Array(5)].map((_, i) => (
+src/components/Profile.tsx:2567:                        {PROFESSIONAL_BADGES.map((badge) => {
+src/components/PublicProfile.tsx:121:      const fetchedReviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/PublicProfile.tsx:192:      const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+src/components/PublicProfile.tsx:470:              {getTraderBadges(profile).map((badge: any) => (
+src/components/PublicProfile.tsx:485:              {profile.badges && profile.badges.length > 0 && profile.badges.map((badgeId: string) => {
+src/components/PublicProfile.tsx:610:            {(isServicesExpanded ? profile.services : profile.services.slice(0, 4)).map((service: string, index: number) => (
+src/components/PublicProfile.tsx:637:          {profile.trades?.map((trade: string) => (
+src/components/PublicProfile.tsx:642:          {profile.tags?.map((tag: string) => (
+src/components/PublicProfile.tsx:695:            {profile.portfolio.map((url: string, index: number) => (
+src/components/PublicProfile.tsx:721:            {reviews.map((review) => (
+src/components/PublicProfile.tsx:725:                    {[...Array(5)].map((_, i) => (
+src/components/PublicProfile.tsx:838:                    userJobs.map(job => (
+src/components/QuoteComparisonModal.tsx:115:                {quotes.map((quote) => {
+src/components/ReviewForm.tsx:69:            {[1, 2, 3, 4, 5].map((star) => (
+src/components/RidesCommandCenter.tsx:64:      setRideRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/RidesCommandCenter.tsx:105:      setDrivers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/RidesCommandCenter.tsx:134:        vehicleTypes: (config.vehicleTypes || []).map((vt: any) => ({
+src/components/RidesCommandCenter.tsx:143:        surcharges: (config.surcharges || []).map((s: any) => ({
+src/components/RidesCommandCenter.tsx:256:          ].map((tab) => (
+src/components/RidesCommandCenter.tsx:290:              ].map((stat, i) => (
+src/components/RidesCommandCenter.tsx:305:            ].map((section) => (
+src/components/RidesCommandCenter.tsx:334:                        {section.data.map((ride) => (
+src/components/RidesCommandCenter.tsx:487:                    {drivers.map((driver) => (
+src/components/RidesCommandCenter.tsx:615:                  {(config.vehicleTypes || []).map((vt: any, idx: number) => (
+src/components/RidesCommandCenter.tsx:633:                            const newTypes = config.vehicleTypes.map((vt: any, i: number) => 
+src/components/RidesCommandCenter.tsx:651:                            const newTypes = config.vehicleTypes.map((vt: any, i: number) => 
+src/components/RidesCommandCenter.tsx:670:                  {['morning', 'evening', 'lateNight'].map((peak) => (
+src/components/RidesCommandCenter.tsx:711:                  {(config.surcharges || []).map((s: any, idx: number) => (
+src/components/RidesCommandCenter.tsx:730:                              const newS = config.surcharges.map((s: any, i: number) => 
+src/components/RidesCommandCenter.tsx:745:                              const newS = config.surcharges.map((s: any, i: number) => 
+src/components/RidesCommandCenter.tsx:758:                          const newS = config.surcharges.map((s: any, i: number) => 
+src/components/RidesCommandCenter.tsx:823:                          {config.vehicleTypes?.map((v: any) => (
+src/components/RidesCommandCenter.tsx:864:                          ].map((mode) => (
+src/components/RidesCommandCenter.tsx:884:                          {(config.surcharges || []).map((s: any) => (
+src/components/RidesCommandCenter.tsx:1014:                      {drivers.filter(d => d.status === 'online').map(driver => (
+src/components/TradeBot.tsx:103:            {messages.map((msg, i) => (
+src/components/TradesDashboard.tsx:354:                      regionalDemand.map((region, i) => (
+src/components/TradesDashboard.tsx:435:      setActiveQuotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+src/components/TradesDashboard.tsx:450:      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+src/components/TradesDashboard.tsx:474:      const postedJobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/TradesDashboard.tsx:524:        const jobs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+src/components/TradesDashboard.tsx:537:            .map(rec => {
+src/components/TradesDashboard.tsx:890:              {recommendedJobs.map((job) => {
+src/components/TradesDashboard.tsx:1053:              return displayJobs.map((job) => (
+src/components/TradesDashboard.tsx:1128:              activeQuotes.slice(0, 5).map((quote) => (
+src/components/TradesDashboard.tsx:1180:            {postedJobs.slice(0, 4).map((job) => (

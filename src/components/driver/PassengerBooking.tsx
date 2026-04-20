@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MapPin, Navigation, Car, Clock, X, Check, Target, MessageSquare, Info, ChevronRight, Zap, History, Loader2, CreditCard, Mic, MicOff, Star, Users, Repeat, Shield, Menu, Plus } from "lucide-react";
+import { MapPin, Navigation, Car, Clock, X, Check, Target, MessageSquare, Info, ChevronRight, Zap, History, Loader2, CreditCard, Mic, MicOff, Star, Users, Repeat, Shield, Menu, Plus, Home, Briefcase, Dog, Accessibility } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
@@ -45,7 +45,8 @@ const CAR_CATEGORIES = [
   { id: 'executive', name: 'Executive', multiplier: 1.5, wait: '5-8', capacity: 4, icon: Shield },
   { id: 'luxury', name: 'Luxury', multiplier: 2.2, wait: '8-12', capacity: 4, icon: Star },
   { id: '6seater', name: '6-Seater XL', multiplier: 1.4, wait: '6-10', capacity: 6, icon: Users },
-  { id: '8seater', name: '8-Seater Max', multiplier: 1.8, wait: '8-15', capacity: 8, icon: Users }
+  { id: '8seater', name: '8-Seater Max', multiplier: 1.8, wait: '8-15', capacity: 8, icon: Users },
+  { id: 'wav', name: 'Wheelchair', multiplier: 1.5, wait: '10-20', capacity: 4, icon: Accessibility }
 ];
 
 export default function PassengerBooking() {
@@ -58,6 +59,7 @@ export default function PassengerBooking() {
   const [comments, setComments] = useState(searchParams.get("comments") || "");
   const [waitTolerance, setWaitTolerance] = useState<10 | 20 | 30>(20);
   const [selectedCategory, setSelectedCategory] = useState("standard");
+  const [isPetFriendly, setIsPetFriendly] = useState(false);
   
   const [isDetecting, setIsDetecting] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -217,7 +219,7 @@ export default function PassengerBooking() {
         }
       });
 
-      const result = JSON.parse(response.text);
+      const result = response.text ? JSON.parse(response.text) : {};
       if (result.pickup) setPickup(result.pickup);
       if (result.dropoff) setDropoff(result.dropoff);
       if (result.comments) setComments(result.comments);
@@ -388,7 +390,9 @@ export default function PassengerBooking() {
         vehicleInfo: assignedDriver.vehicle,
         pickup,
         dropoff,
+        stops: stops.filter(s => s.coords !== null),
         carCategory: selectedCategory,
+        isPetFriendly,
         waitTolerance,
         comments,
         status: "pending",
@@ -447,12 +451,12 @@ export default function PassengerBooking() {
                 <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {!pickupCoords && !dropoffCoords && <Marker position={mapCenter} />}
-                {pickupCoords && <Marker position={pickupCoords} />}
-                {stops.map((stop, i) => stop.coords && <Marker key={i} position={stop.coords} />)}
-                {dropoffCoords && <Marker position={dropoffCoords} />}
+                {!pickupCoords && !dropoffCoords && <Marker key="center-marker" position={mapCenter} />}
+                {pickupCoords && <Marker key="pickup-marker" position={pickupCoords} />}
+                {stops.map((stop, i) => stop.coords && <Marker key={`stop-marker-${i}`} position={stop.coords} />)}
+                {dropoffCoords && <Marker key="dropoff-marker" position={dropoffCoords} />}
                 {routeLine.length > 0 && (
-                   <Polyline positions={routeLine} color="#2563eb" weight={5} opacity={0.7} />
+                   <Polyline key="route-polyline" positions={routeLine} color="#2563eb" weight={5} opacity={0.7} />
                 )}
                 <MapController center={mapCenter} />
              </MapContainer>
@@ -502,7 +506,7 @@ export default function PassengerBooking() {
 
                       {/* Stops */}
                       {stops.map((stop, i) => (
-                        <div key={i} className="space-y-2 relative">
+                        <div key={`stop-input-${stop.address}-${i}`} className="space-y-2 relative">
                           <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-amber-500 rounded-full z-10 border-2 border-white" />
                           <input type="text" className="w-full pl-12 pr-12 py-3 bg-slate-50 border-2 border-transparent focus:border-amber-500 rounded-2xl font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400" placeholder={`Stop ${i + 1}`} value={stop.address} onFocus={() => setActiveField(`stop-${i}`)} onChange={(e) => {
                              const newStops = [...stops];
@@ -537,6 +541,21 @@ export default function PassengerBooking() {
                           <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-indigo-600 rounded-sm z-10" />
                           <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400" placeholder="Destination Name or Postcode" value={dropoff} onFocus={() => setActiveField("dropoff")} onChange={(e) => setDropoff(e.target.value)} />
                         </div>
+                        {/* Quick Places Chips */}
+                        <div className="flex items-center gap-2 mt-2 -mb-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                          <button onClick={() => { setDropoff("Home"); setActiveField("dropoff"); triggerHaptic(ImpactStyle.Light); }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-full transition-colors whitespace-nowrap">
+                            <Home className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Home</span>
+                          </button>
+                          <button onClick={() => { setDropoff("Work"); setActiveField("dropoff"); triggerHaptic(ImpactStyle.Light); }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 rounded-full transition-colors whitespace-nowrap">
+                            <Briefcase className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Work</span>
+                          </button>
+                          <button onClick={() => { setDropoff("Recent Destination"); setActiveField("dropoff"); triggerHaptic(ImpactStyle.Light); }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-full transition-colors whitespace-nowrap">
+                            <History className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Recent</span>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Suggestions Dropdown */}
@@ -547,7 +566,7 @@ export default function PassengerBooking() {
                               <div className="w-full px-5 py-4 flex items-center justify-center gap-2 text-slate-400 text-sm font-bold"><Loader2 className="w-4 h-4 animate-spin" />Finding addresses...</div>
                             )}
                             {suggestions.map((s, idx) => (
-                              <button key={idx} onClick={() => selectSuggestion(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center gap-3 transition-colors border-b border-slate-50 last:border-0">
+                              <button key={`suggestion-${s.label}-${idx}`} onClick={() => selectSuggestion(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center gap-3 transition-colors border-b border-slate-50 last:border-0">
                                 <History className="w-4 h-4 text-slate-300" />
                                 <span className="font-bold text-slate-700 text-sm">{s.label}</span>
                               </button>
@@ -562,10 +581,10 @@ export default function PassengerBooking() {
                   <div className="space-y-2 pt-2 -mx-2 px-2 overflow-hidden">
                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Select Ride</label>
                      <div className="flex gap-2 overflow-x-auto pb-4 pt-1 snap-x px-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                       {CAR_CATEGORIES.map(category => {
+                       {CAR_CATEGORIES.map((category, idx) => {
                          const price = getComputedFare(category.id);
                          return (
-                           <button key={category.id} onClick={() => setSelectedCategory(category.id)} className={cn("flex-none w-[88px] snap-start flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all", selectedCategory === category.id ? "border-slate-900 bg-slate-900 shadow-lg text-white transform scale-105" : "border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50")}>
+                           <button key={`category-${category.id}-${idx}`} onClick={() => setSelectedCategory(category.id)} className={cn("flex-none w-[88px] snap-start flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all", selectedCategory === category.id ? "border-slate-900 bg-slate-900 shadow-lg text-white transform scale-105" : "border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50")}>
                              <category.icon className={cn("w-5 h-5 mb-1 transition-colors", selectedCategory === category.id ? "text-white" : "text-slate-400")} />
                              <p className={cn("text-[9px] font-black uppercase tracking-wider mb-0.5 line-clamp-1", selectedCategory === category.id ? "text-slate-300" : "text-slate-500")}>{category.name}</p>
                              <p className="text-[16px] font-black tracking-tighter mb-1.5">£{price.toFixed(2)}</p>
@@ -580,8 +599,16 @@ export default function PassengerBooking() {
                      </div>
                   </div>
 
-                  {/* Driver Comments */}
+                  {/* Driver Comments & Preferences */}
                   <div className="space-y-4">
+                    {/* Accessibility Toggles */}
+                    <div className="flex items-center gap-3 ml-1 mr-1">
+                      <button onClick={() => { setIsPetFriendly(!isPetFriendly); triggerHaptic(ImpactStyle.Light); }} className={cn("flex flex-1 justify-center items-center gap-2 py-2.5 rounded-xl border-2 transition-all", isPetFriendly ? "bg-amber-100 border-amber-500 text-amber-800 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50")}>
+                         <Dog className="w-4 h-4" />
+                         <span className="text-[10px] font-black uppercase tracking-wider">{isPetFriendly ? 'Pet Friendly ✓' : 'Pet Friendly'}</span>
+                      </button>
+                    </div>
+
                     <div className="flex items-center justify-between ml-4 pr-1">
                       <div className="flex items-center gap-2">
                          <MessageSquare className="w-3 h-3 text-slate-400" />

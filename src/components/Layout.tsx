@@ -335,7 +335,7 @@ export default function Layout() {
 
                   return (
                     <Link
-                      key={item.name}
+                      key={item.path}
                       to={item.path}
                       className={cn(
                         "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all relative",
@@ -580,9 +580,9 @@ export default function Layout() {
                         <p className="text-xs text-slate-400 font-medium px-2 italic">Nothing saved yet.</p>
                       )}
                       
-                      {favorites.slice(0, 3).map((fav) => (
+                      {favorites.slice(0, 3).map((fav, idx) => (
                         <button 
-                          key={fav.id}
+                          key={`fav-${idx}`}
                           onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(fav.address)}`); setIsMenuOpen(false); }}
                           className="w-full p-2.5 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-slate-100 transition-all group"
                         >
@@ -595,9 +595,9 @@ export default function Layout() {
                         </button>
                       ))}
 
-                      {journeys.slice(0, 2).map((j) => (
+                      {journeys.slice(0, 2).map((j, idx) => (
                         <button 
-                          key={j.id}
+                          key={`journey-${idx}`}
                           onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(j.from)}&dropoff=${encodeURIComponent(j.to)}&comments=${encodeURIComponent(j.comments || "")}`); setIsMenuOpen(false); }}
                           className="w-full p-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-100 transition-all group"
                         >
@@ -622,9 +622,9 @@ export default function Layout() {
                       <p className="text-xs text-slate-400 font-medium px-2 italic">Add drivers after 5-star rides.</p>
                     ) : (
                       <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-1">
-                        {preferredDrivers.map((driver) => (
+                        {preferredDrivers.map((driver, idx) => (
                           <button 
-                            key={driver.uid}
+                            key={`driver-${idx}`}
                             onClick={() => navigate(`/profile/${driver.uid}`)}
                             className="shrink-0 flex flex-col items-center gap-1.5 p-2 bg-slate-50 border border-slate-100 rounded-2xl min-w-[70px]"
                           >
@@ -645,8 +645,8 @@ export default function Layout() {
                        </div>
                     </div>
                     <div className="space-y-2">
-                       {recentRides.map((ride) => (
-                         <div key={ride.id} className="p-3 bg-white border border-slate-100 rounded-2xl space-y-2 group relative">
+                       {recentRides.map((ride, idx) => (
+                         <div key={`ride-${idx}`} className="p-3 bg-white border border-slate-100 rounded-2xl space-y-2 group relative">
                             <div className="flex items-center justify-between">
                                <span className={cn(
                                  "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
@@ -708,7 +708,7 @@ export default function Layout() {
                     ) : (
                       <div className="space-y-2">
                         {emergencyContacts.map((contact, i) => (
-                           <div key={i} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                           <div key={`contact-${i}`} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
                               <p className="font-bold text-slate-900 text-xs">{contact.name}</p>
                               <a href={`tel:${contact.phone}`} className="p-2 bg-white rounded-xl shadow-sm text-blue-600">
                                  <Phone className="w-3 h-3" />
@@ -752,7 +752,7 @@ export default function Layout() {
 
       {/* Bottom Navigation (Mobile) */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 h-16 flex items-center justify-around z-50">
-        {navItems.map((item) => {
+        {navItems.map((item, idx) => {
           const Icon = item.icon;
           const isActive = location.pathname + location.search === item.path || (item.path === "/admin" && location.pathname === "/admin" && (!location.search || location.search === "?tab=users"));
           
@@ -764,7 +764,7 @@ export default function Layout() {
 
           return (
             <Link
-              key={item.name}
+              key={`nav-${idx}-${item.path}`}
               to={item.path}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 transition-colors relative",
