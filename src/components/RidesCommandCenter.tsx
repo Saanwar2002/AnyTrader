@@ -33,6 +33,7 @@ export default function RidesCommandCenter() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [serverConfig, setServerConfig] = useState<any>(null);
   
   // Simulator States
   const [simDistance, setSimDistance] = useState("10");
@@ -53,18 +54,29 @@ export default function RidesCommandCenter() {
     const unsubConfig = onSnapshot(doc(db, "platform_config", "rides"), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        // Merge with defaults to ensure new fields like vehicleTypes exist
-        setConfig((prev: any) => ({
-          ...prev,
+        const defaultVehicles = [
+          { id: "standard", name: "AnyTrader Standard", multiplier: 1.0 },
+          { id: "executive", name: "AnyTrader Executive", multiplier: 1.5 },
+          { id: "mpv", name: "AnyTrader XL (6-Seater)", multiplier: 1.4 },
+          { id: "van", name: "AnyTrader Pro Van", multiplier: 1.8 },
+          { id: "vip", name: "AnyTrader VIP Luxury", multiplier: 2.2 }
+        ];
+
+        const merged = {
           ...data,
-          vehicleTypes: data.vehicleTypes || [
-            { id: "standard", name: "AnyTrader Standard", multiplier: 1.0 },
-            { id: "executive", name: "AnyTrader Executive", multiplier: 1.5 },
-            { id: "mpv", name: "AnyTrader XL (6-Seater)", multiplier: 1.4 },
-            { id: "van", name: "AnyTrader Pro Van", multiplier: 1.8 },
-            { id: "vip", name: "AnyTrader VIP Luxury", multiplier: 2.2 }
-          ]
-        }));
+          vehicleTypes: data.vehicleTypes || defaultVehicles
+        };
+
+        setServerConfig(merged);
+
+        setConfig((prev: any) => {
+          // If the user is currently looking at dials and we just got a remote update, 
+          // we might want to be careful about overwriting. But for most cases:
+          return {
+            ...prev,
+            ...merged
+          };
+        });
       }
     });
 
@@ -80,13 +92,43 @@ export default function RidesCommandCenter() {
     };
   }, []);
 
+  const isConfigEqual = (c1: any, c2: any) => {
+    if (!c1 || !c2) return false;
+    const keys = ['baseFare', 'distanceRate', 'timeRate', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers'];
+    return keys.every(key => JSON.stringify(c1[key]) === JSON.stringify(c2[key]));
+  };
+
+  const hasUnsavedChanges = serverConfig && !isConfigEqual(config, serverConfig);
+
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      await setDoc(doc(db, "platform_config", "rides"), {
+      // Sanitize NaNs and types before saving
+      const sanitizedConfig = {
         ...config,
+        baseFare: Number(config.baseFare) || 0,
+        distanceRate: Number(config.distanceRate) || 0,
+        timeRate: Number(config.timeRate) || 0,
+        minFare: Number(config.minFare) || 0,
+        commission: Number(config.commission) || 0,
+        vehicleTypes: (config.vehicleTypes || []).map((vt: any) => ({
+          ...vt,
+          multiplier: Number(vt.multiplier) || 1
+        })),
+        peakMultipliers: {
+          morning: Number(config.peakMultipliers?.morning) || 1,
+          evening: Number(config.peakMultipliers?.evening) || 1,
+          lateNight: Number(config.peakMultipliers?.lateNight) || 1,
+        }
+      };
+
+      await setDoc(doc(db, "platform_config", "rides"), {
+        ...sanitizedConfig,
         updatedAt: serverTimestamp()
       }, { merge: true });
+      
+      setServerConfig(sanitizedConfig);
+      setConfig(sanitizedConfig);
       toast.success("Fleet engine dials synced!");
     } catch (error) {
       toast.error("Failed to save dials");
@@ -656,6 +698,32 @@ export default function RidesCommandCenter() {
             </div>
           </motion.div>
         )}
+
+        <AnimatePresence>
+          {hasUnsavedChanges && activeTab === "dials" && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="fixed bottom-24 left-0 right-0 z-[100] px-4 flex justify-center pointer-events-none"
+            >
+              <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-[28px] p-2 pl-6 shadow-2xl flex items-center gap-6 pointer-events-auto max-w-sm w-full">
+                <div className="flex-1">
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Unsaved Changes</p>
+                  <p className="text-xs font-bold text-white">Pricing engine is out of sync.</p>
+                </div>
+                <button 
+                  onClick={handleSaveConfig}
+                  disabled={saving}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  SYNC
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </AnimatePresence>
     </div>
   );
