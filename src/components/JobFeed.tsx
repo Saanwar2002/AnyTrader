@@ -29,7 +29,12 @@ export default function JobFeed() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>(() => {
     if (profile?.activeFilter?.categories) return profile.activeFilter.categories;
     const saved = localStorage.getItem("job_feed_selectedCategories");
-    return saved ? JSON.parse(saved) : [];
+    try {
+      return saved && saved !== "undefined" ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.warn("Invalid JSON in localStorage for job_feed_selectedCategories");
+      return [];
+    }
   });
   const [sortBy, setSortBy] = useState<"newest" | "urgency" | "completion">(() => 
     profile?.activeFilter?.sortBy || (localStorage.getItem("job_feed_sortBy") as any) || "newest"

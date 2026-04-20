@@ -124,7 +124,7 @@ export default function FindTrades() {
     const stored = localStorage.getItem("recentlyViewedTraders");
     if (stored) {
       try {
-        setRecentlyViewedIds(JSON.parse(stored));
+        setRecentlyViewedIds(stored !== "undefined" ? JSON.parse(stored) : []);
       } catch (e) {
         console.error("Error parsing recently viewed:", e);
       }

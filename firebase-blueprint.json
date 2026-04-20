@@ -506,6 +506,49 @@
       },
       "required": ["id", "partnerId", "title", "status", "createdAt"]
     },
+    "TaxiRide": {
+      "title": "TaxiRide",
+      "description": "A ride request and trip record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "riderId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "pickup": { "type": "string" },
+        "dropoff": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "in_transit", "completed", "cancelled"] },
+        "totalFare": { "type": "number" },
+        "scheduledAt": { "type": "string", "format": "date-time", "description": "Optional future date for pre-booked rides." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "riderId", "status", "createdAt"]
+    },
+    "DriverLocation": {
+      "title": "DriverLocation",
+      "description": "Real-time location of a driver for dispatching.",
+      "type": "object",
+      "properties": {
+        "driverId": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "geohash": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["driverId", "lat", "lng", "geohash", "updatedAt"]
+    },
+    "DriverMetrics": {
+      "title": "DriverMetrics",
+      "description": "Real-time daily performance metrics for driver fairness.",
+      "type": "object",
+      "properties": {
+        "driverId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "dailyEarnings": { "type": "number" },
+        "jobsDoneToday": { "type": "integer" },
+        "lastAssignmentAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["driverId", "date", "dailyEarnings", "jobsDoneToday", "lastAssignmentAt"]
+    },
     "Lead": {
       "title": "Lead",
       "description": "A lead generated for a partner.",
@@ -604,6 +647,26 @@
     "/leads/{leadId}": {
       "schema": "Lead",
       "description": "Lead documents for partners."
+    },
+    "/ride_requests/{rideId}": {
+      "schema": "TaxiRide",
+      "description": "Ride request and trip records."
+    },
+    "/live_tracking/{rideId}": {
+      "schema": "DriverLocation",
+      "description": "Real-time location index for drivers."
+    },
+    "/dispatches/{dispatchId}": {
+      "schema": { "type": "object" },
+      "description": "Dispatch jobs."
+    },
+    "/driver_status/{driverId}": {
+      "schema": { "type": "object" },
+      "description": "Driver status."
+    },
+    "/driver_metrics/{driverId}": {
+      "schema": "DriverMetrics",
+      "description": "Driver performance metrics for fairness."
     }
   }
 }

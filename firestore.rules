@@ -13,6 +13,28 @@ service cloud.firestore {
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ecosystem_manager'))
       );
     }
+    
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isValidTaxiRide(data, isCreate) {
+      return data.keys().hasAll(['riderId', 'pickup', 'dropoff', 'status', 'createdAt']) &&
+             data.riderId is string && data.pickup is string && data.dropoff is string &&
+             data.pickup.size() <= 200 && data.dropoff.size() <= 200 &&
+             data.status in ["pending", "accepted", "in_transit", "completed", "cancelled"] &&
+             (isCreate ? data.createdAt == request.time : data.createdAt is timestamp);
+    }
+    
+    function isValidDriverLocation(data) {
+      return data.keys().hasAll(['driverId', 'lat', 'lng', 'geohash', 'updatedAt']) &&
+             data.driverId is string &&
+             data.lat is float && data.lng is float &&
+             data.geohash is string && data.geohash.size() <= 20 &&
+             data.updatedAt is timestamp;
+    }
 
     function isEcosystemManager() {
       return isAuthenticated() && (
@@ -26,8 +48,9 @@ service cloud.firestore {
     function isDriverAuthorized() {
       return isAuthenticated() &&
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tradesperson' &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.trades.hasAny(['Taxi & Transport']) &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tradesperson' || 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'fleet_driver') &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.trades.hasAny(['Taxi & Transport', 'Transport & Rides'])) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'verified';
     }
 
@@ -76,7 +99,7 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['role', 'name', 'phone']) &&
-             data.role in ['homeowner', 'tradesperson', 'business', 'admin', 'ecosystem_manager'] &&
+             data.role in ['homeowner', 'tradesperson', 'business', 'admin', 'ecosystem_manager', 'fleet_driver'] &&
              (!('email' in data) || data.email is string) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.phone is string;
@@ -267,26 +290,27 @@ service cloud.firestore {
 
     match /ride_requests/{rideId} {
       allow read: if isAuthenticated() && (
-        resource.data.passengerId == request.auth.uid || 
+        resource.data.riderId == request.auth.uid || 
         resource.data.driverId == request.auth.uid || 
         isAdmin()
       );
-      allow create: if isAuthenticated() && request.resource.data.passengerId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        (resource.data.passengerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])) ||
-        (isDriverAuthorized() && request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'driverId'])) ||
+      allow create: if isAuthenticated() && isValidId(rideId) && request.resource.data.riderId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidId(rideId) && (
+        (resource.data.riderId == request.auth.uid) ||
+        (isDriverAuthorized() && resource.data.driverId == request.auth.uid) ||
         isAdmin()
       );
     }
 
     match /live_tracking/{rideId} {
       allow read: if isAuthenticated() && (
-        resource.data.passengerId == request.auth.uid || 
+        resource.data.riderId == request.auth.uid || 
         resource.data.driverId == request.auth.uid || 
         isAdmin()
       );
       allow update: if isDriverAuthorized() && 
-        request.resource.data.updatedAt == request.time && // Prevents time-travel spoofing
+        isValidId(rideId) &&
+        request.resource.data.updatedAt <= request.time && // Prevents time-travel spoofing
         request.resource.data.driverId == request.auth.uid;
     }
 

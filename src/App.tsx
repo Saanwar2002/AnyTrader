@@ -40,6 +40,7 @@ import { PlusCircle, Briefcase, MessageSquare, User as UserIcon, Bell, ChevronRi
 import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "@/src/firebase";
 
 import DriverTerminal from "./components/driver/DriverTerminal";
+import PassengerBooking from "./components/driver/PassengerBooking";
 
 export default function App() {
   const { user, profile, isAuthReady } = useAuth();
@@ -106,6 +107,7 @@ export default function App() {
                     : <TradesDashboard />
               } />
               <Route path="driver-terminal" element={<DriverTerminal />} />
+              <Route path="book-ride" element={<PassengerBooking />} />
               <Route path="dashboard" element={profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />} />
               <Route path="trades-dashboard" element={<TradesDashboard />} />
               <Route path="job-feed" element={<JobFeed />} />

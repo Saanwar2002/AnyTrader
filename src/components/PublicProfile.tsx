@@ -63,7 +63,12 @@ export default function PublicProfile() {
           // Update Recently Viewed
           try {
             const stored = localStorage.getItem("recentlyViewedTraders");
-            let ids: string[] = stored ? JSON.parse(stored) : [];
+            let ids: string[] = [];
+            try {
+              ids = stored && stored !== "undefined" ? JSON.parse(stored) : [];
+            } catch (e) {
+              console.warn("Invalid JSON in localStorage for recentlyViewedTraders");
+            }
             // Remove if already exists to move to front
             ids = ids.filter(item => item !== id);
             // Add to front

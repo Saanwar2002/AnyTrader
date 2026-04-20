@@ -129,6 +129,65 @@ const startMatchingSystem = async () => {
         console.error("Error fetching global config:", err);
       }
       
+      // 3. AnyTrader Rides Dispatch Logic
+      try {
+        const pendingRidesSnapshot = await db.collection("ride_requests")
+          .where("status", "==", "pending")
+          .get();
+
+        for (const rideDoc of pendingRidesSnapshot.docs) {
+          const ride = rideDoc.data();
+          const pickupLat = ride.pickupLat; // Assuming these exist
+          const pickupLng = ride.pickupLng;
+          
+          if (pickupLat && pickupLng) {
+            // Get nearby drivers (simplified geohash neighbors lookup)
+            const nearbyDriversSnapshot = await db.collection("driver_status")
+              .where("online", "==", true)
+              .get();
+              
+            if (nearbyDriversSnapshot.empty) continue;
+
+            let bestDriver: any = null;
+            let highestScore = -Infinity;
+
+            for (const driverDoc of nearbyDriversSnapshot.docs) {
+              const driverId = driverDoc.id;
+              const driverLoc = await db.collection("live_tracking").doc(driverId).get();
+              const metrics = await db.collection("driver_metrics").doc(driverId).get();
+              
+              if (!driverLoc.exists || !metrics.exists) continue;
+              
+              const dL = driverLoc.data()!;
+              const m = metrics.data()!;
+
+              // Scores (Normalized 0-1)
+              const distance = Math.sqrt(Math.pow(dL.lat - pickupLat, 2) + Math.pow(dL.lng - pickupLng, 2));
+              const distanceScore = 1 / (distance + 0.1); 
+              const earningsScore = 1 / (m.dailyEarnings + 10);
+              const fairnessScore = (Date.now() - new Date(m.lastAssignmentAt).getTime()) / 3600000; // Hours since last job
+              
+              const score = (distanceScore * 0.4) + (earningsScore * 0.3) + (fairnessScore * 0.3);
+
+              if (score > highestScore) {
+                highestScore = score;
+                bestDriver = driverId;
+              }
+            }
+
+            if (bestDriver) {
+              await rideDoc.ref.update({ status: "accepted", driverId: bestDriver });
+              await db.collection("driver_metrics").doc(bestDriver).update({
+                lastAssignmentAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error in taxi dispatching:", err);
+      }
+      
+      // Original matching logic...
       for (const doc of snapshot.docs) {
         const notification = doc.data();
         console.log("New emergency job notification:", notification);
