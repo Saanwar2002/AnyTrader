@@ -36,6 +36,8 @@ type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progr
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
+  const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
+  const [onlineDurationText, setOnlineDurationText] = useState("0 min");
   const [mapCenter, setMapCenter] = useState<[number, number]>([53.6458, -1.7850]); // Default to Huddersfield from spec
   const [demandZones, setDemandZones] = useState<any[]>([]);
   
@@ -140,9 +142,55 @@ export default function DriverTerminal() {
 
   const handleToggleOnline = () => {
     if (rideState !== 'idle') return; // Cannot toggle while riding
-    setIsOnline(!isOnline);
+    
+    const newStatus = !isOnline;
+    setIsOnline(newStatus);
+    
+    if (newStatus) {
+      setOnlineStartTime(new Date());
+      setOnlineDurationText("0 min");
+    } else {
+      setOnlineStartTime(null);
+    }
+    
     if (navigator.vibrate) navigator.vibrate(100);
   };
+
+  // Update session duration timer
+  useEffect(() => {
+    if (!isOnline || !onlineStartTime) return;
+
+    const interval = setInterval(() => {
+      const diffMs = new Date().getTime() - onlineStartTime.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      
+      if (diffMin < 60) {
+        setOnlineDurationText(`${diffMin} min`);
+      } else {
+        const hrs = Math.floor(diffMin / 60);
+        const mins = diffMin % 60;
+        setOnlineDurationText(`${hrs}h ${mins}m`);
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [isOnline, onlineStartTime]);
+
+  // Real-time GPS Tracking
+  useEffect(() => {
+    if (!isOnline) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setMapCenter([latitude, longitude]);
+      },
+      (err) => console.warn("GPS tracking error:", err),
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isOnline]);
 
   const simulateIncomingRide = () => {
     if (!isOnline) {
@@ -218,34 +266,37 @@ export default function DriverTerminal() {
       <div className="absolute inset-0 z-0 h-full w-full">
         <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
           <SetupMapControls isOnline={isOnline} />
-          {/* Using CartoDB Dark Matter for the aesthetic */}
+          {/* Switched to Voyager theme for much better visibility and clarity */}
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
           />
-          {demandZones.map((zone, i) => (
-            <Circle 
-              key={`zone-${i}`}
-              center={[zone.lat, zone.lng]} 
-              radius={zone.radius}
-              pathOptions={{ 
-                color: zone.type === "high" ? "#FF3B30" : "#FF9500", 
-                fillColor: zone.type === "high" ? "#FF3B30" : "#FF9500", 
-                fillOpacity: 0.25, 
-                weight: 0 
-              }}
-            />
-          ))}
           {isOnline && <Marker position={mapCenter} icon={driverIcon} />}
         </MapContainer>
         
-        {/* Dark gradient overlays */}
-        <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-[#0D0D0F] to-transparent pointer-events-none z-[5]"></div>
-        <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-[#0D0D0F] to-transparent pointer-events-none z-[5]"></div>
+        {/* Lighter, softer gradient overlays to preserve map visibility */}
+        <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
       </div>
 
       {/* 2. Top UI: Privacy Drawer (Earning Bar & Gamification) */}
       <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
+        
+        {/* Status indicator (Pulsing Online) - Always visible at top center */}
+        <AnimatePresence>
+          {(isOnline && activeTab === 'home') && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 16 }}
+              exit={{ opacity: 0, scale: 0.9, y: -20 }}
+              className="absolute left-1/2 -translate-x-1/2 bg-[#0D0D0F]/70 border border-[#00D26A]/40 text-[#00D26A] px-4 py-1.5 rounded-full flex items-center justify-center gap-2 backdrop-blur-md w-max shadow-[0_4px_20px_rgba(0,0,0,0.6)] z-40 pointer-events-auto"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse shadow-[0_0_5px_#00D26A]"></span>
+              <span className="text-[10px] font-black uppercase tracking-widest leading-none pt-0.5">Online • {onlineDurationText}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <motion.div 
           className="pointer-events-auto"
           drag="y"
@@ -264,23 +315,8 @@ export default function DriverTerminal() {
           }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
-          <div className="px-4 pt-6 pb-2 flex flex-col gap-3 relative">
+          <div className="px-4 pt-16 pb-2 flex flex-col gap-3 relative">
             
-            {/* Status indicator (Pulsing Online) */}
-            <AnimatePresence>
-              {isOnline && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                  className="mx-auto bg-[#00D26A]/10 border border-[#00D26A]/30 text-[#00D26A] px-4 py-1.5 rounded-full flex items-center justify-center gap-2 backdrop-blur-md w-max shadow-[0_0_15px_rgba(0,210,106,0.2)]"
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse shadow-[0_0_5px_#00D26A]"></span>
-                  <span className="text-[10px] font-black uppercase tracking-widest leading-none pt-0.5">Online • 12 min</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* The Money-First Bar */}
             <div className="bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl shadow-2xl overflow-hidden relative">
               <div className="p-4">
@@ -715,18 +751,7 @@ export default function DriverTerminal() {
       {/* 3. Bottom UI: Details and Call to Action */}
       <div className={cn("relative z-20 w-full px-4 pb-24 flex flex-col gap-3 transition-opacity", rideState !== 'idle' ? "opacity-0 pointer-events-none" : "opacity-100")}>
         
-        {/* Primary Action Button (Matches "Big Button" specs, 56px height) */}
-        <button
-          onClick={handleToggleOnline}
-          className={cn(
-            "w-full h-14 rounded-2xl font-black text-[15px] flex items-center justify-center gap-2 uppercase tracking-widest transition-all pointer-events-auto z-30",
-            isOnline 
-              ? "bg-[#FF3B30] text-white shadow-[0_4px_25px_rgba(255,59,48,0.4)] active:scale-[0.98] border border-[#FF3B30]/50" 
-              : "bg-[#00D26A] text-[#0D0D0F] shadow-[0_4px_25px_rgba(0,210,106,0.3)] active:scale-[0.98]"
-          )}
-        >
-          {isOnline ? "Go Offline" : "Go Online"}
-        </button>
+        {/* Primary Action Button moved to Menu - only map controls or status might remain here if needed */}
       </div>
       </>
       )}
@@ -734,7 +759,14 @@ export default function DriverTerminal() {
       {/* Render Other Tabs */}
       {activeTab === 'earnings' && <DriverEarnings fareConfig={fareConfig} />}
       {activeTab === 'inbox' && <DriverInbox />}
-      {activeTab === 'menu' && <DriverMenu onNavigate={(tab) => setActiveTab(tab as any)} commissionRate={fareConfig.commissionRate} />}
+      {activeTab === 'menu' && (
+        <DriverMenu 
+          onNavigate={(tab) => setActiveTab(tab as any)} 
+          commissionRate={fareConfig.commissionRate}
+          isOnline={isOnline}
+          onToggleOnline={handleToggleOnline}
+        />
+      )}
       <AnimatePresence>
          {activeTab === 'documents' && (
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute inset-0 z-50">
@@ -745,7 +777,54 @@ export default function DriverTerminal() {
 
       {/* Bottom Navigation (Sticky Fixed Widget) */}
       {(rideState === 'idle' && activeTab !== 'documents') && (
-        <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 z-50 pointer-events-none">
+        <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 z-50 pointer-events-none flex flex-col items-center gap-0.5">
+          
+          {/* Status Indicator Bar (Height reduced by 40%) */}
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "w-full max-w-sm h-6 px-4 rounded-xl flex items-center justify-between border backdrop-blur-md transition-all pointer-events-auto shadow-lg",
+              isOnline 
+                ? "bg-[#064e3b]/80 border-emerald-500/30 shadow-emerald-900/20" 
+                : "bg-[#1A1A1E]/90 border-[#2C2C30]"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#6B6B73]"
+              )} />
+              <span className={cn(
+                "text-[8px] font-black uppercase tracking-widest",
+                isOnline ? "text-white" : "text-[#6B6B73]"
+              )}>
+                {isOnline ? "Waiting for Jobs" : "Offline"}
+              </span>
+            </div>
+
+            {isOnline && (
+              <div className="flex-1 max-w-[100px] h-0.5 bg-white/10 rounded-full mx-4 overflow-hidden relative">
+                <motion.div 
+                  animate={{ left: ["-30%", "130%"] }}
+                  transition={{ 
+                    duration: 2.5, 
+                    repeat: Infinity, 
+                    ease: "easeInOut" 
+                  }}
+                  className="absolute top-0 bottom-0 w-8 bg-gradient-to-r from-transparent via-white to-transparent"
+                />
+              </div>
+            )}
+
+            <span className={cn(
+              "text-[7px] font-bold",
+              isOnline ? "text-white/60" : "text-[#6B6B73]"
+            )}>
+              {isOnline ? "ACTIVE" : "STANDBY"}
+            </span>
+          </motion.div>
+
           <div className="max-w-md mx-auto w-full h-18 bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl px-6 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.4)] pointer-events-auto">
             <button 
               onClick={() => setActiveTab('home')}

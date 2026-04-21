@@ -3,7 +3,17 @@ import { useAuth } from "../AuthProvider";
 import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
-export default function DriverMenu({ onNavigate, commissionRate = 0.12 }: { onNavigate: (tab: string) => void, commissionRate?: number }) {
+export default function DriverMenu({ 
+  onNavigate, 
+  commissionRate = 0.12,
+  isOnline = false,
+  onToggleOnline
+}: { 
+  onNavigate: (tab: string) => void, 
+  commissionRate?: number,
+  isOnline?: boolean,
+  onToggleOnline?: () => void
+}) {
   const { profile, signOut } = useAuth();
 
   const sections = [
@@ -43,14 +53,29 @@ export default function DriverMenu({ onNavigate, commissionRate = 0.12 }: { onNa
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-8 font-sans pb-24">
       
       {/* Header / Profile Summary */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-16 h-16 bg-[#252529] rounded-full flex items-center justify-center font-black text-2xl text-white border border-[#2C2C30]">
-          {profile?.firstName?.[0] || "D"}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-[#252529] rounded-full flex items-center justify-center font-black text-2xl text-white border border-[#2C2C30]">
+            {profile?.firstName?.[0] || "D"}
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-white">{profile?.firstName} {profile?.lastName}</h1>
+            <p className="text-xs text-[#00D26A] font-bold mt-1">⭐ 4.9 Rating</p>
+          </div>
         </div>
-        <div className="flex-1">
-          <h1 className="text-xl font-black text-white">{profile?.firstName} {profile?.lastName}</h1>
-          <p className="text-xs text-[#00D26A] font-bold mt-1">⭐ 4.9 Rating</p>
-        </div>
+
+        {/* Online Toggle Widget (Moved from Map View) */}
+        <button 
+          onClick={onToggleOnline}
+          className={cn(
+            "px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95",
+            isOnline 
+              ? "bg-[#FF3B30] text-white shadow-red-500/20" 
+              : "bg-[#00D26A] text-[#0D0D0F] shadow-emerald-500/20"
+          )}
+        >
+          {isOnline ? "Go Offline" : "Go Online"}
+        </button>
       </div>
 
       {/* Referral Banner */}
