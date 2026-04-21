@@ -1,220 +1,783 @@
-import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence, PanInfo, useMotionValue } from "motion/react";
-import { MapPin, Navigation, Clock, PoundSterling, Shield, AlertTriangle, X, Check, Eye, Zap, Flame, ChevronRight, Menu, Coffee } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { MapContainer, TileLayer, Circle, Marker, useMap, Polyline } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
-import { generateGeohash } from "@/src/services/taxiIntegrationService";
-import { db, doc, updateDoc } from "@/src/firebase";
+import { Navigation, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star } from "lucide-react";
+import { db, doc, onSnapshot, collection, query, where, updateDoc } from "@/src/firebase";
+import DriverEarnings from "./DriverEarnings";
+import DriverInbox from "./DriverInbox";
+import DriverMenu from "./DriverMenu";
+import DriverDocuments from "./DriverDocuments";
 
-// --- Draggable Slider Component ---
-function SlideAction({ label, onComplete, resetDelay = 1000 }: { label: string, onComplete: () => void, resetDelay?: number }) {
-  const x = useMotionValue(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isCompleted, setIsCompleted] = useState(false);
+// Custom pulsing blue dot for driver
+const driverIcon = new L.DivIcon({
+  html: `<div class="relative flex items-center justify-center w-8 h-8">
+           <div class="absolute inset-0 bg-[#007AFF] rounded-full opacity-30 animate-ping"></div>
+           <div class="bg-[#007AFF] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10"></div>
+         </div>`,
+  className: "bg-transparent",
+  iconSize: [32, 32],
+  iconAnchor: [16, 16]
+});
 
-  return (
-    <div className="relative w-full h-16 bg-slate-900 rounded-full flex items-center justify-center overflow-hidden" ref={containerRef}>
-      <AnimatePresence>
-        {!isCompleted && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
-          >
-            <span className="text-white/50 text-sm font-black uppercase tracking-[0.2em]">{label}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <motion.div
-        drag="x"
-        dragConstraints={containerRef}
-        dragElastic={0.05}
-        dragSnapToOrigin={!isCompleted}
-        style={{ x }}
-        onDragEnd={(e, info: any) => {
-          const containerWidth = containerRef.current?.offsetWidth || 0;
-          if (info.offset.x > containerWidth * 0.6) {
-            setIsCompleted(true);
-            onComplete();
-            setTimeout(() => {
-              setIsCompleted(false);
-            }, resetDelay);
-          }
-        }}
-        className="absolute left-1 w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing shadow-lg"
-      >
-        <ChevronRight className="w-6 h-6 text-white" />
-      </motion.div>
-    </div>
-  );
+function SetupMapControls({ isOnline }: { isOnline: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    map.zoomControl?.remove();
+  }, [map]);
+  return null;
 }
 
-const SlidingEarningsWidget = ({ isOnline, onToggleBreak, breakMode }: { isOnline: boolean, onToggleBreak: () => void, breakMode: boolean }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <motion.div 
-      className="absolute top-20 left-4 right-4 bg-slate-900 rounded-3xl p-4 shadow-xl border border-slate-700 z-30"
-      initial={{ height: 60 }}
-      animate={{ height: isOpen ? 200 : 60, y: isOnline ? 0 : -100 }}
-      onClick={() => setIsOpen(!isOpen)}
-    >
-      <div className="flex justify-between items-center h-full">
-        <div className="text-white">
-          <p className="text-[10px] uppercase font-black text-slate-400">Today's Earnings</p>
-          <p className="text-xl font-black font-mono">£84.50</p>
-        </div>
-        <div className="text-white text-right">
-          <p className="text-[10px] uppercase font-black text-slate-400">Last Job</p>
-          <p className="text-xl font-black font-mono">£24.50</p>
-        </div>
-      </div>
-      {isOpen && (
-        <div className="mt-4 pt-4 border-t border-slate-700 text-white space-y-2">
-          <p className="text-xs font-bold text-slate-400">Status: {breakMode ? "Taking Break Next" : "Searching for Jobs"}</p>
-          <button onClick={(e) => { e.stopPropagation(); onToggleBreak(); }} className="w-full bg-slate-800 p-3 rounded-xl font-black text-xs uppercase">{breakMode ? "Cancel Break" : "Take Break Next"}</button>
-        </div>
-      )}
-    </motion.div>
-  );
-};
+type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progress' | 'completed';
 
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [breakMode, setBreakMode] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([53.6458, -1.7850]); // Default to Huddersfield from spec
+  const [demandZones, setDemandZones] = useState<any[]>([]);
+  
+  // Ride Simulation State
+  const [rideState, setRideState] = useState<RideState>('idle');
+  const [showFareBreakdown, setShowFareBreakdown] = useState(false);
+  const [incomingTimer, setIncomingTimer] = useState(15);
+  
+  // Rating State
+  const [passengerRating, setPassengerRating] = useState(5);
+  const [ratingComment, setRatingComment] = useState("");
+  
+  // Stats Card state
+  const [isStatsExpanded, setIsStatsExpanded] = useState(false);
+  const [isTopPanelHidden, setIsTopPanelHidden] = useState(false);
 
-  const [requireHandshake, setRequireHandshake] = useState(profile?.driverSettings?.requireHandshake !== false);
-
-  const toggleHandshake = async () => {
-    if (!user) return;
-    const newValue = !requireHandshake;
-    setRequireHandshake(newValue);
-    try {
-      await updateDoc(doc(db, "users", user.uid), {
-        "driverSettings.requireHandshake": newValue
-      });
-    } catch (err) {
-      console.error("Failed to update handshake setting", err);
-      // Revert on fail
-      setRequireHandshake(!newValue);
+  // Auto-close stats after 5 seconds
+  useEffect(() => {
+    if (isStatsExpanded) {
+      const timer = setTimeout(() => {
+        setIsStatsExpanded(false);
+      }, 5000);
+      return () => clearTimeout(timer);
     }
+  }, [isStatsExpanded]);
+
+  // Dynamic Fare & Live Ride Tracking
+  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12 });
+  const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
+
+  // Listen to Taxi Command Settings (platform_config/rides)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "platform_config", "rides"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFareConfig({
+          baseFare: Number(data.baseFare) || 3.5,
+          distanceRate: Number(data.distanceRate) || 1.3,
+          minFare: Number(data.minFare) || 5.0,
+          commissionRate: data.commission ? Number(data.commission) / 100 : 0.12,
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Listen for REAL incoming live ride requests
+  useEffect(() => {
+    if (!isOnline || rideState !== 'idle') return;
+
+    const q = query(
+      collection(db, "ride_requests"), 
+      where("status", "==", "searching")
+    );
+    
+    const unsub = onSnapshot(q, (snapshot) => {
+      // Find the first searching request
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+        
+        // Populate the active ride with real data
+        setActiveRide({
+          id: doc.id,
+          userId: data.userId,
+          name: data.passengerName || "Live Passenger",
+          pickupAddress: data.pickupAddress,
+          dropoffAddress: data.dropoffAddress,
+          fareEstimate: data.fareEstimate,
+          distanceMiles: data.distanceMiles,
+          durationMinutes: data.durationMinutes,
+          isReal: true // Flag to know whether to update Firestore on Accept
+        });
+        
+        setIncomingTimer(15);
+        setRideState('incoming');
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+      }
+    });
+    
+    return () => unsub();
+  }, [isOnline, rideState]);
+
+  // Simulation: Add fake demand zones
+  useEffect(() => {
+    setDemandZones([
+      { lat: 53.6458, lng: -1.7850, radius: 1200, type: "high", multiplier: "1.4x" },
+      { lat: 53.6550, lng: -1.8000, radius: 1800, type: "moderate", multiplier: "1.2x" },
+    ]);
+  }, []);
+
+  // Timer simulation for Incoming request
+  useEffect(() => {
+    let interval: any;
+    if (rideState === 'incoming' && incomingTimer > 0) {
+      interval = setInterval(() => setIncomingTimer(prev => prev - 1), 1000);
+    } else if (rideState === 'incoming' && incomingTimer === 0) {
+      handleDeclineRide();
+    }
+    return () => clearInterval(interval);
+  }, [rideState, incomingTimer]);
+
+  const handleToggleOnline = () => {
+    if (rideState !== 'idle') return; // Cannot toggle while riding
+    setIsOnline(!isOnline);
+    if (navigator.vibrate) navigator.vibrate(100);
   };
 
-  // Live Location Polling
-  useEffect(() => {
-    if (!isOnline) return;
+  const simulateIncomingRide = () => {
+    if (!isOnline) {
+      setIsOnline(true);
+    }
+    
+    // Create a dynamic simulation using real live fare configs
+    const simulatedDist = Math.floor(Math.random() * 15) + 3; // 3 to 18 miles
+    const simulatedTime = simulatedDist * 2.5; // Rough time
+    const calcFare = Math.max(fareConfig.minFare, fareConfig.baseFare + (simulatedDist * fareConfig.distanceRate));
+    
+    // Add surge for the simulation (just for UI visuals)
+    const surge = 1.4;
+    const finalFare = calcFare * surge;
+    
+    setActiveRide({
+      id: "simulated_ride_123",
+      name: "Sarah T.",
+      pickupAddress: "12 Elm Street, SE15",
+      dropoffAddress: "Bristol Temple Meads",
+      fareEstimate: finalFare,
+      baseCalc: calcFare,
+      surgeMultiplier: surge,
+      distanceMiles: simulatedDist,
+      durationMinutes: simulatedTime,
+      isReal: false
+    });
 
-    const interval = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const hash = generateGeohash(latitude, longitude);
-        
-        // Push update to Firebase: live_tracking collection
-        console.log("Updated location", { latitude, longitude, geohash: hash });
-      });
-    }, 15000); // 15 seconds
+    setIncomingTimer(15);
+    setRideState('incoming');
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]); // Custom ride tone haptic
+  };
 
-    return () => clearInterval(interval);
-  }, [isOnline]);
+  const handleAcceptRide = async () => {
+    // If it's a real ride from Firestore, claim it!
+    if (activeRide?.isReal) {
+      try {
+        await updateDoc(doc(db, "ride_requests", activeRide.id), {
+          status: "accepted",
+          driverId: user?.uid,
+          acceptedAt: new Date()
+        });
+      } catch (err) {
+        console.error("Failed to claim ride:", err);
+      }
+    }
+
+    setRideState('en_route_pickup');
+    if (navigator.vibrate) navigator.vibrate(50);
+  };
+
+  const handleDeclineRide = () => {
+    setActiveRide(null);
+    setRideState('idle');
+  };
+
+  const [activeTab, setActiveTab] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents'>('home');
 
   return (
-    <div className="relative h-screen bg-[#0A0F1C] overflow-hidden">
-      {/* 1. LAYER 1: Full-screen Map Simulation */}
-      <div className="absolute inset-0 z-0">
-          {/* Animated "Looking for rides" visualizer */}
-          {isOnline && (
-            <motion.div 
-              className="absolute inset-0 flex items-center justify-center opacity-30"
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
-            >
-              <div className="w-96 h-96 border-4 border-blue-500 rounded-full" />
-            </motion.div>
-          )}
+    <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans -mx-4 -mt-6"> {/* Full bleed container */}
+      
+      {activeTab === 'home' && (
+      <>
+      {/* Simulation Trigger (Dev Only) */}
+      <button 
+        onClick={simulateIncomingRide}
+        className="absolute top-2 left-1/2 -translate-x-1/2 z-[100] bg-purple-600 text-xs px-3 py-1 rounded-full font-bold opacity-50 hover:opacity-100"
+      >
+        Simulate Ride
+      </button>
+
+      {/* 1. Map Layer (Background) */}
+      <div className="absolute inset-0 z-0 h-full w-full">
+        <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+          <SetupMapControls isOnline={isOnline} />
+          {/* Using CartoDB Dark Matter for the aesthetic */}
+          <TileLayer
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
+          />
+          {demandZones.map((zone, i) => (
+            <Circle 
+              key={`zone-${i}`}
+              center={[zone.lat, zone.lng]} 
+              radius={zone.radius}
+              pathOptions={{ 
+                color: zone.type === "high" ? "#FF3B30" : "#FF9500", 
+                fillColor: zone.type === "high" ? "#FF3B30" : "#FF9500", 
+                fillOpacity: 0.25, 
+                weight: 0 
+              }}
+            />
+          ))}
+          {isOnline && <Marker position={mapCenter} icon={driverIcon} />}
+        </MapContainer>
+        
+        {/* Dark gradient overlays */}
+        <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-[#0D0D0F] to-transparent pointer-events-none z-[5]"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-[#0D0D0F] to-transparent pointer-events-none z-[5]"></div>
       </div>
 
-      {/* 2. LAYER 2: Overlay UI */}
-      <div className="absolute inset-0 p-4 z-20 flex flex-col justify-between pointer-events-none">
-        {/* Header */}
-        <div className="flex justify-between items-start pt-2 pointer-events-auto">
-          <button onClick={() => setMenuOpen(!menuOpen)}>
-             <Menu className="text-white w-8 h-8" />
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="text-white/50 text-xs font-black uppercase">{isOnline ? "Online" : "Offline"}</span>
-            <button onClick={() => setIsOnline(!isOnline)} className={cn("w-12 h-6 rounded-full p-1", isOnline ? "bg-orange-500" : "bg-slate-700")}>
-              <div className={cn("w-4 h-4 bg-white rounded-full transition-transform", isOnline ? "translate-x-6" : "")} />
-            </button>
-          </div>
-        </div>
-
-        {/* 3. Earnings Slider */}
-        <SlidingEarningsWidget isOnline={isOnline} breakMode={breakMode} onToggleBreak={() => setBreakMode(!breakMode)} />
-
-        {/* 4. Bottom Break Trigger */}
+      {/* 2. Top UI: Privacy Drawer (Earning Bar & Gamification) */}
+      <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
         <motion.div 
-          className="pointer-events-auto h-24 flex items-center justify-center"
+          className="pointer-events-auto"
           drag="y"
-          dragConstraints={{ top: -50, bottom: 0 }}
-          onDragEnd={(event, info: PanInfo) => {
-            if (info.offset.y < -30) setBreakMode(true);
+          dragConstraints={{ top: -260, bottom: 0 }}
+          dragElastic={0.05}
+          onDragEnd={(_, info) => {
+            // Logic to snap based on drag direction/distance
+            if (info.velocity.y > 100) setIsTopPanelHidden(false);
+            else if (info.velocity.y < -100) setIsTopPanelHidden(true);
+            else if (info.offset.y > 50) setIsTopPanelHidden(false);
+            else if (info.offset.y < -50) setIsTopPanelHidden(true);
           }}
+          animate={{ 
+            y: isTopPanelHidden ? -260 : 0,
+            opacity: 1
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
-          <div className="w-16 h-16 rounded-full bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] flex items-center justify-center border-4 border-red-300">
-             <Coffee className="text-white w-6 h-6" />
+          <div className="px-4 pt-6 pb-2 flex flex-col gap-3 relative">
+            
+            {/* Status indicator (Pulsing Online) */}
+            <AnimatePresence>
+              {isOnline && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                  className="mx-auto bg-[#00D26A]/10 border border-[#00D26A]/30 text-[#00D26A] px-4 py-1.5 rounded-full flex items-center justify-center gap-2 backdrop-blur-md w-max shadow-[0_0_15px_rgba(0,210,106,0.2)]"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse shadow-[0_0_5px_#00D26A]"></span>
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none pt-0.5">Online • 12 min</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* The Money-First Bar */}
+            <div className="bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl shadow-2xl overflow-hidden relative">
+              <div className="p-4">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-[10px] text-[#A0A0A8] font-black uppercase tracking-widest">Today</p>
+                      {!isOnline && <span className="w-2 h-2 rounded-full bg-[#FF3B30]" />}
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <h1 className="text-[32px] leading-none font-black tracking-tight text-white">£142.60</h1>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="text-sm font-bold text-white bg-[#252529] px-3 py-1.5 rounded-lg border border-[#333338] tracking-tight">8 rides • 5h</span>
+                    <button 
+                      onClick={() => setIsStatsExpanded(!isStatsExpanded)}
+                      className={cn(
+                        "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md transition-colors",
+                        isStatsExpanded ? "text-emerald-500 bg-emerald-500/10" : "text-[#A0A0A8] hover:text-white"
+                      )}
+                    >
+                      Stats
+                      <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", isStatsExpanded && "rotate-180")} />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="mt-5">
+                  <div className="flex justify-between items-baseline mb-1.5 font-bold">
+                    <span className="text-[11px] text-[#A0A0A8] uppercase tracking-wider">Goal: £200</span>
+                    <span className="text-xs text-[#00D26A]">71%</span>
+                  </div>
+                  <div className="h-[6px] w-full bg-[#252529] rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-[#00D26A] rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: "71%" }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Collapsible Session Stats Content */}
+                <AnimatePresence>
+                  {isStatsExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                      animate={{ height: "auto", opacity: 1, marginTop: 24 }}
+                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                      transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                    >
+                      <div className="border-t border-[#2C2C30] pt-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-[10px] font-black tracking-widest text-[#A0A0A8] uppercase">Live Session Performance</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span className="text-[8px] font-bold text-emerald-500 uppercase">Live</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
+                          <div>
+                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Acceptance</p>
+                            <p className="text-white text-sm font-bold flex items-center gap-1.5">92% <Check className="w-3.5 h-3.5 text-emerald-500" /></p>
+                          </div>
+                          <div>
+                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Rating</p>
+                            <p className="text-white text-sm font-bold flex items-center gap-1.5">4.9 <Star className="w-3.5 h-3.5 text-[#FF9500] fill-[#FF9500]" /></p>
+                          </div>
+                          <div>
+                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Avg Fare</p>
+                            <p className="text-white text-sm font-bold">£17.80</p>
+                          </div>
+                          <div>
+                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Rides/Hour</p>
+                            <p className="text-white text-sm font-bold">1.5</p>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Drawer Handle (Privacy Privacy Puller) */}
+              <div 
+                className="w-full h-8 flex items-end justify-center pb-2 cursor-grab active:cursor-grabbing group"
+                onClick={() => setIsTopPanelHidden(!isTopPanelHidden)}
+              >
+                <div className={cn(
+                  "w-12 h-1 rounded-full transition-colors",
+                  isTopPanelHidden ? "bg-[#00D26A] shadow-[0_0_8px_rgba(0,210,106,0.5)]" : "bg-white/10 group-hover:bg-white/20"
+                )} />
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>
 
-      {/* 5. Hamburger Menu Panel */}
+      <div className="flex-1 pointer-events-none"></div>
+
+      {/* Screen 3: Incoming Ride Request Overlay (z-50) */}
       <AnimatePresence>
-        {menuOpen && (
+        {rideState === 'incoming' && (
           <motion.div 
-            className="absolute top-16 left-4 w-72 bg-white rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-40"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute inset-0 z-50 bg-[#0D0D0F]/90 backdrop-blur-md flex flex-col justify-end p-4 pointer-events-auto pb-6"
           >
-            {showSettings ? (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="font-black text-xl text-slate-900">Settings</h2>
-                  <button onClick={() => setShowSettings(false)} className="text-xs font-black text-slate-500 uppercase">Back</button>
+            {/* Same content as before */}
+            <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5 shadow-2xl relative overflow-hidden">
+              
+              {/* Highlight header */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent"></div>
+
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-black text-white px-1 tracking-tight flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
+                    NEW RIDE REQUEST
+                  </h2>
                 </div>
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-slate-800 text-sm">Require Handshake Code</p>
-                      <p className="text-xs text-slate-500 max-w-[160px] leading-tight mt-1">Ask passengers for their 4-digit code to start trips.</p>
-                    </div>
-                    <button 
-                      onClick={toggleHandshake}
-                      className={cn("w-12 h-6 rounded-full p-1 transition-colors", requireHandshake ? "bg-emerald-500" : "bg-slate-200")}
+                
+                {/* Circular Timer Ring */}
+                <div className="relative w-14 h-14 flex items-center justify-center">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle cx="28" cy="28" r="26" className="stroke-[#2C2C30] fill-none" strokeWidth="4" />
+                    <motion.circle 
+                      cx="28" cy="28" r="26" 
+                      className={cn("fill-none", incomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
+                      strokeWidth="4" 
+                      strokeDasharray="163" 
+                      strokeLinecap="round"
+                      initial={{ strokeDashoffset: 0 }}
+                      animate={{ strokeDashoffset: 163 - (163 * (incomingTimer / 15)) }}
+                      transition={{ duration: 1, ease: 'linear' }}
+                    />
+                  </svg>
+                  <span className="absolute text-sm font-black text-white">{incomingTimer}s</span>
+                </div>
+              </div>
+
+              {/* Fare Section */}
+              <div className="bg-[#252529] rounded-2xl p-4 mb-4 relative overflow-hidden group/fare cursor-pointer" onClick={() => setShowFareBreakdown(!showFareBreakdown)}>
+                <div className="flex justify-between items-end mb-1">
+                  <h1 className="text-[36px] leading-[1] font-black text-white w-full">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</h1>
+                  <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
+                </div>
+                <p className="text-[#00D26A] text-sm font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+
+                {/* Collapsible Breakdown */}
+                <AnimatePresence>
+                  {showFareBreakdown && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="border-t border-[#333338] mt-3 pt-3 flex flex-col gap-1.5"
                     >
-                      <div className={cn("w-4 h-4 rounded-full bg-white transition-transform", requireHandshake ? "translate-x-6" : "translate-x-0")} />
-                    </button>
+                      <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
+                      <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
+                      <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Time (~{activeRide?.durationMinutes || 45}m):</span><span>£---</span></div>
+                      <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge:</span><span>+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
+                      <div className="flex justify-between text-[11px] font-bold text-[#FF3B30] mt-1 p-1.5 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20">
+                        <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
+                {!showFareBreakdown && (
+                  <div className="w-full text-center mt-2 group-hover/fare:bg-white/5 py-1 rounded transition-colors">
+                    <ChevronDown className="w-4 h-4 text-[#6B6B73] mx-auto" />
+                  </div>
+                )}
+              </div>
+
+              {/* Rider Details */}
+              <div className="border-t border-[#2C2C30] pt-4 pb-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-lg border-2 border-white">
+                    {(activeRide?.name || "S")[0]}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-bold text-white leading-tight">{activeRide?.name || "Sarah T."}</h3>
+                    <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#A0A0A8] font-normal">(124 trips)</span></p>
+                  </div>
+                </div>
+
+                <div className="relative pl-4 space-y-4">
+                  {/* Route Line indicator */}
+                  <div className="absolute left-1.5 top-2 bottom-2 w-0.5 bg-[#2C2C30]"></div>
+                  
+                  <div className="relative">
+                    <div className="absolute w-3.5 h-3.5 rounded-full bg-[#A0A0A8] border-2 border-[#1A1A1E] -left-[22px] top-0.5 z-10"></div>
+                    <p className="text-[10px] font-black uppercase text-[#6B6B73] tracking-widest leading-none mb-1">Pickup</p>
+                    <p className="text-sm font-bold text-white leading-tight">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                    <p className="text-xs text-[#00D26A] font-bold mt-0.5">3 min • 1.2 miles</p>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[22px] top-0.5 z-10"></div>
+                    <p className="text-[10px] font-black uppercase text-[#6B6B73] tracking-widest leading-none mb-1">Drop-off</p>
+                    <p className="text-sm border-b border-dashed border-[#6B6B73]/50 pb-0.5 inline-block text-white">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <p className="text-xs text-[#A0A0A8] font-bold mt-1">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
                   </div>
                 </div>
               </div>
-            ) : (
-              <>
-                <h2 className="font-black text-xl mb-4">Menu</h2>
-                <nav className="space-y-4 font-bold text-slate-700">
-                  <p>Earnings Dashboard</p>
-                  <p>Trip History</p>
-                  <p className="cursor-pointer" onClick={() => setShowSettings(true)}>Settings <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full ml-2">New</span></p>
-                  <p>Documents & Compliance</p>
-                  <p>Support</p>
-                </nav>
-                <button onClick={() => setMenuOpen(false)} className="mt-8 text-xs font-black text-red-500 uppercase tracking-widest">Close</button>
-              </>
-            )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 mt-2">
+                <button 
+                  onClick={handleAcceptRide}
+                  className="w-full h-14 bg-[#00D26A] text-[#0D0D0F] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_25px_rgba(0,210,106,0.25)] transition-transform"
+                >
+                  <Check className="w-6 h-6 stroke-[3]" /> ACCEPT RIDE
+                </button>
+                <button 
+                  onClick={handleDeclineRide}
+                  className="w-full py-2.5 text-xs font-bold text-[#A0A0A8] uppercase tracking-wide hover:text-white transition-colors"
+                >
+                  Decline
+                </button>
+              </div>
+
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Screen 4 & 5 & 6: Active Ride States (z-40) */}
+      <AnimatePresence>
+        {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
+          >
+            {rideState === 'en_route_pickup' && (
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
+                  <p className="text-xl font-black text-white">3 min <span className="text-sm font-bold text-[#6B6B73] ml-1">· 1.2 mi</span></p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                </div>
+              </div>
+            )}
+
+            {rideState === 'waiting' && (
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-widest mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Waiting for Rider</p>
+                  <p className="text-xl font-black text-white px-0.5">2:34</p>
+                  <p className="text-xs text-[#A0A0A8] font-bold mt-0.5">Free cancel in: 2:26</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                </div>
+              </div>
+            )}
+
+            {rideState === 'in_progress' && (
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest mb-1 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
+                  </p>
+                  <p className="text-xl font-black text-white truncate max-w-[200px]">{activeRide?.dropoffAddress?.split(',')[0] || "Bristol"} <span className="text-sm font-bold text-[#6B6B73] ml-1">· {activeRide?.durationMinutes || 38} min left</span></p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Contextual Action Button */}
+            <div className="mt-2">
+              {rideState === 'en_route_pickup' && (
+                <button 
+                  onClick={() => setRideState('waiting')}
+                  className="w-full h-14 bg-[#252529] text-white border border-[#333338] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                >
+                  <MapPin className="w-5 h-5" /> ARRIVED AT PICKUP
+                </button>
+              )}
+              {rideState === 'waiting' && (
+                <button 
+                  onClick={() => setRideState('in_progress')}
+                  className="w-full h-14 bg-[#00D26A] text-[#0D0D0F] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-[0_4px_25px_rgba(0,210,106,0.25)]"
+                >
+                  RIDER IS IN THE CAR
+                </button>
+              )}
+              {rideState === 'in_progress' && (
+                <button 
+                  onClick={() => setRideState('completed')}
+                  className="w-full h-14 bg-[#FF9500] text-[#0D0D0F] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-[0_4px_25px_rgba(255,149,0,0.25)]"
+                >
+                  <Check className="w-6 h-6 stroke-[3]" /> COMPLETE TRIP
+                </button>
+              )}
+            </div>
+
+            {/* Cancel fallback */}
+            {(rideState === 'en_route_pickup' || rideState === 'waiting') && (
+              <button onClick={handleDeclineRide} className="w-full py-4 text-xs font-bold text-[#A0A0A8] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-1">
+                {rideState === 'waiting' ? 'Cancel (Free in 2:26)' : 'Cancel Ride'}
+              </button>
+            )}
+            
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Screen 7: Trip Completed (z-50) */}
+      <AnimatePresence>
+        {rideState === 'completed' && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute inset-0 z-50 bg-[#0D0D0F]/95 backdrop-blur-xl flex flex-col justify-center p-4 pointer-events-auto"
+          >
+            <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center max-h-[90vh] overflow-y-auto w-full">
+              
+              <div className="w-16 h-16 bg-[#00D26A]/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-[#00D26A]/30">
+                <Check className="w-8 h-8 text-[#00D26A] stroke-[3]" />
+              </div>
+              <h2 className="text-xl font-black text-white uppercase tracking-tight mb-6">Trip Complete</h2>
+              
+              <div className="mb-8">
+                <motion.h1 
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", damping: 15 }}
+                  className="text-[56px] leading-[1] font-black text-white tracking-tighter"
+                >
+                  £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
+                </motion.h1>
+                <div className="mt-4 bg-[#00D26A]/10 border border-[#00D26A]/20 py-2.5 px-4 rounded-xl inline-block">
+                  <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider mb-0.5">You Earned</p>
+                  <p className="text-2xl font-black text-[#00D26A]">£{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div className="bg-[#252529] rounded-2xl p-4 text-left mb-6">
+                <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-3 border-b border-[#333338] pb-2">Fare Breakdown</p>
+                <div className="space-y-1.5 mb-3">
+                  <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Base fare:</span><span className="text-white">£{fareConfig.baseFare.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span className="text-white">£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
+                  <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Time (~{activeRide?.durationMinutes || 45}min):</span><span className="text-white">£---</span></div>
+                  <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge ({activeRide?.surgeMultiplier || '1.4'}x):</span><span className="font-bold">+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
+                </div>
+                <div className="border-t border-[#333338] pt-2 mb-2 flex justify-between text-sm font-bold text-white">
+                  <span>Total fare:</span><span>£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</span>
+                </div>
+                <div className="flex justify-between text-xs font-bold text-[#FF3B30] p-1.5 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20 mb-3">
+                  <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
+                </div>
+                <div className="border-t border-[#333338] pt-2 flex justify-between text-[15px] font-black text-[#00D26A]">
+                  <span>YOUR EARNINGS:</span><span>£{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Passenger Rating Block */}
+              <div className="bg-[#1A1A1E] rounded-2xl p-5 mb-6 border border-[#2C2C30] text-center shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#FF9500] to-[#FFCC00]"></div>
+                <h3 className="text-[13px] font-black uppercase text-white tracking-widest mb-4">Rate Passenger</h3>
+                
+                <div className="flex justify-center gap-2 mb-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => setPassengerRating(star)}
+                      className="p-1.5 focus:outline-none active:scale-90 transition-transform"
+                    >
+                      <Star 
+                        className={cn(
+                          "w-10 h-10 transition-colors drop-shadow-sm", 
+                          passengerRating >= star 
+                             ? "fill-[#FF9500] text-[#FF9500]" 
+                             : "text-[#333338] fill-transparent"
+                        )} 
+                      />
+                    </button>
+                  ))}
+                </div>
+                
+                <AnimatePresence>
+                  {passengerRating < 5 && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                      animate={{ opacity: 1, height: "auto", marginTop: 16 }}
+                      exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <textarea
+                        value={ratingComment}
+                        onChange={(e) => setRatingComment(e.target.value)}
+                        placeholder="Please provide details about your rating (Required)"
+                        className="w-full bg-[#0D0D0F] border border-[#333338] rounded-xl p-3 text-white text-sm focus:outline-none focus:border-[#FF9500] transition-colors resize-none placeholder:text-[#6B6B73]"
+                        rows={3}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setRideState('idle');
+                  setIsOnline(true);
+                  setPassengerRating(5);
+                  setRatingComment("");
+                }}
+                disabled={passengerRating < 5 && ratingComment.trim() === ""}
+                className="disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed w-full h-14 bg-white text-[#0D0D0F] rounded-2xl font-black text-[15px] flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all shadow-xl shadow-white/5"
+              >
+                DONE — BACK TO MAP
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. Bottom UI: Details and Call to Action */}
+      <div className={cn("relative z-20 w-full px-4 pb-24 flex flex-col gap-3 transition-opacity", rideState !== 'idle' ? "opacity-0 pointer-events-none" : "opacity-100")}>
+        
+        {/* Primary Action Button (Matches "Big Button" specs, 56px height) */}
+        <button
+          onClick={handleToggleOnline}
+          className={cn(
+            "w-full h-14 rounded-2xl font-black text-[15px] flex items-center justify-center gap-2 uppercase tracking-widest transition-all pointer-events-auto z-30",
+            isOnline 
+              ? "bg-[#FF3B30] text-white shadow-[0_4px_25px_rgba(255,59,48,0.4)] active:scale-[0.98] border border-[#FF3B30]/50" 
+              : "bg-[#00D26A] text-[#0D0D0F] shadow-[0_4px_25px_rgba(0,210,106,0.3)] active:scale-[0.98]"
+          )}
+        >
+          {isOnline ? "Go Offline" : "Go Online"}
+        </button>
+      </div>
+      </>
+      )}
+
+      {/* Render Other Tabs */}
+      {activeTab === 'earnings' && <DriverEarnings fareConfig={fareConfig} />}
+      {activeTab === 'inbox' && <DriverInbox />}
+      {activeTab === 'menu' && <DriverMenu onNavigate={(tab) => setActiveTab(tab as any)} commissionRate={fareConfig.commissionRate} />}
+      <AnimatePresence>
+         {activeTab === 'documents' && (
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute inset-0 z-50">
+               <DriverDocuments onBack={() => setActiveTab('menu')} />
+            </motion.div>
+         )}
+      </AnimatePresence>
+
+      {/* Bottom Navigation (Sticky Fixed Widget) */}
+      {(rideState === 'idle' && activeTab !== 'documents') && (
+        <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 z-50 pointer-events-none">
+          <div className="max-w-md mx-auto w-full h-18 bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl px-6 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.4)] pointer-events-auto">
+            <button 
+              onClick={() => setActiveTab('home')}
+              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'home' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <MapPin className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'home' && "scale-110")} />
+              <span className="text-[9px] uppercase font-black tracking-widest">Home</span>
+            </button>
+            
+            <button 
+              onClick={() => setActiveTab('earnings')}
+              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'earnings' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <PoundSterling className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'earnings' && "scale-110")} />
+              <span className="text-[9px] uppercase font-black tracking-widest">Earnings</span>
+            </button>
+            
+            <button 
+              onClick={() => setActiveTab('inbox')}
+              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'inbox' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <Inbox className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'inbox' && "scale-110")} />
+              <span className="text-[10px] uppercase font-black tracking-widest">Inbox</span>
+            </button>
+            
+            <button 
+              onClick={() => setActiveTab('menu')}
+              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'menu' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <MenuIcon className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'menu' && "scale-110")} />
+              <span className="text-[10px] uppercase font-black tracking-widest">Menu</span>
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

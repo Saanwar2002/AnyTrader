@@ -305,9 +305,11 @@ export default function Layout() {
 
   // Hide the sidebars if on map
   const isMapUX = (activePortal === "anyride" && activeRole === "customer");
+  
+  const isDriverTerminal = activeRole === "driver" && activePortal === "anyride";
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
+    <div className={cn("min-h-screen flex flex-col", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
       {/* Scheduled Maintenance Banner */}
       {showMaintenanceBanner && platformConfig?.scheduledMaintenance && (
         <div className="bg-primary text-white px-4 py-3 flex items-center justify-between gap-4 shadow-lg z-[60]">
@@ -341,6 +343,7 @@ export default function Layout() {
       )}
 
       {/* Header */}
+      {!isDriverTerminal && (
       <header className="glass sticky top-0 z-50">
           <div className="max-w-7xl auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4 sm:gap-8">
@@ -533,6 +536,7 @@ export default function Layout() {
           </div>
         </div>
       </header>
+      )}
 
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
@@ -566,8 +570,11 @@ export default function Layout() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 sm:pb-6">
-        <RoleTabBar />
+      <main className={cn(
+        "flex-1 w-full relative",
+        isDriverTerminal ? "pb-0 p-0 h-[100dvh] flex flex-col" : "max-w-7xl mx-auto px-4 py-6 pb-24 sm:pb-6"
+      )}>
+        {!isDriverTerminal && <RoleTabBar />}
         <Outlet />
       </main>
 
@@ -894,38 +901,40 @@ export default function Layout() {
       <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 h-16 flex items-center justify-around z-50">
-        {navItems.map((item, idx) => {
-          const Icon = item.icon;
-          const isActive = location.pathname + location.search === item.path || (item.path === "/admin" && location.pathname === "/admin" && (!location.search || location.search === "?tab=users"));
-          
-          let hasUnread = false;
-          if (item.path === "/job-feed" && unreadTypes.has("system")) hasUnread = true;
-          if (item.path === "/messages" && unreadTypes.has("message")) hasUnread = true;
-          if (item.path.startsWith("/my-quotes") && unreadTypes.has("quote")) hasUnread = true;
-          if (item.path === "/my-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
+      {!isDriverTerminal && (
+        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 h-16 flex items-center justify-around z-50">
+          {navItems.map((item, idx) => {
+            const Icon = item.icon;
+            const isActive = location.pathname + location.search === item.path || (item.path === "/admin" && location.pathname === "/admin" && (!location.search || location.search === "?tab=users"));
+            
+            let hasUnread = false;
+            if (item.path === "/job-feed" && unreadTypes.has("system")) hasUnread = true;
+            if (item.path === "/messages" && unreadTypes.has("message")) hasUnread = true;
+            if (item.path.startsWith("/my-quotes") && unreadTypes.has("quote")) hasUnread = true;
+            if (item.path === "/my-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
 
-          return (
-            <Link
-              key={`nav-${idx}-${item.path}`}
-              to={item.path}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 transition-colors relative",
-                isActive ? "text-blue-600" : "text-slate-500 hover:text-slate-900",
-                item.isCta && "text-blue-600"
-              )}
-            >
-              <div className="relative">
-                <Icon className={cn("w-6 h-6", item.isCta && "w-7 h-7")} />
-                {hasUnread && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+            return (
+              <Link
+                key={`nav-${idx}-${item.path}`}
+                to={item.path}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 transition-colors relative",
+                  isActive ? "text-blue-600" : "text-slate-500 hover:text-slate-900",
+                  item.isCta && "text-blue-600"
                 )}
-              </div>
-              <span className="text-[10px] font-medium">{item.name}</span>
-            </Link>
-          );
-        })}
-      </nav>
+              >
+                <div className="relative">
+                  <Icon className={cn("w-6 h-6", item.isCta && "w-7 h-7")} />
+                  {hasUnread && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                  )}
+                </div>
+                <span className="text-[10px] font-medium">{item.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }

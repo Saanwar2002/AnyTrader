@@ -81,6 +81,11 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 *   **The Ecosystem Bible:** Created `ECOSYSTEM.md` to ensure the separate Taxi App agent synchronizes perfectly with this shared database, identity, and payment architecture.
 *   **UI/UX Refinements:** Optimized the height of the "Saved Fees" dashboard card (30% reduction via tighter padding, text scaling, and badge compression) to preserve valuable screen real estate for active job tracking.
 
+## 🚗 Next Steps: Driver Terminal Revamp
+*   **Blueprint Saved:** A comprehensive mobile-first design specification for the Driver Terminal has been saved to `DRIVER_UI_SPEC.md`.
+*   **Focus:** Migrating the basic `DriverTerminal` into a highly polished, money-first, dark-mode default dashboard.
+*   **Actionable Items:** Build the Driver Home Screen (Offline/Online states), Sticky Earnings Bar, Demand Map, and 4-tab Bottom Navigation.
+
 ---
 
 ## 🆘 Final Pre-Launch Security Checklist (Must be completed before production)

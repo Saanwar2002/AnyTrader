@@ -8,6 +8,7 @@ import firebaseConfig from "./firebase-applet-config.json" with { type: "json" }
 import { GoogleGenAI } from "@google/genai";
 import jwt from "jsonwebtoken";
 import cron from "node-cron";
+import Stripe from 'stripe';
 
 dotenv.config();
 
@@ -344,8 +345,6 @@ const startMatchingSystem = async () => {
     }
   }, 10000); // Poll every 10 seconds
 };
-
-import Stripe from 'stripe';
 
 // Stripe initialization
 let stripeClient: Stripe | null = null;
@@ -1105,6 +1104,8 @@ Description: ${description}`;
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`TradeQuote UK server running on http://localhost:${PORT}`);
+    // Start background systems
+    startMatchingSystem();
   });
 }
 
