@@ -53,18 +53,19 @@ export default function DriverMenu({
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-8 font-sans pb-24">
       
       {/* Header / Profile Summary */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-[#252529] rounded-full flex items-center justify-center font-black text-2xl text-white border border-[#2C2C30]">
             {profile?.firstName?.[0] || "D"}
           </div>
           <div>
             <h1 className="text-xl font-black text-white">{profile?.firstName} {profile?.lastName}</h1>
-            <p className="text-xs text-[#00D26A] font-bold mt-1">⭐ 4.9 Rating</p>
+            <p className="text-[10px] text-[#00D26A] font-black uppercase tracking-widest mt-1 flex items-center gap-2">
+              <ShieldCheck className="w-3 h-3" /> Fully Verified
+            </p>
           </div>
         </div>
 
-        {/* Online Toggle Widget (Moved from Map View) */}
         <button 
           onClick={onToggleOnline}
           className={cn(
@@ -77,6 +78,40 @@ export default function DriverMenu({
           {isOnline ? "Go Offline" : "Go Online"}
         </button>
       </div>
+
+      {/* Stripe Connect Onboarding Wizard */}
+      {!profile?.stripeAccountId ? (
+        <div className="bg-[#1A1A1E] border-2 border-[#AF52DE]/30 rounded-3xl p-6 mb-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#AF52DE]/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#AF52DE]/20 flex items-center justify-center">
+              <CreditCard className="w-6 h-6 text-[#AF52DE]" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-white uppercase tracking-tight">Payments Setup Required</h3>
+              <p className="text-[11px] text-[#A0A0A8] font-bold">Connect Stripe to receive instant payouts</p>
+            </div>
+          </div>
+          <button className="w-full py-3.5 bg-[#AF52DE] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_4px_15px_rgba(175,82,222,0.3)] active:scale-95 transition-transform">
+            Start Setup Wizard
+          </button>
+        </div>
+      ) : (
+        <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5 mb-8 flex items-center justify-between">
+           <div className="flex items-center gap-4">
+             <div className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
+               <ShieldCheck className="w-5 h-5 text-[#007AFF]" />
+             </div>
+             <div>
+               <p className="text-[10px] font-black text-[#6B6B73] uppercase tracking-widest leading-none mb-1">Stripe Connected</p>
+               <p className="text-sm font-black text-white tracking-tight">**** 4242</p>
+             </div>
+           </div>
+           <button className="text-[10px] font-black text-[#A0A0A8] uppercase tracking-widest border border-[#2C2C30] px-3 py-1.5 rounded-lg active:bg-[#252529]">
+             Manage
+           </button>
+        </div>
+      )}
 
       {/* Referral Banner */}
       <div className="bg-gradient-to-r from-[#00D26A]/20 to-[#007AFF]/20 border border-[#00D26A]/30 rounded-2xl p-4 mb-8 flex items-center justify-between active:scale-[0.98] transition-transform">

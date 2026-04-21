@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
 import { GoogleGenAI } from "@google/genai";
 import jwt from "jsonwebtoken";
@@ -17,20 +18,56 @@ const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin
 let db: admin.firestore.Firestore | null = null;
-try {
-  const app = admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-    projectId: firebaseConfig.projectId,
-  });
-  console.log("Firebase Admin initialized successfully.");
-  
-  // Initialize with specific databaseId
-  db = admin.firestore(app);
-  console.log("Firestore initialized with database ID:", firebaseConfig.firestoreDatabaseId);
-} catch (error) {
-  console.error("Error initializing Firebase:", error);
-  // Do not exit, allow server to start even if Firebase fails
-}
+const initFirebase = () => {
+  try {
+    // Check if the app is already initialized
+    let app;
+    const existingApp = admin.apps.find(a => a?.name === "SERVER_INIT");
+    
+    if (existingApp) {
+      app = existingApp;
+    } else {
+      app = admin.initializeApp({
+        projectId: firebaseConfig.projectId,
+      }, "SERVER_INIT");
+      console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
+    }
+    
+    // Attempt named database, fallback to default if it fails
+    if (!db) {
+      const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+      const fallbackDb = () => {
+        if (dbId !== "(default)") {
+          console.warn(`Falling back to (default) database due to issue with: ${dbId}`);
+          db = getFirestore(app, "(default)");
+        }
+      };
+
+      try {
+        db = getFirestore(app, dbId);
+        
+        // Immediate verification
+        db.collection("users").limit(1).get()
+          .then(() => console.log(`Firestore connected to: ${dbId}`))
+          .catch(err => {
+            // Code 7: Permission Denied, Code 5: Not Found
+            if ((err.code === 7 || err.code === 5) && dbId !== "(default)") {
+              console.warn(`Firestore initialization error (${err.code}): ${err.message}. Triggering fallback...`);
+              fallbackDb();
+            } else {
+              console.error("Firestore initialization error code:", err.code, err.message);
+            }
+          });
+      } catch (e: any) {
+        console.error("Critical Firestore Setup Error:", e.message);
+        fallbackDb();
+      }
+    }
+  } catch (error) {
+    console.error("Error during Firebase Admin initialization:", error);
+  }
+};
+initFirebase();
 
 // Scheduled task: Daily Profitability Aggregation
 async function runDailyAggregation() {
@@ -107,12 +144,14 @@ const startMatchingSystem = async () => {
           .where("processed", "==", false)
           .get();
       } catch (err: any) {
-        if (err.code === 5 || err.code === 'not-found' || err.message.includes('NOT_FOUND') || err.message.includes('not-found')) { // NOT_FOUND
-          console.info("trader_notifications collection not found (expected if empty or not created).");
+        if (err.code === 5 || err.message?.includes('NOT_FOUND')) {
+          console.info("trader_notifications collection not found (expected if empty).");
+        } else if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
+          console.warn("Matching System: Permission Denied. Skipping this iteration.");
         } else {
           console.error("Error querying trader_notifications:", err);
         }
-        return; // Skip this iteration if collection not found or other error
+        return; 
       }
         
       if (snapshot.docs.length > 0) {
@@ -130,7 +169,7 @@ const startMatchingSystem = async () => {
         console.error("Error fetching global config:", err);
       }
       
-      // 3. AnyTrader Rides Dispatch Logic
+      // 3. AnyTrader Rides Dispatch Logic (Fairness Engine)
       try {
         const pendingRidesSnapshot = await db.collection("ride_requests")
           .where("status", "==", "pending")
@@ -138,37 +177,56 @@ const startMatchingSystem = async () => {
 
         for (const rideDoc of pendingRidesSnapshot.docs) {
           const ride = rideDoc.data();
-          const pickupLat = ride.pickupLat; // Assuming these exist
+          const pickupLat = ride.pickupLat; 
           const pickupLng = ride.pickupLng;
           
           if (pickupLat && pickupLng) {
-            // Get nearby drivers (simplified geohash neighbors lookup)
-            const nearbyDriversSnapshot = await db.collection("driver_status")
+            // Find ALL online drivers
+            const onlineDriversSnapshot = await db.collection("driver_status")
               .where("online", "==", true)
               .get();
               
-            if (nearbyDriversSnapshot.empty) continue;
+            if (onlineDriversSnapshot.empty) continue;
 
             let bestDriver: any = null;
-            let highestScore = -Infinity;
+            let highestScore = -1000;
 
-            for (const driverDoc of nearbyDriversSnapshot.docs) {
-              const driverId = driverDoc.id;
-              const driverLoc = await db.collection("live_tracking").doc(driverId).get();
-              const metrics = await db.collection("driver_metrics").doc(driverId).get();
+            for (const statusDoc of onlineDriversSnapshot.docs) {
+              const driverId = statusDoc.id;
+              const statusData = statusDoc.data();
               
-              if (!driverLoc.exists || !metrics.exists) continue;
-              
-              const dL = driverLoc.data()!;
-              const m = metrics.data()!;
+              // Skip if busy
+              if (statusData.isBusy) continue;
 
-              // Scores (Normalized 0-1)
-              const distance = Math.sqrt(Math.pow(dL.lat - pickupLat, 2) + Math.pow(dL.lng - pickupLng, 2));
-              const distanceScore = 1 / (distance + 0.1); 
-              const earningsScore = 1 / (m.dailyEarnings + 10);
-              const fairnessScore = (Date.now() - new Date(m.lastAssignmentAt).getTime()) / 3600000; // Hours since last job
+              // 1. Get Live Tracking (Distance)
+              const trackingDoc = await db.collection("live_tracking").doc(driverId).get();
+              if (!trackingDoc.exists) continue;
+              const dL = trackingDoc.data()!;
+
+              // 2. Get Performance Metrics
+              const metricsRef = db.collection("driver_metrics").doc(driverId);
+              let metrics: any = { dailyEarnings: 0, lastAssignmentAt: new Date(0).toISOString() };
+              const mDoc = await metricsRef.get();
+              if (mDoc.exists) metrics = mDoc.data()!;
+
+              // Calculate Haversine distance (approximate simple version)
+              const latDiff = Math.abs(dL.lat - pickupLat);
+              const lonDiff = Math.abs(dL.lng - pickupLng);
+              const distance = Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
               
-              const score = (distanceScore * 0.4) + (earningsScore * 0.3) + (fairnessScore * 0.3);
+              /**
+               * FAIRNESS SCORING FORMULA
+               * Proximity (40%): Reward nearby drivers.
+               * Poverty/Fairness (30%): Help drivers with low daily earnings.
+               * Idle Reward (30%): Reward drivers who have waited the longest.
+               */
+              const distanceScore = 1 / (distance + 0.05); // Boost close ones (capped at 20)
+              const earningsScore = 1 / ((metrics.dailyEarnings / 100) + 1); // Decay as earnings grow
+              const idleTimeSec = (Date.now() - new Date(metrics.lastAssignmentAt).getTime()) / 1000;
+              const idleScore = Math.min(idleTimeSec / 3600, 5); // 1 point per hour, capped at 5
+
+              // Normalize scores for weight application
+              const score = (distanceScore * 0.4) + (earningsScore * 0.3) + (idleScore * 0.3);
 
               if (score > highestScore) {
                 highestScore = score;
@@ -177,15 +235,52 @@ const startMatchingSystem = async () => {
             }
 
             if (bestDriver) {
-              await rideDoc.ref.update({ status: "accepted", driverId: bestDriver });
-              await db.collection("driver_metrics").doc(bestDriver).update({
-                lastAssignmentAt: admin.firestore.FieldValue.serverTimestamp()
+              console.log(`Dispatching Ride ${rideDoc.id} to Driver ${bestDriver} (Score: ${highestScore.toFixed(2)})`);
+              
+              // Move to 'offered' state with 15s timer
+              await rideDoc.ref.update({ 
+                status: "offered", 
+                assignedDriverId: bestDriver,
+                offerExpiresAt: new Date(Date.now() + 15000).toISOString(),
+                dispatchAttempts: admin.firestore.FieldValue.increment(1)
+              });
+
+              // Mark driver as temporarily considering (so they don't get multiple offers)
+              await db.collection("driver_status").doc(bestDriver).update({
+                pendingRideId: rideDoc.id
               });
             }
           }
         }
+
+        // 4. Handle Expired Offers
+        const expiredOffersSnapshot = await db.collection("ride_requests")
+          .where("status", "==", "offered")
+          .get();
+
+        for (const rideDoc of expiredOffersSnapshot.docs) {
+          const ride = rideDoc.data();
+          if (new Date(ride.offerExpiresAt).getTime() < Date.now()) {
+            console.log(`Offer for Ride ${rideDoc.id} expired. Auto-declining for driver ${ride.assignedDriverId}`);
+            
+            // Revert driver status
+            if (ride.assignedDriverId) {
+              await db.collection("driver_status").doc(ride.assignedDriverId).update({
+                pendingRideId: admin.firestore.FieldValue.delete(),
+                consecutiveDeclines: admin.firestore.FieldValue.increment(1)
+              });
+            }
+
+            // Put ride back in pool
+            await rideDoc.ref.update({
+              status: "pending",
+              assignedDriverId: admin.firestore.FieldValue.delete(),
+              offerExpiresAt: admin.firestore.FieldValue.delete()
+            });
+          }
+        }
       } catch (err) {
-        console.error("Error in taxi dispatching:", err);
+        console.error("Error in Fairness Dispatch Engine:", err);
       }
       
       // Original matching logic...
@@ -453,6 +548,55 @@ async function startServer() {
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
               });
             }
+          } else if (session.metadata?.type === 'taxi_trip' && session.metadata?.rideId && db) {
+            const rideId = session.metadata.rideId;
+            const driverId = session.metadata.driverId;
+            const amount = session.amount_total ? session.amount_total / 100 : 0;
+
+            // 1. Update ride status
+            await db.collection("ride_requests").doc(rideId).update({
+              status: "completed",
+              paymentStatus: "paid",
+              stripePaymentIntentId: session.payment_intent as string,
+              paidAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // 2. Update driver metrics
+            if (driverId) {
+              const today = new Date().toISOString().split('T')[0];
+              const metricsRef = db.collection("driver_metrics").doc(driverId);
+              const metricsDoc = await metricsRef.get();
+              
+              if (metricsDoc.exists) {
+                const data = metricsDoc.data();
+                if (data?.date === today) {
+                  await metricsRef.update({
+                    dailyEarnings: admin.firestore.FieldValue.increment(amount * 0.88), // 88% after commission
+                    jobsDoneToday: admin.firestore.FieldValue.increment(1),
+                    lastTripAt: admin.firestore.FieldValue.serverTimestamp()
+                  });
+                } else {
+                  // Reset for a new day
+                  await metricsRef.set({
+                    driverId,
+                    date: today,
+                    dailyEarnings: amount * 0.88,
+                    jobsDoneToday: 1,
+                    lastAssignmentAt: admin.firestore.FieldValue.serverTimestamp(),
+                    lastTripAt: admin.firestore.FieldValue.serverTimestamp()
+                  });
+                }
+              } else {
+                await metricsRef.set({
+                  driverId,
+                  date: today,
+                  dailyEarnings: amount * 0.88,
+                  jobsDoneToday: 1,
+                  lastAssignmentAt: admin.firestore.FieldValue.serverTimestamp(),
+                  lastTripAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            }
           }
         }
       } else if (event.type === 'customer.subscription.updated') {
@@ -569,6 +713,175 @@ async function startServer() {
     } catch (error: any) {
       console.error("Stripe Checkout Error:", error);
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
+    }
+  });
+
+  // NEW: Direct-to-Driver Taxi Payment (QR Handshake)
+  app.post("/api/rides/create-trip-payment", async (req, res) => {
+    try {
+      const { rideId, driverId, amount } = req.body;
+      
+      console.log("Create Trip Payment Request:", { rideId, driverId, amount, dbStatus: !!db });
+
+      if (!db) {
+        console.warn("Retrying Firebase initialization in route handler...");
+        initFirebase();
+        if (!db) return res.status(500).json({ error: "Database not available" });
+      }
+      
+      if (!driverId) return res.status(400).json({ error: "Driver ID is required" });
+
+      // 1. Get Driver's Stripe Account
+      let driverDoc;
+      try {
+        driverDoc = await db.collection("users").doc(driverId).get();
+      } catch (dbErr: any) {
+        console.error("Taxi Fare Error (Full Debug):", {
+          code: dbErr.code,
+          message: dbErr.message,
+          driverId,
+          rideId,
+          dbId: firebaseConfig.firestoreDatabaseId,
+          dbName: db?.["_databaseId"] // Internal property for logging
+        });
+        throw dbErr; // Let the outer catch handle it
+      }
+      
+      if (!driverDoc.exists) {
+        console.warn(`Driver doc not found for ID: ${driverId}. This may happen if the driver was deleted but the ride persists.`);
+        return res.status(404).json({ error: "Driver profile not found. Please ensure you are logged in as a registered driver." });
+      }
+
+      const driverData = driverDoc.data();
+      const stripeAccountId = driverData?.stripeAccountId;
+
+      // Fallback for local testing if Stripe is not configured
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        console.warn("Stripe missing. Mocking Trip QR link.");
+        return res.json({ url: `${process.env.APP_URL || ''}/payment-success?rideId=${rideId}` });
+      }
+
+      if (!stripeAccountId) {
+        return res.status(400).json({ error: "Driver has not completed Stripe onboarding." });
+      }
+
+      // 2. Create Destination Charge with Platform Fee (12% Commission)
+      const feeAmount = Math.round(amount * 0.12 * 100); // 12% in pence
+      
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: `Trip Payment (Ride #${rideId.substring(0, 8)})`,
+              description: "Direct to driver transport payment."
+            },
+            unit_amount: Math.round(amount * 100), // Original amount in pence
+          },
+          quantity: 1,
+        }],
+        payment_intent_data: {
+          application_fee_amount: feeAmount,
+          transfer_data: {
+            destination: stripeAccountId,
+          },
+        },
+        metadata: {
+          rideId,
+          driverId,
+          type: 'taxi_trip'
+        },
+        success_url: `${process.env.APP_URL || ''}/payment-success?rideId=${rideId}`,
+        cancel_url: `${process.env.APP_URL || ''}/payment-failed?rideId=${rideId}`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Taxi Fare Error (Full Debug):", {
+        code: error.code,
+        message: error.message,
+        driverId: req.body?.driverId,
+        rideId: req.body?.rideId,
+        dbId: firebaseConfig.firestoreDatabaseId
+      });
+      res.status(500).json({ 
+        error: error.message || "Failed to generate payment link",
+        debugCode: error.code 
+      });
+    }
+  });
+  
+  app.get("/api/driver/stripe-balance/:driverId", async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      if (!db) return res.status(500).json({ error: "Database not available" });
+
+      const driverDoc = await db.collection("users").doc(driverId).get();
+      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
+
+      const stripeAccountId = driverDoc.data()?.stripeAccountId;
+      if (!stripeAccountId) return res.status(400).json({ error: "No Stripe account connected" });
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ available: 0, pending: 0, currency: 'gbp', mock: true });
+      }
+
+      const balance = await stripe.balance.retrieve({
+        stripeAccount: stripeAccountId,
+      });
+
+      const available = balance.available.find(b => b.currency === 'gbp')?.amount || 0;
+      const pending = balance.pending.find(b => b.currency === 'gbp')?.amount || 0;
+
+      res.json({
+        available: available / 100,
+        pending: pending / 100,
+        currency: 'gbp'
+      });
+    } catch (error: any) {
+      console.error("Stripe Balance Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/driver/create-payout", async (req, res) => {
+    try {
+      const { driverId, amount } = req.body;
+      if (!db) return res.status(500).json({ error: "Database not available" });
+
+      const driverDoc = await db.collection("users").doc(driverId).get();
+      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
+
+      const stripeAccountId = driverDoc.data()?.stripeAccountId;
+      if (!stripeAccountId) return res.status(400).json({ error: "No Stripe account connected" });
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ success: true, mock: true, payoutId: "pout_mock_123" });
+      }
+
+      // Withdraw all available balance (amount is in GBP, convert to pence)
+      const payout = await stripe.payouts.create({
+        amount: Math.round(amount * 100),
+        currency: 'gbp',
+      }, {
+        stripeAccount: stripeAccountId,
+      });
+
+      res.json({ success: true, payoutId: payout.id });
+    } catch (error: any) {
+      console.error("Payout Error:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 

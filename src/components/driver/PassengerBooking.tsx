@@ -376,99 +376,154 @@ export default function PassengerBooking() {
     );
   };
 
-  // Simulated distance for fare calc using arbitrary string length hash scaling
-  const estimatedMiles = useMemo(() => {
-    if (!pickup || !dropoff) return 0;
-    const combined = pickup + dropoff;
-    let hash = 0;
-    for (let i = 0; i < combined.length; i++) hash = ((hash << 5) - hash) + combined.charCodeAt(i);
-    return Math.max(2.5, (Math.abs(hash) % 150) / 10); // yields distances between 2.5 and 15 miles
-  }, [pickup, dropoff]);
+  const [driverPos, setDriverPos] = useState<[number, number] | null>(null);
+
+  // 1. Improved Fare Estimation using OSRM Distance
+  useEffect(() => {
+    if (!pickupCoords || !dropoffCoords) return;
+    
+    const fetchRoute = async () => {
+      try {
+        const coords = [pickupCoords, ...stops.filter(s => s.coords).map(s => s.coords), dropoffCoords];
+        const coordString = coords.map(c => `${c[1]},${c[0]}`).join(';');
+        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.routes && data.routes[0]) {
+            const route = data.routes[0];
+            const distanceMiles = (route.distance / 1609.34);
+            const calculatedFare = fareConfig.baseFare + (distanceMiles * fareConfig.distanceRate);
+            setFareEstimate(calculatedFare);
+            setRouteLine(route.geometry.coordinates.map((c: any) => [c[1], c[0]]));
+          }
+        }
+      } catch (e) {
+        console.error("OSRM Error:", e);
+      }
+    };
+    fetchRoute();
+  }, [pickupCoords, dropoffCoords, stops, fareConfig]);
 
   const getComputedFare = (catId: string) => {
-    if (!pickup || !dropoff) return 0;
     const category = CAR_CATEGORIES.find(c => c.id === catId);
-    const rawFare = fareConfig.baseFare + (estimatedMiles * fareConfig.distanceRate);
     const multiplier = category?.multiplier || 1.0;
-    return Math.max(rawFare * multiplier, fareConfig.minFare * multiplier);
+    return Math.max(fareEstimate * multiplier, fareConfig.minFare * multiplier);
   };
+
+  const [currentRideId, setCurrentRideId] = useState<string | null>(null);
 
   const handleConfirmBooking = async () => {
     triggerHaptic(ImpactStyle.Heavy);
     hideNativeKeyboard();
     if (!user) return;
     
-    const finalFare = getComputedFare(selectedCategory);
-    if (!finalFare) return;
-    setFareEstimate(finalFare);
     setStep("searching");
 
     try {
-      const blockedList = profile?.blockedDrivers || [];
-      const preferredList = profile?.preferredDrivers || [];
-      
-      // Simulate finding a driver that isn't blocked
-      let availableDrivers = [
-        { uid: "D-8821", name: "David Sterling", vehicle: "Silver Toyota Prius", code: "8821" },
-        { uid: "D-4412", name: "Sarah Jenkins", vehicle: "Black Mercedes E-Class", code: "4412" },
-        { uid: "D-1902", name: "Michael Chen", vehicle: "Tesla Model 3", code: "1902" }
-      ];
-      
-      // Inject Preferred Drivers into the available pool (mocking them as nearby)
-      preferredList.forEach((pref: any) => {
-        if (!availableDrivers.some(d => d.uid === pref.uid)) {
-          availableDrivers.unshift({ uid: pref.uid, name: pref.name, vehicle: "Preferred Vehicle", code: "FAV1" });
-        }
-      });
-
-      // 1. Filter out completely blocked drivers (Anti-Match)
-      availableDrivers = availableDrivers.filter(d => !blockedList.includes(d.uid));
-
-      // 2. Try to assign a preferred driver first, else fallback to standard available
-      let assignedDriver = availableDrivers.find(d => preferredList.some((p: any) => p.uid === d.uid));
-      if (!assignedDriver) {
-        assignedDriver = availableDrivers[0];
-      }
-
-      setAssignedDriverInfo(assignedDriver);
-
       const rideData = {
         riderId: user.uid,
-        driverId: assignedDriver.uid,
-        driverName: assignedDriver.name,
-        vehicleInfo: assignedDriver.vehicle,
+        passengerName: profile?.firstName || "Passenger",
         pickup,
+        pickupLat: pickupCoords?.[0] || mapCenter[0],
+        pickupLng: pickupCoords?.[1] || mapCenter[1],
         dropoff,
+        dropoffLat: dropoffCoords?.[0],
+        dropoffLng: dropoffCoords?.[1],
         stops: stops.filter(s => s.coords !== null),
         carCategory: selectedCategory,
         isPetFriendly,
         waitTolerance,
         comments,
         status: "pending",
-        totalFare: finalFare,
+        fareEstimate: getComputedFare(selectedCategory),
+        currency: "GBP",
+        handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
       };
 
+      let rideId = editId;
       if (editId) {
          await updateDoc(doc(db, "ride_requests", editId), {
            ...rideData,
            updatedAt: serverTimestamp()
          });
       } else {
-         await addDoc(collection(db, "ride_requests"), {
+         const docRef = await addDoc(collection(db, "ride_requests"), {
            ...rideData,
            createdAt: serverTimestamp()
          });
+         rideId = docRef.id;
       }
       
-      setTimeout(() => {
-        setStep("confirmed");
-        toast.success(editId ? "Ride updated!" : "Ride request sent to fleet!");
-      }, 3000);
+      setCurrentRideId(rideId);
+      toast.success(editId ? "Ride updated!" : "Ride request sent to fleet!");
 
     } catch (err) {
       console.error(err);
       toast.error(editId ? "Failed to update ride" : "Failed to post ride request");
       setStep("details");
+    }
+  };
+
+  // 2. Listen for Driver Assignment and Tracking
+  useEffect(() => {
+    if (!currentRideId) return;
+
+    const unsubRide = onSnapshot(doc(db, "ride_requests", currentRideId), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.status === 'accepted' && data.driverId) {
+          if (step === 'searching') {
+            setAssignedDriverInfo({
+              uid: data.driverId,
+              name: data.driverName || "Assigned Driver",
+              vehicle: data.vehicleInfo || "Vehicle en route",
+              code: data.handshakeCode || "8821"
+            });
+            setStep("confirmed");
+            triggerHaptic(ImpactStyle.Heavy);
+          }
+        }
+        
+        if (data.status === 'completed') {
+           toast.success("Life is a journey! Trip completed.");
+           setStep("details");
+           setCurrentRideId(null);
+           setRouteLine([]);
+           setAssignedDriverInfo(null);
+           setDriverPos(null);
+        }
+      }
+    });
+
+    // 3. Listen for Live Driver Location
+    const unsubTrack = onSnapshot(doc(db, "live_tracking", currentRideId), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.lat && data.lng) {
+          setDriverPos([data.lat, data.lng]);
+        }
+      }
+    });
+
+    return () => {
+      unsubRide();
+      unsubTrack();
+    };
+  }, [step, currentRideId]);
+
+  const handleCancelRequest = async () => {
+    if (!currentRideId) return;
+    if (window.confirm("Are you sure you want to cancel your ride request?")) {
+      try {
+        await updateDoc(doc(db, "ride_requests", currentRideId), { status: "cancelled" });
+        setStep("details");
+        setCurrentRideId(null);
+        setAssignedDriverInfo(null);
+        setDriverPos(null);
+        toast.info("Ride cancelled.");
+      } catch (e) {
+        toast.error("Failed to cancel ride.");
+      }
     }
   };
 
@@ -513,6 +568,18 @@ export default function PassengerBooking() {
                 {pickupCoords && <Marker key="pickup-marker" position={pickupCoords} />}
                 {stops.map((stop, i) => stop.coords && <Marker key={`stop-marker-${i}`} position={stop.coords} />)}
                 {dropoffCoords && <Marker key="dropoff-marker" position={dropoffCoords} />}
+                {driverPos && (
+                  <Marker 
+                    key="driver-marker" 
+                    position={driverPos}
+                    icon={L.divIcon({
+                      html: `<div class="bg-slate-900 p-1.5 rounded-lg shadow-xl border-2 border-white animate-bounce"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg></div>`,
+                      className: 'custom-taxi-icon',
+                      iconSize: [32, 32],
+                      iconAnchor: [16, 16]
+                    })}
+                  />
+                )}
                 {routeLine.length > 0 && (
                    <Polyline key="route-polyline" positions={routeLine} color="#2563eb" weight={5} opacity={0.7} />
                 )}
@@ -798,7 +865,7 @@ export default function PassengerBooking() {
                       <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 180 }} className="h-full bg-blue-600" />
                    </div>
                 </div>
-                <button onClick={() => { if (window.confirm("Cancel this request?")) setStep("details"); }} className="text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 px-6 py-3 rounded-2xl transition-all">
+                <button onClick={handleCancelRequest} className="text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 px-6 py-3 rounded-2xl transition-all">
                   Cancel Request
                 </button>
               </motion.div>
@@ -821,20 +888,26 @@ export default function PassengerBooking() {
                     <p className="text-slate-500 font-bold text-sm">{assignedDriverInfo?.name} • {assignedDriverInfo?.vehicle}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Est. Arrival</p>
-                      <p className="text-xl font-black text-slate-900">4 Mins</p>
-                   </div>
-                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Fixed Fare</p>
-                      <p className="text-xl font-black text-indigo-600">£{fareEstimate?.toFixed(2)}</p>
-                   </div>
-                </div>
-                <div className="flex items-center gap-2 text-indigo-600 justify-center mb-6 bg-indigo-50 py-3 rounded-2xl">
-                   <Zap className="w-4 h-4 fill-indigo-600" />
-                   <p className="text-xs font-black uppercase tracking-widest">Handshake Code: {assignedDriverInfo?.code || "8821"}</p>
-                </div>
+                 <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                       <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Est. Arrival</p>
+                       <p className="text-xl font-black text-slate-900">
+                         {driverPos && pickupCoords 
+                           ? `${Math.max(1, Math.round(L.latLng(driverPos).distanceTo(L.latLng(pickupCoords)) / 400))} Mins` 
+                           : "Calculating..."}
+                       </p>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                       <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Fixed Fare</p>
+                       <p className="text-xl font-black text-indigo-600">£{fareEstimate?.toFixed(2)}</p>
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-2 text-indigo-600 justify-center mb-6 bg-indigo-50 py-3 rounded-2xl">
+                    <Zap className="w-4 h-4 fill-indigo-600" />
+                    <p className="text-xs font-black uppercase tracking-widest text-center">
+                       Safety Code: <span className="bg-white px-2 py-1 rounded-lg border border-indigo-200 ml-1 select-all">{assignedDriverInfo?.code || "---"}</span>
+                    </p>
+                 </div>
                 <button onClick={() => navigate("/my-rides")} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-lg shadow-[0_8px_30px_rgba(15,23,42,0.3)] hover:bg-slate-800 transition-all flex justify-center items-center gap-2">
                   Track Ride Progress <Navigation className="w-5 h-5 opacity-70" />
                 </button>

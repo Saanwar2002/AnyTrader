@@ -599,6 +599,10 @@
         "dropoff": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "accepted", "in_transit", "completed", "cancelled"] },
         "totalFare": { "type": "number" },
+        "commissionAmount": { "type": "number", "description": "The platform's 12% cut of the total fare." },
+        "driverEarnings": { "type": "number", "description": "The amount delivered directly to the driver." },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "pending", "paid", "failed"] },
+        "stripeCheckoutSessionId": { "type": "string" },
         "rideType": { "type": "string", "enum": ["standard", "hourly"] },
         "duration": { "type": "integer", "description": "Duration in hours for hourly bookings." },
         "waitTolerance": { "type": "integer", "enum": [10, 20, 30], "description": "Max wait time in minutes for ASAP requests." },
@@ -610,16 +614,19 @@
     },
     "DriverLocation": {
       "title": "DriverLocation",
-      "description": "Real-time location of a driver for dispatching.",
+      "description": "Real-time location and status of a driver for dispatching.",
       "type": "object",
       "properties": {
         "driverId": { "type": "string" },
         "lat": { "type": "number" },
         "lng": { "type": "number" },
         "geohash": { "type": "string" },
+        "isOnline": { "type": "boolean", "description": "Whether the driver is currently fetching jobs." },
+        "sessionStartTime": { "type": "string", "format": "date-time", "description": "Timestamp when the driver last went online." },
+        "vehicleClass": { "type": "string", "enum": ["standard", "executive", "xl", "pro_van", "luxury"] },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["driverId", "lat", "lng", "geohash", "updatedAt"]
+      "required": ["driverId", "lat", "lng", "geohash", "isOnline", "updatedAt"]
     },
     "DriverMetrics": {
       "title": "DriverMetrics",

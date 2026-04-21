@@ -81,10 +81,56 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 *   **The Ecosystem Bible:** Created `ECOSYSTEM.md` to ensure the separate Taxi App agent synchronizes perfectly with this shared database, identity, and payment architecture.
 *   **UI/UX Refinements:** Optimized the height of the "Saved Fees" dashboard card (30% reduction via tighter padding, text scaling, and badge compression) to preserve valuable screen real estate for active job tracking.
 
-## 🚗 Next Steps: Driver Terminal Revamp
-*   **Blueprint Saved:** A comprehensive mobile-first design specification for the Driver Terminal has been saved to `DRIVER_UI_SPEC.md`.
-*   **Focus:** Migrating the basic `DriverTerminal` into a highly polished, money-first, dark-mode default dashboard.
-*   **Actionable Items:** Build the Driver Home Screen (Offline/Online states), Sticky Earnings Bar, Demand Map, and 4-tab Bottom Navigation.
+## 🚕 Phase 11.8: Direct-to-Driver Scan-to-Pay (Architecture Plan)
+*   **The Mission:** Implement a contactless, frictionless payment handshake between Passenger and Driver.
+*   **Zero-Escrow Logic:** The platform does NOT touch the driver's fare. Payments travel directly from Customer -> Driver's Stripe Connect account.
+*   **Commission Split:** Leveraging Stripe's `application_fee_amount` to automatically deduct the platform's 12% commission during the transaction. 
+*   **The QR Handshake:** 
+    *   *Driver UI:* At the end of a trip, the `DriverTerminal` generates a dynamic Stripe Checkout QR code.
+    *   *Passenger UI:* The passenger scans the driver's phone to complete the payment instantly.
+*   **Sync Rule:** Drivers MUST have a verified `stripeAccountId` in their profile to go online and accept jobs.
+
+---
+
+## 🚕 Phase 11.8: Driver Performance & Safety Hub (Completed April 21, 2026)
+*   **Analytics Hub (Earnings Revamp):** 
+    *   *Implementation:* Refactored `DriverEarnings.tsx` into a real-time performance hub.
+    *   *Live Metrics:* Real-time integration with `driver_metrics` collection for daily net revenue and trip counting.
+    *   *Goal Tracking:* High-fidelity progress bars with visual "daily goal" targets and session dynamic breakdown (Gross Fares vs. Platform Fees).
+*   **Safety SOS (Panic System):** 
+    *   *UI:* Implemented a high-visibility, floating "SOS" button pinned to the Driver Terminal map.
+    *   *Logic:* Triggers instant high-accuracy location broadcasting to dispatch and simulates the start of audio/video ingestion for evidence collection.
+*   **Stripe Setup Wizard:** 
+    *   *Integration:* Added a Connect onboarding wizard to the `DriverMenu.tsx`.
+    *   *Banking Status:* Implemented a check for `stripeAccountId` that guides new drivers through the payment verification handshake to ensure compliance with the Platform Split logic.
+
+---
+
+## 🚗 Next Steps: Ecosystem Scale & Automation
+*   **Rider Portal UI:** Building the consumer-facing app for booking and high-accuracy fare estimation.
+*   **Automated Payouts:** Moving from manually generated Stripe links to background-payout orchestration.
+*   **AI Surge Modeling:** Using historical `ride_requests` density to predict high-demand areas for live driver guidance.
+
+---
+
+## 🚕 Phase 11.6: Driver Map Optimization & UX (Completed April 21, 2026)
+*   **Map Visibility Refinement:**
+    *   *Theme Switch:* Migrated map from "Dark Matter" to high-visibility **"Voyager" Theme** to improve driver legibility during daytime operations.
+    *   *Clean View:* Removed large demand-zone circles to eliminate map clutter, ensuring street names and GPS markers are unobstructed.
+    *   *Overlay Softening:* Reduced dark UI gradients by 60% to enhance map "pop" while maintaining text readability.
+*   **HUD (Heads-Up Display) Logic:**
+    *   *Status Slider:* Implemented a slim, high-contrast status bar above the navigation widget. Reduced height by 40% for ultra-compactness.
+    *   *Ready Pulse:* Added an emerald-green animation with a moving slider to provide visual "everything is working" confirmation to drivers while waiting for jobs.
+*   **Control Relocation (Accidental-Tap Prevention):**
+    *   *Menu Migration:* Moved the critical **"Go Online/Offline"** toggle from the primary map view to the top-right of the **Menu tab**. 
+    *   *UX Outcome:* Forces a deliberate two-step action for status changes, preventing accidental log-offs during navigation.
+
+## 🚕 Phase 11.7: Live Operational Core (Completed April 21, 2026)
+*   **Real-Time GPS Engine:** Integrated `navigator.geolocation` for high-accuracy tracking. The blue driver dot is now fully functional and reflects physical device movement.
+*   **Session Lifecycle Management:**
+    *   *Live Timer:* Implemented a session clock that tracks "Time Online" in real-time.
+    *   *Auto-Reset:* Engineered the timer to reset to `0 min` automatically upon every re-login/online-toggle for accurate daily tracking.
+*   **Persistent Status:** Detached the online indicator from the collapsible top drawer to ensure "Online Status" and "Session Duration" are pinned and visible even when the privacy/earnings drawer is closed.
 
 ---
 

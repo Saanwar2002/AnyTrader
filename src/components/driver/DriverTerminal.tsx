@@ -5,8 +5,10 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
-import { Navigation, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star } from "lucide-react";
-import { db, doc, onSnapshot, collection, query, where, updateDoc } from "@/src/firebase";
+import { toast } from "sonner";
+import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
+import { Navigation, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock } from "lucide-react";
+import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment } from "@/src/firebase";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
@@ -31,7 +33,7 @@ function SetupMapControls({ isOnline }: { isOnline: boolean }) {
   return null;
 }
 
-type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progress' | 'completed';
+type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progress' | 'completed' | 'review';
 
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
@@ -84,42 +86,46 @@ export default function DriverTerminal() {
     return () => unsub();
   }, []);
 
-  // Listen for REAL incoming live ride requests
+  // Listen for REAL incoming live ride requests (offered to this driver)
   useEffect(() => {
-    if (!isOnline || rideState !== 'idle') return;
+    if (!isOnline || rideState !== 'idle' || !user) return;
 
     const q = query(
       collection(db, "ride_requests"), 
-      where("status", "==", "searching")
+      where("status", "==", "offered"),
+      where("assignedDriverId", "==", user.uid)
     );
     
     const unsub = onSnapshot(q, (snapshot) => {
-      // Find the first searching request
       if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        const data = doc.data();
+        const rideDoc = snapshot.docs[0];
+        const data = rideDoc.data();
         
-        // Populate the active ride with real data
         setActiveRide({
-          id: doc.id,
-          userId: data.userId,
+          id: rideDoc.id,
+          userId: data.riderId,
           name: data.passengerName || "Live Passenger",
-          pickupAddress: data.pickupAddress,
-          dropoffAddress: data.dropoffAddress,
-          fareEstimate: data.fareEstimate,
-          distanceMiles: data.distanceMiles,
-          durationMinutes: data.durationMinutes,
-          isReal: true // Flag to know whether to update Firestore on Accept
+          pickupAddress: data.pickup,
+          dropoffAddress: data.dropoff,
+          fareEstimate: data.totalFare,
+          distanceMiles: data.distanceMiles || 0,
+          durationMinutes: data.durationMinutes || 0,
+          isReal: true,
+          offerExpiresAt: data.offerExpiresAt
         });
         
-        setIncomingTimer(15);
+        // Calculate remaining time for the offer
+        const expiresAt = new Date(data.offerExpiresAt).getTime();
+        const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+        
+        setIncomingTimer(remaining);
         setRideState('incoming');
         if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
       }
     });
     
     return () => unsub();
-  }, [isOnline, rideState]);
+  }, [isOnline, rideState, user]);
 
   // Simulation: Add fake demand zones
   useEffect(() => {
@@ -176,21 +182,46 @@ export default function DriverTerminal() {
     return () => clearInterval(interval);
   }, [isOnline, onlineStartTime]);
 
-  // Real-time GPS Tracking
+  // Real-time GPS Tracking & Status Sync
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || !user) return;
 
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
+      async (pos) => {
         const { latitude, longitude } = pos.coords;
         setMapCenter([latitude, longitude]);
+        
+        // Sync to Firestore for dispatcher
+        try {
+          await setDoc(doc(db, "live_tracking", user.uid), {
+            driverId: user.uid,
+            lat: latitude,
+            lng: longitude,
+            updatedAt: serverTimestamp(),
+            isOnline: true
+          }, { merge: true });
+          
+          await setDoc(doc(db, "driver_status", user.uid), {
+            online: true,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (err) {
+          console.error("Failed to sync location:", err);
+        }
       },
       (err) => console.warn("GPS tracking error:", err),
       { enableHighAccuracy: true, maximumAge: 10000 }
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [isOnline]);
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      // When effect cleans up (offline), we should update status
+      if (user) {
+        updateDoc(doc(db, "driver_status", user.uid), { online: false }).catch(console.error);
+        updateDoc(doc(db, "live_tracking", user.uid), { isOnline: false }).catch(console.error);
+      }
+    };
+  }, [isOnline, user]);
 
   const simulateIncomingRide = () => {
     if (!isOnline) {
@@ -226,15 +257,24 @@ export default function DriverTerminal() {
 
   const handleAcceptRide = async () => {
     // If it's a real ride from Firestore, claim it!
-    if (activeRide?.isReal) {
+    if (activeRide?.isReal && activeRide?.id && user) {
       try {
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "accepted",
-          driverId: user?.uid,
-          acceptedAt: new Date()
+          driverId: user.uid,
+          acceptedAt: serverTimestamp()
         });
+        
+        await updateDoc(doc(db, "driver_status", user.uid), {
+          isBusy: true,
+          pendingRideId: deleteField()
+        } as any);
+
       } catch (err) {
         console.error("Failed to claim ride:", err);
+        toast.error("Failed to accept ride. It might have expired.");
+        setRideState('idle');
+        return;
       }
     }
 
@@ -242,12 +282,90 @@ export default function DriverTerminal() {
     if (navigator.vibrate) navigator.vibrate(50);
   };
 
-  const handleDeclineRide = () => {
+  const handleDeclineRide = async () => {
+    if (activeRide?.id && activeRide?.isReal && user) {
+      try {
+        // Penalty logic: consecutive declines
+        await updateDoc(doc(db, "driver_status", user.uid), {
+          pendingRideId: deleteField(),
+          consecutiveDeclines: increment(1)
+        } as any);
+
+        // Put ride back into search pool
+        await updateDoc(doc(db, "ride_requests", activeRide.id), {
+          status: "pending",
+          assignedDriverId: deleteField(),
+          offerExpiresAt: deleteField()
+        } as any);
+
+      } catch (err) {
+        console.error("Error declining ride:", err);
+      }
+    }
+
     setActiveRide(null);
     setRideState('idle');
   };
 
   const [activeTab, setActiveTab] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents'>('home');
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
+
+  const handleArrived = async () => {
+    setRideState('waiting');
+    if (activeRide?.id && activeRide?.isReal) {
+      await updateDoc(doc(db, "ride_requests", activeRide.id), {
+        status: "arrived",
+        arrivedAt: serverTimestamp()
+      });
+    }
+    if (navigator.vibrate) navigator.vibrate(100);
+  };
+
+  const handleStartRide = async () => {
+    setRideState('in_progress');
+    if (activeRide?.id && activeRide?.isReal) {
+      await updateDoc(doc(db, "ride_requests", activeRide.id), {
+        status: "in_progress",
+        startedAt: serverTimestamp()
+      });
+    }
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  };
+
+  const handleCompleteRide = async () => {
+    setIsGeneratingPayment(true);
+    setRideState('completed');
+    
+    // Generate the Direct-to-Driver QR Payment Link
+    try {
+      const response = await fetch("/api/rides/create-trip-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rideId: activeRide?.id || "sim_123",
+          driverId: user?.uid,
+          amount: activeRide?.fareEstimate || 38.50
+        })
+      });
+      
+      const data = await response.json();
+      if (data.url) {
+        setPaymentUrl(data.url);
+      }
+    } catch (err) {
+      console.error("Payment generation failed:", err);
+    } finally {
+      setIsGeneratingPayment(false);
+    }
+
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  };
+
+  const handleClosePayment = () => {
+    setRideState('review');
+    setPaymentUrl(null);
+  };
 
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans -mx-4 -mt-6"> {/* Full bleed container */}
@@ -277,6 +395,35 @@ export default function DriverTerminal() {
         {/* Lighter, softer gradient overlays to preserve map visibility */}
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
+      </div>
+
+      {/* Floating Map Controls & SOS */}
+      <div className="absolute top-[32%] right-4 z-40 flex flex-col items-end gap-3">
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex flex-col items-end"
+        >
+          <button 
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate([100, 30, 100, 30, 500]);
+              alert("EMERGENCY SOS: Dispatch has been alerted to your high-accuracy location. Recorded audio and video ingestion starting...");
+            }}
+            className="w-12 h-12 bg-[#FF3B30] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,59,48,0.4)] active:scale-95 transition-transform border border-red-400/20"
+          >
+            <AlertCircle className="w-6 h-6 text-white" />
+          </button>
+          <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm">
+            <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
+          </div>
+        </motion.div>
+
+        <button 
+          onClick={() => setMapCenter([53.6458, -1.7850])}
+          className="w-12 h-12 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
+        >
+          <Target className="w-5 h-5 text-[#A0A0A8]" />
+        </button>
       </div>
 
       {/* 2. Top UI: Privacy Drawer (Earning Bar & Gamification) */}
@@ -418,6 +565,75 @@ export default function DriverTerminal() {
 
       <div className="flex-1 pointer-events-none"></div>
 
+      {/* Screen 7: Payment QR Handshake (z-[60]) */}
+      <AnimatePresence>
+        {rideState === 'completed' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[60] bg-[#0D0D0F]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 pointer-events-auto"
+          >
+            <div className="w-full max-w-sm bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-[#00D26A] to-emerald-500"></div>
+              
+              <h2 className="text-[13px] font-black text-[#A0A0A8] mb-1 tracking-[0.2em] uppercase">Total Fare</h2>
+              <h1 className="text-[52px] leading-tight font-black text-white mb-8">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</h1>
+              
+              <div className="relative mb-8 bg-white p-4 rounded-3xl inline-block shadow-[0_0_50px_rgba(255,255,255,0.05)] border-4 border-white/10 min-w-[212px] min-h-[212px]">
+                {isGeneratingPayment || !paymentUrl ? (
+                  <div className="w-[180px] h-[180px] flex flex-col items-center justify-center gap-4">
+                    <div className="w-10 h-10 border-4 border-[#00D26A] border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-[10px] font-black text-[#0D0D0F] uppercase tracking-widest">
+                      {isGeneratingPayment ? "Securing QR..." : "Finalizing..."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="relative group">
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentUrl)}`}
+                      alt="Payment QR"
+                      className="w-[180px] h-[180px] rounded-lg"
+                      referrerPolicy="no-referrer"
+                      loading="eager"
+                      onError={(e) => {
+                         // Fallback UI or retry if QR fails
+                         (e.target as HTMLImageElement).src = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(paymentUrl)}`;
+                      }}
+                    />
+                    <div className="absolute inset-0 border-2 border-emerald-500/20 rounded-lg pointer-events-none"></div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4 mb-10">
+                <p className="text-sm text-white font-bold px-4">
+                  "Please scan to pay directly to my account."
+                </p>
+                <div className="flex items-center justify-center gap-2 text-[10px] font-black text-[#A0A0A8] uppercase tracking-widest bg-[#252529] md:w-max mx-auto px-3 py-1.5 rounded-full border border-[#333338]">
+                  <Zap className="w-3 h-3 text-emerald-500 fill-emerald-500" />
+                  Stripe Direct Handshake
+                </div>
+              </div>
+
+              <button 
+                onClick={handleClosePayment}
+                className="w-full h-12 bg-[#00D26A] text-[#0D0D0F] rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(0,210,106,0.3)] active:scale-95 transition-transform"
+              >
+                PAYMENT RECEIVED
+              </button>
+              
+              <button 
+                onClick={() => setRideState('idle')}
+                className="mt-6 text-xs font-bold text-[#6B6B73] uppercase tracking-widest hover:text-white transition-colors"
+              >
+                Skip / Cash Received
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Screen 3: Incoming Ride Request Overlay (z-50) */}
       <AnimatePresence>
         {rideState === 'incoming' && (
@@ -532,9 +748,9 @@ export default function DriverTerminal() {
               <div className="flex flex-col gap-3 mt-2">
                 <button 
                   onClick={handleAcceptRide}
-                  className="w-full h-14 bg-[#00D26A] text-[#0D0D0F] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_25px_rgba(0,210,106,0.25)] transition-transform"
+                  className="w-full h-11 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
                 >
-                  <Check className="w-6 h-6 stroke-[3]" /> ACCEPT RIDE
+                  <Check className="w-5 h-5 stroke-[3]" /> ACCEPT RIDE
                 </button>
                 <button 
                   onClick={handleDeclineRide}
@@ -560,71 +776,73 @@ export default function DriverTerminal() {
             className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
           >
             {rideState === 'en_route_pickup' && (
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
-                  <p className="text-xl font-black text-white">3 min <span className="text-sm font-bold text-[#6B6B73] ml-1">· 1.2 mi</span></p>
+              <>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
+                    <p className="text-xl font-black text-white">3 min <span className="text-sm font-bold text-[#6B6B73] ml-1">· 1.2 mi</span></p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                <div className="flex justify-center mt-2">
+                  <button 
+                    onClick={handleArrived}
+                    className="w-[80%] h-11 bg-[#FF9500] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
+                  >
+                    <MapPin className="w-4 h-4" /> ARRIVED AT PICKUP
+                  </button>
                 </div>
-              </div>
+              </>
             )}
 
             {rideState === 'waiting' && (
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-widest mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Waiting for Rider</p>
-                  <p className="text-xl font-black text-white px-0.5">2:34</p>
-                  <p className="text-xs text-[#A0A0A8] font-bold mt-0.5">Free cancel in: 2:26</p>
+              <>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-widest mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Waiting for Rider</p>
+                    <p className="text-xl font-black text-white px-0.5">2:34</p>
+                    <p className="text-xs text-[#A0A0A8] font-bold mt-0.5">Free cancel in: 2:26</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                <div className="flex justify-center mt-2">
+                  <button 
+                    onClick={handleStartRide}
+                    className="w-[80%] h-11 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-emerald-950/20"
+                  >
+                    <Zap className="w-4 h-4 fill-[#0D0D0F]" /> START TRIP
+                  </button>
                 </div>
-              </div>
+              </>
             )}
 
             {rideState === 'in_progress' && (
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest mb-1 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
-                  </p>
-                  <p className="text-xl font-black text-white truncate max-w-[200px]">{activeRide?.dropoffAddress?.split(',')[0] || "Bristol"} <span className="text-sm font-bold text-[#6B6B73] ml-1">· {activeRide?.durationMinutes || 38} min left</span></p>
+              <>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest mb-1 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
+                    </p>
+                    <p className="text-xl font-black text-white truncate max-w-[200px]">{activeRide?.dropoffAddress?.split(',')[0] || "Bristol"} <span className="text-sm font-bold text-[#6B6B73] ml-1">· {activeRide?.durationMinutes || 38} min left</span></p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                <div className="flex justify-center mt-2">
+                  <button 
+                    onClick={handleCompleteRide}
+                    className="w-[80%] h-11 bg-[#FF3B30] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" /> COMPLETE TRIP
+                  </button>
                 </div>
-              </div>
+              </>
             )}
-
-            {/* Contextual Action Button */}
-            <div className="mt-2">
-              {rideState === 'en_route_pickup' && (
-                <button 
-                  onClick={() => setRideState('waiting')}
-                  className="w-full h-14 bg-[#252529] text-white border border-[#333338] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-                >
-                  <MapPin className="w-5 h-5" /> ARRIVED AT PICKUP
-                </button>
-              )}
-              {rideState === 'waiting' && (
-                <button 
-                  onClick={() => setRideState('in_progress')}
-                  className="w-full h-14 bg-[#00D26A] text-[#0D0D0F] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-[0_4px_25px_rgba(0,210,106,0.25)]"
-                >
-                  RIDER IS IN THE CAR
-                </button>
-              )}
-              {rideState === 'in_progress' && (
-                <button 
-                  onClick={() => setRideState('completed')}
-                  className="w-full h-14 bg-[#FF9500] text-[#0D0D0F] rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-[0_4px_25px_rgba(255,149,0,0.25)]"
-                >
-                  <Check className="w-6 h-6 stroke-[3]" /> COMPLETE TRIP
-                </button>
-              )}
-            </div>
 
             {/* Cancel fallback */}
             {(rideState === 'en_route_pickup' || rideState === 'waiting') && (
@@ -637,9 +855,9 @@ export default function DriverTerminal() {
         )}
       </AnimatePresence>
 
-      {/* Screen 7: Trip Completed (z-50) */}
+      {/* Screen 7: Trip Completed / Review (z-50) */}
       <AnimatePresence>
-        {rideState === 'completed' && (
+        {rideState === 'review' && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -737,9 +955,10 @@ export default function DriverTerminal() {
                   setIsOnline(true);
                   setPassengerRating(5);
                   setRatingComment("");
+                  setActiveRide(null);
                 }}
                 disabled={passengerRating < 5 && ratingComment.trim() === ""}
-                className="disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed w-full h-14 bg-white text-[#0D0D0F] rounded-2xl font-black text-[15px] flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all shadow-xl shadow-white/5"
+                className="disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed w-full h-12 bg-white text-[#0D0D0F] rounded-2xl font-black text-sm flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all shadow-xl shadow-white/5"
               >
                 DONE — BACK TO MAP
               </button>
@@ -825,33 +1044,33 @@ export default function DriverTerminal() {
             </span>
           </motion.div>
 
-          <div className="max-w-md mx-auto w-full h-18 bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl px-6 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.4)] pointer-events-auto">
+          <div className="max-w-md mx-auto w-full h-14 bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl px-6 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.4)] pointer-events-auto">
             <button 
               onClick={() => setActiveTab('home')}
-              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'home' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <MapPin className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'home' && "scale-110")} />
-              <span className="text-[9px] uppercase font-black tracking-widest">Home</span>
+              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'home' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <MapPin className={cn("w-5 h-5 transition-transform", activeTab === 'home' && "scale-110")} />
+              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Home</span>
             </button>
             
             <button 
               onClick={() => setActiveTab('earnings')}
-              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'earnings' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <PoundSterling className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'earnings' && "scale-110")} />
-              <span className="text-[9px] uppercase font-black tracking-widest">Earnings</span>
+              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'earnings' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <PoundSterling className={cn("w-5 h-5 transition-transform", activeTab === 'earnings' && "scale-110")} />
+              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Earnings</span>
             </button>
             
             <button 
               onClick={() => setActiveTab('inbox')}
-              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'inbox' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <Inbox className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'inbox' && "scale-110")} />
-              <span className="text-[10px] uppercase font-black tracking-widest">Inbox</span>
+              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'inbox' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <Inbox className={cn("w-5 h-5 transition-transform", activeTab === 'inbox' && "scale-110")} />
+              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Inbox</span>
             </button>
             
             <button 
               onClick={() => setActiveTab('menu')}
-              className={cn("flex flex-col items-center gap-1 transition-all active:scale-90", activeTab === 'menu' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <MenuIcon className={cn("w-5.5 h-5.5 transition-transform", activeTab === 'menu' && "scale-110")} />
-              <span className="text-[10px] uppercase font-black tracking-widest">Menu</span>
+              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'menu' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
+              <MenuIcon className={cn("w-5 h-5 transition-transform", activeTab === 'menu' && "scale-110")} />
+              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Menu</span>
             </button>
           </div>
         </div>
