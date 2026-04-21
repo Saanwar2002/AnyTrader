@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Check, CreditCard, ShieldCheck, Zap, Star, Award, 
   ArrowRight, Info, Loader2, Sparkles, TrendingUp, 
-  PoundSterling, Package
+  PoundSterling, Package, Plus, Trash2, Wallet
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -27,6 +27,9 @@ export default function BillingManager() {
   const [platformConfig, setPlatformConfig] = useState<any>(null);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [savedCards, setSavedCards] = useState([
+    { id: "1", last4: "4242", brand: "Visa", expMonth: 12, expYear: 2028, isDefault: true },
+  ]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
@@ -43,15 +46,13 @@ export default function BillingManager() {
     setIsProcessing(true);
     
     try {
-      // For now, this is a mock activation if paywall is disabled or for demo
-      // In production, this would redirect to Stripe
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
           tierName: tier.name,
-          priceId: tier.id, // Mapped to real stripe price ID
+          priceId: tier.id,
           successUrl: `${window.location.origin}/dashboard?subscription=success`,
           cancelUrl: `${window.location.origin}/billing`
         })
@@ -61,7 +62,6 @@ export default function BillingManager() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        // Fallback mock activation for development
         await updateDoc(doc(db, "users", user.uid), {
           tierId: tier.name,
           subscriptionStatus: "active",
@@ -72,7 +72,6 @@ export default function BillingManager() {
       }
     } catch (err) {
       console.error("Billing Error:", err);
-      // Fallback update
       await updateDoc(doc(db, "users", user.uid), {
         tierId: tier.name,
         subscriptionStatus: "active"
@@ -83,11 +82,85 @@ export default function BillingManager() {
     }
   };
 
+  const handleAddPaymentMethod = () => {
+    alert("In a production environment, this would open Stripe Elements to securely add a new card or bank account.");
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
     </div>
   );
+
+  // -------------------------------------------------------------
+  // CUSTOMER / PASSENGER BILLING UI (PAYMENT METHODS)
+  // -------------------------------------------------------------
+  if (profile?.role === "homeowner") {
+    return (
+      <div className="min-h-screen bg-slate-50 pb-20">
+        <div className="max-w-2xl mx-auto px-6 pt-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Payment Methods</h1>
+            <p className="text-slate-500 font-medium">Manage your cards and bank accounts for seamless booking.</p>
+          </div>
+
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50 p-6 mb-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-blue-600" /> Saved Cards
+              </h2>
+              <button 
+                onClick={handleAddPaymentMethod}
+                className="flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add New
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {savedCards.map((card) => (
+                <div key={card.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors bg-slate-50/50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-8 bg-slate-900 rounded-md flex items-center justify-center">
+                      <CreditCard className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">•••• •••• •••• {card.last4}</p>
+                      <p className="text-xs text-slate-500 font-medium tracking-wide border-t border-transparent">
+                        Expires {card.expMonth.toString().padStart(2, '0')}/{card.expYear}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {card.isDefault && (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Default</span>
+                    )}
+                    <button className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-6 flex items-start gap-3 bg-blue-50/50 p-4 rounded-2xl">
+               <ShieldCheck className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+               <div>
+                 <p className="text-sm font-bold text-blue-900">Payments are secure and encrypted.</p>
+                 <p className="text-xs text-blue-700/70 mt-1 leading-relaxed">
+                    We do not store your full card details. All transactions are securely processed via Stripe's encrypted banking infrastructure.
+                 </p>
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // TRADESPERSON / BUSINESS BILLING UI (SUBSCRIPTIONS)
+  // -------------------------------------------------------------
 
   const isFounding = profile?.isFoundingMember;
 

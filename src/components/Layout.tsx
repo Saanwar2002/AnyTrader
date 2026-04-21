@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info } from "lucide-react";
+import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc, updateDoc, arrayRemove, orderBy, limit, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
@@ -7,9 +7,12 @@ import { toast } from "sonner";
 import React, { useEffect, useState, useRef } from "react";
 import { TradeBot } from "./TradeBot";
 import { Logo } from "./Logo";
-import MagicBubble from "./MagicBubble";
 import { AnimatePresence, motion } from "motion/react";
 import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
+import { usePortal } from "../lib/PortalContext";
+import PlatformSwitcher from "./shared/PlatformSwitcher";
+
+import RoleTabBar from "./shared/RoleTabBar";
 
 const getIconComponent = (iconName: string) => {
   const icons: any = { Wrench, Hammer, HardHat, Shield, Zap, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, Briefcase, PenTool, Box };
@@ -29,6 +32,7 @@ export default function Layout() {
   const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
   const [recentRides, setRecentRides] = useState<any[]>([]);
   const [blockedDrivers, setBlockedDrivers] = useState<string[]>([]);
+  const [openSection, setOpenSection] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -214,6 +218,20 @@ export default function Layout() {
     }
   };
 
+  const { activePortal, switchPortal, activeRole } = usePortal();
+
+  // Keep routing somewhat hardened to portal
+  useEffect(() => {
+    // List of exclusive AnyRide paths
+    if (location.pathname === "/book-ride" || location.pathname === "/driver-terminal") {
+      if (activePortal !== "anyride") switchPortal("anyride");
+    } 
+    // Example of exclusive AnyTrader paths
+    else if (location.pathname === "/job-feed" || location.pathname === "/post-job") {
+      if (activePortal !== "anytrader") switchPortal("anytrader");
+    }
+  }, [location.pathname, activePortal, switchPortal]);
+
   const homeownerNav = [
     { name: "Home", path: "/", icon: Home, isCta: false },
     { name: "Find Trades", path: "/find-trades", icon: Search, isCta: false },
@@ -260,9 +278,33 @@ export default function Layout() {
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
   ];
 
-  const navItems = profile?.role === "admin" 
-    ? adminNav 
-    : (profile?.role === "ecosystem_manager" ? ecosystemNav : (profile?.role === "fleet_driver" ? driverNav : (profile?.subscriptionType === "business" ? businessNav : (profile?.role === "tradesperson" ? tradespersonNav : homeownerNav))));
+  const passengerNav = [
+    { name: "Book Ride", path: "/book-ride", icon: Car, isCta: false },
+    { name: "My Rides", path: "/my-rides", icon: MapPin, isCta: false },
+    { name: "Saved", path: "/saved-journeys", icon: Bookmark, isCta: false },
+    { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+    { name: "Billing", path: "/billing", icon: PoundSterling, isCta: false },
+  ];
+
+  let navItems;
+  if (activeRole === "admin") {
+    navItems = adminNav;
+  } else if (activeRole === "ecosystem_manager") {
+    navItems = ecosystemNav;
+  } else if (activePortal === "anyride") {
+    navItems = activeRole === "driver" ? driverNav : passengerNav;
+  } else {
+    if (activeRole === "business") {
+      navItems = businessNav;
+    } else if (activeRole === "trader") {
+      navItems = tradespersonNav;
+    } else {
+      navItems = homeownerNav;
+    }
+  }
+
+  // Hide the sidebars if on map
+  const isMapUX = (activePortal === "anyride" && activeRole === "customer");
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -302,15 +344,17 @@ export default function Layout() {
       <header className="glass sticky top-0 z-50">
           <div className="max-w-7xl auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4 sm:gap-8">
-              <button 
-                onClick={() => {
-                  triggerHaptic();
-                  setIsMenuOpen(true);
-                }}
-                className="p-2 -ml-2 text-slate-500 hover:text-slate-900 transition-colors"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
+              {activePortal === "anyride" && (
+                <button 
+                  onClick={() => {
+                    triggerHaptic();
+                    setIsMenuOpen(true);
+                  }}
+                  className="p-2 -ml-2 text-slate-500 hover:text-slate-900 transition-colors"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+              )}
               <Link to="/" className="flex items-center gap-3 group">
                 <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform duration-500">
                   <Logo size={32} className="text-white" />
@@ -523,10 +567,9 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 sm:pb-6">
+        <RoleTabBar />
         <Outlet />
       </main>
-
-      <MagicBubble />
 
       {/* Sandwich Menu Sidebar */}
       <AnimatePresence>
@@ -547,9 +590,9 @@ export default function Layout() {
             animate={{ x: 0 }}
             exit={{ x: "-100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-y-0 left-0 w-80 bg-white shadow-2xl z-[70] overflow-y-auto"
+            className="fixed inset-y-0 left-0 w-52 bg-white shadow-2xl z-[70] overflow-y-auto overflow-x-hidden"
           >
-            <div className="p-6 space-y-8">
+            <div className="p-3 space-y-5">
                 <div className="flex items-center justify-between">
                   <Logo className="h-6" />
                   <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-slate-50 rounded-xl transition-colors">
@@ -559,96 +602,145 @@ export default function Layout() {
 
                 <div className="space-y-6">
                   {/* Account Health Section */}
-                  <div className="bg-slate-900 rounded-[28px] p-5 text-white shadow-xl shadow-slate-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Passenger Rating</span>
-                      <ShieldAlert className="w-4 h-4 text-emerald-400" />
+                  <div className="bg-slate-900 rounded-[16px] p-3 mx-1 w-[140px] text-white shadow-lg shadow-slate-200">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[8px] font-black uppercase tracking-[0.1em] opacity-60">Passenger Rating</span>
+                      <ShieldAlert className="w-3 h-3 text-emerald-400" />
                     </div>
-                    <div className="flex items-end gap-2">
-                       <span className="text-4xl font-black">⭐ {profile?.homeownerRating || "5.0"}</span>
-                       <span className="text-xs font-bold opacity-60 pb-1.5">/ 5.0</span>
+                    <div className="flex items-end gap-1.5">
+                       <span className="text-2xl font-black leading-none">⭐ {profile?.homeownerRating || "5.0"}</span>
+                       <span className="text-[10px] font-bold opacity-60 pb-0.5">/ 5.0</span>
                     </div>
-                    <p className="text-[10px] font-bold text-emerald-400 mt-2 uppercase tracking-widest">
-                       Account Status: Elite Helper
+                    <p className="text-[8px] font-bold text-emerald-400 mt-1 uppercase tracking-widest">
+                       Elite Helper
                     </p>
                   </div>
 
                   {/* Favorites Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-slate-400 px-2">
-                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Saved Places</span>
-                    </div>
-                    <div className="space-y-2">
-                      {favorites.length === 0 && journeys.length === 0 && (
-                        <p className="text-xs text-slate-400 font-medium px-2 italic">Nothing saved yet.</p>
-                      )}
-                      
-                      {favorites.slice(0, 3).map((fav, idx) => (
-                        <button 
-                          key={`fav-${idx}`}
-                          onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(fav.address)}`); setIsMenuOpen(false); }}
-                          className="w-full p-2.5 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-slate-100 transition-all group"
+                  <div className="space-y-2">
+                    <button 
+                       onClick={() => setOpenSection(openSection === "places" ? null : "places")}
+                       className="w-full flex items-center justify-between px-2 py-2 hover:bg-slate-50 rounded-xl transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 text-slate-400 group-hover:text-slate-600">
+                        <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Saved Places</span>
+                      </div>
+                      <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", openSection === "places" && "rotate-180")} />
+                    </button>
+                    
+                    <AnimatePresence initial={false}>
+                      {openSection === "places" && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden space-y-2 px-1"
                         >
-                          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
-                            <MapPin className="w-4 h-4 text-indigo-500" />
-                          </div>
-                          <div className="text-left flex-1 min-w-0">
-                            <p className="font-bold text-slate-900 text-xs truncate">{fav.name}</p>
-                          </div>
-                        </button>
-                      ))}
+                          {favorites.length === 0 && journeys.length === 0 && (
+                            <p className="text-xs text-slate-400 font-medium p-2 italic">Nothing saved yet.</p>
+                          )}
+                          
+                          {favorites.slice(0, 3).map((fav, idx) => (
+                            <button 
+                              key={`fav-${idx}`}
+                              onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(fav.address)}`); setIsMenuOpen(false); }}
+                              className="w-full p-2.5 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-slate-100 transition-all group"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
+                                <MapPin className="w-4 h-4 text-indigo-500" />
+                              </div>
+                              <div className="text-left flex-1 min-w-0">
+                                <p className="font-bold text-slate-900 text-xs truncate">{fav.name}</p>
+                              </div>
+                            </button>
+                          ))}
 
-                      {journeys.slice(0, 2).map((j, idx) => (
-                        <button 
-                          key={`journey-${idx}`}
-                          onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(j.from)}&dropoff=${encodeURIComponent(j.to)}&comments=${encodeURIComponent(j.comments || "")}`); setIsMenuOpen(false); }}
-                          className="w-full p-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-100 transition-all group"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm text-indigo-500">
-                            <Repeat className="w-4 h-4" />
-                          </div>
-                          <div className="text-left flex-1 min-w-0">
-                            <p className="font-bold text-slate-900 text-xs truncate whitespace-pre-wrap leading-tight">{j.name}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                          {journeys.slice(0, 2).map((j, idx) => (
+                            <button 
+                              key={`journey-${idx}`}
+                              onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(j.from)}&dropoff=${encodeURIComponent(j.to)}&comments=${encodeURIComponent(j.comments || "")}`); setIsMenuOpen(false); }}
+                              className="w-full p-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3 hover:bg-indigo-100 transition-all group"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm text-indigo-500">
+                                <Repeat className="w-4 h-4" />
+                              </div>
+                              <div className="text-left flex-1 min-w-0">
+                                <p className="font-bold text-slate-900 text-xs truncate whitespace-pre-wrap leading-tight">{j.name}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Preferred Drivers Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-slate-400 px-2">
-                      <Heart className="w-4 h-4 fill-red-400 text-red-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Favorite Drivers</span>
-                    </div>
-                    {preferredDrivers.length === 0 ? (
-                      <p className="text-xs text-slate-400 font-medium px-2 italic">Add drivers after 5-star rides.</p>
-                    ) : (
-                      <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-1">
-                        {preferredDrivers.map((driver, idx) => (
-                          <button 
-                            key={`driver-${idx}`}
-                            onClick={() => navigate(`/profile/${driver.uid}`)}
-                            className="shrink-0 flex flex-col items-center gap-1.5 p-2 bg-slate-50 border border-slate-100 rounded-2xl min-w-[70px]"
-                          >
-                            <img src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${driver.name}`} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt={driver.name} referrerPolicy="no-referrer" />
-                            <span className="text-[10px] font-bold text-slate-700 truncate w-full text-center">{driver.name.split(' ')[0]}</span>
-                          </button>
-                        ))}
+                  <div className="space-y-2 pt-2">
+                    <button 
+                       onClick={() => setOpenSection(openSection === "drivers" ? null : "drivers")}
+                       className="w-full flex items-center justify-between px-2 py-2 hover:bg-slate-50 rounded-xl transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 text-slate-400 group-hover:text-slate-600">
+                        <Heart className="w-4 h-4 fill-red-400 text-red-400" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Favorite Drivers</span>
                       </div>
-                    )}
+                      <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", openSection === "drivers" && "rotate-180")} />
+                    </button>
+                    
+                    <AnimatePresence initial={false}>
+                      {openSection === "drivers" && (
+                        <motion.div 
+                           initial={{ height: 0, opacity: 0 }}
+                           animate={{ height: "auto", opacity: 1 }}
+                           exit={{ height: 0, opacity: 0 }}
+                           transition={{ duration: 0.2 }}
+                           className="overflow-hidden"
+                        >
+                          {preferredDrivers.length === 0 ? (
+                            <p className="text-xs text-slate-400 font-medium p-2 italic">Add drivers after 5-star rides.</p>
+                          ) : (
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-1 pt-1">
+                              {preferredDrivers.map((driver, idx) => (
+                                <button 
+                                  key={`driver-${idx}`}
+                                  onClick={() => navigate(`/profile/${driver.uid}`)}
+                                  className="shrink-0 flex flex-col items-center gap-1.5 p-2 bg-slate-50 border border-slate-100 rounded-2xl min-w-[70px] hover:bg-slate-100 transition-colors"
+                                >
+                                  <img src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${driver.name}`} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt={driver.name} referrerPolicy="no-referrer" />
+                                  <span className="text-[10px] font-bold text-slate-700 truncate w-full text-center">{driver.name.split(' ')[0]}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Recent Trips Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between px-2">
-                       <div className="flex items-center gap-2 text-slate-400">
+                  <div className="space-y-2 pt-2">
+                    <button 
+                       onClick={() => setOpenSection(openSection === "activity" ? null : "activity")}
+                       className="w-full flex items-center justify-between px-2 py-2 hover:bg-slate-50 rounded-xl transition-colors group"
+                    >
+                       <div className="flex items-center gap-2 text-slate-400 group-hover:text-slate-600">
                          <Car className="w-4 h-4 text-blue-500" />
-                         <span className="text-[10px] font-black uppercase tracking-widest">Recent Activity</span>
+                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Recent Activity</span>
                        </div>
-                    </div>
-                    <div className="space-y-2">
+                       <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", openSection === "activity" && "rotate-180")} />
+                    </button>
+                    
+                    <AnimatePresence initial={false}>
+                      {openSection === "activity" && (
+                        <motion.div 
+                           initial={{ height: 0, opacity: 0 }}
+                           animate={{ height: "auto", opacity: 1 }}
+                           exit={{ height: 0, opacity: 0 }}
+                           transition={{ duration: 0.2 }}
+                           className="overflow-hidden space-y-2 px-1"
+                        >
                        {recentRides.map((ride, idx) => (
                          <div key={`ride-${idx}`} className="p-3 bg-white border border-slate-100 rounded-2xl space-y-2 group relative">
                             <div className="flex items-center justify-between">
@@ -674,6 +766,32 @@ export default function Layout() {
                                <button 
                                  onClick={async () => {
                                    if (!user || !ride.driverId) return;
+                                   const isFav = preferredDrivers.some(d => d.uid === ride.driverId);
+                                   if (isFav) {
+                                      // Remove favorite
+                                      const newFavs = preferredDrivers.filter(d => d.uid !== ride.driverId);
+                                      await updateDoc(doc(db, "users", user.uid), { preferredDrivers: newFavs });
+                                      toast.success("Removed from Favorite Drivers");
+                                   } else {
+                                      // Add favorite
+                                      await updateDoc(doc(db, "users", user.uid), { 
+                                        preferredDrivers: arrayUnion({
+                                          uid: ride.driverId,
+                                          name: ride.driverName || "Driver",
+                                          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName || "Driver")}`
+                                        }) 
+                                      });
+                                      toast.success("Driver added to Favorites");
+                                   }
+                                 }} 
+                                 className={cn("p-1.5 bg-slate-50 rounded-lg transition-colors", preferredDrivers.some(d => d.uid === ride.driverId) ? "text-red-500 hover:text-red-600" : "text-slate-400 hover:text-red-500")} 
+                                 title={preferredDrivers.some(d => d.uid === ride.driverId) ? "Remove Favorite" : "Favorite Driver"}
+                               >
+                                  <Heart className="w-3 h-3" fill={preferredDrivers.some(d => d.uid === ride.driverId) ? "currentColor" : "none"} />
+                               </button>
+                               <button 
+                                 onClick={async () => {
+                                   if (!user || !ride.driverId) return;
                                    if (confirm("Block this driver from future rides?")) {
                                      await updateDoc(doc(db, "users", user.uid), { blockedDrivers: arrayUnion(ride.driverId) });
                                      toast.success("Driver blocked");
@@ -687,15 +805,33 @@ export default function Layout() {
                             </div>
                          </div>
                        ))}
-                    </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Safety Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-slate-400 px-2">
-                      <ShieldAlert className="w-4 h-4 text-orange-500" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Safety & Emergency</span>
-                    </div>
+                  <div className="space-y-2 pt-2">
+                    <button 
+                       onClick={() => setOpenSection(openSection === "safety" ? null : "safety")}
+                       className="w-full flex items-center justify-between px-2 py-2 hover:bg-slate-50 rounded-xl transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 text-slate-400 group-hover:text-slate-600">
+                        <ShieldAlert className="w-4 h-4 text-orange-500" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Safety & Emergency</span>
+                      </div>
+                      <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", openSection === "safety" && "rotate-180")} />
+                    </button>
+                    
+                    <AnimatePresence initial={false}>
+                      {openSection === "safety" && (
+                        <motion.div 
+                           initial={{ height: 0, opacity: 0 }}
+                           animate={{ height: "auto", opacity: 1 }}
+                           exit={{ height: 0, opacity: 0 }}
+                           transition={{ duration: 0.2 }}
+                           className="overflow-hidden space-y-2 px-1"
+                        >
                     {emergencyContacts.length === 0 ? (
                       <button 
                         onClick={() => navigate("/profile")}
@@ -721,6 +857,9 @@ export default function Layout() {
                         ))}
                       </div>
                     )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   <div className="pt-2 border-t border-slate-100">
@@ -751,6 +890,7 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
+      <PlatformSwitcher />
       <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
 
       {/* Bottom Navigation (Mobile) */}

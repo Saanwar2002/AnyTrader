@@ -10,6 +10,7 @@ import { URGENCY_LEVELS } from "@/src/constants";
 import { useCategories } from "../lib/CategoryProvider";
 import MediaGalleryModal from "./MediaGalleryModal";
 import { SEO } from "./SEO";
+import { useEntitlements } from "../lib/useEntitlements";
 
 const iconMap: Record<string, any> = {
   Wrench, Briefcase, Clock, MapPin, Search, Filter, X
@@ -21,6 +22,7 @@ export default function JobFeed() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { categories } = useCategories();
+  const entitlements = useEntitlements();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -844,7 +846,64 @@ export default function JobFeed() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {filteredJobs.map((job) => (
+          {filteredJobs.map((job) => {
+            
+            // Entitlements Delay Logic
+            const createdAtMs = job.createdAt?.toMillis?.() || new Date(job.createdAt).getTime();
+            const isDelayed = !entitlements.canBypassLeadDelay(createdAtMs);
+            const delayMinutes = entitlements.entitlements.leadAccessDelayMinutes;
+            const unlockTimeMs = createdAtMs + (delayMinutes * 60 * 1000);
+            const msRemaining = unlockTimeMs - Date.now();
+            const minutesToUnlock = Math.ceil(msRemaining / 60000);
+
+            // Existing Exclusive Timer Logic
+            const jobExclusiveUntil = job.exclusiveUntil?.toDate ? job.exclusiveUntil.toDate() : (job.exclusiveUntil ? new Date(job.exclusiveUntil) : null);
+            const isCurrentlyExclusive = jobExclusiveUntil && jobExclusiveUntil > new Date() && !job.isBoosted; // Emergency boosts bypass exclusivity visual
+
+            if (isDelayed && !job.isBoosted) {
+              return (
+                <div
+                  key={job.id}
+                  className="bg-white/80 rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden group relative"
+                >
+                  <div className="p-5 flex items-center gap-4 relative">
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center p-4">
+                      <div className="bg-slate-900/90 text-white px-6 py-4 rounded-2xl shadow-xl max-w-sm w-full text-center border border-slate-800">
+                        <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Clock className="w-6 h-6 text-blue-400" />
+                        </div>
+                        <h4 className="font-bold text-lg mb-1">Lead Locked</h4>
+                        <p className="text-sm text-slate-300 mb-4 px-2">
+                          Pro members are viewing this lead right now. You gain access in <span className="font-bold text-white">{minutesToUnlock}m</span>.
+                        </p>
+                        <Link 
+                          to="/billing"
+                          className="inline-block w-full py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm shadow-md shadow-blue-500/20"
+                        >
+                          Upgrade to Pro
+                        </Link>
+                      </div>
+                    </div>
+                    {/* Blurred Background Details */}
+                    <div className="flex-1 min-w-0 opacity-40 select-none">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                          {job.category}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-lg text-slate-900 mb-2">
+                        {job.title.replace(/[a-zA-Z]/g, "x")}
+                      </h4>
+                      <p className="text-sm text-slate-500 line-clamp-2">
+                        {job.description.replace(/[a-zA-Z]/g, "x")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
             <Link
               key={job.id}
               to={`/job/${job.id}`}
@@ -1036,7 +1095,8 @@ export default function JobFeed() {
                 View Details
               </div>
             </Link>
-          ))}
+          );
+        })}
         </div>
       )}
     </>

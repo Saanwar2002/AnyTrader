@@ -21,8 +21,10 @@
   - **AnyTrader Rides Integration**: Full ecosystem synchronization with a dedicated Taxi portal, including shared auth, role mapping, and real-time emergency dispatch ingestion.
 
 ## Active Task
-- Integration with AnyTrader Rides completed.
-- The application is now a multi-portal ecosystem with home services and transport services unified.
+- The architecture was successfully heavily refactored into the "Super App" module (Phase 1-4).
+- The application now uses `PortalContext` and `RoleTabBar` to fully silo experiences (Home vs Trades vs Taxi) natively without requiring multiple logins.
+- The legacy `MagicBubble` has been replaced by a tiny draggable `PlatformSwitcher`.
+- The new `useEntitlements.ts` Engine is live to handle PAYG vs Pro lead payment offsets.
 
 ## Project Conventions
 - **Styling**: Tailwind CSS with a "Modern Professional" aesthetic.

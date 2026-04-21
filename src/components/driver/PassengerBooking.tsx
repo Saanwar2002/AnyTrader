@@ -60,7 +60,28 @@ export default function PassengerBooking() {
   const [waitTolerance, setWaitTolerance] = useState<10 | 20 | 30>(20);
   const [selectedCategory, setSelectedCategory] = useState("standard");
   const [isPetFriendly, setIsPetFriendly] = useState(false);
+  const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   
+  // Try to load existing ride if edit ID is present
+  useEffect(() => {
+    if (editId) {
+      const unsub = onSnapshot(doc(db, "ride_requests", editId), (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          if (data.status === "pending" || data.status === "draft") {
+            setPickup(data.pickup || "");
+            setDropoff(data.dropoff || "");
+            setComments(data.comments || "");
+            setSelectedCategory(data.carCategory || "standard");
+            setIsPetFriendly(data.isPetFriendly || false);
+            if (data.waitTolerance) setWaitTolerance(data.waitTolerance as any);
+          }
+        }
+      });
+      return () => unsub();
+    }
+  }, [editId]);
+
   const [isDetecting, setIsDetecting] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
@@ -142,6 +163,18 @@ export default function PassengerBooking() {
   }, [profile]);
 
   const isFavorite = (address: string) => favoriteAddresses.some(f => f.address === address);
+
+  const saveQuickAddress = async (type: "home" | "work", address: string) => {
+    if (!user || !address) return;
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        [`${type}Address`]: address
+      });
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} address saved!`);
+    } catch (err) {
+      toast.error(`Failed to save ${type} address`);
+    }
+  };
 
   const toggleFavorite = async (address: string, name: string) => {
     if (!user || !address) return;
@@ -372,15 +405,31 @@ export default function PassengerBooking() {
 
     try {
       const blockedList = profile?.blockedDrivers || [];
+      const preferredList = profile?.preferredDrivers || [];
       
       // Simulate finding a driver that isn't blocked
-      const availableDrivers = [
+      let availableDrivers = [
         { uid: "D-8821", name: "David Sterling", vehicle: "Silver Toyota Prius", code: "8821" },
         { uid: "D-4412", name: "Sarah Jenkins", vehicle: "Black Mercedes E-Class", code: "4412" },
         { uid: "D-1902", name: "Michael Chen", vehicle: "Tesla Model 3", code: "1902" }
       ];
       
-      const assignedDriver = availableDrivers.find(d => !blockedList.includes(d.uid)) || availableDrivers[0];
+      // Inject Preferred Drivers into the available pool (mocking them as nearby)
+      preferredList.forEach((pref: any) => {
+        if (!availableDrivers.some(d => d.uid === pref.uid)) {
+          availableDrivers.unshift({ uid: pref.uid, name: pref.name, vehicle: "Preferred Vehicle", code: "FAV1" });
+        }
+      });
+
+      // 1. Filter out completely blocked drivers (Anti-Match)
+      availableDrivers = availableDrivers.filter(d => !blockedList.includes(d.uid));
+
+      // 2. Try to assign a preferred driver first, else fallback to standard available
+      let assignedDriver = availableDrivers.find(d => preferredList.some((p: any) => p.uid === d.uid));
+      if (!assignedDriver) {
+        assignedDriver = availableDrivers[0];
+      }
+
       setAssignedDriverInfo(assignedDriver);
 
       const rideData = {
@@ -397,19 +446,28 @@ export default function PassengerBooking() {
         comments,
         status: "pending",
         totalFare: finalFare,
-        createdAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "ride_requests"), rideData);
+      if (editId) {
+         await updateDoc(doc(db, "ride_requests", editId), {
+           ...rideData,
+           updatedAt: serverTimestamp()
+         });
+      } else {
+         await addDoc(collection(db, "ride_requests"), {
+           ...rideData,
+           createdAt: serverTimestamp()
+         });
+      }
       
       setTimeout(() => {
         setStep("confirmed");
-        toast.success("Ride request sent to fleet!");
+        toast.success(editId ? "Ride updated!" : "Ride request sent to fleet!");
       }, 3000);
 
     } catch (err) {
       console.error(err);
-      toast.error("Failed to post ride request");
+      toast.error(editId ? "Failed to update ride" : "Failed to post ride request");
       setStep("details");
     }
   };
@@ -543,15 +601,82 @@ export default function PassengerBooking() {
                         </div>
                         {/* Quick Places Chips */}
                         <div className="flex items-center gap-2 mt-2 -mb-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                          <button onClick={() => { setDropoff("Home"); setActiveField("dropoff"); triggerHaptic(ImpactStyle.Light); }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-full transition-colors whitespace-nowrap">
+                          <button 
+                            onClick={() => { 
+                              const homeAddr = profile?.homeAddress;
+                              if (homeAddr) {
+                                if (activeField === "pickup") setPickup(homeAddr);
+                                else if (activeField === "dropoff") setDropoff(homeAddr);
+                                else if (activeField?.startsWith("stop-")) {
+                                  const idx = parseInt(activeField.split('-')[1]);
+                                  const newStops = [...stops];
+                                  newStops[idx].address = homeAddr;
+                                  setStops(newStops);
+                                }
+                                triggerHaptic(ImpactStyle.Light);
+                              } else {
+                                const current = activeField === "pickup" ? pickup : activeField === "dropoff" ? dropoff : "";
+                                if (current) {
+                                  saveQuickAddress("home", current);
+                                } else {
+                                  toast.info("Type an address first to save it as Home");
+                                }
+                              }
+                            }} 
+                            className={cn(
+                              "flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all whitespace-nowrap",
+                              profile?.homeAddress 
+                                ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200" 
+                                : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                            )}
+                          >
                             <Home className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">Home</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">
+                              {profile?.homeAddress ? "Home" : "Set Home"}
+                            </span>
                           </button>
-                          <button onClick={() => { setDropoff("Work"); setActiveField("dropoff"); triggerHaptic(ImpactStyle.Light); }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 rounded-full transition-colors whitespace-nowrap">
+                          <button 
+                            onClick={() => { 
+                              const workAddr = profile?.workAddress;
+                              if (workAddr) {
+                                if (activeField === "pickup") setPickup(workAddr);
+                                else if (activeField === "dropoff") setDropoff(workAddr);
+                                else if (activeField?.startsWith("stop-")) {
+                                  const idx = parseInt(activeField.split('-')[1]);
+                                  const newStops = [...stops];
+                                  newStops[idx].address = workAddr;
+                                  setStops(newStops);
+                                }
+                                triggerHaptic(ImpactStyle.Light);
+                              } else {
+                                const current = activeField === "pickup" ? pickup : activeField === "dropoff" ? dropoff : "";
+                                if (current) {
+                                  saveQuickAddress("work", current);
+                                } else {
+                                  toast.info("Type an address first to save it as Work");
+                                }
+                              }
+                            }} 
+                            className={cn(
+                              "flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all whitespace-nowrap",
+                              profile?.workAddress 
+                                ? "bg-amber-100 text-amber-700 hover:bg-amber-200" 
+                                : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                            )}
+                          >
                             <Briefcase className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">Work</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">
+                              {profile?.workAddress ? "Work" : "Set Work"}
+                            </span>
                           </button>
-                          <button onClick={() => { setDropoff("Recent Destination"); setActiveField("dropoff"); triggerHaptic(ImpactStyle.Light); }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-full transition-colors whitespace-nowrap">
+                          <button onClick={() => { 
+                            const favs = favoriteAddresses.map(f => f.address);
+                            if (favs.length > 0) {
+                              if (activeField === "pickup") setPickup(favs[0]);
+                              else if (activeField === "dropoff") setDropoff(favs[0]);
+                              triggerHaptic(ImpactStyle.Light);
+                            }
+                          }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-full transition-colors whitespace-nowrap">
                             <History className="w-3.5 h-3.5" />
                             <span className="text-[10px] font-bold uppercase tracking-wider">Recent</span>
                           </button>
@@ -710,7 +835,7 @@ export default function PassengerBooking() {
                    <Zap className="w-4 h-4 fill-indigo-600" />
                    <p className="text-xs font-black uppercase tracking-widest">Handshake Code: {assignedDriverInfo?.code || "8821"}</p>
                 </div>
-                <button onClick={() => navigate("/")} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-lg shadow-[0_8px_30px_rgba(15,23,42,0.3)] hover:bg-slate-800 transition-all flex justify-center items-center gap-2">
+                <button onClick={() => navigate("/my-rides")} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-lg shadow-[0_8px_30px_rgba(15,23,42,0.3)] hover:bg-slate-800 transition-all flex justify-center items-center gap-2">
                   Track Ride Progress <Navigation className="w-5 h-5 opacity-70" />
                 </button>
               </motion.div>

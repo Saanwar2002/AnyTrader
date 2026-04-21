@@ -4,6 +4,17 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
+    
+    // Platform configs and categories are globally readable to allow app initialization
+    match /platform_config/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /platform_categories/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
     match /{document=**} {
       allow read, write: if isSignedIn();
     }

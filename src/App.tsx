@@ -33,6 +33,7 @@ import BusinessTeamManagement from "./components/BusinessTeamManagement";
 import BillingManager from "./components/BillingManager";
 import AdminDashboard from "./components/AdminDashboard";
 import EcosystemAdmin from "./components/EcosystemAdmin";
+import SavedJourneys from "./components/SavedJourneys";
 import { RecurringJobManager } from "./components/RecurringJobManager";
 import { Toaster } from "sonner";
 import { ReviewReminder } from "./components/ReviewReminder";
@@ -42,18 +43,47 @@ import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "
 import DriverTerminal from "./components/driver/DriverTerminal";
 import PassengerBooking from "./components/driver/PassengerBooking";
 
+import { PortalProvider, usePortal } from "./lib/PortalContext";
+
+// A small wrapper to handle the index '/' route dynamically based on activePortal
+import MyRides from "./components/MyRides";
+
+function IndexRoute() {
+  const { activePortal, activeRole } = usePortal();
+
+  if (activePortal === "anyride") {
+    return activeRole === "driver" ? <DriverTerminal /> : <PassengerBooking />;
+  }
+
+  // AnyTrader context
+  if (activeRole === "driver") {
+    return <DriverTerminal />; // Fallback 
+  }
+  
+  if (activeRole === "business") {
+    return <BusinessDashboard />;
+  }
+
+  if (activeRole === "trader") {
+    return <TradesDashboard />;
+  }
+
+  return <Dashboard />;
+}
+
 export default function App() {
   const { user, profile, isAuthReady } = useAuth();
   const [platformConfig, setPlatformConfig] = useState<any>(null);
 
   useEffect(() => {
+    if (!isAuthReady) return;
     const unsub = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
       if (doc.exists()) {
         setPlatformConfig(doc.data());
       }
     });
     return () => unsub();
-  }, []);
+  }, [isAuthReady]);
 
   if (!isAuthReady) return null;
 
@@ -89,9 +119,10 @@ export default function App() {
     <CategoryProvider>
       <Toaster position="top-center" richColors />
       <BrowserRouter>
-        <RecurringJobManager />
-        <ReviewReminder />
-        <Routes>
+        <PortalProvider>
+          <RecurringJobManager />
+          <ReviewReminder />
+          <Routes>
           <Route path="/profile/:id" element={<PublicProfile />} />
           {!user ? (
             <Route path="*" element={<Login />} />
@@ -99,15 +130,11 @@ export default function App() {
             <Route path="*" element={<Onboarding />} />
           ) : (
             <Route path="/" element={<Layout />}>
-              <Route index element={
-                profile.role === "fleet_driver"
-                  ? <DriverTerminal />
-                  : profile.role === "homeowner" 
-                    ? (profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />)
-                    : <TradesDashboard />
-              } />
+              <Route index element={<IndexRoute />} />
               <Route path="driver-terminal" element={<DriverTerminal />} />
               <Route path="book-ride" element={<PassengerBooking />} />
+              <Route path="my-rides" element={<MyRides />} />
+              <Route path="saved-journeys" element={<SavedJourneys />} />
               <Route path="dashboard" element={profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />} />
               <Route path="trades-dashboard" element={<TradesDashboard />} />
               <Route path="job-feed" element={<JobFeed />} />
@@ -134,6 +161,7 @@ export default function App() {
             </Route>
           )}
         </Routes>
+        </PortalProvider>
       </BrowserRouter>
     </CategoryProvider>
   );

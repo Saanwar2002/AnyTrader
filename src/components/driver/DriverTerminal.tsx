@@ -4,6 +4,7 @@ import { MapPin, Navigation, Clock, PoundSterling, Shield, AlertTriangle, X, Che
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { generateGeohash } from "@/src/services/taxiIntegrationService";
+import { db, doc, updateDoc } from "@/src/firebase";
 
 // --- Draggable Slider Component ---
 function SlideAction({ label, onComplete, resetDelay = 1000 }: { label: string, onComplete: () => void, resetDelay?: number }) {
@@ -79,10 +80,28 @@ const SlidingEarningsWidget = ({ isOnline, onToggleBreak, breakMode }: { isOnlin
 };
 
 export default function DriverTerminal() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [breakMode, setBreakMode] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const [requireHandshake, setRequireHandshake] = useState(profile?.driverSettings?.requireHandshake !== false);
+
+  const toggleHandshake = async () => {
+    if (!user) return;
+    const newValue = !requireHandshake;
+    setRequireHandshake(newValue);
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        "driverSettings.requireHandshake": newValue
+      });
+    } catch (err) {
+      console.error("Failed to update handshake setting", err);
+      // Revert on fail
+      setRequireHandshake(!newValue);
+    }
+  };
 
   // Live Location Polling
   useEffect(() => {
@@ -154,19 +173,45 @@ export default function DriverTerminal() {
       <AnimatePresence>
         {menuOpen && (
           <motion.div 
-            className="absolute top-16 left-4 w-64 bg-white rounded-3xl p-6 shadow-2xl z-40"
+            className="absolute top-16 left-4 w-72 bg-white rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-40"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <h2 className="font-black text-xl mb-4">Menu</h2>
-            <nav className="space-y-4 font-bold text-slate-700">
-              <p>Earnings Dashboard</p>
-              <p>Trip History</p>
-              <p>Documents & Compliance</p>
-              <p>Support</p>
-            </nav>
-            <button onClick={() => setMenuOpen(false)} className="mt-8 text-xs font-black text-red-500">Close</button>
+            {showSettings ? (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-black text-xl text-slate-900">Settings</h2>
+                  <button onClick={() => setShowSettings(false)} className="text-xs font-black text-slate-500 uppercase">Back</button>
+                </div>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">Require Handshake Code</p>
+                      <p className="text-xs text-slate-500 max-w-[160px] leading-tight mt-1">Ask passengers for their 4-digit code to start trips.</p>
+                    </div>
+                    <button 
+                      onClick={toggleHandshake}
+                      className={cn("w-12 h-6 rounded-full p-1 transition-colors", requireHandshake ? "bg-emerald-500" : "bg-slate-200")}
+                    >
+                      <div className={cn("w-4 h-4 rounded-full bg-white transition-transform", requireHandshake ? "translate-x-6" : "translate-x-0")} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 className="font-black text-xl mb-4">Menu</h2>
+                <nav className="space-y-4 font-bold text-slate-700">
+                  <p>Earnings Dashboard</p>
+                  <p>Trip History</p>
+                  <p className="cursor-pointer" onClick={() => setShowSettings(true)}>Settings <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full ml-2">New</span></p>
+                  <p>Documents & Compliance</p>
+                  <p>Support</p>
+                </nav>
+                <button onClick={() => setMenuOpen(false)} className="mt-8 text-xs font-black text-red-500 uppercase tracking-widest">Close</button>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

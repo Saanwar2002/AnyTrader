@@ -69,7 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Force admin role if email matches
             if (firebaseUser.email?.toLowerCase() === "saanwar2002@gmail.com" && data.role !== "admin") {
               data.role = "admin";
-              await updateDoc(doc(db, "users", firebaseUser.uid), { role: "admin" });
+              await updateDoc(doc(db, "users", firebaseUser.uid), { 
+                role: "admin",
+                subscriptionType: null
+              });
             }
             
             // Check for expired or near-expiry documents
