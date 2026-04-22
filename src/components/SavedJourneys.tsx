@@ -35,14 +35,14 @@ export default function SavedJourneys() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 pb-24">
+    <div className="flex-1 overflow-y-auto bg-surface pb-24">
       {/* Header */}
-      <div className="bg-white px-4 py-6 border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
+      <div className="bg-card px-4 py-6 border-b border-border-main flex items-center justify-between sticky top-0 z-10">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-tight">Saved Journeys</h1>
-          <p className="text-slate-500 font-medium text-sm mt-1">Book your regular trips instantly</p>
+          <h1 className="text-2xl font-black tracking-tight text-text-main leading-tight">Saved Journeys</h1>
+          <p className="text-text-muted font-medium text-sm mt-1">Book your regular trips instantly</p>
         </div>
-        <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+        <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
           <Bookmark className="w-6 h-6" />
         </div>
       </div>
@@ -50,17 +50,17 @@ export default function SavedJourneys() {
       {/* Content */}
       <div className="max-w-2xl mx-auto p-4 space-y-4">
         {savedJourneys.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Bookmark className="w-8 h-8 text-slate-300" />
+          <div className="text-center py-12 bg-card rounded-3xl border border-border-main shadow-sm">
+            <div className="w-16 h-16 bg-surface rounded-full flex items-center justify-center mx-auto mb-4">
+              <Bookmark className="w-8 h-8 text-text-muted" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No saved journeys</h3>
-            <p className="text-sm text-slate-500 mt-1 mb-6 max-w-[250px] mx-auto">
+            <h3 className="text-lg font-bold text-text-main">No saved journeys</h3>
+            <p className="text-sm text-text-muted mt-1 mb-6 max-w-[250px] mx-auto">
               Save your frequent routes from the My Rides tab to quickly book them here.
             </p>
             <button
               onClick={() => navigate("/my-rides")}
-              className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-slate-800 transition-colors"
+              className="bg-text-main text-surface px-6 py-3 rounded-2xl font-black text-sm hover:opacity-90 transition-colors"
             >
               Go to My Rides
             </button>
@@ -72,43 +72,43 @@ export default function SavedJourneys() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
               key={`${journey.pickup}-${journey.dropoff}-${idx}`}
-              className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-4 group"
+              className="bg-card rounded-3xl border border-border-main shadow-sm overflow-hidden p-4 group"
             >
               <div className="space-y-4 mb-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                  <div className="w-8 h-8 rounded-full bg-surface border border-border-main flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</p>
-                    <p className="text-sm font-bold text-slate-700 line-clamp-1">{journey.pickup}</p>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">Pickup</p>
+                    <p className="text-sm font-bold text-text-main line-clamp-1">{journey.pickup}</p>
                   </div>
                 </div>
 
-                <div className="w-0.5 h-4 bg-slate-200 ml-[15px] -my-2" />
+                <div className="w-0.5 h-4 bg-border-main ml-[15px] -my-2" />
 
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <MapPin className="w-4 h-4 text-emerald-500" />
+                  <div className="w-8 h-8 rounded-full bg-surface border border-border-main flex items-center justify-center shrink-0 mt-0.5">
+                    <MapPin className="w-4 h-4 text-trust" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dropoff</p>
-                    <p className="text-sm font-bold text-slate-700 line-clamp-1">{journey.dropoff}</p>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">Dropoff</p>
+                    <p className="text-sm font-bold text-text-main line-clamp-1">{journey.dropoff}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border-main">
                 <button
                   onClick={() => handleRemoveJourney(journey)}
                   disabled={loading}
-                  className="p-3 text-slate-400 bg-slate-50 rounded-xl hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
+                  className="p-3 text-text-muted bg-surface rounded-xl hover:bg-danger/10 hover:text-danger transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => handleBookJourney(journey)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/20"
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl font-black text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
                 >
                   Book This Journey <ArrowRight className="w-4 h-4 opacity-70" />
                 </button>

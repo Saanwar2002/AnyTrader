@@ -17,7 +17,6 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
   const [stripeBalance, setStripeBalance] = useState({ available: 0, pending: 0, loading: true });
   const [recentTrips, setRecentTrips] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -94,37 +93,6 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
     setTimeout(() => setIsRefreshing(false), 800);
   };
 
-  const handleWithdraw = async () => {
-    if (isWithdrawing || !user || stripeBalance.available <= 0) {
-      if (stripeBalance.available <= 0) toast.error("No available funds to withdraw");
-      return;
-    }
-    
-    setIsWithdrawing(true);
-    const toastId = toast.loading("Processing withdrawal...");
-
-    try {
-      const res = await fetch("/api/driver/create-payout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId: user.uid, amount: stripeBalance.available })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(data.mock ? "Mock payout successful (Dev Mode)" : "Funds successfully sent to your bank!", { id: toastId });
-        setStripeBalance({ available: 0, pending: 0, loading: false });
-      } else {
-        const err = await res.json();
-        toast.error(err.error || "Withdrawal failed", { id: toastId });
-      }
-    } catch (err) {
-      toast.error("Network error during withdrawal", { id: toastId });
-    } finally {
-      setIsWithdrawing(false);
-    }
-  };
-
   // Mock data for week/month for demo purposes since we don't have historical aggregation yet
   const displayEarnings = metrics[period].earnings || (period === 'week' ? 845.20 : period === 'month' ? 2104.50 : 0);
   const displayGoal = metrics[period].goal;
@@ -167,17 +135,11 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
           </button>
         </div>
         <div className="flex gap-4">
-          <button 
-            onClick={handleWithdraw}
-            disabled={isWithdrawing || stripeBalance.available <= 0}
-            className="flex-1 bg-white text-[#AF52DE] py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
-          >
-            {isWithdrawing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              "Withdraw Now"
-            )}
-          </button>
+        <div className="flex gap-4">
+           <p className="text-[10px] text-white/60 font-bold italic">
+             * Payouts are managed automatically via Stripe Connect.
+           </p>
+        </div>
           <div className="bg-white/10 px-4 py-2 rounded-2xl flex flex-col justify-center">
             <p className="text-[8px] font-black text-white/60 uppercase">Pending</p>
             <p className="text-xs font-black text-white">£{stripeBalance.pending.toFixed(2)}</p>

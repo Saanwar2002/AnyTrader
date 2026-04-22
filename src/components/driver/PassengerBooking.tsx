@@ -1,42 +1,67 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MapPin, Navigation, Car, Clock, X, Check, Target, MessageSquare, Info, ChevronRight, Zap, History, Loader2, CreditCard, Mic, MicOff, Star, Users, Repeat, Shield, Menu, Plus, Home, Briefcase, Dog, Accessibility } from "lucide-react";
+import { 
+  MapPin, Navigation, Car, Clock, X, Check, Target, 
+  MessageSquare, ChevronRight, Zap, History, Loader2, 
+  Mic, MicOff, Star, Users, Repeat, Shield, Plus, 
+  Home, Briefcase, Dog, Accessibility 
+} from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
+import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { GoogleGenAI, Type } from "@google/genai";
 import { triggerHaptic, ImpactStyle, hideNativeKeyboard } from "@/src/lib/capacitor";
 
-// Leaflet Mapping Imports
-import { MapContainer, TileLayer, Marker, useMap, Polyline } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
+// Google Maps Imports
+import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, InfoWindowF } from "@react-google-maps/api";
 
-// Fix Leaflet's default icon paths
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+const containerStyle = {
+  width: '100%',
+  height: '100%'
+};
 
-function MapController({ center }: { center: [number, number] | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (center) {
-      const zoom = 16;
-      const targetPoint = map.project(center, zoom);
-      // Add 25% of window height to push camera South, moving the marker North (up) on the screen
-      const offsetPoint = L.point(targetPoint.x, targetPoint.y + window.innerHeight * 0.25);
-      const offsetLatLng = map.unproject(offsetPoint, zoom);
-      
-      map.flyTo(offsetLatLng, zoom, { animate: true, duration: 1.5 });
+const defaultCenter = {
+  lat: 51.5225,
+  lng: -0.1554
+};
+
+const mapOptions: google.maps.MapOptions = {
+  disableDefaultUI: false,
+  zoomControl: true,
+  streetViewControl: false,
+  mapTypeControl: false,
+  fullscreenControl: false,
+  styles: [
+    {
+      "featureType": "poi",
+      "stylers": [{ "visibility": "off" }]
+    },
+    {
+      "featureType": "transit",
+      "stylers": [{ "visibility": "simplified" }]
     }
-  }, [center, map]);
-  return null;
-}
+  ]
+};
+
+const darkMapOptions: google.maps.MapOptions = {
+  ...mapOptions,
+  styles: [
+    { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
+    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
+    { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
+    { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
+    { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
+    { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
+    { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
+    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] }
+  ]
+};
+
+const libraries: any[] = ['places'];
 
 type BookingStep = "details" | "searching" | "confirmed";
 
@@ -51,6 +76,7 @@ const CAR_CATEGORIES = [
 
 export default function PassengerBooking() {
   const { user, profile } = useAuth();
+  const { theme } = usePortal();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<BookingStep>("details");
@@ -62,7 +88,16 @@ export default function PassengerBooking() {
   const [isPetFriendly, setIsPetFriendly] = useState(false);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   
-  // Try to load existing ride if edit ID is present
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+    version: "weekly"
+  });
+
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
+  // Load existing ride
   useEffect(() => {
     if (editId) {
       const unsub = onSnapshot(doc(db, "ride_requests", editId), (doc) => {
@@ -87,59 +122,92 @@ export default function PassengerBooking() {
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [fareEstimate, setFareEstimate] = useState<number | null>(null);
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
-  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, minFare: number}>({ baseFare: 2.5, distanceRate: 1.2, minFare: 5.0 });
+  const [fareConfig, setFareConfig] = useState({ baseFare: 2.5, distanceRate: 1.2, minFare: 5.0 });
 
   // Map States
-  const [mapCenter, setMapCenter] = useState<[number, number]>([51.5225, -0.1554]); // Default Baker St
-  const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
-  const [dropoffCoords, setDropoffCoords] = useState<[number, number] | null>(null);
-  const [stops, setStops] = useState<{address: string, coords: [number, number] | null}[]>([]);
-  const [routeLine, setRouteLine] = useState<[number, number][]>([]);
+  const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [pickupCoords, setPickupCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [dropoffCoords, setDropoffCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
+  const [routeLine, setRouteLine] = useState<{lat: number, lng: number}[]>([]);
 
-  // Fetch route when both coordinates are set
+  const panToWithOffset = useCallback((coords: {lat: number, lng: number}) => {
+    if (!map) return;
+    map.panTo(coords);
+    // Offset North-South based on screen height to keep the pin visible above the sheet
+    setTimeout(() => {
+       map.panBy(0, window.innerHeight * 0.15); 
+    }, 100);
+  }, [map]);
+
   useEffect(() => {
-    if (pickupCoords && dropoffCoords) {
-      const getRoute = async () => {
-        try {
-          const validStops = stops.filter(s => s.coords !== null);
-          const stopString = validStops.length > 0 
-             ? ';' + validStops.map(s => `${s.coords![1]},${s.coords![0]}`).join(';')
-             : '';
-          
-          // Use OSRM public API for routing
-          const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${pickupCoords[1]},${pickupCoords[0]}${stopString};${dropoffCoords[1]},${dropoffCoords[0]}?overview=full&geometries=geojson`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.routes && data.routes[0]) {
-              const coords = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
-              setRouteLine(coords);
+    if (mapCenter && map && step === "details") {
+      panToWithOffset(mapCenter);
+    }
+  }, [mapCenter, map, panToWithOffset, step]);
+
+  // Routing and Distance Calculation (consolidated)
+  useEffect(() => {
+    if (pickupCoords && dropoffCoords && isLoaded) {
+      const getRoute = () => {
+        const directionsService = new google.maps.DirectionsService();
+        const validStops = stops.filter(s => s.coords !== null).map(s => ({
+          location: new google.maps.LatLng(s.coords!.lat, s.coords!.lng),
+          stopover: true
+        }));
+
+        directionsService.route({
+          origin: new google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
+          destination: new google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
+          waypoints: validStops,
+          travelMode: google.maps.TravelMode.DRIVING,
+        }, (result, status) => {
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            // Draw the line
+            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+            setRouteLine(path);
+
+            // Fit bounds
+            if (map) {
+              const bounds = new google.maps.LatLngBounds();
+              path.forEach((p: any) => bounds.extend(p));
+              map.fitBounds(bounds, { 
+                padding: { 
+                  top: 100, 
+                  right: 50, 
+                  bottom: window.innerHeight * 0.45, 
+                  left: 50 
+                } 
+              });
             }
+
+            // Calculate distance/fare
+            let totalDistanceMeters = 0;
+            result.routes[0].legs.forEach(leg => {
+              if (leg.distance) totalDistanceMeters += leg.distance.value;
+            });
+            const distanceMiles = totalDistanceMeters / 1609.34;
+            setFareEstimate(fareConfig.baseFare + (distanceMiles * fareConfig.distanceRate));
+          } else {
+            console.error("Directions failed:", status);
           }
-        } catch (err) {
-          console.error("Routing failed", err);
-        }
+        });
       };
       getRoute();
     } else {
       setRouteLine([]);
     }
-  }, [pickupCoords, dropoffCoords, stops]);
+  }, [pickupCoords, dropoffCoords, stops, map, fareConfig, isLoaded]);
 
   useEffect(() => {
-    // Try to get user's location immediately for the map when they open the page
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-           const coords: [number, number] = [position.coords.latitude, position.coords.longitude];
-           setMapCenter(coords);
-           setPickupCoords(coords); // Also tentatively set pickup to their GPS
-        },
-        () => {
-           console.log("Could not get initial location automatically.");
-        }
-      );
+    if (navigator.geolocation && !pickupCoords) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setMapCenter(c);
+        setPickupCoords(c);
+      });
     }
-  }, []);
+  }, [pickupCoords]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "platform_config", "rides"), (doc) => {
@@ -155,31 +223,14 @@ export default function PassengerBooking() {
     return () => unsub();
   }, []);
 
-  
-  // Favorites logic
   const [favoriteAddresses, setFavoriteAddresses] = useState<any[]>([]);
   useEffect(() => {
     if (profile?.favoriteAddresses) setFavoriteAddresses(profile.favoriteAddresses);
   }, [profile]);
 
-  const isFavorite = (address: string) => favoriteAddresses.some(f => f.address === address);
-
-  const saveQuickAddress = async (type: "home" | "work", address: string) => {
-    if (!user || !address) return;
-    try {
-      await updateDoc(doc(db, "users", user.uid), {
-        [`${type}Address`]: address
-      });
-      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} address saved!`);
-    } catch (err) {
-      toast.error(`Failed to save ${type} address`);
-    }
-  };
-
   const toggleFavorite = async (address: string, name: string) => {
     if (!user || !address) return;
     const existing = favoriteAddresses.find(f => f.address === address);
-    
     try {
       if (existing) {
         await updateDoc(doc(db, "users", user.uid), {
@@ -198,80 +249,55 @@ export default function PassengerBooking() {
     }
   };
 
-  // Voice Interaction
-  const recognitionRef = useRef<any>(null);
-
   const startListening = () => {
     triggerHaptic(ImpactStyle.Light);
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      toast.error("Speech recognition is not supported in this browser.");
+      toast.error("Speech recognition not supported.");
       return;
     }
-
     const recognition = new SpeechRecognition();
     recognition.lang = "en-GB";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
     recognition.onerror = () => setIsListening(false);
-
     recognition.onresult = async (event: any) => {
       const transcript = event.results[0][0].transcript;
       setIsListening(false);
       await processVoiceCommand(transcript);
     };
-
-    recognitionRef.current = recognition;
     recognition.start();
   };
 
   const processVoiceCommand = async (text: string) => {
     setIsAiProcessing(true);
-    toast.info("AI extracting details from your voice...");
-
+    toast.info("AI extracting details...");
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Extract taxi booking details from this text: "${text}". 
-        Return JSON with: pickup, dropoff, comments.
-        The current location is Baker St, London.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              pickup: { type: Type.STRING },
-              dropoff: { type: Type.STRING },
-              comments: { type: Type.STRING }
-            }
-          }
-        }
+        contents: [{ parts: [{ text: `Extract taxi booking details from: "${text}". Return JSON with keys: pickup, dropoff, comments.` }] }],
+        config: { responseMimeType: "application/json" }
       });
-
-      const result = response.text && response.text !== "undefined" ? JSON.parse(response.text) : {};
+      const result = JSON.parse(response.text || "{}");
       if (result.pickup) setPickup(result.pickup);
       if (result.dropoff) setDropoff(result.dropoff);
       if (result.comments) setComments(result.comments);
-
-      toast.success("Details updated via AI Voice!");
+      toast.success("AI extraction complete.");
     } catch (err) {
-      console.error(err);
-      toast.error("AI failed to process voice. Please try again or type.");
+      console.error("AI Error:", err);
+      toast.error("AI error. Try typing.");
     } finally {
       setIsAiProcessing(false);
     }
   };
 
-  // Real search results using Nominatim & Postcodes.io
-  const [suggestions, setSuggestions] = useState<{label: string, lat?: number, lon?: number}[]>([]);
+  const [suggestions, setSuggestions] = useState<{label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any}[]>([]);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
 
   useEffect(() => {
+    if (!isLoaded) return;
     let val = "";
     if (activeField === "pickup") val = pickup;
     else if (activeField === "dropoff") val = dropoff;
@@ -279,135 +305,86 @@ export default function PassengerBooking() {
       const idx = parseInt(activeField.split('-')[1]);
       val = stops[idx]?.address || "";
     }
-    
-    if (!val || val.length < 3) {
-      setSuggestions([]);
-      return;
-    }
+    if (!val || val.length < 3) { setSuggestions([]); return; }
 
     const fetchSuggestions = async () => {
       setIsLoadingAddress(true);
+      
       try {
-        // Quick postcode check
-        const ukPostcodeRegex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
-        if (ukPostcodeRegex.test(val)) {
-          const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(val)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === 200 && data.result) {
-              setSuggestions([{
-                label: `${data.result.postcode}, ${data.result.admin_district || data.result.parish || data.result.region}`,
-                lat: data.result.latitude,
-                lon: data.result.longitude
-              }]);
-              setIsLoadingAddress(false);
-              return;
-            }
-          }
+        if (!window.google || !window.google.maps) {
+          throw new Error("Google Maps not loaded. Check API Key or libraries.");
         }
 
-        // Address check via Nominatim (Biased to current mapCenter to find nearby places like "Train Station")
-        const latBias = mapCenter[0];
-        const lonBias = mapCenter[1];
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&countrycodes=gb&limit=5&lat=${latBias}&lon=${lonBias}`);
-        if (res.ok) {
-          const data = await res.json();
-          // Clean up long nominatim addresses a bit
-          const cleaned = data.map((d: any) => {
-            const parts = d.display_name.split(', ');
-            return {
-              label: parts.slice(0, 4).join(', '),
-              lat: parseFloat(d.lat),
-              lon: parseFloat(d.lon)
-            };
-          });
+        const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
+
+        const request = {
+          input: val,
+          includedRegionCodes: ['GB'],
+        };
+
+        const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+
+        setIsLoadingAddress(false);
+        
+        if (predictions && predictions.length > 0) {
+          const cleaned = predictions.map((p: any) => ({
+            label: p.placePrediction.text.text,
+            placeId: p.placePrediction.placeId,
+            placePrediction: p.placePrediction // Save the raw prediction object to use toPlace() later
+          }));
           setSuggestions(cleaned);
+        } else {
+          setSuggestions([]);
         }
-      } catch (err) {
-        console.error("Address lookup failed", err);
-      } finally {
+      } catch (err: any) {
+        console.error("Google Places Exception:", err);
+        import("sonner").then(({ toast }) => toast.error(`Map Error: ${err.message}`));
+        setSuggestions([]);
         setIsLoadingAddress(false);
       }
     };
 
-    const debounce = setTimeout(fetchSuggestions, 600);
+    const debounce = setTimeout(fetchSuggestions, 500);
     return () => clearTimeout(debounce);
-  }, [pickup, dropoff, activeField]);
+  }, [pickup, dropoff, activeField, mapCenter, isLoaded]);
 
   const handleDetectLocation = () => {
     triggerHaptic(ImpactStyle.Light);
-    if (!navigator.geolocation) {
-      toast.error("Geolocation is not supported by your browser");
-      return;
-    }
-
     setIsDetecting(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        setMapCenter([latitude, longitude]); // Auto fly the map
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.display_name) {
-              const parts = data.display_name.split(', ');
-              const cleaned = parts.slice(0, 4).join(', ');
-              setPickup(cleaned);
-              setPickupCoords([latitude, longitude]);
-              setIsDetecting(false);
-              toast.success(`Location detected (Accuracy: ${accuracy.toFixed(1)}m)`);
-              return;
-            }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      const c = { lat: latitude, lng: longitude };
+      setMapCenter(c);
+      setPickupCoords(c);
+
+      if (!window.google || !window.google.maps) {
+        setIsDetecting(false);
+        return;
+      }
+
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: c }, (results, status) => {
+        setIsDetecting(false);
+        if (status === "OK" && results && results[0]) {
+          const res = results[0];
+          let addr = res.formatted_address;
+          const postcode = res.address_components.find(c => c.types.includes("postal_code"))?.long_name;
+          if (postcode && !addr.includes(postcode)) {
+            addr += `, ${postcode}`;
           }
-        } catch (err) {
-          console.error("Reverse geocoding failed", err);
+          setPickup(addr);
         }
-        setPickup(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-        setPickupCoords([latitude, longitude]);
-        setIsDetecting(false);
-        toast.success(`Location detected (Accuracy: ${accuracy.toFixed(1)}m)`);
-      },
-      (error) => {
-        setIsDetecting(false);
-        toast.error("Unable to retrieve your location. Please check your permissions.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+      });
+    }, () => setIsDetecting(false));
   };
 
-  const [driverPos, setDriverPos] = useState<[number, number] | null>(null);
-
-  // 1. Improved Fare Estimation using OSRM Distance
-  useEffect(() => {
-    if (!pickupCoords || !dropoffCoords) return;
-    
-    const fetchRoute = async () => {
-      try {
-        const coords = [pickupCoords, ...stops.filter(s => s.coords).map(s => s.coords), dropoffCoords];
-        const coordString = coords.map(c => `${c[1]},${c[0]}`).join(';');
-        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.routes && data.routes[0]) {
-            const route = data.routes[0];
-            const distanceMiles = (route.distance / 1609.34);
-            const calculatedFare = fareConfig.baseFare + (distanceMiles * fareConfig.distanceRate);
-            setFareEstimate(calculatedFare);
-            setRouteLine(route.geometry.coordinates.map((c: any) => [c[1], c[0]]));
-          }
-        }
-      } catch (e) {
-        console.error("OSRM Error:", e);
-      }
-    };
-    fetchRoute();
-  }, [pickupCoords, dropoffCoords, stops, fareConfig]);
+  const [driverPos, setDriverPos] = useState<{lat: number, lng: number} | null>(null);
 
   const getComputedFare = (catId: string) => {
     const category = CAR_CATEGORIES.find(c => c.id === catId);
     const multiplier = category?.multiplier || 1.0;
-    return Math.max(fareEstimate * multiplier, fareConfig.minFare * multiplier);
+    const base = fareEstimate || 5.0;
+    return Math.max(base * multiplier, fareConfig.minFare * multiplier);
   };
 
   const [currentRideId, setCurrentRideId] = useState<string | null>(null);
@@ -416,19 +393,17 @@ export default function PassengerBooking() {
     triggerHaptic(ImpactStyle.Heavy);
     hideNativeKeyboard();
     if (!user) return;
-    
     setStep("searching");
-
     try {
       const rideData = {
         riderId: user.uid,
         passengerName: profile?.firstName || "Passenger",
         pickup,
-        pickupLat: pickupCoords?.[0] || mapCenter[0],
-        pickupLng: pickupCoords?.[1] || mapCenter[1],
+        pickupLat: pickupCoords?.lat || mapCenter.lat,
+        pickupLng: pickupCoords?.lng || mapCenter.lng,
         dropoff,
-        dropoffLat: dropoffCoords?.[0],
-        dropoffLng: dropoffCoords?.[1],
+        dropoffLat: dropoffCoords?.lat,
+        dropoffLng: dropoffCoords?.lng,
         stops: stops.filter(s => s.coords !== null),
         carCategory: selectedCategory,
         isPetFriendly,
@@ -439,156 +414,185 @@ export default function PassengerBooking() {
         currency: "GBP",
         handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
       };
-
-      let rideId = editId;
       if (editId) {
-         await updateDoc(doc(db, "ride_requests", editId), {
-           ...rideData,
-           updatedAt: serverTimestamp()
-         });
+         await updateDoc(doc(db, "ride_requests", editId), { ...rideData, updatedAt: serverTimestamp() });
+         setCurrentRideId(editId);
       } else {
-         const docRef = await addDoc(collection(db, "ride_requests"), {
-           ...rideData,
-           createdAt: serverTimestamp()
-         });
-         rideId = docRef.id;
+         const docRef = await addDoc(collection(db, "ride_requests"), { ...rideData, createdAt: serverTimestamp() });
+         setCurrentRideId(docRef.id);
       }
-      
-      setCurrentRideId(rideId);
-      toast.success(editId ? "Ride updated!" : "Ride request sent to fleet!");
-
-    } catch (err) {
-      console.error(err);
-      toast.error(editId ? "Failed to update ride" : "Failed to post ride request");
-      setStep("details");
-    }
+    } catch (err) { setStep("details"); }
   };
 
-  // 2. Listen for Driver Assignment and Tracking
   useEffect(() => {
     if (!currentRideId) return;
-
     const unsubRide = onSnapshot(doc(db, "ride_requests", currentRideId), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.status === 'accepted' && data.driverId) {
-          if (step === 'searching') {
-            setAssignedDriverInfo({
-              uid: data.driverId,
-              name: data.driverName || "Assigned Driver",
-              vehicle: data.vehicleInfo || "Vehicle en route",
-              code: data.handshakeCode || "8821"
-            });
-            setStep("confirmed");
-            triggerHaptic(ImpactStyle.Heavy);
-          }
+          setAssignedDriverInfo({ uid: data.driverId, name: data.driverName || "Driver", vehicle: data.vehicleInfo || "Taxi", code: data.handshakeCode || "---" });
+          setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
         }
-        
-        if (data.status === 'completed') {
-           toast.success("Life is a journey! Trip completed.");
-           setStep("details");
-           setCurrentRideId(null);
-           setRouteLine([]);
-           setAssignedDriverInfo(null);
-           setDriverPos(null);
-        }
+        if (data.status === 'completed') { setStep("details"); setCurrentRideId(null); setAssignedDriverInfo(null); }
       }
     });
-
-    // 3. Listen for Live Driver Location
     const unsubTrack = onSnapshot(doc(db, "live_tracking", currentRideId), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        if (data.lat && data.lng) {
-          setDriverPos([data.lat, data.lng]);
-        }
+        if (data.lat && data.lng) setDriverPos({ lat: data.lat, lng: data.lng });
       }
     });
+    return () => { unsubRide(); unsubTrack(); };
+  }, [currentRideId]);
 
-    return () => {
-      unsubRide();
-      unsubTrack();
-    };
-  }, [step, currentRideId]);
-
-  const handleCancelRequest = async () => {
-    if (!currentRideId) return;
-    if (window.confirm("Are you sure you want to cancel your ride request?")) {
-      try {
-        await updateDoc(doc(db, "ride_requests", currentRideId), { status: "cancelled" });
-        setStep("details");
-        setCurrentRideId(null);
-        setAssignedDriverInfo(null);
-        setDriverPos(null);
-        toast.info("Ride cancelled.");
-      } catch (e) {
-        toast.error("Failed to cancel ride.");
-      }
-    }
-  };
-
-  const selectSuggestion = (s: {label: string, lat?: number, lon?: number}) => {
+  const selectSuggestion = async (s: {label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any}) => {
     triggerHaptic(ImpactStyle.Light);
-    if (activeField === "pickup") {
-      setPickup(s.label);
-      if (s.lat && s.lon) {
-         setMapCenter([s.lat, s.lon]);
-         setPickupCoords([s.lat, s.lon]);
+    
+    const finalizeSelection = (coords: {lat: number, lng: number} | null, finalAddr: string) => {
+      if (activeField === "pickup") { 
+        setPickup(finalAddr); 
+        if (coords) { setMapCenter(coords); setPickupCoords(coords); } 
       }
-    } else if (activeField === "dropoff") {
-      setDropoff(s.label);
-      if (s.lat && s.lon) {
-         setMapCenter([s.lat, s.lon]); // Move map to dropoff focus
-         setDropoffCoords([s.lat, s.lon]);
+      else if (activeField === "dropoff") { 
+        setDropoff(finalAddr); 
+        if (coords) { setMapCenter(coords); setDropoffCoords(coords); } 
       }
-    } else if (activeField?.startsWith("stop-")) {
-      const idx = parseInt(activeField.split('-')[1]);
-      const newStops = [...stops];
-      newStops[idx] = { ...newStops[idx], address: s.label };
-      if (s.lat && s.lon) {
-        newStops[idx].coords = [s.lat, s.lon];
-        setMapCenter([s.lat, s.lon]);
+      else if (activeField?.startsWith("stop-")) {
+        const idx = parseInt(activeField.split('-')[1]);
+        const ns = [...stops];
+        ns[idx] = { address: finalAddr, coords };
+        setStops(ns);
+        if (coords) setMapCenter(coords);
       }
-      setStops(newStops);
+      setSuggestions([]); setActiveField(null);
+    };
+
+    if (s.placePrediction) {
+      if (!window.google || !window.google.maps) {
+        import("sonner").then(({ toast }) => toast.error("Google Maps not loaded"));
+        return;
+      }
+      try {
+        const place = s.placePrediction.toPlace();
+        await place.fetchFields({ fields: ['location', 'formattedAddress', 'addressComponents'] });
+        const loc = place.location;
+        let finalAddr = place.formattedAddress || s.label;
+        
+        // Ensure UK postcode specifically is present
+        const components = (place as any).addressComponents;
+        const postcode = components?.find((c: any) => c.types.includes('postal_code'))?.longText;
+        if (postcode && !finalAddr.includes(postcode)) {
+          finalAddr += `, ${postcode}`;
+        }
+
+        if (loc) {
+          finalizeSelection({ lat: loc.lat(), lng: loc.lng() }, finalAddr);
+        } else {
+          finalizeSelection(null, s.label);
+        }
+      } catch (err: any) {
+        console.error("Geocoding using new Places API failed:", err);
+        finalizeSelection(null, s.label);
+      }
+    } else {
+      const coords = s.lat && s.lon ? { lat: s.lat, lng: s.lon } : null;
+      finalizeSelection(coords, s.label);
     }
-    setSuggestions([]);
-    setActiveField(null);
   };
+
+  // Handle Google Maps load errors (e.g. ApiProjectMapError)
+  if (loadError || (!isLoaded && !(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY)) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-surface p-8 text-center">
+        <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mb-6">
+          <Navigation className="w-10 h-10 text-danger" />
+        </div>
+        <h2 className="text-2xl font-black text-text-main mb-2">Maps API Error</h2>
+        <p className="text-text-muted max-w-sm mb-8 font-medium">
+          {loadError ? "The Google Maps API failed to load. Please ensure the 'Maps JavaScript API' is enabled in your Google Cloud Console project." : "Google Maps API Key is missing. Please configure VITE_GOOGLE_MAPS_API_KEY."}
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <a 
+            href="https://console.cloud.google.com/google/maps-apis/library/maps-backend.googleapis.com" 
+            target="_blank" 
+            rel="noreferrer"
+            className="w-full py-4 bg-primary text-white rounded-2xl font-black text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
+          >
+            Enable Maps JS API
+          </a>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="w-full py-4 bg-card border border-border-main text-text-main rounded-2xl font-black text-sm"
+          >
+            Check Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoaded) return <div className="h-full flex items-center justify-center bg-surface"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
   return (
-    <div className="relative h-[calc(100vh-64px)] w-full overflow-hidden bg-slate-100 flex flex-col">
-       {/* Full Screen Map Layer */}
+    <div className="relative flex-1 w-full overflow-hidden bg-surface flex flex-col">
        <div className="absolute inset-0 z-0">
-          {window.navigator && ( // Defensive load
-             <MapContainer center={mapCenter} zoom={16} style={{ height: '100%', width: '100%' }} zoomControl={false}>
-                <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                {!pickupCoords && !dropoffCoords && <Marker key="center-marker" position={mapCenter} />}
-                {pickupCoords && <Marker key="pickup-marker" position={pickupCoords} />}
-                {stops.map((stop, i) => stop.coords && <Marker key={`stop-marker-${i}`} position={stop.coords} />)}
-                {dropoffCoords && <Marker key="dropoff-marker" position={dropoffCoords} />}
-                {driverPos && (
-                  <Marker 
-                    key="driver-marker" 
-                    position={driverPos}
-                    icon={L.divIcon({
-                      html: `<div class="bg-slate-900 p-1.5 rounded-lg shadow-xl border-2 border-white animate-bounce"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg></div>`,
-                      className: 'custom-taxi-icon',
-                      iconSize: [32, 32],
-                      iconAnchor: [16, 16]
-                    })}
-                  />
-                )}
-                {routeLine.length > 0 && (
-                   <Polyline key="route-polyline" positions={routeLine} color="#2563eb" weight={5} opacity={0.7} />
-                )}
-                <MapController center={mapCenter} />
-             </MapContainer>
-          )}
+          <GoogleMap
+            mapContainerStyle={containerStyle}
+            center={mapCenter}
+            zoom={15}
+            onLoad={setMap}
+            options={theme === "dark" ? darkMapOptions : mapOptions}
+            onClick={(e) => {
+               if (e.latLng && step === "details") {
+                  const lat = e.latLng.lat();
+                  const lng = e.latLng.lng();
+                  const coords = { lat, lng };
+                  setMapCenter(coords);
+                  if (activeField === "pickup") setPickupCoords(coords);
+                  else if (activeField === "dropoff") setDropoffCoords(coords);
+                  else if (!pickupCoords) setPickupCoords(coords);
+                  else setDropoffCoords(coords);
+               }
+            }}
+          >
+            {pickupCoords && (
+              <>
+                <MarkerF position={pickupCoords} label="P" />
+                <InfoWindowF position={pickupCoords} options={{ pixelOffset: new window.google.maps.Size(0, -40), disableAutoPan: true }}>
+                  <div className="bg-card p-2 rounded-lg shadow-xl border border-border-main min-w-[120px]">
+                    <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Pickup</p>
+                    <p className="text-[11px] font-bold text-text-main leading-tight line-clamp-2">{pickup}</p>
+                  </div>
+                </InfoWindowF>
+              </>
+            )}
+            {dropoffCoords && (
+              <>
+                <MarkerF position={dropoffCoords} label="D" />
+                <InfoWindowF position={dropoffCoords} options={{ pixelOffset: new window.google.maps.Size(0, -40), disableAutoPan: true }}>
+                  <div className="bg-card p-2 rounded-lg shadow-xl border border-border-main min-w-[120px]">
+                    <p className="text-[10px] font-black text-header uppercase tracking-widest mb-1">Dropoff</p>
+                    <p className="text-[11px] font-bold text-text-main leading-tight line-clamp-2">{dropoff}</p>
+                  </div>
+                </InfoWindowF>
+              </>
+            )}
+            {stops.map((s, i) => s.coords && (
+              <React.Fragment key={i}>
+                <MarkerF position={s.coords} label={`${i+1}`} />
+                <InfoWindowF position={s.coords} options={{ pixelOffset: new window.google.maps.Size(0, -40), disableAutoPan: true }}>
+                  <div className="bg-card p-2 rounded-lg shadow-xl border border-border-main min-w-[120px]">
+                    <p className="text-[10px] font-black text-warning uppercase tracking-widest mb-1">Stop {i+1}</p>
+                    <p className="text-[11px] font-bold text-text-main leading-tight line-clamp-2">{s.address}</p>
+                  </div>
+                </InfoWindowF>
+              </React.Fragment>
+            ))}
+            {driverPos && <MarkerF position={driverPos} label="🚕" />}
+            {routeLine.length > 0 && <PolylineF path={routeLine} options={{ strokeColor: '#2563eb', strokeOpacity: 0.8, strokeWeight: 5 }} />}
+          </GoogleMap>
        </div>
 
-       {/* Interactive Bottom Sheet overlaying the map */}
        <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none flex flex-col justify-end">
           <AnimatePresence mode="wait">
             {step === "details" && (
@@ -597,320 +601,166 @@ export default function PassengerBooking() {
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="bg-white rounded-t-[40px] shadow-[0_-20px_40px_rgba(0,0,0,0.15)] pointer-events-auto flex flex-col max-h-[55vh] w-full"
+                className="bg-card rounded-t-[40px] shadow-2xl pointer-events-auto flex flex-col max-h-[55vh] w-full border-t border-border-main"
               >
-                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
-                <div className="p-5 pt-2 overflow-y-auto w-full space-y-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="w-12 h-1.5 bg-border-main rounded-full mx-auto mt-3 mb-1" />
+                <div className="p-5 pt-2 overflow-y-auto space-y-4 no-scrollbar">
                   <div className="relative">
-                    <div className="absolute left-4 top-10 bottom-6 w-0.5 border-l-2 border-dashed border-slate-200" />
+                    <div className="absolute left-4 top-10 bottom-6 w-0.5 border-l-2 border-dashed border-border-main" />
                     <div className="space-y-3 relative">
-                      {/* Pickup */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between ml-4 pr-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</label>
+                          <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">Pickup</label>
                           <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1 bg-amber-50 border border-amber-100 rounded-xl p-1 shadow-sm">
-                              <button onClick={startListening} disabled={isAiProcessing} className={cn("p-1.5 rounded-lg transition-all", isListening ? "bg-red-200 text-red-600 animate-pulse" : "text-amber-600 hover:bg-amber-100")}>
-                                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                              </button>
-                              <button onClick={handleDetectLocation} disabled={isDetecting} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
-                                {isDetecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
-                              </button>
-                            </div>
-                            <button onClick={() => toggleFavorite(pickup, pickup || "Pickup Location")} className={cn("p-2 rounded-xl transition-all", isFavorite(pickup) ? "bg-amber-100 text-amber-500" : "hover:bg-slate-50 text-slate-300 hover:text-amber-400")}>
-                              <Star className={cn("w-4 h-4", isFavorite(pickup) && "fill-amber-500")} />
-                            </button>
+                             <button onClick={startListening} className={cn("p-2 rounded-xl transition-all", isListening ? "bg-danger/20 text-danger animate-pulse" : "bg-warning/10 text-warning hover:bg-warning/20")}><Mic className="w-4 h-4" /></button>
+                             <button onClick={handleDetectLocation} className="p-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-all"><Target className="w-4 h-4" /></button>
                           </div>
                         </div>
                         <div className="relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-blue-500 bg-white z-10" />
-                          <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400" placeholder="Address, Station, Postcode..." value={pickup} onFocus={() => setActiveField("pickup")} onChange={(e) => setPickup(e.target.value)} />
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-primary bg-surface z-10" />
+                          <input type="text" className="w-full pl-12 pr-4 py-3 bg-surface border-2 border-transparent focus:border-primary rounded-2xl font-bold text-text-main outline-none transition-all placeholder:text-text-muted" placeholder="Where from?" value={pickup} onFocus={() => setActiveField("pickup")} onChange={(e) => setPickup(e.target.value)} />
+                          
+                          <AnimatePresence>
+                            {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
+                              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full mt-2 left-0 right-0 z-[100] w-full bg-surface border border-border-main shadow-2xl rounded-2xl overflow-hidden">
+                                {suggestions.map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full p-4 text-left hover:bg-card border-b border-border-main last:border-0 flex items-center gap-3">
+                                    <MapPin className="w-4 h-4 text-primary shrink-0" />
+                                    <span className="font-bold text-text-main text-sm truncate">{s.label}</span>
+                                  </button>
+                                ))}
+                                {suggestions.length === 0 && isLoadingAddress && (
+                                  <div className="p-4 flex items-center justify-center text-text-muted bg-card">
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       </div>
 
-                      {/* Stops */}
                       {stops.map((stop, i) => (
-                        <div key={`stop-input-${stop.address}-${i}`} className="space-y-2 relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-amber-500 rounded-full z-10 border-2 border-white" />
-                          <input type="text" className="w-full pl-12 pr-12 py-3 bg-slate-50 border-2 border-transparent focus:border-amber-500 rounded-2xl font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400" placeholder={`Stop ${i + 1}`} value={stop.address} onFocus={() => setActiveField(`stop-${i}`)} onChange={(e) => {
-                             const newStops = [...stops];
-                             newStops[i].address = e.target.value;
-                             setStops(newStops);
+                        <div key={i} className="relative">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-warning rounded-full z-10 border-2 border-surface" />
+                          <input type="text" className="w-full pl-12 pr-12 py-3 bg-surface border-2 border-transparent focus:border-warning rounded-2xl font-bold text-text-main outline-none placeholder:text-text-muted" placeholder={`Stop ${i+1}`} value={stop.address} onFocus={() => setActiveField(`stop-${i}`)} onChange={(e) => {
+                             const ns = [...stops]; ns[i].address = e.target.value; setStops(ns);
                           }} />
-                          <button onClick={() => {
-                             setStops(stops.filter((_, idx) => idx !== i));
-                          }} className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"><X className="w-4 h-4" /></button>
+                          <button onClick={() => setStops(stops.filter((_, idx) => idx !== i))} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-danger"><X className="w-4 h-4" /></button>
+
+                          <AnimatePresence>
+                            {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
+                              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full mt-2 left-0 right-0 z-[100] w-full bg-surface border border-border-main shadow-2xl rounded-2xl overflow-hidden">
+                                {suggestions.map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full p-4 text-left hover:bg-card border-b border-border-main last:border-0 flex items-center gap-3">
+                                    <MapPin className="w-4 h-4 text-warning shrink-0" />
+                                    <span className="font-bold text-text-main text-sm truncate">{s.label}</span>
+                                  </button>
+                                ))}
+                                {suggestions.length === 0 && isLoadingAddress && (
+                                  <div className="p-4 flex items-center justify-center text-text-muted bg-card">
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       ))}
 
-                      {/* Add Stop Button */}
                       {stops.length < 3 && (
-                        <div className="relative -my-1 ml-[11px] z-10">
-                          <button className="flex items-center gap-1.5 px-3 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded-full border-2 border-white transition-colors" onClick={() => setStops([...stops, { address: "", coords: null }])}>
-                            <Plus className="w-3.5 h-3.5" />
-                            <span className="text-[9px] font-black uppercase tracking-wider">Add Stop</span>
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Dropoff */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between ml-4 pr-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dropoff</label>
-                          <button onClick={() => toggleFavorite(dropoff, dropoff || "Dropoff Location")} className={cn("transition-all p-2 rounded-xl", isFavorite(dropoff) ? "bg-amber-100 text-amber-500" : "text-slate-300 hover:text-amber-400 hover:bg-slate-50")}>
-                            <Star className={cn("w-4 h-4", isFavorite(dropoff) && "fill-amber-500")} />
-                          </button>
-                        </div>
-                        <div className="relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-indigo-600 rounded-sm z-10" />
-                          <input type="text" className="w-full pl-12 pr-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400" placeholder="Destination Name or Postcode" value={dropoff} onFocus={() => setActiveField("dropoff")} onChange={(e) => setDropoff(e.target.value)} />
-                        </div>
-                        {/* Quick Places Chips */}
-                        <div className="flex items-center gap-2 mt-2 -mb-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                          <button 
-                            onClick={() => { 
-                              const homeAddr = profile?.homeAddress;
-                              if (homeAddr) {
-                                if (activeField === "pickup") setPickup(homeAddr);
-                                else if (activeField === "dropoff") setDropoff(homeAddr);
-                                else if (activeField?.startsWith("stop-")) {
-                                  const idx = parseInt(activeField.split('-')[1]);
-                                  const newStops = [...stops];
-                                  newStops[idx].address = homeAddr;
-                                  setStops(newStops);
-                                }
-                                triggerHaptic(ImpactStyle.Light);
-                              } else {
-                                const current = activeField === "pickup" ? pickup : activeField === "dropoff" ? dropoff : "";
-                                if (current) {
-                                  saveQuickAddress("home", current);
-                                } else {
-                                  toast.info("Type an address first to save it as Home");
-                                }
-                              }
-                            }} 
-                            className={cn(
-                              "flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all whitespace-nowrap",
-                              profile?.homeAddress 
-                                ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200" 
-                                : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                            )}
-                          >
-                            <Home className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">
-                              {profile?.homeAddress ? "Home" : "Set Home"}
-                            </span>
-                          </button>
-                          <button 
-                            onClick={() => { 
-                              const workAddr = profile?.workAddress;
-                              if (workAddr) {
-                                if (activeField === "pickup") setPickup(workAddr);
-                                else if (activeField === "dropoff") setDropoff(workAddr);
-                                else if (activeField?.startsWith("stop-")) {
-                                  const idx = parseInt(activeField.split('-')[1]);
-                                  const newStops = [...stops];
-                                  newStops[idx].address = workAddr;
-                                  setStops(newStops);
-                                }
-                                triggerHaptic(ImpactStyle.Light);
-                              } else {
-                                const current = activeField === "pickup" ? pickup : activeField === "dropoff" ? dropoff : "";
-                                if (current) {
-                                  saveQuickAddress("work", current);
-                                } else {
-                                  toast.info("Type an address first to save it as Work");
-                                }
-                              }
-                            }} 
-                            className={cn(
-                              "flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all whitespace-nowrap",
-                              profile?.workAddress 
-                                ? "bg-amber-100 text-amber-700 hover:bg-amber-200" 
-                                : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                            )}
-                          >
-                            <Briefcase className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">
-                              {profile?.workAddress ? "Work" : "Set Work"}
-                            </span>
-                          </button>
-                          <button onClick={() => { 
-                            const favs = favoriteAddresses.map(f => f.address);
-                            if (favs.length > 0) {
-                              if (activeField === "pickup") setPickup(favs[0]);
-                              else if (activeField === "dropoff") setDropoff(favs[0]);
-                              triggerHaptic(ImpactStyle.Light);
-                            }
-                          }} className="flex-none flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-full transition-colors whitespace-nowrap">
-                            <History className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">Recent</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Suggestions Dropdown */}
-                      <AnimatePresence>
-                        {(suggestions.length > 0 || isLoadingAddress) && (
-                          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-100 shadow-xl rounded-2xl mt-1 overflow-hidden">
-                            {isLoadingAddress && suggestions.length === 0 && (
-                              <div className="w-full px-5 py-4 flex items-center justify-center gap-2 text-slate-400 text-sm font-bold"><Loader2 className="w-4 h-4 animate-spin" />Finding addresses...</div>
-                            )}
-                            {suggestions.map((s, idx) => (
-                              <button key={`suggestion-${s.label}-${idx}`} onClick={() => selectSuggestion(s)} className="w-full px-5 py-3 text-left hover:bg-slate-50 flex items-center gap-3 transition-colors border-b border-slate-50 last:border-0">
-                                <History className="w-4 h-4 text-slate-300" />
-                                <span className="font-bold text-slate-700 text-sm">{s.label}</span>
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-
-                  {/* Select Car Category */}
-                  <div className="space-y-2 pt-2 -mx-2 px-2 overflow-hidden">
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Select Ride</label>
-                     <div className="flex gap-2 overflow-x-auto pb-4 pt-1 snap-x px-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                       {CAR_CATEGORIES.map((category, idx) => {
-                         const price = getComputedFare(category.id);
-                         return (
-                           <button key={`category-${category.id}-${idx}`} onClick={() => setSelectedCategory(category.id)} className={cn("flex-none w-[88px] snap-start flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all", selectedCategory === category.id ? "border-slate-900 bg-slate-900 shadow-lg text-white transform scale-105" : "border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50")}>
-                             <category.icon className={cn("w-5 h-5 mb-1 transition-colors", selectedCategory === category.id ? "text-white" : "text-slate-400")} />
-                             <p className={cn("text-[9px] font-black uppercase tracking-wider mb-0.5 line-clamp-1", selectedCategory === category.id ? "text-slate-300" : "text-slate-500")}>{category.name}</p>
-                             <p className="text-[16px] font-black tracking-tighter mb-1.5">£{price.toFixed(2)}</p>
-                             <div className={cn("flex items-center gap-1 px-1.5 py-0.5 rounded border mb-1.5", selectedCategory === category.id ? "bg-amber-100 border-amber-200 text-amber-800" : "bg-amber-50 border-amber-200 text-amber-700")}>
-                                <Clock className="w-2.5 h-2.5" />
-                                <p className="text-[9px] font-bold uppercase tracking-wider">{category.wait} MINS</p>
-                             </div>
-                             <p className={cn("text-[8px] font-bold uppercase", selectedCategory === category.id ? "text-slate-400" : "text-slate-400")}>{category.capacity} PAX</p>
-                           </button>
-                         );
-                       })}
-                     </div>
-                  </div>
-
-                  {/* Driver Comments & Preferences */}
-                  <div className="space-y-4">
-                    {/* Accessibility Toggles */}
-                    <div className="flex items-center gap-3 ml-1 mr-1">
-                      <button onClick={() => { setIsPetFriendly(!isPetFriendly); triggerHaptic(ImpactStyle.Light); }} className={cn("flex flex-1 justify-center items-center gap-2 py-2.5 rounded-xl border-2 transition-all", isPetFriendly ? "bg-amber-100 border-amber-500 text-amber-800 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50")}>
-                         <Dog className="w-4 h-4" />
-                         <span className="text-[10px] font-black uppercase tracking-wider">{isPetFriendly ? 'Pet Friendly ✓' : 'Pet Friendly'}</span>
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between ml-4 pr-1">
-                      <div className="flex items-center gap-2">
-                         <MessageSquare className="w-3 h-3 text-slate-400" />
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes for Driver</label>
-                      </div>
-                      {pickup && dropoff && (
-                        <button onClick={async () => {
-                            if (!user) return;
-                            const newJourney = { id: Math.random().toString(36).substr(2, 9), name: `${pickup.split(',')[0]} to ${dropoff.split(',')[0]}`, from: pickup, to: dropoff, comments };
-                            try {
-                              await updateDoc(doc(db, "users", user.uid), { regularJourneys: arrayUnion(newJourney) });
-                              toast.success("Saved to Regular Journeys!");
-                            } catch (err) { toast.error("Failed to save journey"); }
-                          }} className="flex items-center gap-1 text-[10px] font-black text-blue-600 hover:text-blue-700 transition-colors">
-                          <Repeat className="w-3 h-3" />
-                          SAVE AS REGULAR
+                        <button className="ml-8 flex items-center gap-1.5 px-3 py-1 bg-trust/10 text-trust rounded-full border-2 border-card text-[9px] font-black uppercase" onClick={() => setStops([...stops, { address: "", coords: null }])}>
+                          <Plus className="w-3.5 h-3.5" /> Add Stop
                         </button>
                       )}
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-4">Dropoff</label>
+                        <div className="relative">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-header rounded-sm z-10" />
+                          <input type="text" className="w-full pl-12 pr-4 py-3 bg-surface border-2 border-transparent focus:border-header rounded-2xl font-bold text-text-main outline-none placeholder:text-text-muted" placeholder="Where to?" value={dropoff} onFocus={() => setActiveField("dropoff")} onChange={(e) => setDropoff(e.target.value)} />
+                          
+                          <AnimatePresence>
+                            {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
+                              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full mb-2 left-0 right-0 z-[100] w-full bg-surface border border-border-main shadow-2xl rounded-2xl overflow-hidden">
+                                {suggestions.map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full p-4 text-left hover:bg-card border-b border-border-main last:border-0 flex items-center gap-3">
+                                    <MapPin className="w-4 h-4 text-header shrink-0" />
+                                    <span className="font-bold text-text-main text-sm truncate">{s.label}</span>
+                                  </button>
+                                ))}
+                                {suggestions.length === 0 && isLoadingAddress && (
+                                  <div className="p-4 flex items-center justify-center text-text-muted bg-card">
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                        <button onClick={() => setDropoff(profile?.homeAddress || "")} className="flex-none px-3 py-1.5 bg-surface rounded-full flex items-center gap-1.5 border border-border-main text-[10px] font-black text-text-muted"><Home className="w-3 h-3" /> Home</button>
+                        <button onClick={() => setDropoff(profile?.workAddress || "")} className="flex-none px-3 py-1.5 bg-surface rounded-full flex items-center gap-1.5 border border-border-main text-[10px] font-black text-text-muted"><Briefcase className="w-3 h-3" /> Work</button>
+                      </div>
                     </div>
-                    <textarea rows={2} className="w-full p-4 bg-slate-50 rounded-2xl font-medium text-sm text-slate-600 border-2 border-transparent focus:border-slate-200 outline-none transition-all resize-none" placeholder="Gate code, specific entrance, luggage notes..." value={comments} onChange={(e) => setComments(e.target.value)} />
                   </div>
 
-                  {pickup && dropoff ? (
-                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-2">
-                       <button onClick={handleConfirmBooking} disabled={isAiProcessing} className="w-full py-5 bg-orange-500 text-white rounded-3xl font-black text-xl shadow-[0_8px_30px_rgba(249,115,22,0.3)] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-                         {isAiProcessing ? "Processing Voice..." : `Confirm ${CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}`}
-                         <ChevronRight className="w-6 h-6 opacity-50" />
-                       </button>
-                     </motion.div>
-                  ) : (
-                      <div className="py-6 text-center px-4">
-                         <p className="text-slate-400 font-bold text-sm">Enter your pickup and dropoff to view ride options and prices.</p>
-                      </div>
-                  )}
+                  <div className="space-y-4 pt-2">
+                    <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x px-1">
+                      {CAR_CATEGORIES.map((cat) => {
+                        const active = selectedCategory === cat.id;
+                        return (
+                          <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={cn("flex-none w-[100px] snap-center p-3 rounded-2xl border-2 transition-all", active ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-surface border-border-main text-text-main hover:border-primary/50")}>
+                            <cat.icon className={cn("w-5 h-5 mb-2", active ? "text-white" : "text-primary")} />
+                            <p className="text-[10px] font-black uppercase tracking-tight line-clamp-1">{cat.name}</p>
+                            <p className="text-lg font-black tracking-tighter">£{getComputedFare(cat.id).toFixed(2)}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <button onClick={handleConfirmBooking} disabled={!pickup || !dropoff} className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all">
+                      Confirm {CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             )}
 
             {step === "searching" && (
-              <motion.div
-                key="searching"
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                className="bg-white rounded-t-[40px] shadow-[0_-20px_40px_rgba(0,0,0,0.15)] pointer-events-auto flex flex-col p-8 pt-4 items-center justify-center w-full"
-              >
-                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8 shrink-0" />
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 bg-blue-400/20 rounded-full animate-ping" />
-                  <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center relative shadow-2xl z-10">
-                    <Car className="w-8 h-8 text-white animate-pulse" />
-                  </div>
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-8 flex flex-col items-center border-t border-border-main">
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center relative mb-6">
+                  <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
+                  <Car className="w-10 h-10 text-primary animate-pulse" />
                 </div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center mb-2">Finding Your Driver</h2>
-                <p className="text-slate-500 font-bold text-sm text-center mb-6 max-w-xs">Searching for available vehicles nearby.</p>
-                <div className="w-full bg-slate-50 rounded-2xl p-4 border border-slate-100 mb-6">
-                   <div className="flex items-center justify-between mb-3">
-                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Search Pulse</span>
-                     <span className="flex items-center gap-1 text-[10px] font-black text-blue-600"><Loader2 className="w-3 h-3 animate-spin" /> ACTIVE</span>
-                   </div>
-                   <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                      <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 180 }} className="h-full bg-blue-600" />
-                   </div>
-                </div>
-                <button onClick={handleCancelRequest} className="text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 px-6 py-3 rounded-2xl transition-all">
-                  Cancel Request
-                </button>
+                <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">Requesting...</h2>
+                <p className="text-text-muted font-bold text-sm text-center mb-8">Pinging the fleet to find your professional driver.</p>
+                <button onClick={() => setStep("details")} className="text-danger font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl bg-danger/5">Cancel</button>
               </motion.div>
             )}
 
             {step === "confirmed" && (
-              <motion.div
-                key="confirmed"
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                className="bg-white rounded-t-[40px] shadow-[0_-20px_40px_rgba(0,0,0,0.15)] pointer-events-auto flex flex-col p-6 w-full"
-              >
-                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0" />
+              <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 border-t border-border-main">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center shrink-0">
-                     <Check className="w-8 h-8 text-emerald-500" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-1">Driver Assigned!</h2>
-                    <p className="text-slate-500 font-bold text-sm">{assignedDriverInfo?.name} • {assignedDriverInfo?.vehicle}</p>
-                  </div>
+                   <div className="w-16 h-16 bg-trust/10 rounded-2xl flex items-center justify-center"><Check className="w-8 h-8 text-trust" /></div>
+                   <div>
+                     <h2 className="text-2xl font-black text-text-main tracking-tight">Driver Assigned</h2>
+                     <p className="text-text-muted font-bold text-sm">{assignedDriverInfo?.name} • {assignedDriverInfo?.vehicle}</p>
+                   </div>
                 </div>
-                 <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                       <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Est. Arrival</p>
-                       <p className="text-xl font-black text-slate-900">
-                         {driverPos && pickupCoords 
-                           ? `${Math.max(1, Math.round(L.latLng(driverPos).distanceTo(L.latLng(pickupCoords)) / 400))} Mins` 
-                           : "Calculating..."}
-                       </p>
-                    </div>
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                       <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Fixed Fare</p>
-                       <p className="text-xl font-black text-indigo-600">£{fareEstimate?.toFixed(2)}</p>
-                    </div>
-                 </div>
-                 <div className="flex items-center gap-2 text-indigo-600 justify-center mb-6 bg-indigo-50 py-3 rounded-2xl">
-                    <Zap className="w-4 h-4 fill-indigo-600" />
-                    <p className="text-xs font-black uppercase tracking-widest text-center">
-                       Safety Code: <span className="bg-white px-2 py-1 rounded-lg border border-indigo-200 ml-1 select-all">{assignedDriverInfo?.code || "---"}</span>
-                    </p>
-                 </div>
-                <button onClick={() => navigate("/my-rides")} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-lg shadow-[0_8px_30px_rgba(15,23,42,0.3)] hover:bg-slate-800 transition-all flex justify-center items-center gap-2">
-                  Track Ride Progress <Navigation className="w-5 h-5 opacity-70" />
-                </button>
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                   <div className="bg-surface p-4 rounded-2xl border border-border-main">
+                      <p className="text-[10px] font-black text-text-muted uppercase mb-1">Pass Code</p>
+                      <p className="text-2xl font-black text-primary tracking-widest">{assignedDriverInfo?.code}</p>
+                   </div>
+                   <div className="bg-surface p-4 rounded-2xl border border-border-main">
+                      <p className="text-[10px] font-black text-text-muted uppercase mb-1">Fixed Fare</p>
+                      <p className="text-2xl font-black text-text-main">£{fareEstimate?.toFixed(2)}</p>
+                   </div>
+                </div>
+                <button onClick={() => navigate("/my-rides")} className="w-full py-5 bg-text-main text-surface rounded-3xl font-black text-lg shadow-xl">Track Live Location</button>
               </motion.div>
             )}
           </AnimatePresence>

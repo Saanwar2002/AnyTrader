@@ -1,22 +1,68 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() {
-      return request.auth != null;
-    }
+    // --- Global Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
     
-    // Platform configs and categories are globally readable to allow app initialization
+    // --- Default Deny ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Platform Config (Readable by all for init) ---
     match /platform_config/{document=**} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
     match /platform_categories/{document=**} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- User Profiles (Public/Private Split) ---
+    match /users/{userId} {
+      allow read: if isSignedIn(); // Basic read for profile discovery
+      allow write: if isOwner(userId) || isAdmin();
+      
+      // Prevent privilege escalation
+      allow update: if (
+        isSignedIn() && (
+          isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'bio', 'avatarUrl', 'notificationSettings', 'favoriteAddresses', 'regularJourneys', 'emergencyContacts'
+          ])
+        ) || isAdmin()
+      );
+    }
+
+    // --- Rides Portal ---
+    match /ride_requests/{rideId} {
+      allow read: if isSignedIn() && (resource.data.riderId == request.auth.uid || resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.riderId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        (resource.data.riderId == request.auth.uid || resource.data.driverId == request.auth.uid || isAdmin())
+      );
+      allow list: if isSignedIn() && (request.query.limit <= 100);
     }
     
-    match /{document=**} {
-      allow read, write: if isSignedIn();
+    match /live_tracking/{rideId} {
+        allow read: if isSignedIn() && (get(/databases/$(database)/documents/ride_requests/$(rideId)).data.riderId == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.driverId == request.auth.uid || isAdmin());
+        allow write: if isSignedIn() && get(/databases/$(database)/documents/ride_requests/$(rideId)).data.driverId == request.auth.uid;
+    }
+
+    // --- Home Portal (Tradesperson/Homeowner Logic) ---
+    match /jobs/{jobId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.homeownerId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.homeownerId == request.auth.uid || isAdmin());
+    }
+
+    match /jobs/{jobId}/quotes/{quoteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.tradespersonId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.tradespersonId == request.auth.uid || isAdmin());
     }
   }
 }

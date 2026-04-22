@@ -852,39 +852,6 @@ async function startServer() {
     }
   });
 
-  app.post("/api/driver/create-payout", async (req, res) => {
-    try {
-      const { driverId, amount } = req.body;
-      if (!db) return res.status(500).json({ error: "Database not available" });
-
-      const driverDoc = await db.collection("users").doc(driverId).get();
-      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
-
-      const stripeAccountId = driverDoc.data()?.stripeAccountId;
-      if (!stripeAccountId) return res.status(400).json({ error: "No Stripe account connected" });
-
-      let stripe;
-      try {
-        stripe = getStripe();
-      } catch (e) {
-        return res.json({ success: true, mock: true, payoutId: "pout_mock_123" });
-      }
-
-      // Withdraw all available balance (amount is in GBP, convert to pence)
-      const payout = await stripe.payouts.create({
-        amount: Math.round(amount * 100),
-        currency: 'gbp',
-      }, {
-        stripeAccount: stripeAccountId,
-      });
-
-      res.json({ success: true, payoutId: payout.id });
-    } catch (error: any) {
-      console.error("Payout Error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
   // Milestone Release Route
   app.post("/api/release-milestone", async (req, res) => {
     try {

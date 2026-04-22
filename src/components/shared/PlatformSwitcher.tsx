@@ -1,5 +1,5 @@
 import React from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Car, Hammer, Repeat } from "lucide-react";
 import { usePortal } from "../../lib/PortalContext";
 import { useAuth } from "../AuthProvider";

@@ -752,6 +752,10 @@
       "schema": { "type": "object" },
       "description": "Dispatch jobs."
     },
+    "/admins/{adminId}": {
+      "schema": { "type": "object" },
+      "description": "Trusted admin UIDs for RBAC."
+    },
     "/driver_status/{driverId}": {
       "schema": { "type": "object" },
       "description": "Driver status."

@@ -41,18 +41,16 @@ import { PlusCircle, Briefcase, MessageSquare, User as UserIcon, Bell, ChevronRi
 import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "@/src/firebase";
 
 import DriverTerminal from "./components/driver/DriverTerminal";
-import PassengerBooking from "./components/driver/PassengerBooking";
-
-import { PortalProvider, usePortal } from "./lib/PortalContext";
-
-// A small wrapper to handle the index '/' route dynamically based on activePortal
+import RideDashboardLayout from "./components/driver/RideDashboardLayout";
 import MyRides from "./components/MyRides";
+import { PortalProvider, usePortal } from "./lib/PortalContext";
+import PlatformSwitcher from "./components/shared/PlatformSwitcher";
 
 function IndexRoute() {
   const { activePortal, activeRole } = usePortal();
 
   if (activePortal === "anyride") {
-    return activeRole === "driver" ? <DriverTerminal /> : <PassengerBooking />;
+    return activeRole === "driver" ? <DriverTerminal /> : <RideDashboardLayout />;
   }
 
   // AnyTrader context
@@ -120,6 +118,7 @@ export default function App() {
       <Toaster position="top-center" richColors />
       <BrowserRouter>
         <PortalProvider>
+          <PlatformSwitcher />
           <RecurringJobManager />
           <ReviewReminder />
           <Routes>
@@ -129,36 +128,38 @@ export default function App() {
           ) : !profile ? (
             <Route path="*" element={<Onboarding />} />
           ) : (
-            <Route path="/" element={<Layout />}>
-              <Route index element={<IndexRoute />} />
+            <>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<IndexRoute />} />
+                <Route path="dashboard" element={profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />} />
+                <Route path="trades-dashboard" element={<TradesDashboard />} />
+                <Route path="job-feed" element={<JobFeed />} />
+                <Route path="my-jobs" element={<MyJobs />} />
+                <Route path="portfolio" element={<Portfolio />} />
+                <Route path="post-job" element={<PostJobWizard />} />
+                <Route path="post-emergency-job" element={<EmergencyJobWizard />} />
+                <Route path="my-quotes" element={<MyQuotes />} />
+                <Route path="messages" element={<Conversations />} />
+                <Route path="notifications" element={<Notifications />} />
+                <Route path="chat/:conversationId" element={<Chat />} />
+                <Route path="profile" element={<Profile />} />
+                <Route path="profile/:id" element={<PublicProfile />} />
+                <Route path="availability" element={<Availability />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="billing" element={<BillingManager />} />
+                <Route path="team" element={<BusinessTeamManagement />} />
+                <Route path="find-trades" element={<FindTrades />} />
+                <Route path="admin" element={<AdminDashboard />} />
+                <Route path="ecosystem" element={<EcosystemAdmin />} />
+                <Route path="job/:id" element={<JobDetails />} />
+                <Route path="job/:id/timeline" element={<JobTimeline />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
               <Route path="driver-terminal" element={<DriverTerminal />} />
-              <Route path="book-ride" element={<PassengerBooking />} />
+              <Route path="book-ride" element={<RideDashboardLayout />} />
               <Route path="my-rides" element={<MyRides />} />
               <Route path="saved-journeys" element={<SavedJourneys />} />
-              <Route path="dashboard" element={profile.subscriptionType === "business" ? <BusinessDashboard /> : <Dashboard />} />
-              <Route path="trades-dashboard" element={<TradesDashboard />} />
-              <Route path="job-feed" element={<JobFeed />} />
-              <Route path="my-jobs" element={<MyJobs />} />
-              <Route path="portfolio" element={<Portfolio />} />
-              <Route path="post-job" element={<PostJobWizard />} />
-              <Route path="post-emergency-job" element={<EmergencyJobWizard />} />
-              <Route path="my-quotes" element={<MyQuotes />} />
-              <Route path="messages" element={<Conversations />} />
-              <Route path="notifications" element={<Notifications />} />
-              <Route path="chat/:conversationId" element={<Chat />} />
-              <Route path="profile" element={<Profile />} />
-              <Route path="profile/:id" element={<PublicProfile />} />
-              <Route path="availability" element={<Availability />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="billing" element={<BillingManager />} />
-              <Route path="team" element={<BusinessTeamManagement />} />
-              <Route path="find-trades" element={<FindTrades />} />
-              <Route path="admin" element={<AdminDashboard />} />
-              <Route path="ecosystem" element={<EcosystemAdmin />} />
-              <Route path="job/:id" element={<JobDetails />} />
-              <Route path="job/:id/timeline" element={<JobTimeline />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
+            </>
           )}
         </Routes>
         </PortalProvider>

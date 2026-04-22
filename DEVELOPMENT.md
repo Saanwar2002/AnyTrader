@@ -103,6 +103,8 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 *   **Stripe Setup Wizard:** 
     *   *Integration:* Added a Connect onboarding wizard to the `DriverMenu.tsx`.
     *   *Banking Status:* Implemented a check for `stripeAccountId` that guides new drivers through the payment verification handshake to ensure compliance with the Platform Split logic.
+*   **Direct-to-Driver Payments (Zero-Escrow):**
+    *   *Logic:* Payments go directly from Passenger to Driver via Stripe QR. The platform holds NO funds. Payouts are managed entirely by Stripe Connect.
 
 ---
 

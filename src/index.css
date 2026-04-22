@@ -5,14 +5,55 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Outfit", "Inter", sans-serif;
   
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-trust: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-surface: #f8fafc;
-  --color-header: #0f172a;
+  --color-primary: var(--primary-color, #2563eb);
+  --color-primary-hover: var(--primary-hover, #1d4ed8);
+  --color-trust: var(--trust-color, #10b981);
+  --color-warning: var(--warning-color, #f59e0b);
+  --color-danger: var(--danger-color, #ef4444);
+  --color-surface: var(--surface-color, #f8fafc);
+  --color-header: var(--header-color, #0f172a);
   --color-brand-blue: #2d5a88;
+
+  --color-card: var(--card-bg, #ffffff);
+  --color-text-main: var(--text-color, #0f172a);
+  --color-text-muted: var(--text-muted-color, #64748b);
+  --color-border-main: var(--border-color, #f1f5f9);
+}
+
+/* Light Theme (Default) */
+:root {
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+  --surface-color: #f8fafc;
+  --card-bg: #ffffff;
+  --text-color: #0f172a;
+  --text-muted-color: #64748b;
+  --border-color: #f1f5f9;
+  --header-color: #0f172a;
+}
+
+/* Dark Theme */
+.theme-dark {
+  --primary-color: #3b82f6;
+  --primary-hover: #60a5fa;
+  --surface-color: #0f172a;
+  --card-bg: #1e293b;
+  --text-color: #f8fafc;
+  --text-muted-color: #94a3b8;
+  --border-color: #334155;
+  --header-color: #1e293b;
+}
+
+/* AnyRide Brand Theme */
+.theme-anyride {
+  --primary-color: #000000;
+  --primary-hover: #333333;
+  --surface-color: #fffbeb;
+  --card-bg: #ffffff;
+  --text-color: #000000;
+  --text-muted-color: #71717a;
+  --border-color: #e4e4e7;
+  --header-color: #000000;
 }
 
 @layer utilities {
@@ -25,15 +66,15 @@
   }
   
   .glass {
-    @apply bg-white/80 backdrop-blur-md border border-white/20;
+    @apply bg-card/80 backdrop-blur-md border border-white/20;
   }
   
   .card-premium {
-    @apply bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300;
+    @apply bg-card rounded-3xl border border-border-main shadow-sm hover:shadow-md transition-all duration-300;
   }
   
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-text-main to-text-muted;
   }
 }
 
@@ -42,27 +83,22 @@
     margin: 0;
     padding: 0;
     width: 100%;
-    /* Keep 100% height for consistent layout */
     min-height: 100%;
-    /* Prevent mobile text scaling by system */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    /* Native tap behavior */
     -webkit-tap-highlight-color: transparent;
     cursor: default;
   }
 
   body {
-    @apply bg-surface text-slate-900 font-sans antialiased;
+    @apply bg-surface text-text-main font-sans antialiased;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    /* Prevent horizontal bounce */
     overflow-x: hidden;
   }
 
-  /* Force font-size to 16px for inputs to prevent iOS auto-zoom */
   input, textarea, select {
     font-size: 16px !important;
   }

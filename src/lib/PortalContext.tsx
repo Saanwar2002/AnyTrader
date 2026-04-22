@@ -3,6 +3,7 @@ import { useAuth } from "../components/AuthProvider";
 
 type PortalType = "anytrader" | "anyride";
 type ActiveRoleType = "customer" | "trader" | "business" | "admin" | "driver" | "ecosystem_manager";
+type ThemeType = "light" | "dark" | "anyride";
 
 interface PortalContextType {
   activePortal: PortalType;
@@ -10,6 +11,8 @@ interface PortalContextType {
   activeRole: ActiveRoleType;
   setActiveRole: (role: ActiveRoleType) => void;
   availableRoles: ActiveRoleType[];
+  theme: ThemeType;
+  setTheme: (theme: ThemeType) => void;
 }
 
 const PortalContext = createContext<PortalContextType | undefined>(undefined);
@@ -27,6 +30,23 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
     return defaultPortal;
   });
+
+  const [theme, setThemeState] = useState<ThemeType>(() => {
+    const saved = localStorage.getItem("anyride_theme") as ThemeType;
+    return saved || "light";
+  });
+
+  const setTheme = (newTheme: ThemeType) => {
+    setThemeState(newTheme);
+    localStorage.setItem("anyride_theme", newTheme);
+  };
+
+  useEffect(() => {
+    // Apply theme to body
+    document.body.classList.remove("theme-dark", "theme-anyride");
+    if (theme === "dark") document.body.classList.add("theme-dark");
+    if (theme === "anyride") document.body.classList.add("theme-anyride");
+  }, [theme]);
 
   // Calculate user's available roles based on profile
   const availableRoles: ActiveRoleType[] = [];
@@ -88,7 +108,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <PortalContext.Provider value={{ activePortal, switchPortal, activeRole, setActiveRole, availableRoles }}>
+    <PortalContext.Provider value={{ activePortal, switchPortal, activeRole, setActiveRole, availableRoles, theme, setTheme }}>
       {children}
     </PortalContext.Provider>
   );
