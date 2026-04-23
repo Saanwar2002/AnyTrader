@@ -176,7 +176,8 @@ export default function Onboarding() {
 
     const isBusiness = role === "tradesperson" || (role === "homeowner" && homeownerType === "business");
 
-    if (isBusiness && !isTestAdmin && !confirmationResult && !user.phoneNumber && !bypassPhoneAuth) {
+    // Temporarily disabled for development testing
+    if (false && isBusiness && !isTestAdmin && !confirmationResult && !user.phoneNumber && !bypassPhoneAuth) {
       try {
         if (!(window as any).recaptchaVerifier) {
           (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
@@ -370,7 +371,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-y-auto pb-64">
       {/* Header Section with Background */}
       <div className="relative h-[40vh] min-h-[320px] bg-[#1e3a5f] flex flex-col items-center justify-center p-8 text-center overflow-hidden">
         {/* Background Image Overlay */}

@@ -50,7 +50,7 @@ export default function DriverMenu({
   ];
 
   return (
-    <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-8 font-sans pb-24">
+    <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-8 font-sans pb-24 min-h-0">
       
       {/* Header / Profile Summary */}
       <div className="flex items-center justify-between mb-6">

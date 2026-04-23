@@ -1212,24 +1212,6 @@ export default function PostJobWizard() {
                 )}
               </div>
 
-              {/* Post Manually Button */}
-              <div className={cn("grid gap-3", targetTradespersonId ? "grid-cols-1" : "grid-cols-2")}>
-                {!targetTradespersonId && (
-                  <button 
-                    onClick={() => navigate("/post-emergency-job")}
-                    className="p-4 rounded-2xl bg-red-600 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 active:scale-95 transition-transform"
-                  >
-                    <AlertTriangle className="w-6 h-6" /> Emergency Job
-                  </button>
-                )}
-                <button 
-                  onClick={() => setStep(1)}
-                  className="p-4 rounded-2xl bg-orange-500 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95 transition-transform"
-                >
-                  <Plus className="w-6 h-6" /> Post Job Manually
-                </button>
-              </div>
-
               {/* Popular Categories */}
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-slate-900">Popular Categories</h3>
@@ -1564,37 +1546,6 @@ export default function PostJobWizard() {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button 
-                  onClick={prevStep}
-                  className="flex-1 p-4 rounded-2xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Back
-                </button>
-                <button 
-                  onClick={handleGetRefinement} 
-                  disabled={!formData.title || formData.title.length < 3 || !formData.description || isRefiningScope}
-                  className={cn(
-                    "flex-[2] p-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all",
-                    (formData.title && formData.title.length >= 3 && formData.description)
-                      ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-95" 
-                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                  )}
-                >
-                  {isRefiningScope ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Continue <ChevronRight className="w-5 h-5" /></>}
-                </button>
-              </div>
-              {isRefiningScope && (
-                <button 
-                  onClick={() => {
-                    setIsRefiningScope(false);
-                    setStep(4);
-                  }}
-                  className="w-full py-2 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all"
-                >
-                  Skip AI Refinement
-                </button>
-              )}
             </motion.div>
           )}
 
@@ -1630,26 +1581,6 @@ export default function PostJobWizard() {
                 ))}
               </div>
 
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setStep(3)}
-                  className="flex-1 p-4 rounded-2xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Back
-                </button>
-                <button 
-                  onClick={() => setStep(4)}
-                  className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95 transition-transform"
-                >
-                  Continue <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-              <button 
-                onClick={() => setStep(4)}
-                className="w-full py-2 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all"
-              >
-                Skip AI Refinement
-              </button>
             </motion.div>
           )}
 
@@ -1748,26 +1679,6 @@ export default function PostJobWizard() {
                   {postcodeError && <p className="text-red-500 text-xs mt-1">{postcodeError}</p>}
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button 
-                  onClick={prevStep}
-                  className="flex-1 p-4 rounded-2xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Back
-                </button>
-                <button 
-                  onClick={nextStep} 
-                  disabled={!formData.city || !formData.postcode || !!postcodeError}
-                  className={cn(
-                    "flex-[2] p-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all",
-                    (formData.city && formData.postcode && !postcodeError)
-                      ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-95" 
-                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                  )}
-                >
-                  Continue <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
             </motion.div>
           )}
 
@@ -1832,26 +1743,6 @@ export default function PostJobWizard() {
                     />
                   </motion.div>
                 )}
-              </div>
-              <div className="flex gap-3">
-                <button 
-                  onClick={prevStep}
-                  className="flex-1 p-4 rounded-2xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Back
-                </button>
-                <button 
-                  onClick={nextStep}
-                  disabled={formData.urgency === "specific_date" && !formData.jobDate}
-                  className={cn(
-                    "flex-[2] p-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform",
-                    (formData.urgency !== "specific_date" || formData.jobDate)
-                      ? "bg-orange-500 text-white shadow-orange-500/20"
-                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                  )}
-                >
-                  Continue <ChevronRight className="w-5 h-5" />
-                </button>
               </div>
             </motion.div>
           )}
@@ -1930,20 +1821,6 @@ export default function PostJobWizard() {
                     </div>
                   </div>
                 )}
-                
-                <button 
-                  onClick={handleEstimate}
-                  className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-orange-500 text-white font-bold text-lg shadow-lg shadow-orange-500/20 active:scale-95 transition-transform"
-                >
-                  Continue to Estimate <ChevronRight className="w-5 h-5" />
-                </button>
-                
-                <button 
-                  onClick={() => nextStep()}
-                  className="w-full py-2 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all"
-                >
-                  Skip AI Estimate
-                </button>
                 
                 <input 
                   type="file"
@@ -2047,20 +1924,6 @@ export default function PostJobWizard() {
                 )}
               </div>
               
-              <div className="flex gap-3">
-                <button 
-                  onClick={prevStep}
-                  className="flex-1 p-4 rounded-2xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Back
-                </button>
-                <button 
-                  onClick={nextStep}
-                  className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95 transition-transform"
-                >
-                  Continue to Estimate <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
             </motion.div>
           )}
 
@@ -2156,16 +2019,6 @@ export default function PostJobWizard() {
                       />
                     </div>
                   </div>
-
-                  <button 
-                    id="next-step-button"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || (!formData.selectedBudget && estimate.isAvailable !== false)}
-                    className="w-full p-6 rounded-2xl bg-[#0084a5] text-white font-black text-xl flex items-center justify-center gap-3 shadow-lg shadow-cyan-500/20 active:scale-95 transition-transform disabled:opacity-50"
-                  >
-                    {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
-                    Next Step
-                  </button>
 
                   {estimate.isAvailable !== false && (
                     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -2320,29 +2173,147 @@ export default function PostJobWizard() {
                       />
                     </div>
                   </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <button 
-                      onClick={() => handleEstimate()}
-                      className="flex-1 p-4 rounded-2xl border-2 border-[#0084a5] text-[#0084a5] font-bold flex items-center justify-center gap-2 hover:bg-cyan-50 transition-all"
-                    >
-                      <RefreshCw className="w-5 h-5" />
-                      Retry AI
-                    </button>
-                    <button 
-                      onClick={handleSubmit}
-                      disabled={isSubmitting || !formData.selectedBudget}
-                      className="flex-[2] p-4 rounded-2xl bg-[#0084a5] text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all"
-                    >
-                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                      Next Step
-                    </button>
-                  </div>
                 </div>
               )}
-            </motion.div>
-          )}
+              </motion.div>
+            )}
         </AnimatePresence>
+      </div>
+
+      {/* Sticky Navigation Footer */}
+      <div className="fixed bottom-[120px] sm:bottom-0 left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl z-40 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:mt-10 shadow-2xl">
+        <div className="max-w-2xl mx-auto">
+          {step === 0 ? (
+            <button 
+              onClick={() => setStep(1)}
+              className="w-full p-5 rounded-[2rem] bg-orange-500 text-white font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-orange-500/20 active:scale-95 transition-all group"
+            >
+              Post Job Manually <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+            </button>
+          ) : step === 1 || step === 2 ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={prevStep}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <ChevronLeft className="w-5 h-5" /> Back
+              </button>
+              <div className="flex-[2] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select a category to continue</p>
+              </div>
+            </div>
+          ) : step === 3 ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={prevStep}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Back
+              </button>
+              <button 
+                onClick={handleGetRefinement} 
+                disabled={!formData.title || formData.title.length < 3 || !formData.description || isRefiningScope}
+                id="wizard-next-step-3"
+                className={cn(
+                  "flex-[2] p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all",
+                  (formData.title && formData.title.length >= 3 && formData.description)
+                    ? "bg-orange-500 text-white shadow-xl shadow-orange-500/20 active:scale-95" 
+                    : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                )}
+              >
+                {isRefiningScope ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue <ChevronRight className="w-6 h-6" /></>}
+              </button>
+            </div>
+          ) : step === 3.5 ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setStep(3)}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Back
+              </button>
+              <button 
+                onClick={() => setStep(4)}
+                id="wizard-next-step-3-5"
+                className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all"
+              >
+                Continue <ChevronRight className="w-6 h-6" />
+              </button>
+            </div>
+          ) : step === 4 ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={prevStep}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Back
+              </button>
+              <button 
+                onClick={nextStep} 
+                disabled={!formData.city || !formData.postcode || !!postcodeError}
+                id="wizard-next-step-4"
+                className={cn(
+                  "flex-[2] p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all",
+                  (formData.city && formData.postcode && !postcodeError)
+                    ? "bg-orange-500 text-white shadow-xl shadow-orange-500/20 active:scale-95" 
+                    : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                )}
+              >
+                Continue <ChevronRight className="w-6 h-6" />
+              </button>
+            </div>
+          ) : step === 5 ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={prevStep}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Back
+              </button>
+              <button 
+                onClick={nextStep} 
+                id="wizard-next-step-5"
+                className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all"
+              >
+                Continue <ChevronRight className="w-6 h-6" />
+              </button>
+            </div>
+          ) : step === 6 ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={prevStep}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Back
+              </button>
+              <button 
+                onClick={nextStep} 
+                disabled={isUploading}
+                id="wizard-next-step-6"
+                className="flex-[2] p-4 rounded-2xl bg-[#0084a5] text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-cyan-500/20 active:scale-95 transition-all"
+              >
+                {isUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue to Estimate <ChevronRight className="w-6 h-6" /></>}
+              </button>
+            </div>
+          ) : step === 7 ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={prevStep}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Back
+              </button>
+              <button 
+                onClick={handleSubmit}
+                disabled={isSubmitting || !formData.selectedBudget}
+                id="wizard-next-step-7"
+                className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 disabled:opacity-50 transition-all active:scale-95"
+              >
+                {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Next Step <ChevronRight className="w-6 h-6" /></>}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Camera Overlay */}

@@ -123,6 +123,9 @@ export default function TradesDashboard() {
       } else {
         setSysConfig({ paywallEnabled: true });
       }
+    }, (error) => {
+      console.error("Firestore Paywall Config Error:", error);
+      setSysConfig({ paywallEnabled: true });
     });
     return () => unsubConfig();
   }, []);

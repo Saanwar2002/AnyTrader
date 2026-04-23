@@ -274,8 +274,9 @@ export default function Layout() {
 
   const driverNav = [
     { name: "Terminal", path: "/driver-terminal", icon: Zap, isCta: false },
-    { name: "Earnings", path: "/billing", icon: PoundSterling, isCta: false },
-    { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+    { name: "Earnings", path: "/driver-terminal?tab=earnings", icon: PoundSterling, isCta: false },
+    { name: "Messages", path: "/driver-terminal?tab=inbox", icon: MessageSquare, isCta: false },
+    { name: "Menu", path: "/driver-terminal?tab=menu", icon: Menu, isCta: false },
   ];
 
   const passengerNav = [
@@ -283,7 +284,7 @@ export default function Layout() {
     { name: "My Rides", path: "/my-rides", icon: MapPin, isCta: false },
     { name: "Saved", path: "/saved-journeys", icon: Bookmark, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
-    { name: "Billing", path: "/billing", icon: PoundSterling, isCta: false },
+    { name: "Menu", path: "/profile", icon: Menu, isCta: false },
   ];
 
   let navItems;
@@ -573,8 +574,8 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className={cn(
-        "flex-1 w-full relative",
-        (isDriverTerminal || activePortal === 'anyride') ? "pb-0 p-0 h-[100dvh] flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 py-6 pb-24 sm:pb-6"
+        "flex-1 w-full relative min-h-0",
+        isDriverTerminal ? "pb-60 p-0 h-[100dvh] flex flex-col overflow-hidden" : (activePortal === 'anyride' ? "pb-60 sm:pb-6 p-0 h-[100dvh] flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 py-6 pb-60 sm:pb-6")
       )}>
         {(!isDriverTerminal && activePortal !== 'anyride') && <RoleTabBar />}
         <Outlet />
@@ -902,8 +903,11 @@ export default function Layout() {
       <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
 
       {/* Bottom Navigation (Mobile) */}
-      {!isDriverTerminal && location.pathname !== "/book-ride" && activePortal !== 'anyride' && (
-        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 h-16 flex items-center justify-around z-50">
+      {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && (
+        <nav className={cn(
+          "sm:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t px-4 pb-[env(safe-area-inset-bottom)] h-[calc(4rem+env(safe-area-inset-bottom))] flex items-center justify-around z-[100] transition-colors",
+          isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : "bg-white border-slate-200"
+        )}>
           {navItems.map((item, idx) => {
             const Icon = item.icon;
             const isActive = location.pathname + location.search === item.path || (item.path === "/admin" && location.pathname === "/admin" && (!location.search || location.search === "?tab=users"));
@@ -919,18 +923,26 @@ export default function Layout() {
                 key={`nav-${idx}-${item.path}`}
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 transition-colors relative",
-                  isActive ? "text-blue-600" : "text-slate-500 hover:text-slate-900",
+                  "flex flex-col items-center justify-center gap-1 transition-colors relative h-full px-2",
+                  isActive 
+                    ? (isDriverTerminal ? "text-white" : "text-blue-600 font-bold") 
+                    : (isDriverTerminal ? "text-[#6B6B73] hover:text-[#A0A0A8]" : "text-slate-500 hover:text-slate-900"),
                   item.isCta && "text-blue-600"
                 )}
               >
                 <div className="relative">
-                  <Icon className={cn("w-6 h-6", item.isCta && "w-7 h-7")} />
+                  <Icon className={cn(isActive ? "w-6 h-6" : "w-5 h-5", item.isCta && "w-7 h-7")} />
                   {hasUnread && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                   )}
                 </div>
-                <span className="text-[10px] font-medium">{item.name}</span>
+                <span className="text-[10px] font-medium tracking-tight">{item.name}</span>
+                {isActive && (
+                   <motion.div 
+                     layoutId="navDot"
+                     className={cn("absolute bottom-1 w-1 h-1 rounded-full", isDriverTerminal ? "bg-white" : "bg-blue-600")}
+                   />
+                )}
               </Link>
             );
           })}

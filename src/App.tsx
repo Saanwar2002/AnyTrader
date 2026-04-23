@@ -42,6 +42,8 @@ import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "
 
 import DriverTerminal from "./components/driver/DriverTerminal";
 import RideDashboardLayout from "./components/driver/RideDashboardLayout";
+import DriverEarnings from "./components/driver/DriverEarnings";
+import DriverInbox from "./components/driver/DriverInbox";
 import MyRides from "./components/MyRides";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
@@ -79,6 +81,8 @@ export default function App() {
       if (doc.exists()) {
         setPlatformConfig(doc.data());
       }
+    }, (error) => {
+      console.error("Firestore Platform Config Error:", error);
     });
     return () => unsub();
   }, [isAuthReady]);
@@ -146,19 +150,22 @@ export default function App() {
                 <Route path="profile/:id" element={<PublicProfile />} />
                 <Route path="availability" element={<Availability />} />
                 <Route path="analytics" element={<Analytics />} />
-                <Route path="billing" element={<BillingManager />} />
+                <Route path="billing" element={profile?.role === "driver" ? <DriverEarnings fareConfig={{ baseFare: 4.50, distanceRate: 1.80, commissionRate: 0.12 }} /> : <BillingManager />} />
                 <Route path="team" element={<BusinessTeamManagement />} />
                 <Route path="find-trades" element={<FindTrades />} />
                 <Route path="admin" element={<AdminDashboard />} />
                 <Route path="ecosystem" element={<EcosystemAdmin />} />
                 <Route path="job/:id" element={<JobDetails />} />
                 <Route path="job/:id/timeline" element={<JobTimeline />} />
+                
+                {/* AnyRide specific routes inside Layout */}
+                <Route path="driver-terminal" element={<DriverTerminal />} />
+                <Route path="book-ride" element={<RideDashboardLayout />} />
+                <Route path="my-rides" element={<MyRides />} />
+                <Route path="saved-journeys" element={<SavedJourneys />} />
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
-              <Route path="driver-terminal" element={<DriverTerminal />} />
-              <Route path="book-ride" element={<RideDashboardLayout />} />
-              <Route path="my-rides" element={<MyRides />} />
-              <Route path="saved-journeys" element={<SavedJourneys />} />
             </>
           )}
         </Routes>

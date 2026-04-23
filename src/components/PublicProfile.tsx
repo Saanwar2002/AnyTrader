@@ -286,7 +286,7 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className={cn("max-w-2xl mx-auto pb-24", !currentUser && "pt-16")}>
+    <div className={cn("max-w-2xl mx-auto pb-40", !currentUser && "pt-16")}>
       <SEO 
         title={`${profile.name} | Verified Trader`} 
         description={profile.bio || `View ${profile.name}'s profile on AnyTrader. See reviews, portfolio, and hire for your next project.`}
@@ -748,7 +748,7 @@ export default function PublicProfile() {
       </div>
 
       {/* Fixed Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-40 pb-safe sm:pb-4">
+      <div className="fixed bottom-[120px] sm:bottom-0 left-4 right-4 sm:left-0 sm:right-0 bg-white/95 backdrop-blur-xl border border-slate-200 sm:border-t p-4 z-40 rounded-2xl sm:rounded-none shadow-2xl sm:shadow-none pb-safe sm:pb-4">
         {!currentUser ? (
           <div className="max-w-2xl mx-auto">
             <button 

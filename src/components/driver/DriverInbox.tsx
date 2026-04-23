@@ -19,7 +19,7 @@ export default function DriverInbox() {
   const filteredMessages = mockMessages.filter(m => filter === 'all' || m.type === filter);
 
   return (
-    <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-6 font-sans pb-24">
+    <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-6 font-sans pb-24 min-h-0">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-black tracking-tight">Inbox</h1>

@@ -13,12 +13,12 @@ export default defineConfig(({mode}) => {
       VitePWA({
         registerType: 'autoUpdate',
         workbox: {
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
         },
         includeAssets: ['mask-icon.svg'],
         manifest: {
-          name: 'TradeQuote UK',
-          short_name: 'TradeQuote',
+          name: 'AnyTrader UK',
+          short_name: 'AnyTrader',
           description: 'Hire a tradesperson as easily as ordering a taxi.',
           theme_color: '#2563eb',
           icons: [
@@ -38,6 +38,22 @@ export default defineConfig(({mode}) => {
         }
       })
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('lucide-react')) return 'vendor-icons';
+              if (id.includes('recharts') || id.includes('d3')) return 'vendor-charts';
+              if (id.includes('motion')) return 'vendor-animation';
+              return 'vendor';
+            }
+          }
+        }
+      },
+      chunkSizeWarningLimit: 1000,
+    },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },

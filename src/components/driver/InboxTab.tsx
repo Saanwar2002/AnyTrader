@@ -31,7 +31,7 @@ export default function InboxTab() {
     : notifications.filter(n => n.type === filter);
 
   return (
-    <div className="flex-1 bg-surface overflow-y-auto pb-24">
+    <div className="flex-1 bg-surface overflow-y-auto pb-24 min-h-0">
       <div className="p-6">
         <h1 className="text-2xl font-black text-text-main mb-6">Inbox</h1>
 

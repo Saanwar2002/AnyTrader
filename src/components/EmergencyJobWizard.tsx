@@ -251,7 +251,7 @@ export default function EmergencyJobWizard() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white min-h-screen p-4">
+    <div className="max-w-2xl mx-auto bg-white min-h-screen p-4 pb-48">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Emergency Job</h1>
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full"><X className="w-6 h-6" /></button>
@@ -435,13 +435,21 @@ export default function EmergencyJobWizard() {
               </p>
             </div>
           </div>
-
-          <button 
-            onClick={handleInitialSubmit}
-            className="w-full p-4 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-600/20 active:scale-95 transition-transform"
-          >
-            {isBoosted ? "Pay £5 & Post Emergency Job" : "Post Emergency Job Now"}
-          </button>
+          
+          <div className="fixed bottom-[120px] left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-red-100 rounded-2xl z-40 shadow-2xl space-y-3">
+            {isBoosted && (
+              <div className="flex items-center justify-between px-2">
+                <span className="text-xs font-bold text-slate-500 uppercase">Emergency Boost Fee</span>
+                <span className="text-lg font-black text-red-600">£5.00</span>
+              </div>
+            )}
+            <button 
+              onClick={handleInitialSubmit}
+              className="w-full p-4 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-600/20 active:scale-95 transition-transform"
+            >
+              {isBoosted ? "Pay £5 & Post Emergency Job" : "Post Emergency Job Now"}
+            </button>
+          </div>
         </div>
       )}
 

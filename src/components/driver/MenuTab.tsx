@@ -36,7 +36,7 @@ export default function MenuTab() {
   ];
 
   return (
-    <div className="flex-1 bg-surface overflow-y-auto pb-24">
+    <div className="flex-1 bg-surface overflow-y-auto pb-24 min-h-0">
       <div className="p-6">
         {/* Profile Header */}
         <div className="bg-card p-6 rounded-3xl border border-border-main shadow-sm mb-6 flex items-center gap-4">

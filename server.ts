@@ -50,17 +50,21 @@ const initFirebase = () => {
         db.collection("users").limit(1).get()
           .then(() => console.log(`Firestore connected to: ${dbId}`))
           .catch(err => {
-            // Code 7: Permission Denied, Code 5: Not Found
-            if ((err.code === 7 || err.code === 5) && dbId !== "(default)") {
+            // Code 7: Permission Denied indicates lack of Service Account credentials
+            if (err.code === 7) {
+              console.warn("Server-side Firestore disabled: Missing service account permissions in development sandbox.");
+              db = null; // Disable DB functions gracefully
+            } else if (err.code === 5 && dbId !== "(default)") {
               console.warn(`Firestore initialization error (${err.code}): ${err.message}. Triggering fallback...`);
               fallbackDb();
             } else {
               console.error("Firestore initialization error code:", err.code, err.message);
+              db = null;
             }
           });
       } catch (e: any) {
         console.error("Critical Firestore Setup Error:", e.message);
-        fallbackDb();
+        db = null;
       }
     }
   } catch (error) {
@@ -726,7 +730,7 @@ async function startServer() {
       if (!db) {
         console.warn("Retrying Firebase initialization in route handler...");
         initFirebase();
-        if (!db) return res.status(500).json({ error: "Database not available" });
+        if (!db) return res.status(500).json({ error: "Database backend disabled" });
       }
       
       if (!driverId) return res.status(400).json({ error: "Driver ID is required" });

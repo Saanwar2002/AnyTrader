@@ -35,7 +35,7 @@ export default function SavedJourneys() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-surface pb-24">
+    <div className="flex-1 overflow-y-auto bg-surface pb-24 min-h-0">
       {/* Header */}
       <div className="bg-card px-4 py-6 border-b border-border-main flex items-center justify-between sticky top-0 z-10">
         <div>

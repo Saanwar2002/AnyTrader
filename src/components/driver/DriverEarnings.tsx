@@ -99,7 +99,7 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
   const progress = Math.min(100, Math.round((displayEarnings / displayGoal) * 100));
 
   return (
-    <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-6 font-sans pb-24">
+    <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-6 font-sans pb-24 min-h-0">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-black tracking-tight">Analytics Hub</h1>

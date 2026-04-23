@@ -38,7 +38,7 @@ export default function BillingTab() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-surface pb-24">
+    <div className="flex-1 overflow-y-auto bg-surface pb-24 min-h-0">
       {/* Header */}
       <div className="bg-card px-4 py-8 border-b border-border-main text-center space-y-2">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">Total Balance Spent</p>

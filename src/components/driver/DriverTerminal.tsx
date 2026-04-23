@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { MapContainer, TileLayer, Circle, Marker, useMap, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock } from "lucide-react";
+import { Navigation, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff } from "lucide-react";
+import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment } from "@/src/firebase";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
@@ -35,6 +37,8 @@ function SetupMapControls({ isOnline }: { isOnline: boolean }) {
 
 type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progress' | 'completed' | 'review';
 
+const libraries: any[] = ['places'];
+
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
@@ -54,7 +58,8 @@ export default function DriverTerminal() {
   
   // Stats Card state
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
-  const [isTopPanelHidden, setIsTopPanelHidden] = useState(false);
+  const [isEarningsVisible, setIsEarningsVisible] = useState(false);
+  const [isEmergencyVisible, setIsEmergencyVisible] = useState(false);
 
   // Auto-close stats after 5 seconds
   useEffect(() => {
@@ -65,6 +70,13 @@ export default function DriverTerminal() {
       return () => clearTimeout(timer);
     }
   }, [isStatsExpanded]);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+    version: "weekly"
+  });
 
   // Dynamic Fare & Live Ride Tracking
   const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12 });
@@ -82,6 +94,8 @@ export default function DriverTerminal() {
           commissionRate: data.commission ? Number(data.commission) / 100 : 0.12,
         });
       }
+    }, (error) => {
+      console.error("Firestore Rides Config Error:", error);
     });
     return () => unsub();
   }, []);
@@ -107,6 +121,11 @@ export default function DriverTerminal() {
           name: data.passengerName || "Live Passenger",
           pickupAddress: data.pickup,
           dropoffAddress: data.dropoff,
+          pickupLat: data.pickupLat,
+          pickupLng: data.pickupLng,
+          dropoffLat: data.dropoffLat,
+          dropoffLng: data.dropoffLng,
+          stops: data.stops || [],
           fareEstimate: data.totalFare,
           distanceMiles: data.distanceMiles || 0,
           durationMinutes: data.durationMinutes || 0,
@@ -242,6 +261,11 @@ export default function DriverTerminal() {
       name: "Sarah T.",
       pickupAddress: "12 Elm Street, SE15",
       dropoffAddress: "Bristol Temple Meads",
+      pickupLat: mapCenter[0] + 0.01,
+      pickupLng: mapCenter[1] + 0.01,
+      dropoffLat: mapCenter[0] - 0.02,
+      dropoffLng: mapCenter[1] - 0.02,
+      stops: [],
       fareEstimate: finalFare,
       baseCalc: calcFare,
       surgeMultiplier: surge,
@@ -307,7 +331,23 @@ export default function DriverTerminal() {
     setRideState('idle');
   };
 
-  const [activeTab, setActiveTab] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents'>('home');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTabParam = searchParams.get("tab") || "home";
+  
+  const [activeTab, setActiveTabState] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents'>(currentTabParam as any);
+
+  useEffect(() => {
+    setActiveTabState((searchParams.get("tab") as any) || "home");
+  }, [searchParams]);
+
+  const setActiveTab = (tab: string) => {
+    if (tab === 'home') {
+      searchParams.delete('tab');
+    } else {
+      searchParams.set('tab', tab);
+    }
+    setSearchParams(searchParams);
+  };
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
 
@@ -368,7 +408,7 @@ export default function DriverTerminal() {
   };
 
   return (
-    <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans -mx-4 -mt-6"> {/* Full bleed container */}
+    <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans -mx-4 -mt-6 min-h-0"> {/* Full bleed container */}
       
       {activeTab === 'home' && (
       <>
@@ -399,24 +439,37 @@ export default function DriverTerminal() {
 
       {/* Floating Map Controls & SOS */}
       <div className="absolute top-[32%] right-4 z-40 flex flex-col items-end gap-3">
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex flex-col items-end"
+        <button 
+          onClick={() => setIsEmergencyVisible(!isEmergencyVisible)}
+          className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
         >
-          <button 
-            onClick={() => {
-              if (navigator.vibrate) navigator.vibrate([100, 30, 100, 30, 500]);
-              alert("EMERGENCY SOS: Dispatch has been alerted to your high-accuracy location. Recorded audio and video ingestion starting...");
-            }}
-            className="w-12 h-12 bg-[#FF3B30] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,59,48,0.4)] active:scale-95 transition-transform border border-red-400/20"
-          >
-            <AlertCircle className="w-6 h-6 text-white" />
-          </button>
-          <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm">
-            <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
-          </div>
-        </motion.div>
+          <Zap className={cn("w-4 h-4", isEmergencyVisible ? "text-[#FF3B30]" : "text-[#A0A0A8]")} />
+        </button>
+
+        <AnimatePresence>
+          {isEmergencyVisible && (
+            <motion.div 
+              initial={{ opacity: 0, x: 20, height: 0, overflow: 'hidden' }}
+              animate={{ opacity: 1, x: 0, height: 'auto', overflow: 'visible' }}
+              exit={{ opacity: 0, x: 20, height: 0, overflow: 'hidden' }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-col items-end"
+            >
+              <button 
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate([100, 30, 100, 30, 500]);
+                  alert("EMERGENCY SOS: Dispatch has been alerted to your high-accuracy location. Recorded audio and video ingestion starting...");
+                }}
+                className="w-12 h-12 bg-[#FF3B30] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,59,48,0.4)] active:scale-95 transition-transform border border-red-400/20"
+              >
+                <AlertCircle className="w-6 h-6 text-white" />
+              </button>
+              <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm mb-2">
+                <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <button 
           onClick={() => setMapCenter([53.6458, -1.7850])}
@@ -429,138 +482,41 @@ export default function DriverTerminal() {
       {/* 2. Top UI: Privacy Drawer (Earning Bar & Gamification) */}
       <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
         
-        {/* Status indicator (Pulsing Online) - Always visible at top center */}
-        <AnimatePresence>
-          {(isOnline && activeTab === 'home') && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: -20 }}
-              animate={{ opacity: 1, scale: 1, y: 16 }}
-              exit={{ opacity: 0, scale: 0.9, y: -20 }}
-              className="absolute left-1/2 -translate-x-1/2 bg-[#0D0D0F]/70 border border-[#00D26A]/40 text-[#00D26A] px-4 py-1.5 rounded-full flex items-center justify-center gap-2 backdrop-blur-md w-max shadow-[0_4px_20px_rgba(0,0,0,0.6)] z-40 pointer-events-auto"
+        {/* Status Header (Sticky) */}
+        <div className="absolute top-12 left-4 right-4 z-40 flex items-center justify-between pointer-events-none">
+          <div className="bg-[#1A1A1E]/95 backdrop-blur-md pl-4 pr-2 py-2 flex items-center gap-2 rounded-full border border-[#2C2C30] shadow-lg pointer-events-auto">
+            <button 
+              onClick={() => setActiveTab('earnings')}
+              className="flex items-center gap-3 active:scale-95 transition-transform outline-none"
             >
-              <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse shadow-[0_0_5px_#00D26A]"></span>
-              <span className="text-[10px] font-black uppercase tracking-widest leading-none pt-0.5">Online • {onlineDurationText}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <motion.div 
-          className="pointer-events-auto"
-          drag="y"
-          dragConstraints={{ top: -260, bottom: 0 }}
-          dragElastic={0.05}
-          onDragEnd={(_, info) => {
-            // Logic to snap based on drag direction/distance
-            if (info.velocity.y > 100) setIsTopPanelHidden(false);
-            else if (info.velocity.y < -100) setIsTopPanelHidden(true);
-            else if (info.offset.y > 50) setIsTopPanelHidden(false);
-            else if (info.offset.y < -50) setIsTopPanelHidden(true);
-          }}
-          animate={{ 
-            y: isTopPanelHidden ? -260 : 0,
-            opacity: 1
-          }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        >
-          <div className="px-4 pt-16 pb-2 flex flex-col gap-3 relative">
-            
-            {/* The Money-First Bar */}
-            <div className="bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl shadow-2xl overflow-hidden relative">
-              <div className="p-4">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-[10px] text-[#A0A0A8] font-black uppercase tracking-widest">Today</p>
-                      {!isOnline && <span className="w-2 h-2 rounded-full bg-[#FF3B30]" />}
-                    </div>
-                    <div className="flex items-baseline gap-1.5">
-                      <h1 className="text-[32px] leading-none font-black tracking-tight text-white">£142.60</h1>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <span className="text-sm font-bold text-white bg-[#252529] px-3 py-1.5 rounded-lg border border-[#333338] tracking-tight">8 rides • 5h</span>
-                    <button 
-                      onClick={() => setIsStatsExpanded(!isStatsExpanded)}
-                      className={cn(
-                        "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md transition-colors",
-                        isStatsExpanded ? "text-emerald-500 bg-emerald-500/10" : "text-[#A0A0A8] hover:text-white"
-                      )}
-                    >
-                      Stats
-                      <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", isStatsExpanded && "rotate-180")} />
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="mt-5">
-                  <div className="flex justify-between items-baseline mb-1.5 font-bold">
-                    <span className="text-[11px] text-[#A0A0A8] uppercase tracking-wider">Goal: £200</span>
-                    <span className="text-xs text-[#00D26A]">71%</span>
-                  </div>
-                  <div className="h-[6px] w-full bg-[#252529] rounded-full overflow-hidden">
-                    <motion.div 
-                      className="h-full bg-[#00D26A] rounded-full"
-                      initial={{ width: 0 }}
-                      animate={{ width: "71%" }}
-                      transition={{ duration: 1, ease: "easeOut" }}
-                    />
-                  </div>
-                </div>
-
-                {/* Collapsible Session Stats Content */}
-                <AnimatePresence>
-                  {isStatsExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                      animate={{ height: "auto", opacity: 1, marginTop: 24 }}
-                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                      transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                    >
-                      <div className="border-t border-[#2C2C30] pt-4">
-                        <div className="flex items-center justify-between mb-4">
-                          <p className="text-[10px] font-black tracking-widest text-[#A0A0A8] uppercase">Live Session Performance</p>
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span className="text-[8px] font-bold text-emerald-500 uppercase">Live</span>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                          <div>
-                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Acceptance</p>
-                            <p className="text-white text-sm font-bold flex items-center gap-1.5">92% <Check className="w-3.5 h-3.5 text-emerald-500" /></p>
-                          </div>
-                          <div>
-                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Rating</p>
-                            <p className="text-white text-sm font-bold flex items-center gap-1.5">4.9 <Star className="w-3.5 h-3.5 text-[#FF9500] fill-[#FF9500]" /></p>
-                          </div>
-                          <div>
-                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Avg Fare</p>
-                            <p className="text-white text-sm font-bold">£17.80</p>
-                          </div>
-                          <div>
-                            <p className="text-[#6B6B73] text-[9px] font-bold uppercase mb-1">Rides/Hour</p>
-                            <p className="text-white text-sm font-bold">1.5</p>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Drawer Handle (Privacy Privacy Puller) */}
-              <div 
-                className="w-full h-8 flex items-end justify-center pb-2 cursor-grab active:cursor-grabbing group"
-                onClick={() => setIsTopPanelHidden(!isTopPanelHidden)}
-              >
-                <div className={cn(
-                  "w-12 h-1 rounded-full transition-colors",
-                  isTopPanelHidden ? "bg-[#00D26A] shadow-[0_0_8px_rgba(0,210,106,0.5)]" : "bg-white/10 group-hover:bg-white/20"
-                )} />
-              </div>
-            </div>
+              {isOnline ? (
+                <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse shadow-[0_0_5px_#00D26A]"></span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-[#FF3B30]"></span>
+              )}
+              <span className="text-white font-black leading-none tracking-tight">
+                 {isEarningsVisible ? '£142.60' : '••••••'}
+              </span>
+            </button>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEarningsVisible(!isEarningsVisible);
+              }}
+              className="p-1.5 text-[#A0A0A8] hover:text-white hover:bg-white/10 rounded-full transition-colors outline-none"
+            >
+              {isEarningsVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
-        </motion.div>
+          
+          <button 
+            onClick={() => setActiveTab('menu')} 
+            className="w-10 h-10 bg-[#1A1A1E]/95 backdrop-blur-md rounded-full border border-[#2C2C30] text-white flex items-center justify-center shadow-lg pointer-events-auto active:scale-95 transition-transform"
+          >
+            <MenuIcon className="w-5 h-5" />
+          </button>
+        </div>
+
       </div>
 
       <div className="flex-1 pointer-events-none"></div>
@@ -642,15 +598,15 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute inset-0 z-50 bg-[#0D0D0F]/90 backdrop-blur-md flex flex-col justify-end p-4 pointer-events-auto pb-6"
+            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end p-4 pointer-events-none pb-[90px]"
           >
             {/* Same content as before */}
-            <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5 shadow-2xl relative overflow-hidden">
+            <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-4 shadow-2xl relative overflow-hidden pointer-events-auto max-h-[calc(100svh-120px)] overflow-y-auto scrollbar-hide">
               
               {/* Highlight header */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent"></div>
 
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-lg font-black text-white px-1 tracking-tight flex items-center gap-2">
                     <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
@@ -678,12 +634,12 @@ export default function DriverTerminal() {
               </div>
 
               {/* Fare Section */}
-              <div className="bg-[#252529] rounded-2xl p-4 mb-4 relative overflow-hidden group/fare cursor-pointer" onClick={() => setShowFareBreakdown(!showFareBreakdown)}>
+              <div className="bg-[#252529] rounded-2xl p-3 mb-3 relative overflow-hidden group/fare cursor-pointer" onClick={() => setShowFareBreakdown(!showFareBreakdown)}>
                 <div className="flex justify-between items-end mb-1">
-                  <h1 className="text-[36px] leading-[1] font-black text-white w-full">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</h1>
-                  <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
+                  <h1 className="text-[28px] leading-[1] font-black text-white w-full">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</h1>
+                  <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-2 py-0.5 rounded-lg text-[11px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
                 </div>
-                <p className="text-[#00D26A] text-sm font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                <p className="text-[#00D26A] text-[13px] font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
 
                 {/* Collapsible Breakdown */}
                 <AnimatePresence>
@@ -692,7 +648,7 @@ export default function DriverTerminal() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="border-t border-[#333338] mt-3 pt-3 flex flex-col gap-1.5"
+                      className="border-t border-[#333338] mt-2 pt-2 flex flex-col gap-1"
                     >
                       <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
                       <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
@@ -724,22 +680,55 @@ export default function DriverTerminal() {
                   </div>
                 </div>
 
-                <div className="relative pl-4 space-y-4">
-                  {/* Route Line indicator */}
-                  <div className="absolute left-1.5 top-2 bottom-2 w-0.5 bg-[#2C2C30]"></div>
-                  
-                  <div className="relative">
-                    <div className="absolute w-3.5 h-3.5 rounded-full bg-[#A0A0A8] border-2 border-[#1A1A1E] -left-[22px] top-0.5 z-10"></div>
-                    <p className="text-[10px] font-black uppercase text-[#6B6B73] tracking-widest leading-none mb-1">Pickup</p>
-                    <p className="text-sm font-bold text-white leading-tight">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                    <p className="text-xs text-[#00D26A] font-bold mt-0.5">3 min • 1.2 miles</p>
-                  </div>
+                <div className="flex flex-col gap-3">
+                  {isLoaded && activeRide?.pickupLat && activeRide?.dropoffLat && (
+                    <div className="w-full h-[100px] rounded-xl overflow-hidden relative border border-[#2C2C30]">
+                      <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
+                      <GoogleMap
+                        mapContainerStyle={{ width: '100%', height: '100%' }}
+                        center={{
+                          lat: (activeRide.pickupLat + activeRide.dropoffLat) / 2,
+                          lng: (activeRide.pickupLng + activeRide.dropoffLng) / 2,
+                        }}
+                        zoom={11}
+                        options={{
+                          disableDefaultUI: true,
+                          keyboardShortcuts: false,
+                          mapId: "a1b2c3d4e5f6g7h8",
+                        }}
+                      >
+                        {activeRide.pickupLat && (
+                          <MarkerF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} label="P" />
+                        )}
+                        {activeRide.dropoffLat && (
+                          <MarkerF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} label="D" />
+                        )}
+                        {(activeRide.stops || []).map((s: any, i: number) => s.coords && (
+                          <React.Fragment key={i}>
+                            <MarkerF position={s.coords} label={`${i+1}`} />
+                          </React.Fragment>
+                        ))}
+                      </GoogleMap>
+                    </div>
+                  )}
 
-                  <div className="relative">
-                    <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[22px] top-0.5 z-10"></div>
-                    <p className="text-[10px] font-black uppercase text-[#6B6B73] tracking-widest leading-none mb-1">Drop-off</p>
-                    <p className="text-sm border-b border-dashed border-[#6B6B73]/50 pb-0.5 inline-block text-white">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                    <p className="text-xs text-[#A0A0A8] font-bold mt-1">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
+                  <div className="relative pl-4 space-y-3 pb-1">
+                    {/* Route Line indicator */}
+                    <div className="absolute left-1.5 top-1.5 bottom-1.5 w-[3px] bg-[#2C2C30] rounded-full"></div>
+                    
+                    <div className="relative">
+                      <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[21.5px] top-0.5 z-10"></div>
+                      <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
+                      <p className="text-xs font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                      <p className="text-[10px] text-white font-bold mt-0.5">3 min • 1.2 miles</p>
+                    </div>
+
+                    <div className="relative">
+                      <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[21.5px] top-0.5 z-10"></div>
+                      <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Drop-off</p>
+                      <p className="text-xs font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                      <p className="text-[10px] text-white font-bold mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -994,85 +983,29 @@ export default function DriverTerminal() {
          )}
       </AnimatePresence>
 
-      {/* Bottom Navigation (Sticky Fixed Widget) */}
-      {(rideState === 'idle' && activeTab !== 'documents') && (
-        <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 z-50 pointer-events-none flex flex-col items-center gap-0.5">
-          
-          {/* Status Indicator Bar (Height reduced by 40%) */}
+      {/* Bottom Status Widget (Sticky Floating above global nav) */}
+      {rideState === 'idle' && (
+        <div className="fixed bottom-[80px] left-0 right-0 px-4 z-50 pointer-events-none flex flex-col items-center">
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "w-full max-w-sm h-6 px-4 rounded-xl flex items-center justify-between border backdrop-blur-md transition-all pointer-events-auto shadow-lg",
+              "w-full max-w-sm h-7 px-4 rounded-xl flex items-center justify-between border backdrop-blur-md transition-all pointer-events-auto shadow-lg",
               isOnline 
                 ? "bg-[#064e3b]/80 border-emerald-500/30 shadow-emerald-900/20" 
                 : "bg-[#1A1A1E]/90 border-[#2C2C30]"
             )}
           >
             <div className="flex items-center gap-3">
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#6B6B73]"
-              )} />
-              <span className={cn(
-                "text-[8px] font-black uppercase tracking-widest",
-                isOnline ? "text-white" : "text-[#6B6B73]"
-              )}>
+              <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#6B6B73]")} />
+              <span className={cn("text-[8px] font-black uppercase tracking-widest", isOnline ? "text-white" : "text-[#6B6B73]")}>
                 {isOnline ? "Waiting for Jobs" : "Offline"}
               </span>
             </div>
-
-            {isOnline && (
-              <div className="flex-1 max-w-[100px] h-0.5 bg-white/10 rounded-full mx-4 overflow-hidden relative">
-                <motion.div 
-                  animate={{ left: ["-30%", "130%"] }}
-                  transition={{ 
-                    duration: 2.5, 
-                    repeat: Infinity, 
-                    ease: "easeInOut" 
-                  }}
-                  className="absolute top-0 bottom-0 w-8 bg-gradient-to-r from-transparent via-white to-transparent"
-                />
-              </div>
-            )}
-
-            <span className={cn(
-              "text-[7px] font-bold",
-              isOnline ? "text-white/60" : "text-[#6B6B73]"
-            )}>
+            <span className={cn("text-[7px]", isOnline ? "font-black text-[#00D26A] drop-shadow-[0_0_2px_rgba(0,210,106,1)] brightness-150" : "font-bold text-[#6B6B73]")}>
               {isOnline ? "ACTIVE" : "STANDBY"}
             </span>
           </motion.div>
-
-          <div className="max-w-md mx-auto w-full h-14 bg-[#1A1A1E]/95 backdrop-blur-xl border border-[#2C2C30] rounded-2xl px-6 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.4)] pointer-events-auto">
-            <button 
-              onClick={() => setActiveTab('home')}
-              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'home' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <MapPin className={cn("w-5 h-5 transition-transform", activeTab === 'home' && "scale-110")} />
-              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Home</span>
-            </button>
-            
-            <button 
-              onClick={() => setActiveTab('earnings')}
-              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'earnings' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <PoundSterling className={cn("w-5 h-5 transition-transform", activeTab === 'earnings' && "scale-110")} />
-              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Earnings</span>
-            </button>
-            
-            <button 
-              onClick={() => setActiveTab('inbox')}
-              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'inbox' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <Inbox className={cn("w-5 h-5 transition-transform", activeTab === 'inbox' && "scale-110")} />
-              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Inbox</span>
-            </button>
-            
-            <button 
-              onClick={() => setActiveTab('menu')}
-              className={cn("flex flex-col items-center gap-0.5 transition-all active:scale-90", activeTab === 'menu' ? "text-white" : "text-[#6B6B73] hover:text-[#A0A0A8]")}>
-              <MenuIcon className={cn("w-5 h-5 transition-transform", activeTab === 'menu' && "scale-110")} />
-              <span className="text-[8px] uppercase font-black tracking-widest leading-none">Menu</span>
-            </button>
-          </div>
         </div>
       )}
 

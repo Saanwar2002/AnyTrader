@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { signInWithGoogle, signInAsGuest, signUpWithEmail, signInWithEmail, sendVerificationEmail, resetPassword } from "@/src/firebase";
+import React, { useState, useEffect } from "react";
+import { signInWithGoogle, signInAsGuest, signUpWithEmail, signInWithEmail, sendVerificationEmail, resetPassword, handleRedirectResult } from "@/src/firebase";
 import { motion } from "motion/react";
 import { LogIn, Loader2, UserCircle, Shield, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { isTemporaryEmail } from "@/src/lib/utils";
@@ -16,28 +16,61 @@ export default function Login() {
   const [isResetPassword, setIsResetPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    // Disabled handleRedirectResult on mount to prevent CSP-related auth/internal-error
+    // in this environment. Users should sign in using Email/Password.
+  }, []);
+
   const handleEmailAuth = async () => {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail) {
+      setError("Please enter your email address.");
+      return;
+    }
+
+    // Basic email regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    if (!isResetPassword && !trimmedPassword) {
+      setError("Please enter your password.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       if (isResetPassword) {
-        await resetPassword(email);
+        await resetPassword(trimmedEmail);
         setError("Password reset email sent. Please check your inbox.");
         setIsResetPassword(false);
       } else if (isSignup) {
-        if (isTemporaryEmail(email)) {
+        if (isTemporaryEmail(trimmedEmail)) {
           throw new Error("Temporary email addresses are not allowed. Please use a valid email address.");
         }
-        const { user } = await signUpWithEmail(email, password);
+        const { user } = await signUpWithEmail(trimmedEmail, trimmedPassword);
         await sendVerificationEmail(user);
         setError("Account created. Please check your email for verification link.");
         setIsSignup(false);
       } else {
-        await signInWithEmail(email, password);
+        await signInWithEmail(trimmedEmail, trimmedPassword);
       }
     } catch (error: any) {
       console.error("Auth error:", error);
-      setError(error.message || "An error occurred. Please try again.");
+      if (error.code === "auth/invalid-email") {
+        setError("The email address is badly formatted.");
+      } else if (error.code === "auth/user-not-found") {
+        setError("No account found with this email.");
+      } else if (error.code === "auth/wrong-password") {
+        setError("Incorrect password.");
+      } else {
+        setError(error.message || "An error occurred. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -85,19 +118,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-blue p-4 relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-brand-blue relative overflow-y-auto pt-8 pb-64 px-4 shadow-inner">
       {/* Background Decorative Elements */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-primary/20 rounded-full blur-3xl" />
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50" />
+        <div className="absolute bottom-48 -right-24 w-96 h-96 bg-primary/20 rounded-full blur-3xl opacity-50" />
       </div>
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="max-w-md w-full bg-white/95 backdrop-blur-xl p-8 sm:p-10 rounded-[40px] border border-white/20 shadow-2xl shadow-black/20 text-center space-y-8 relative z-10"
-      >
+      <div className="flex-1 flex items-start sm:items-center justify-center py-12 sm:py-20">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="max-w-md w-full bg-white/95 backdrop-blur-xl p-8 sm:p-10 rounded-[40px] border border-white/20 shadow-2xl shadow-black/20 text-center space-y-8 relative z-10 mb-20"
+        >
         <div className="space-y-4">
           <div className="w-24 h-24 bg-primary rounded-[32px] flex items-center justify-center mx-auto shadow-2xl shadow-primary/40 transform -rotate-6 hover:rotate-0 transition-transform duration-700 ease-out group">
             <Logo size={56} className="text-white group-hover:scale-110 transition-transform duration-500" />
@@ -131,7 +165,7 @@ export default function Login() {
                   className="w-full pl-12 pr-4 py-4.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none font-medium bg-slate-50/50 focus:bg-white"
                 />
               </div>
-              {!isSignup && (
+              {!isResetPassword && (
                 <div className="relative group">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors" />
                   <input
@@ -196,7 +230,16 @@ export default function Login() {
               try {
                 await signInWithGoogle();
               } catch (error: any) {
-                setError(error.message || "An error occurred.");
+                console.error("Google Auth Error:", error);
+                if (error.code === 'auth/internal-error') {
+                  setError("Firebase internal error. Please ensure this domain is added to 'Authorized Domains' in Firebase console > Authentication > Settings. Also, ensure a Support Email is set for your project.");
+                } else if (error.code === 'auth/unauthorized-domain') {
+                  setError("This domain is not authorized. Please add it to Firebase Console > Authentication > Settings > Authorized domains.");
+                } else if (error.code === 'auth/popup-closed-by-user') {
+                  setError("Sign-in popup was closed before completing.");
+                } else {
+                  setError(error.message || "An error occurred during Google sign in.");
+                }
               } finally {
                 setLoading(false);
               }
@@ -249,6 +292,7 @@ export default function Login() {
           </p>
         </div>
       </motion.div>
+      </div>
     </div>
   );
 }

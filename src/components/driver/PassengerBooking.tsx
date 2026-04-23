@@ -16,7 +16,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { triggerHaptic, ImpactStyle, hideNativeKeyboard } from "@/src/lib/capacitor";
 
 // Google Maps Imports
-import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, InfoWindowF } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 
 const containerStyle = {
   width: '100%',
@@ -346,7 +346,7 @@ export default function PassengerBooking() {
 
     const debounce = setTimeout(fetchSuggestions, 500);
     return () => clearTimeout(debounce);
-  }, [pickup, dropoff, activeField, mapCenter, isLoaded]);
+  }, [pickup, dropoff, stops, activeField, mapCenter, isLoaded]);
 
   const handleDetectLocation = () => {
     triggerHaptic(ImpactStyle.Light);
@@ -534,7 +534,7 @@ export default function PassengerBooking() {
   if (!isLoaded) return <div className="h-full flex items-center justify-center bg-surface"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
   return (
-    <div className="relative flex-1 w-full overflow-hidden bg-surface flex flex-col">
+    <div className="relative flex-1 w-full overflow-hidden bg-surface flex flex-col min-h-0">
        <div className="absolute inset-0 z-0">
           <GoogleMap
             mapContainerStyle={containerStyle}
@@ -558,34 +558,49 @@ export default function PassengerBooking() {
             {pickupCoords && (
               <>
                 <MarkerF position={pickupCoords} label="P" />
-                <InfoWindowF position={pickupCoords} options={{ pixelOffset: new window.google.maps.Size(0, -40), disableAutoPan: true }}>
-                  <div className="bg-card p-2 rounded-lg shadow-xl border border-border-main min-w-[120px]">
-                    <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Pickup</p>
-                    <p className="text-[11px] font-bold text-text-main leading-tight line-clamp-2">{pickup}</p>
+                <OverlayViewF
+                  position={pickupCoords}
+                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
+                >
+                  <div className="bg-emerald-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-emerald-200 min-w-[80px] max-w-[180px] pointer-events-auto">
+                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.1em] mb-0.5">Pickup</p>
+                    <p className="text-[10px] font-bold text-emerald-950 leading-tight line-clamp-3">{pickup}</p>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-50 border-r border-b border-emerald-200 rotate-45 -mt-1" />
                   </div>
-                </InfoWindowF>
+                </OverlayViewF>
               </>
             )}
             {dropoffCoords && (
               <>
                 <MarkerF position={dropoffCoords} label="D" />
-                <InfoWindowF position={dropoffCoords} options={{ pixelOffset: new window.google.maps.Size(0, -40), disableAutoPan: true }}>
-                  <div className="bg-card p-2 rounded-lg shadow-xl border border-border-main min-w-[120px]">
-                    <p className="text-[10px] font-black text-header uppercase tracking-widest mb-1">Dropoff</p>
-                    <p className="text-[11px] font-bold text-text-main leading-tight line-clamp-2">{dropoff}</p>
+                <OverlayViewF
+                  position={dropoffCoords}
+                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
+                >
+                  <div className="bg-rose-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-rose-200 min-w-[80px] max-w-[180px] pointer-events-auto">
+                    <p className="text-[8px] font-black text-rose-600 uppercase tracking-[0.1em] mb-0.5">Dropoff</p>
+                    <p className="text-[10px] font-bold text-rose-950 leading-tight line-clamp-3">{dropoff}</p>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-rose-50 border-r border-b border-rose-200 rotate-45 -mt-1" />
                   </div>
-                </InfoWindowF>
+                </OverlayViewF>
               </>
             )}
             {stops.map((s, i) => s.coords && (
               <React.Fragment key={i}>
                 <MarkerF position={s.coords} label={`${i+1}`} />
-                <InfoWindowF position={s.coords} options={{ pixelOffset: new window.google.maps.Size(0, -40), disableAutoPan: true }}>
-                  <div className="bg-card p-2 rounded-lg shadow-xl border border-border-main min-w-[120px]">
-                    <p className="text-[10px] font-black text-warning uppercase tracking-widest mb-1">Stop {i+1}</p>
-                    <p className="text-[11px] font-bold text-text-main leading-tight line-clamp-2">{s.address}</p>
+                <OverlayViewF
+                  position={s.coords}
+                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
+                >
+                  <div className="bg-amber-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-amber-200 min-w-[80px] max-w-[180px] pointer-events-auto">
+                    <p className="text-[8px] font-black text-amber-600 uppercase tracking-[0.1em] mb-0.5">Stop {i+1}</p>
+                    <p className="text-[10px] font-bold text-amber-950 leading-tight line-clamp-3">{s.address}</p>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-50 border-r border-b border-amber-200 rotate-45 -mt-1" />
                   </div>
-                </InfoWindowF>
+                </OverlayViewF>
               </React.Fragment>
             ))}
             {driverPos && <MarkerF position={driverPos} label="🚕" />}
@@ -601,7 +616,7 @@ export default function PassengerBooking() {
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                className="bg-card rounded-t-[40px] shadow-2xl pointer-events-auto flex flex-col max-h-[55vh] w-full border-t border-border-main"
+                className="bg-card rounded-t-[40px] shadow-2xl pointer-events-auto flex flex-col max-h-[65vh] w-full border-t border-border-main pb-[calc(4rem+env(safe-area-inset-bottom))]"
               >
                 <div className="w-12 h-1.5 bg-border-main rounded-full mx-auto mt-3 mb-1" />
                 <div className="p-5 pt-2 overflow-y-auto space-y-4 no-scrollbar">
@@ -730,7 +745,7 @@ export default function PassengerBooking() {
             )}
 
             {step === "searching" && (
-              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-8 flex flex-col items-center border-t border-border-main">
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-8 pb-[calc(4rem+env(safe-area-inset-bottom)+2rem)] flex flex-col items-center border-t border-border-main">
                 <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center relative mb-6">
                   <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
                   <Car className="w-10 h-10 text-primary animate-pulse" />
@@ -742,7 +757,7 @@ export default function PassengerBooking() {
             )}
 
             {step === "confirmed" && (
-              <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 border-t border-border-main">
+              <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] border-t border-border-main">
                 <div className="flex items-center gap-4 mb-6">
                    <div className="w-16 h-16 bg-trust/10 rounded-2xl flex items-center justify-center"><Check className="w-8 h-8 text-trust" /></div>
                    <div>
