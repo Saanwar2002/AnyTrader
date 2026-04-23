@@ -454,30 +454,32 @@ export default function DriverTerminal() {
               animate={{ opacity: 1, x: 0, height: 'auto', overflow: 'visible' }}
               exit={{ opacity: 0, x: 20, height: 0, overflow: 'hidden' }}
               transition={{ duration: 0.2 }}
-              className="flex flex-col items-end"
+              className="flex flex-col items-end gap-3"
             >
-              <button 
-                onClick={() => {
-                  if (navigator.vibrate) navigator.vibrate([100, 30, 100, 30, 500]);
-                  alert("EMERGENCY SOS: Dispatch has been alerted to your high-accuracy location. Recorded audio and video ingestion starting...");
-                }}
-                className="w-12 h-12 bg-[#FF3B30] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,59,48,0.4)] active:scale-95 transition-transform border border-red-400/20"
-              >
-                <AlertCircle className="w-6 h-6 text-white" />
-              </button>
-              <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm mb-2">
-                <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
+              <div className="flex flex-col items-end">
+                <button 
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate([100, 30, 100, 30, 500]);
+                    alert("EMERGENCY SOS: Dispatch has been alerted to your high-accuracy location. Recorded audio and video ingestion starting...");
+                  }}
+                  className="w-12 h-12 bg-[#FF3B30] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,59,48,0.4)] active:scale-95 transition-transform border border-red-400/20"
+                >
+                  <AlertCircle className="w-6 h-6 text-white" />
+                </button>
+                <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm">
+                  <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
+                </div>
               </div>
+
+              <button 
+                onClick={() => setMapCenter([53.6458, -1.7850])}
+                className="w-12 h-12 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
+              >
+                <Target className="w-5 h-5 text-[#A0A0A8]" />
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
-
-        <button 
-          onClick={() => setMapCenter([53.6458, -1.7850])}
-          className="w-12 h-12 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
-        >
-          <Target className="w-5 h-5 text-[#A0A0A8]" />
-        </button>
       </div>
 
       {/* 2. Top UI: Privacy Drawer (Earning Bar & Gamification) */}
@@ -638,7 +640,12 @@ export default function DriverTerminal() {
                 {/* Fare Section */}
                 <div className="bg-[#252529] rounded-xl p-3 mb-3 relative overflow-hidden group/fare cursor-pointer" onClick={() => setShowFareBreakdown(!showFareBreakdown)}>
                   <div className="flex justify-between items-end mb-1">
-                    <h1 className="text-3xl leading-[1] font-black text-white w-full">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</h1>
+                    <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
+                      £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
+                      <span className="text-[13px] text-[#FEF7D2] font-bold tracking-wide pb-[2px]">
+                        ({((activeRide?.distanceMiles || 22) + 1.2).toFixed(1)} miles)
+                      </span>
+                    </h1>
                     <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
                   </div>
                   <p className="text-[#00D26A] text-[12px] font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>

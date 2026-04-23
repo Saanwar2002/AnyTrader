@@ -926,7 +926,7 @@ export default function Layout() {
                   "flex flex-col items-center justify-center gap-1 transition-colors relative h-full px-2",
                   isActive 
                     ? (isDriverTerminal ? "text-white" : "text-blue-600 font-bold") 
-                    : (isDriverTerminal ? "text-[#6B6B73] hover:text-[#A0A0A8]" : "text-slate-500 hover:text-slate-900"),
+                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-500 hover:text-slate-900"),
                   item.isCta && "text-blue-600"
                 )}
               >
@@ -936,7 +936,7 @@ export default function Layout() {
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                   )}
                 </div>
-                <span className="text-[10px] font-medium tracking-tight">{item.name}</span>
+                <span className="text-xs font-medium tracking-tight">{item.name}</span>
                 {isActive && (
                    <motion.div 
                      layoutId="navDot"

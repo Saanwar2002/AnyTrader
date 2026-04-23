@@ -287,5 +287,11 @@ The prefix is determined by the user's primary registration role:
     *   *Geometry-Driven Map Panning:* Redesigned `MapController` offset logic in `PassengerBooking.tsx`. To compensate for the bottom UI sheet, the camera uses `L.point(x, y + window.innerHeight * 0.25)` to dynamically shove the map focal point South, effectively pushing the targeted UI Pin comfortably upwards into the visible viewport overhead. 
     *   *Intermediate Stops Engine:* Implemented full Multi-Leg routing. Sandwitched an inline "Add Stop" button (`bg-green-100` styling) allowing up to 3 intermediate waypoints. 
     *   *Routing Polylines:* Fully integrated with OSRM. Any stops appended to the state trigger a multi-coordinate array rebuild and force a live visual recalculation of the blue routing polyline snaking across the Map container. 
-    *   *Google Maps Readiness:* These precise layout constraints (`55vh` max-heights, compressed spacing, shifted focal tracking, multi-lat-lng stop injection) are logged here and must be explicitly replicated 1:1 if the platform swaps `react-leaflet` OpenStreetMap components for `@react-google-maps/api` structures in the future.
+## 🚕 Phase 11.9: Driver Terminal UI Polish (Completed April 23, 2026)
+*   **Job Offer Card Legibility:**
+    *   *Fare Visibility:* Adjusted the ride offer card anchor (`bottom-0` with `safe-area-inset-bottom` calculations) to ensure the total fare is completely visible and not obscured by the mobile navigation bar. Map viewport was adjusted accordingly.
+    *   *Distance Clarity:* Redesigned the total trip distance display next to the fare. Replaced "mi total" with a clearer `({total} miles)` format, increased spacing, and changed the text color to a bright cream (`#FEF7D2`) for high-contrast, at-a-glance readability while driving.
+    *   *SOS & Map Controls:* Consolidated the Map re-center button under the SOS 'Flash' button bundle within the Driver Terminal layout to organize floating action buttons cleanly on the right side.
+    *   *Navigation Polish:* Upgraded the Driver Terminal's bottom navigation bar typography. Increased text size to `text-xs` (from `[10px]`) and adjusted the inactive text color to a brighter zinc/white tone (`#E4E4E7`) over the dim grey for significantly better legibility in varied lighting environments.
+
 
