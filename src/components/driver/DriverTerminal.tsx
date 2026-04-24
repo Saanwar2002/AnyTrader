@@ -237,6 +237,51 @@ export default function DriverTerminal() {
     return () => unsub();
   }, [isOnline, rideState, user]);
 
+  // Listen to Active Ride for Cancellations
+  useEffect(() => {
+    if (!activeRide?.isReal || !activeRide?.id || rideState === 'idle' || rideState === 'incoming') return;
+    
+    const unsub = onSnapshot(doc(db, "ride_requests", activeRide.id), async (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.status === "cancelled" && data.cancelledBy === "passenger") {
+          toast.error("Ride Cancelled", {
+            description: "The passenger has cancelled the ride.",
+            duration: 6000
+          });
+          
+          if (data.cancellationFee > 0 && user) {
+            toast.success("Cancellation Fee Applied", {
+              description: `You have been credited £${data.cancellationFee.toFixed(2)} for the cancellation.`
+            });
+            // Credit the driver metric
+            const today = new Date().toISOString().split('T')[0];
+            await setDoc(doc(db, "driver_metrics", user.uid), {
+              date: today,
+              dailyEarnings: increment(data.cancellationFee),
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+          }
+          
+          if (user) {
+            updateDoc(doc(db, "driver_status", user.uid), {
+              isBusy: false,
+              currentRideId: deleteField()
+            } as any).catch(console.error);
+          }
+          
+          setRideState('idle');
+          setActiveRide(null);
+          setPassengerPos(null);
+          setDirections(null);
+          if (navigator.vibrate) navigator.vibrate([300, 200, 300]);
+        }
+      }
+    });
+    
+    return () => unsub();
+  }, [activeRide?.id, activeRide?.isReal, rideState, user]);
+
   // Simulation: Add fake demand zones
   useEffect(() => {
     setDemandZones([
@@ -1387,11 +1432,13 @@ export default function DriverTerminal() {
                   </div>
                 </div>
                 
-                <div className="flex gap-2 mt-3">
-                   <button onClick={handleToggleWaitAtStop} className={`flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? 'bg-[#FF9500] text-white border-[#FF9500]/50' : 'bg-transparent text-[#FF9500] border-[#FF9500]/30'}`}>
-                     {isWaitingAtStop ? 'Resume Trip' : 'Wait at Stop'}
-                   </button>
-                </div>
+                {activeRide?.stops?.length > 0 && (
+                  <div className="flex gap-2 mt-3">
+                     <button onClick={handleToggleWaitAtStop} className={`flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? 'bg-[#FF9500] text-white border-[#FF9500]/50' : 'bg-transparent text-[#FF9500] border-[#FF9500]/30'}`}>
+                       {isWaitingAtStop ? 'Resume Trip' : 'Wait at Stop'}
+                     </button>
+                  </div>
+                )}
 
                 <div className="flex justify-center gap-2 mt-2">
                   <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">

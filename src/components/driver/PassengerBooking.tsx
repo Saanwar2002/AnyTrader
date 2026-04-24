@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
-import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "@/src/firebase";
+import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
@@ -109,6 +109,7 @@ export default function PassengerBooking() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<BookingStep>("details");
+  const [houseNumber, setHouseNumber] = useState("");
   const [pickup, setPickup] = useState(searchParams.get("pickup") || "");
   const [dropoff, setDropoff] = useState(searchParams.get("dropoff") || "");
   const [comments, setComments] = useState(searchParams.get("comments") || "");
@@ -150,8 +151,10 @@ export default function PassengerBooking() {
   const [isListening, setIsListening] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [fareEstimate, setFareEstimate] = useState<number | null>(null);
+  const [distanceMiles, setDistanceMiles] = useState<number>(0);
+  const [durationMinutes, setDurationMinutes] = useState<number>(0);
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
-  const [fareConfig, setFareConfig] = useState({ baseFare: 2.5, distanceRate: 1.2, minFare: 5.0 });
+  const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Map States
@@ -213,11 +216,20 @@ export default function PassengerBooking() {
 
             // Calculate distance/fare
             let totalDistanceMeters = 0;
+            let totalDurationSeconds = 0;
             result.routes[0].legs.forEach(leg => {
               if (leg.distance) totalDistanceMeters += leg.distance.value;
+              if (leg.duration) totalDurationSeconds += leg.duration.value;
             });
-            const distanceMiles = totalDistanceMeters / 1609.34;
-            setFareEstimate(fareConfig.baseFare + (distanceMiles * fareConfig.distanceRate));
+            const dMiles = totalDistanceMeters / 1609.34;
+            const dMins = totalDurationSeconds / 60;
+            
+            setDistanceMiles(dMiles);
+            setDurationMinutes(dMins);
+
+            // Base Fare + Distance + Time
+            const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
+            setFareEstimate(Math.max(calcFare, fareConfig.minFare));
           } else {
             console.warn("Directions failed:", status);
           }
@@ -244,9 +256,12 @@ export default function PassengerBooking() {
       if (doc.exists()) {
         const data = doc.data();
         setFareConfig({
-          baseFare: Number(data.baseFare) || 2.5,
-          distanceRate: Number(data.distanceRate) || 1.2,
+          baseFare: Number(data.baseFare) || 3.5,
+          distanceRate: Number(data.distanceRate) || 1.3,
+          timeRate: Number(data.timeRate) || 0.15,
+          waitRatePerMinute: Number(data.waitRatePerMinute) || 0.25,
           minFare: Number(data.minFare) || 5.0,
+          commissionRate: Number(data.commissionRate) || 0.12,
         });
       }
     });
@@ -310,9 +325,28 @@ export default function PassengerBooking() {
         config: { responseMimeType: "application/json" }
       });
       const result = JSON.parse(response.text || "{}");
-      if (result.pickup) setPickup(result.pickup);
-      if (result.dropoff) setDropoff(result.dropoff);
+      
+      const geocodeLocation = (address: string, setter: (val: string) => void, coordSetter: (coords: {lat: number, lng: number}) => void) => {
+        if (!window.google || !window.google.maps) {
+           setter(address);
+           return;
+        }
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ address: address + ', UK' }, (results, status) => {
+          if (status === "OK" && results && results[0]) {
+            const loc = results[0].geometry.location;
+            coordSetter({ lat: loc.lat(), lng: loc.lng() });
+            setter(results[0].formatted_address);
+          } else {
+            setter(address);
+          }
+        });
+      };
+
+      if (result.pickup) geocodeLocation(result.pickup, setPickup, setPickupCoords);
+      if (result.dropoff) geocodeLocation(result.dropoff, setDropoff, setDropoffCoords);
       if (result.comments) setComments(result.comments);
+      
       toast.success("AI extraction complete.");
     } catch (err) {
       console.error("AI Error:", err);
@@ -382,7 +416,15 @@ export default function PassengerBooking() {
     triggerHaptic(ImpactStyle.Light);
     setIsDetecting(true);
     navigator.geolocation.getCurrentPosition(async (pos) => {
-      const { latitude, longitude } = pos.coords;
+      const { latitude, longitude, accuracy } = pos.coords;
+      
+      if (accuracy > 10) {
+        toast.warning(`GPS accuracy too low (${Math.round(accuracy)}m). Please enter manually for better precision.`);
+        setIsDetecting(false);
+        setActiveField("pickup");
+        return;
+      }
+      
       const c = { lat: latitude, lng: longitude };
       setMapCenter(c);
       setPickupCoords(c);
@@ -405,7 +447,10 @@ export default function PassengerBooking() {
           setPickup(addr);
         }
       });
-    }, () => setIsDetecting(false));
+    }, (err) => {
+      setIsDetecting(false);
+      toast.error("Failed to detect location. Please check browser permissions.");
+    }, { enableHighAccuracy: true });
   };
 
   const [driverPos, setDriverPos] = useState<{lat: number, lng: number} | null>(null);
@@ -430,19 +475,23 @@ export default function PassengerBooking() {
         riderId: user.uid,
         passengerName: profile?.firstName || "Passenger",
         passengerPhone: profile?.phone || profile?.phoneNumber || "",
-        pickup,
+        pickup: houseNumber ? `${houseNumber} ${pickup}` : pickup,
         pickupLat: pickupCoords?.lat || mapCenter.lat,
         pickupLng: pickupCoords?.lng || mapCenter.lng,
         dropoff,
         dropoffLat: dropoffCoords?.lat,
         dropoffLng: dropoffCoords?.lng,
         stops: stops.filter(s => s.coords !== null),
+        distanceMiles: Number(distanceMiles.toFixed(1)),
+        durationMinutes: Number(durationMinutes.toFixed(0)),
+        fareEstimate: getComputedFare(selectedCategory),
+        baseCalc: fareEstimate || 5.0,
+        surgeMultiplier: 1.0, 
         carCategory: selectedCategory,
         isPetFriendly,
         waitTolerance,
         comments,
         status: "pending",
-        fareEstimate: getComputedFare(selectedCategory),
         currency: "GBP",
         handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
       };
@@ -454,6 +503,52 @@ export default function PassengerBooking() {
          setCurrentRideId(docRef.id);
       }
     } catch (err) { setStep("details"); }
+  };
+
+  const handleCancelSearching = async () => {
+    if (currentRideId) {
+      await updateDoc(doc(db, "ride_requests", currentRideId), { status: "cancelled", cancelledBy: "passenger", cancelledAt: serverTimestamp() });
+    }
+    setStep("details");
+    setCurrentRideId(null);
+  };
+
+  const [showCancelPrompt, setShowCancelPrompt] = useState(false);
+  const [cancelFeeToApply, setCancelFeeToApply] = useState(0);
+
+  const handleCancelConfirmed = async () => {
+    if (!currentRideId) return;
+
+    let fee = 0;
+    if (assignedDriverInfo?.acceptedAt) {
+      const diffMs = Date.now() - assignedDriverInfo.acceptedAt;
+      if (diffMs > 120000) { // 2 minutes
+        fee = fareConfig.baseFare; 
+      }
+    }
+
+    if (fee > 0 && !showCancelPrompt) {
+        setCancelFeeToApply(fee);
+        setShowCancelPrompt(true);
+        return; 
+    }
+
+    try {
+      await updateDoc(doc(db, "ride_requests", currentRideId), {
+        status: "cancelled",
+        cancelledBy: "passenger",
+        cancellationFee: fee,
+        cancelledAt: serverTimestamp()
+      });
+      setStep("details");
+      setCurrentRideId(null);
+      setAssignedDriverInfo(null);
+      setShowCancelPrompt(false);
+      toast.success("Ride cancelled.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to cancel ride.");
+    }
   };
 
   useEffect(() => {
@@ -469,7 +564,8 @@ export default function PassengerBooking() {
              plate: data.vehiclePlate || "UNKNOWN",
              code: data.handshakeCode || "---", 
              phone: data.driverPhone || "", 
-             status: "accepted" 
+             status: "accepted",
+             acceptedAt: data.acceptedAt?.toMillis() || Date.now()
           });
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
         }
@@ -737,8 +833,15 @@ export default function PassengerBooking() {
                           </div>
                         </div>
                         <div className="relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-primary bg-surface z-10" />
-                          <input type="text" className="w-full pl-12 pr-4 py-3 bg-surface border-2 border-transparent focus:border-primary rounded-2xl font-bold text-text-main outline-none transition-all placeholder:text-text-muted" placeholder="Where from?" value={pickup} onFocus={() => setActiveField("pickup")} onChange={(e) => setPickup(e.target.value)} />
+                          <div className="flex gap-2">
+                            <div className="w-[84px] shrink-0 relative">
+                               <input type="text" className="w-full pl-3 pr-2 py-3 bg-surface border-2 border-transparent focus:border-primary rounded-2xl font-bold text-text-main outline-none transition-all placeholder:text-text-muted text-center" placeholder="Flat No" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} />
+                            </div>
+                            <div className="relative flex-1">
+                              <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-primary bg-surface z-10" />
+                              <input type="text" className="w-full pl-12 pr-4 py-3 bg-surface border-2 border-transparent focus:border-primary rounded-2xl font-bold text-text-main outline-none transition-all placeholder:text-text-muted" placeholder="Where from?" value={pickup} onFocus={() => setActiveField("pickup")} onChange={(e) => setPickup(e.target.value)} />
+                            </div>
+                          </div>
                           
                           <AnimatePresence>
                             {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
@@ -857,7 +960,7 @@ export default function PassengerBooking() {
                 </div>
                 <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">Requesting...</h2>
                 <p className="text-text-muted font-bold text-sm text-center mb-8">Pinging the fleet to find your professional driver.</p>
-                <button onClick={() => setStep("details")} className="text-danger font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl bg-danger/5">Cancel</button>
+                <button onClick={handleCancelSearching} className="text-danger font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl bg-danger/5">Cancel</button>
               </motion.div>
             )}
 
@@ -907,10 +1010,34 @@ export default function PassengerBooking() {
                       <p className="text-2xl font-black text-text-main">£{fareEstimate?.toFixed(2)}</p>
                    </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 mb-4">
                   <button onClick={() => setIsChatOpen(true)} className="w-[68px] shrink-0 bg-surface border border-border-main rounded-[20px] flex items-center justify-center active:scale-95 transition-transform"><MessageCircle className="w-6 h-6 text-primary" /></button>
                   <button onClick={() => navigate("/my-rides")} className="flex-1 py-5 bg-text-main text-surface rounded-[20px] font-black text-lg shadow-xl shrink-0">Track Live Location</button>
                 </div>
+                
+                <div className="text-center">
+                  <button onClick={handleCancelConfirmed} className="text-xs font-bold text-danger uppercase tracking-widest py-2 px-4 hover:bg-danger/5 rounded-lg transition-colors">
+                    Cancel Ride
+                  </button>
+                </div>
+                
+                <AnimatePresence>
+                  {showCancelPrompt && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-card w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-border-main text-center">
+                        <div className="w-16 h-16 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <AlertCircle className="w-8 h-8 text-danger" />
+                        </div>
+                        <h3 className="text-xl font-black text-text-main mb-2">Cancel Ride?</h3>
+                        <p className="text-sm font-bold text-text-muted mb-6">Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-text-main font-black">£{cancelFeeToApply.toFixed(2)}</span> will apply to compensate the driver.</p>
+                        <div className="flex gap-3">
+                          <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-4 bg-surface rounded-2xl font-black text-text-main hover:bg-surface-hover transition-colors">Go Back</button>
+                          <button onClick={handleCancelConfirmed} className="flex-1 py-4 bg-danger text-white rounded-2xl font-black hover:bg-danger/90 transition-colors">Yes, Cancel</button>
+                        </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
           </AnimatePresence>
