@@ -191,7 +191,7 @@ export default function PassengerBooking() {
             const distanceMiles = totalDistanceMeters / 1609.34;
             setFareEstimate(fareConfig.baseFare + (distanceMiles * fareConfig.distanceRate));
           } else {
-            console.error("Directions failed:", status);
+            console.warn("Directions failed:", status);
           }
         });
       };
@@ -790,8 +790,8 @@ export default function PassengerBooking() {
                    </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setIsChatOpen(true)} className="aspect-square bg-surface border border-border-main rounded-3xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><MessageCircle className="w-6 h-6 text-primary" /></button>
-                  <button onClick={() => navigate("/my-rides")} className="flex-1 py-5 bg-text-main text-surface rounded-3xl font-black text-lg shadow-xl">Track Live Location</button>
+                  <button onClick={() => setIsChatOpen(true)} className="w-[68px] shrink-0 bg-surface border border-border-main rounded-[20px] flex items-center justify-center active:scale-95 transition-transform"><MessageCircle className="w-6 h-6 text-primary" /></button>
+                  <button onClick={() => navigate("/my-rides")} className="flex-1 py-5 bg-text-main text-surface rounded-[20px] font-black text-lg shadow-xl shrink-0">Track Live Location</button>
                 </div>
               </motion.div>
             )}

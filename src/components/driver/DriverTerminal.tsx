@@ -5,7 +5,7 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff } from "lucide-react";
+import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment } from "@/src/firebase";
 import DriverEarnings from "./DriverEarnings";
@@ -120,7 +120,7 @@ export default function DriverTerminal() {
               mapInstance.fitBounds(result.routes[0].bounds);
             }
           } else {
-            console.error("error fetching directions", result);
+            console.warn("Directions request failed with status:", status);
           }
         }
       );
@@ -428,6 +428,7 @@ export default function DriverTerminal() {
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showJobDetails, setShowJobDetails] = useState(false);
 
   const handleArrived = async () => {
     setRideState('waiting');
@@ -560,7 +561,7 @@ export default function DriverTerminal() {
       {/* Simulation Trigger (Dev Only) */}
       <button 
         onClick={simulateIncomingRide}
-        className="absolute top-[80px] left-1/2 -translate-x-1/2 z-[150] bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
+        className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[150] bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
       >
         Simulate Job
       </button>
@@ -710,6 +711,20 @@ export default function DriverTerminal() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Floating Map Navigation (Left Side) - Decreased size and moved to left side corner */}
+      {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
+        <div className="absolute top-[32%] left-4 z-50 pointer-events-auto">
+          <a 
+            href={`https://www.google.com/maps/dir/?api=1&destination=${rideState === 'in_progress' ? `${activeRide?.dropoffLat || ''},${activeRide?.dropoffLng || ''}` : `${activeRide?.pickupLat || ''},${activeRide?.pickupLng || ''}`}`} 
+            target="_blank" 
+            rel="noreferrer" 
+            className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(0,122,255,0.4)] active:scale-95 transition-transform"
+          >
+            <Navigation className="w-4 h-4 text-white" />
+          </a>
+        </div>
+      )}
 
       {/* 2. Top UI: Privacy Drawer (Earning Bar & Gamification) */}
       <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
@@ -1043,6 +1058,42 @@ export default function DriverTerminal() {
         )}
       </AnimatePresence>
 
+      {/* Job Details Modal - Quick Glance */}
+      <AnimatePresence>
+        {showJobDetails && activeRide && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="absolute bottom-[200px] left-4 right-4 z-[100] bg-[#1A1A1E] rounded-2xl border border-[#333338] shadow-2xl p-4 pointer-events-auto"
+          >
+            <div className="flex justify-between items-center mb-3 border-b border-[#333338] pb-2">
+              <h3 className="font-black text-white uppercase text-xs tracking-wider">Job Details</h3>
+              <button onClick={() => setShowJobDetails(false)} className="text-[#A1A1AA] hover:text-white active:scale-95 transition-transform"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-[#A1A1AA] font-bold w-[72px]">Passenger</span>
+                <span className="text-white font-black">{activeRide?.name || "Passenger"}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Pickup</span>
+                <span className="text-white flex-1 leading-tight font-medium">{activeRide?.pickupAddress || "Pickup Location"}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Drop-off</span>
+                <span className="text-white flex-1 leading-tight font-medium">{activeRide?.dropoffAddress || "Drop-off Location"}</span>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-[#333338]">
+                <span className="text-[#A1A1AA] font-bold w-[72px]">Total Fare</span>
+                <span className="text-[#00D26A] font-black text-xl">£{activeRide?.fareEstimate?.toFixed(2) || '0.00'}</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Screen 4 & 5 & 6: Active Ride States (z-40) */}
       <AnimatePresence>
         {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && (
@@ -1069,7 +1120,9 @@ export default function DriverTerminal() {
                   </div>
                 </div>
                 <div className="flex justify-center gap-3 mt-2">
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${activeRide?.pickupLat || ''},${activeRide?.pickupLng || ''}`} target="_blank" rel="noreferrer" className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><Navigation className="w-5 h-5 text-white" /></a>
+                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
+                    <Info className="w-5 h-5 text-white" />
+                  </button>
                   <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                   </button>
@@ -1105,6 +1158,9 @@ export default function DriverTerminal() {
                 )}
                 
                 <div className="flex justify-center gap-3 mt-2">
+                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
+                    <Info className="w-5 h-5 text-white" />
+                  </button>
                   <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                   </button>
@@ -1128,7 +1184,7 @@ export default function DriverTerminal() {
                     <div className="absolute left-1/2 -translate-x-1/2 -top-2">
                       <span className="bg-[#FF3B30] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
                     </div>
-                    <p className="text-[19px] font-bold text-[#FF3B30] mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <p className="text-[19px] font-bold text-[#F8F9FA] mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                     <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left</p>
                   </div>
                   <div className="text-right">
@@ -1136,7 +1192,9 @@ export default function DriverTerminal() {
                   </div>
                 </div>
                 <div className="flex justify-center gap-3 mt-2">
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${activeRide?.dropoffLat || ''},${activeRide?.dropoffLng || ''}`} target="_blank" rel="noreferrer" className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><Navigation className="w-5 h-5 text-white" /></a>
+                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
+                    <Info className="w-5 h-5 text-white" />
+                  </button>
                   <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                   </button>
