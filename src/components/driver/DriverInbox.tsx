@@ -35,7 +35,7 @@ export default function DriverInbox() {
               "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-colors border",
               filter === f 
                 ? "bg-white text-[#0D0D0F] border-white" 
-                : "bg-[#1A1A1E] text-[#A0A0A8] border-[#2C2C30] hover:border-[#6B6B73]"
+                : "bg-[#1A1A1E] text-[#E4E4E7] border-[#2C2C30] hover:border-[#A1A1AA]"
             )}
           >
             {f}
@@ -81,7 +81,7 @@ export default function DriverInbox() {
               transition={{ delay: idx * 0.05 }}
               className={cn(
                 "bg-[#1A1A1E] border border-[#2C2C30] rounded-2xl p-4 flex items-center gap-4 transition-colors active:bg-[#252529]",
-                msg.unread ? "border-[#6B6B73]/50" : ""
+                msg.unread ? "border-[#A1A1AA]/50" : ""
               )}
             >
               <div className="relative">
@@ -98,20 +98,20 @@ export default function DriverInbox() {
                   <h3 className={cn("text-sm truncate font-bold", msg.unread ? "text-white font-black" : "text-[#EBEBF5]")}>
                     {msg.title}
                   </h3>
-                  <span className="text-[10px] font-bold text-[#6B6B73] shrink-0 ml-2 uppercase tracking-wider">{msg.time}</span>
+                  <span className="text-[10px] font-bold text-[#A1A1AA] shrink-0 ml-2 uppercase tracking-wider">{msg.time}</span>
                 </div>
-                <p className="text-xs text-[#A0A0A8] truncate">{msg.desc}</p>
+                <p className="text-xs text-[#E4E4E7] truncate">{msg.desc}</p>
               </div>
               
-              <ChevronRight className="w-5 h-5 text-[#6B6B73]" />
+              <ChevronRight className="w-5 h-5 text-[#A1A1AA]" />
             </motion.div>
           );
         })}
 
         {filteredMessages.length === 0 && (
           <div className="text-center py-12">
-            <CheckCircle2 className="w-12 h-12 text-[#6B6B73] mx-auto mb-3 opacity-20" />
-            <p className="text-[#A0A0A8] font-bold">You're all caught up!</p>
+            <CheckCircle2 className="w-12 h-12 text-[#A1A1AA] mx-auto mb-3 opacity-20" />
+            <p className="text-[#E4E4E7] font-bold">You're all caught up!</p>
           </div>
         )}
       </div>

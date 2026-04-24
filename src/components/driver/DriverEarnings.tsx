@@ -122,7 +122,7 @@ export default function DriverEarnings() {
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest leading-none ${period === p ? 'bg-[#252529] text-[#00D26A] shadow-sm' : 'text-[#A0A0A8]'}`}
+              className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest leading-none ${period === p ? 'bg-[#252529] text-[#00D26A] shadow-sm' : 'text-[#E4E4E7]'}`}
             >
               {p}
             </button>
@@ -173,7 +173,7 @@ export default function DriverEarnings() {
         
         <div className="flex justify-between items-start mb-6">
           <div>
-            <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-[0.2em] mb-2 px-1">
+            <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-[0.2em] mb-2 px-1">
               Net Revenue
             </p>
             <h1 className="text-[56px] leading-[0.9] font-black tracking-tighter text-white">
@@ -191,7 +191,7 @@ export default function DriverEarnings() {
         <div className="space-y-3">
           <div className="flex justify-between items-end px-1">
             <div className="flex flex-col">
-              <p className="text-[9px] font-black text-[#6B6B73] uppercase tracking-widest mb-0.5">Progress to Daily Goal</p>
+              <p className="text-[9px] font-black text-[#A1A1AA] uppercase tracking-widest mb-0.5">Progress to Daily Goal</p>
               <div className="flex items-center gap-2">
                 <Target className="w-3.5 h-3.5 text-[#00D26A]" />
                 <span className="text-sm font-black text-white px-0.5">£{displayGoal}</span>
@@ -217,21 +217,21 @@ export default function DriverEarnings() {
       
       <div className="grid grid-cols-2 gap-3 mb-8">
         <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5">
-          <ArrowUpRight className="w-5 h-5 text-[#A0A0A8] mb-3" />
+          <ArrowUpRight className="w-5 h-5 text-[#E4E4E7] mb-3" />
           <p className="text-2xl font-black text-white -mt-1 leading-none">
             £{(displayEarnings / (1 - fareConfig.commissionRate)).toFixed(2)}
           </p>
-          <p className="text-[10px] font-bold text-[#6B6B73] uppercase tracking-wider mt-2">Gross Fares</p>
+          <p className="text-[10px] font-bold text-[#A1A1AA] uppercase tracking-wider mt-2">Gross Fares</p>
         </div>
         <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5">
           <Star className="w-5 h-5 text-[#FF9500] mb-3" />
           <p className="text-2xl font-black text-[#FF9500] -mt-1 leading-none">4.9</p>
-          <p className="text-[10px] font-bold text-[#6B6B73] uppercase tracking-wider mt-2">Driver Rating</p>
+          <p className="text-[10px] font-bold text-[#A1A1AA] uppercase tracking-wider mt-2">Driver Rating</p>
         </div>
         <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5">
           <Zap className="w-5 h-5 text-[#00D26A] mb-3" />
           <p className="text-2xl font-black text-[#00D26A] -mt-1 leading-none">{metrics[period].jobs || (period === 'week' ? 42 : period === 'month' ? 156 : 0)}</p>
-          <p className="text-[10px] font-bold text-[#6B6B73] uppercase tracking-wider mt-2">Trips Done</p>
+          <p className="text-[10px] font-bold text-[#A1A1AA] uppercase tracking-wider mt-2">Trips Done</p>
         </div>
         <div className="bg-[#FF3B30]/5 border border-[#FF3B30]/10 rounded-3xl p-5 relative overflow-hidden group">
           <div className="absolute inset-0 bg-gradient-to-br from-[#FF3B30]/0 to-[#FF3B30]/[0.05] pointer-events-none group-active:opacity-50 transition-opacity"></div>
@@ -253,7 +253,7 @@ export default function DriverEarnings() {
 
       {/* Recent Activity Feed */}
       <h2 className="text-[11px] font-black text-white uppercase tracking-[0.25em] mb-4 px-2 flex items-center gap-2">
-        <History className="w-4 h-4 text-[#A0A0A8]" /> Recent Trip Log
+        <History className="w-4 h-4 text-[#E4E4E7]" /> Recent Trip Log
       </h2>
       <div className="space-y-3 mb-8">
         {recentTrips.length > 0 ? (
@@ -261,11 +261,11 @@ export default function DriverEarnings() {
             <div key={trip.id} className="bg-[#1A1A1E] border border-[#2C2C30] p-4 rounded-3xl flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-[#252529] flex items-center justify-center">
-                  <Car className="w-5 h-5 text-[#A0A0A8]" />
+                  <Car className="w-5 h-5 text-[#E4E4E7]" />
                 </div>
                 <div className="max-w-[140px]">
                   <p className="text-sm font-bold text-white truncate">{trip.dropoffAddress?.split(',')[0] || "Unknown"}</p>
-                  <p className="text-[10px] text-[#6B6B73] font-bold uppercase mt-0.5">
+                  <p className="text-[10px] text-[#A1A1AA] font-bold uppercase mt-0.5">
                     {trip.rideType || "Standard"} • {new Date(trip.createdAt?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
@@ -282,7 +282,7 @@ export default function DriverEarnings() {
         ) : (
           <div className="text-center py-8 bg-[#1A1A1E]/50 rounded-3xl border border-dashed border-[#2C2C30]">
             <Activity className="w-8 h-8 text-[#2C2C30] mx-auto mb-2" />
-            <p className="text-xs text-[#6B6B73] font-bold">No trips recorded today yet.</p>
+            <p className="text-xs text-[#A1A1AA] font-bold">No trips recorded today yet.</p>
           </div>
         )}
       </div>
@@ -297,7 +297,7 @@ export default function DriverEarnings() {
             </div>
             <div className="text-left">
               <p className="text-sm font-black text-white">Weekly Statements</p>
-              <p className="text-[10px] text-[#A0A0A8] font-bold uppercase tracking-wider mt-0.5">APR 14 - APR 21</p>
+              <p className="text-[10px] text-[#E4E4E7] font-bold uppercase tracking-wider mt-0.5">APR 14 - APR 21</p>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#333338]" />
@@ -305,11 +305,11 @@ export default function DriverEarnings() {
         <button className="w-full bg-[#1A1A1E] border border-[#2C2C30] p-5 rounded-3xl flex items-center justify-between active:scale-[0.98] transition-all">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-[#252529] flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-[#A0A0A8]" />
+              <TrendingUp className="w-6 h-6 text-[#E4E4E7]" />
             </div>
             <div className="text-left">
               <p className="text-sm font-black text-white">Full Trip History</p>
-              <p className="text-[10px] text-[#A0A0A8] font-bold uppercase tracking-wider mt-0.5">View all completed jobs</p>
+              <p className="text-[10px] text-[#E4E4E7] font-bold uppercase tracking-wider mt-0.5">View all completed jobs</p>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#333338]" />

@@ -1,5 +1,6 @@
 import React from "react";
 import { useAuth } from "../AuthProvider";
+import { logout } from "@/src/firebase";
 import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
@@ -14,7 +15,7 @@ export default function DriverMenu({
   isOnline?: boolean,
   onToggleOnline?: () => void
 }) {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
 
   const sections = [
     {
@@ -22,7 +23,7 @@ export default function DriverMenu({
       items: [
         { icon: BarChart3, label: "Analytics", desc: "Performance & trends", color: "text-[#00D26A]", bg: "bg-[#00D26A]/10" },
         { icon: Clock, label: "Availability Hours", desc: "Set schedule & see demand", color: "text-[#007AFF]", bg: "bg-[#007AFF]/10" },
-        { icon: MapPin, label: "My Zones", desc: "Preferred driving areas", color: "text-[#A0A0A8]", bg: "bg-white/5" },
+        { icon: MapPin, label: "My Zones", desc: "Preferred driving areas", color: "text-[#E4E4E7]", bg: "bg-white/5" },
       ]
     },
     {
@@ -42,9 +43,9 @@ export default function DriverMenu({
     {
       title: "Account",
       items: [
-        { icon: CreditCard, label: "Platform Fee", desc: `Fixed at ${(commissionRate * 100).toFixed(0)}%`, color: "text-[#A0A0A8]", bg: "bg-white/5" },
-        { icon: Settings, label: "Settings", desc: "App & privacy", color: "text-[#A0A0A8]", bg: "bg-white/5" },
-        { icon: HelpCircle, label: "Help Center", desc: "Support", color: "text-[#A0A0A8]", bg: "bg-white/5" },
+        { icon: CreditCard, label: "Platform Fee", desc: `Fixed at ${(commissionRate * 100).toFixed(0)}%`, color: "text-[#E4E4E7]", bg: "bg-white/5" },
+        { icon: Settings, label: "Settings", desc: "App & privacy", color: "text-[#E4E4E7]", bg: "bg-white/5" },
+        { icon: HelpCircle, label: "Help Center", desc: "Support", color: "text-[#E4E4E7]", bg: "bg-white/5" },
       ]
     }
   ];
@@ -89,7 +90,7 @@ export default function DriverMenu({
             </div>
             <div>
               <h3 className="text-sm font-black text-white uppercase tracking-tight">Payments Setup Required</h3>
-              <p className="text-[11px] text-[#A0A0A8] font-bold">Connect Stripe to receive instant payouts</p>
+              <p className="text-[11px] text-[#E4E4E7] font-bold">Connect Stripe to receive instant payouts</p>
             </div>
           </div>
           <button className="w-full py-3.5 bg-[#AF52DE] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_4px_15px_rgba(175,82,222,0.3)] active:scale-95 transition-transform">
@@ -103,11 +104,11 @@ export default function DriverMenu({
                <ShieldCheck className="w-5 h-5 text-[#007AFF]" />
              </div>
              <div>
-               <p className="text-[10px] font-black text-[#6B6B73] uppercase tracking-widest leading-none mb-1">Stripe Connected</p>
+               <p className="text-[10px] font-black text-[#A1A1AA] uppercase tracking-widest leading-none mb-1">Stripe Connected</p>
                <p className="text-sm font-black text-white tracking-tight">**** 4242</p>
              </div>
            </div>
-           <button className="text-[10px] font-black text-[#A0A0A8] uppercase tracking-widest border border-[#2C2C30] px-3 py-1.5 rounded-lg active:bg-[#252529]">
+           <button className="text-[10px] font-black text-[#E4E4E7] uppercase tracking-widest border border-[#2C2C30] px-3 py-1.5 rounded-lg active:bg-[#252529]">
              Manage
            </button>
         </div>
@@ -117,7 +118,7 @@ export default function DriverMenu({
       <div className="bg-gradient-to-r from-[#00D26A]/20 to-[#007AFF]/20 border border-[#00D26A]/30 rounded-2xl p-4 mb-8 flex items-center justify-between active:scale-[0.98] transition-transform">
         <div>
           <h3 className="font-black text-white uppercase tracking-tight">Earn £25</h3>
-          <p className="text-xs text-[#A0A0A8] font-bold mt-0.5">Invite a driver or trader</p>
+          <p className="text-xs text-[#E4E4E7] font-bold mt-0.5">Invite a driver or trader</p>
         </div>
         <div className="bg-white text-[#0D0D0F] p-2 rounded-full">
           <Share2 className="w-5 h-5" />
@@ -128,7 +129,7 @@ export default function DriverMenu({
       <div className="space-y-6">
         {sections.map((section, idx) => (
           <div key={idx}>
-            <p className="text-[10px] font-black uppercase text-[#6B6B73] tracking-widest px-2 mb-2">{section.title}</p>
+            <p className="text-[10px] font-black uppercase text-[#A1A1AA] tracking-widest px-2 mb-2">{section.title}</p>
             <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-2xl overflow-hidden shadow-sm">
               {section.items.map((item, idxi) => {
                 const Icon = item.icon;
@@ -150,10 +151,10 @@ export default function DriverMenu({
                           {item.label}
                           {item.alert && <span className="w-2 h-2 rounded-full bg-[#FF3B30] animate-pulse"></span>}
                         </h4>
-                        <p className="text-[11px] text-[#A0A0A8] font-medium mt-0.5">{item.desc}</p>
+                        <p className="text-[11px] text-[#E4E4E7] font-medium mt-0.5">{item.desc}</p>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-[#6B6B73]" />
+                    <ChevronRight className="w-5 h-5 text-[#A1A1AA]" />
                   </button>
                 );
               })}
@@ -164,13 +165,13 @@ export default function DriverMenu({
 
       {/* Logout */}
       <button 
-        onClick={() => signOut()}
+        onClick={() => logout()}
         className="w-full mt-8 py-4 text-xs font-black text-[#FF3B30] uppercase tracking-widest active:bg-[#FF3B30]/10 rounded-xl transition-colors border border-transparent active:border-[#FF3B30]/20"
       >
         Log out
       </button>
 
-      <p className="text-center text-[10px] text-[#6B6B73] mt-8 font-medium">AnyTrader Driver v2.0.4</p>
+      <p className="text-center text-[10px] text-[#A1A1AA] mt-8 font-medium">AnyTrader Driver v2.0.4</p>
     </div>
   );
 }

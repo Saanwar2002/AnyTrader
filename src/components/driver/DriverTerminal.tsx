@@ -655,7 +655,7 @@ export default function DriverTerminal() {
           onClick={() => setIsEmergencyVisible(!isEmergencyVisible)}
           className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
         >
-          <Zap className={cn("w-4 h-4", isEmergencyVisible ? "text-[#FF3B30]" : "text-[#A0A0A8]")} />
+          <Zap className={cn("w-4 h-4", isEmergencyVisible ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
         </button>
 
         <AnimatePresence>
@@ -686,7 +686,7 @@ export default function DriverTerminal() {
                 onClick={handleCenterOnMe}
                 className="w-12 h-12 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
               >
-                <Target className="w-5 h-5 text-[#A0A0A8]" />
+                <Target className="w-5 h-5 text-[#E4E4E7]" />
               </button>
             </motion.div>
           )}
@@ -717,7 +717,7 @@ export default function DriverTerminal() {
                 e.stopPropagation();
                 setIsEarningsVisible(!isEarningsVisible);
               }}
-              className="p-1.5 text-[#A0A0A8] hover:text-white hover:bg-white/10 rounded-full transition-colors outline-none"
+              className="p-1.5 text-[#E4E4E7] hover:text-white hover:bg-white/10 rounded-full transition-colors outline-none"
             >
               {isEarningsVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -748,7 +748,7 @@ export default function DriverTerminal() {
               <div className="w-full max-w-sm bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden my-auto mt-16 mb-24">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-[#00D26A] to-emerald-500"></div>
               
-              <h2 className="text-[13px] font-black text-[#A0A0A8] mb-1 tracking-[0.2em] uppercase">Total Fare</h2>
+              <h2 className="text-[13px] font-black text-[#E4E4E7] mb-1 tracking-[0.2em] uppercase">Total Fare</h2>
               <h1 className="text-[52px] leading-tight font-black text-white mb-8">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</h1>
               
               <div className="relative mb-8 bg-white p-4 rounded-3xl inline-block shadow-[0_0_50px_rgba(255,255,255,0.05)] border-4 border-white/10 min-w-[212px] min-h-[212px]">
@@ -781,7 +781,7 @@ export default function DriverTerminal() {
                 <p className="text-sm text-white font-bold px-4">
                   "Please scan to pay directly to my account."
                 </p>
-                <div className="flex items-center justify-center gap-2 text-[10px] font-black text-[#A0A0A8] uppercase tracking-widest bg-[#252529] md:w-max mx-auto px-3 py-1.5 rounded-full border border-[#333338]">
+                <div className="flex items-center justify-center gap-2 text-[10px] font-black text-[#E4E4E7] uppercase tracking-widest bg-[#252529] md:w-max mx-auto px-3 py-1.5 rounded-full border border-[#333338]">
                   <Zap className="w-3 h-3 text-emerald-500 fill-emerald-500" />
                   Stripe Direct Handshake
                 </div>
@@ -796,7 +796,7 @@ export default function DriverTerminal() {
               
               <button 
                 onClick={() => setShowCashConfirm(true)}
-                className="mt-6 text-xs font-bold text-[#6B6B73] uppercase tracking-widest hover:text-white transition-colors"
+                className="mt-6 text-xs font-bold text-[#A1A1AA] uppercase tracking-widest hover:text-white transition-colors"
               >
                 Skip / Cash Received
               </button>
@@ -819,7 +819,7 @@ export default function DriverTerminal() {
                       <span className="text-2xl">💵</span>
                     </div>
                     <h3 className="text-white text-lg font-black tracking-wide mb-1 uppercase">Confirm Cash</h3>
-                    <p className="text-[#A0A0A8] text-xs mb-4 leading-relaxed font-medium px-2">
+                    <p className="text-[#E4E4E7] text-xs mb-4 leading-relaxed font-medium px-2">
                       Did you receive cash for this trip? The commission will be added to your pending balance and deducted from future card earnings.
                     </p>
                     
@@ -893,9 +893,9 @@ export default function DriverTerminal() {
                         exit={{ height: 0, opacity: 0 }}
                         className="border-t border-[#333338] mt-3 pt-3 flex flex-col gap-1.5"
                       >
-                        <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
-                        <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Time (~{activeRide?.durationMinutes || 45}m):</span><span>£---</span></div>
+                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
+                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
+                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Time (~{activeRide?.durationMinutes || 45}m):</span><span>£---</span></div>
                         <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge:</span><span>+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
                         <div className="flex justify-between text-[11px] font-bold text-[#FF3B30] mt-1 p-1 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20">
                           <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
@@ -906,7 +906,7 @@ export default function DriverTerminal() {
                   
                   {!showFareBreakdown && (
                     <div className="w-full text-center mt-1.5 group-hover/fare:bg-white/5 py-0.5 rounded transition-colors">
-                      <ChevronDown className="w-4 h-4 text-[#6B6B73] mx-auto" />
+                      <ChevronDown className="w-4 h-4 text-[#A1A1AA] mx-auto" />
                     </div>
                   )}
                 </div>
@@ -919,7 +919,7 @@ export default function DriverTerminal() {
                     </div>
                     <div className="flex-1">
                       <h3 className="text-sm font-bold text-white leading-tight">{activeRide?.name || "Sarah T."}</h3>
-                      <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#A0A0A8] font-normal">(124 trips)</span></p>
+                      <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
                     </div>
                   </div>
 
@@ -972,14 +972,14 @@ export default function DriverTerminal() {
                           <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
                           <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                          <p className="text-[12px] text-[#A0A0A8] font-medium mt-0.5">3 min • 1.2 miles</p>
+                          <p className="text-[12px] text-[#E4E4E7] font-medium mt-0.5">3 min • 1.2 miles</p>
                         </div>
 
                         <div className="relative">
                           <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Drop-off</p>
                           <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[12px] text-[#A0A0A8] font-medium mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
+                          <p className="text-[12px] text-[#E4E4E7] font-medium mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
                         </div>
                       </div>
 
@@ -1015,7 +1015,7 @@ export default function DriverTerminal() {
                 </button>
                 <button 
                   onClick={handleDeclineRide}
-                  className="w-full py-2 text-xs font-bold text-[#A0A0A8] uppercase tracking-wider hover:text-white transition-colors"
+                  className="w-full py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
                 >
                   Decline
                 </button>
@@ -1039,12 +1039,12 @@ export default function DriverTerminal() {
               <>
                 <div className="flex justify-between items-start mb-3 relative">
                   <div>
-                    <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
+                    <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
                     <div className="absolute left-1/2 -translate-x-1/2 -top-2">
                       <span className="bg-[#00D26A] text-[#1A1A1E] px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap">Pick Up</span>
                     </div>
                     <p className="text-[19px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                    <p className="text-xl font-black text-white leading-none mt-1">3 min <span className="text-[#8E8E93] text-base font-bold">· 1.2 mi</span></p>
+                    <p className="text-xl font-black text-white leading-none mt-1">3 min <span className="text-[#A1A1AA] text-base font-bold">· 1.2 mi</span></p>
                   </div>
                   <div className="text-right">
                     <p className="text-[#00D26A] font-bold text-lg">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
@@ -1068,7 +1068,7 @@ export default function DriverTerminal() {
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-widest mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Waiting for Rider</p>
                     <p className="text-xl font-black text-white px-0.5">2:34</p>
-                    <p className="text-xs text-[#A0A0A8] font-bold mt-0.5">Free cancel in: 2:26</p>
+                    <p className="text-xs text-[#E4E4E7] font-bold mt-0.5">Free cancel in: 2:26</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
@@ -1126,7 +1126,7 @@ export default function DriverTerminal() {
             {/* Cancel fallback */}
             {(rideState === 'en_route_pickup' || rideState === 'waiting') && (
               <>
-                <button onClick={() => setShowCancelConfirm(true)} className="w-full py-2 text-xs font-bold text-[#A0A0A8] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-0">
+                <button onClick={() => setShowCancelConfirm(true)} className="w-full py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-0">
                   {rideState === 'waiting' ? 'Cancel (Free in 2:26)' : 'Cancel Ride'}
                 </button>
 
@@ -1148,7 +1148,7 @@ export default function DriverTerminal() {
                         <AlertCircle className="w-6 h-6 text-[#FF3B30]" />
                       </div>
                       <h3 className="text-white text-lg font-black tracking-wide mb-1 uppercase">Cancel Ride?</h3>
-                      <p className="text-[#A0A0A8] text-xs mb-4 px-2 leading-relaxed font-medium">
+                      <p className="text-[#E4E4E7] text-xs mb-4 px-2 leading-relaxed font-medium">
                         Are you sure you want to cancel this trip? Frequent cancellations may affect your rating and account standing.
                       </p>
                       
@@ -1209,11 +1209,11 @@ export default function DriverTerminal() {
               </div>
 
               <div className="bg-[#252529] rounded-2xl p-4 text-left mb-6">
-                <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-3 border-b border-[#333338] pb-2">Fare Breakdown</p>
+                <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest mb-3 border-b border-[#333338] pb-2">Fare Breakdown</p>
                 <div className="space-y-1.5 mb-3">
-                  <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Base fare:</span><span className="text-white">£{fareConfig.baseFare.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span className="text-white">£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
-                  <div className="flex justify-between text-xs text-[#A0A0A8]"><span>Time (~{activeRide?.durationMinutes || 45}min):</span><span className="text-white">£---</span></div>
+                  <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Base fare:</span><span className="text-white">£{fareConfig.baseFare.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span className="text-white">£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
+                  <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Time (~{activeRide?.durationMinutes || 45}min):</span><span className="text-white">£---</span></div>
                   <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge ({activeRide?.surgeMultiplier || '1.4'}x):</span><span className="font-bold">+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
                 </div>
                 <div className="border-t border-[#333338] pt-2 mb-2 flex justify-between text-sm font-bold text-white">
@@ -1263,7 +1263,7 @@ export default function DriverTerminal() {
                         value={ratingComment}
                         onChange={(e) => setRatingComment(e.target.value)}
                         placeholder="Please provide details about your rating (Required)"
-                        className="w-full bg-[#0D0D0F] border border-[#333338] rounded-xl p-3 text-white text-sm focus:outline-none focus:border-[#FF9500] transition-colors resize-none placeholder:text-[#6B6B73]"
+                        className="w-full bg-[#0D0D0F] border border-[#333338] rounded-xl p-3 text-white text-sm focus:outline-none focus:border-[#FF9500] transition-colors resize-none placeholder:text-[#A1A1AA]"
                         rows={3}
                       />
                     </motion.div>
@@ -1330,12 +1330,12 @@ export default function DriverTerminal() {
             )}
           >
             <div className="flex items-center gap-3">
-              <div className={cn("w-2 h-2 rounded-full", isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#6B6B73]")} />
-              <span className={cn("text-[9px] font-black uppercase tracking-widest", isOnline ? "text-white" : "text-[#6B6B73]")}>
+              <div className={cn("w-2 h-2 rounded-full", isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#A1A1AA]")} />
+              <span className={cn("text-[9px] font-black uppercase tracking-widest", isOnline ? "text-white" : "text-[#A1A1AA]")}>
                 {isOnline ? "Waiting for Jobs" : "Offline"}
               </span>
             </div>
-            <span className={cn("text-[8px]", isOnline ? "font-black text-[#00D26A] drop-shadow-[0_0_2px_rgba(0,210,106,1)] brightness-150" : "font-bold text-[#6B6B73]")}>
+            <span className={cn("text-[8px]", isOnline ? "font-black text-[#00D26A] drop-shadow-[0_0_2px_rgba(0,210,106,1)] brightness-150" : "font-bold text-[#A1A1AA]")}>
               {isOnline ? "ACTIVE" : "STANDBY"}
             </span>
           </motion.div>
