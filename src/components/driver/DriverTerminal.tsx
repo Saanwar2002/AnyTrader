@@ -41,6 +41,7 @@ export default function DriverTerminal() {
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
   const [isEarningsVisible, setIsEarningsVisible] = useState(false);
   const [isEmergencyVisible, setIsEmergencyVisible] = useState(false);
+  const [todayEarnings, setTodayEarnings] = useState(0);
 
   // Auto-close stats after 5 seconds
   useEffect(() => {
@@ -149,6 +150,21 @@ export default function DriverTerminal() {
     });
     return () => unsub();
   }, []);
+
+  // Listen to Driver Metrics for today's earnings
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, "driver_metrics", user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const today = new Date().toISOString().split('T')[0];
+        if (data.date === today) {
+          setTodayEarnings(data.dailyEarnings || 0);
+        }
+      }
+    });
+    return () => unsub();
+  }, [user]);
 
   // Listen for REAL incoming live ride requests (offered to this driver)
   useEffect(() => {
@@ -402,6 +418,7 @@ export default function DriverTerminal() {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const handleArrived = async () => {
     setRideState('waiting');
@@ -690,7 +707,7 @@ export default function DriverTerminal() {
                 <span className="w-2 h-2 rounded-full bg-[#FF3B30]"></span>
               )}
               <span className="text-white font-black leading-none tracking-tight">
-                 {isEarningsVisible ? '£142.60' : '••••••'}
+                 {isEarningsVisible ? `£${todayEarnings.toFixed(2)}` : '••••••'}
               </span>
             </button>
             <button 
@@ -788,13 +805,19 @@ export default function DriverTerminal() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-6 text-center"
+                    className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 text-center rounded-t-3xl border-t border-[#2C2C30]"
                   >
-                    <div className="w-16 h-16 rounded-full bg-[#FF9500]/20 flex items-center justify-center mb-6">
-                      <span className="text-3xl">💵</span>
+                    <button 
+                      onClick={() => setShowCashConfirm(false)}
+                      className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-[#2C2C30] hover:bg-white/10 rounded-full transition-colors z-50"
+                    >
+                      <X className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                    </button>
+                    <div className="w-12 h-12 rounded-full bg-[#FF9500]/20 flex flex-shrink-0 items-center justify-center mb-3">
+                      <span className="text-2xl">💵</span>
                     </div>
-                    <h3 className="text-white text-xl font-black tracking-wide mb-2 uppercase">Confirm Cash</h3>
-                    <p className="text-[#A0A0A8] text-sm mb-8 leading-relaxed font-medium">
+                    <h3 className="text-white text-lg font-black tracking-wide mb-1 uppercase">Confirm Cash</h3>
+                    <p className="text-[#A0A0A8] text-xs mb-4 leading-relaxed font-medium px-2">
                       Did you receive cash for this trip? The commission will be added to your pending balance and deducted from future card earnings.
                     </p>
                     
@@ -803,13 +826,13 @@ export default function DriverTerminal() {
                         setShowCashConfirm(false);
                         handleCashPayment();
                       }}
-                      className="w-full h-12 bg-[#FF9500] text-[#0D0D0F] rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,149,0,0.3)] active:scale-95 transition-transform mb-4"
+                      className="w-full h-12 flex-shrink-0 bg-[#FF9500] text-[#0D0D0F] rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,149,0,0.3)] active:scale-95 transition-transform mb-3"
                     >
                       CONFIRM CASH RECEIVED
                     </button>
                     <button 
                       onClick={() => setShowCashConfirm(false)}
-                      className="w-full h-12 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform"
+                      className="w-full h-12 flex-shrink-0 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform"
                     >
                       CANCEL
                     </button>
@@ -1091,9 +1114,52 @@ export default function DriverTerminal() {
 
             {/* Cancel fallback */}
             {(rideState === 'en_route_pickup' || rideState === 'waiting') && (
-              <button onClick={handleDeclineRide} className="w-full py-4 text-xs font-bold text-[#A0A0A8] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-1">
-                {rideState === 'waiting' ? 'Cancel (Free in 2:26)' : 'Cancel Ride'}
-              </button>
+              <>
+                <button onClick={() => setShowCancelConfirm(true)} className="w-full py-4 text-xs font-bold text-[#A0A0A8] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-1">
+                  {rideState === 'waiting' ? 'Cancel (Free in 2:26)' : 'Cancel Ride'}
+                </button>
+
+                <AnimatePresence>
+                  {showCancelConfirm && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 text-center rounded-t-3xl border-t border-[#2C2C30]"
+                    >
+                      <button 
+                        onClick={() => setShowCancelConfirm(false)}
+                        className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-[#2C2C30] hover:bg-white/10 rounded-full transition-colors z-50"
+                      >
+                        <X className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                      </button>
+                      <div className="w-12 h-12 rounded-full bg-[#FF3B30]/20 flex flex-shrink-0 items-center justify-center mb-3">
+                        <AlertCircle className="w-6 h-6 text-[#FF3B30]" />
+                      </div>
+                      <h3 className="text-white text-lg font-black tracking-wide mb-1 uppercase">Cancel Ride?</h3>
+                      <p className="text-[#A0A0A8] text-xs mb-4 px-2 leading-relaxed font-medium">
+                        Are you sure you want to cancel this trip? Frequent cancellations may affect your rating and account standing.
+                      </p>
+                      
+                      <button 
+                        onClick={() => {
+                          setShowCancelConfirm(false);
+                          handleDeclineRide();
+                        }}
+                        className="w-full h-12 flex-shrink-0 bg-[#FF3B30] text-white rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,59,48,0.3)] active:scale-95 transition-transform mb-3"
+                      >
+                        CONFIRM CANCEL
+                      </button>
+                      <button 
+                        onClick={() => setShowCancelConfirm(false)}
+                        className="w-full h-12 flex-shrink-0 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform"
+                      >
+                        BACK
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
             )}
             
           </motion.div>
