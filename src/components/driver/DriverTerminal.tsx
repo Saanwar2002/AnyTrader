@@ -401,6 +401,7 @@ export default function DriverTerminal() {
   };
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
+  const [showCashConfirm, setShowCashConfirm] = useState(false);
 
   const handleArrived = async () => {
     setRideState('waiting');
@@ -775,11 +776,46 @@ export default function DriverTerminal() {
               </button>
               
               <button 
-                onClick={handleCashPayment}
+                onClick={() => setShowCashConfirm(true)}
                 className="mt-6 text-xs font-bold text-[#6B6B73] uppercase tracking-widest hover:text-white transition-colors"
               >
                 Skip / Cash Received
               </button>
+
+              <AnimatePresence>
+                {showCashConfirm && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-6 text-center"
+                  >
+                    <div className="w-16 h-16 rounded-full bg-[#FF9500]/20 flex items-center justify-center mb-6">
+                      <span className="text-3xl">💵</span>
+                    </div>
+                    <h3 className="text-white text-xl font-black tracking-wide mb-2 uppercase">Confirm Cash</h3>
+                    <p className="text-[#A0A0A8] text-sm mb-8 leading-relaxed font-medium">
+                      Did you receive cash for this trip? The commission will be added to your pending balance and deducted from future card earnings.
+                    </p>
+                    
+                    <button 
+                      onClick={() => {
+                        setShowCashConfirm(false);
+                        handleCashPayment();
+                      }}
+                      className="w-full h-12 bg-[#FF9500] text-[#0D0D0F] rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,149,0,0.3)] active:scale-95 transition-transform mb-4"
+                    >
+                      CONFIRM CASH RECEIVED
+                    </button>
+                    <button 
+                      onClick={() => setShowCashConfirm(false)}
+                      className="w-full h-12 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform"
+                    >
+                      CANCEL
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             </div>
           </motion.div>
@@ -976,9 +1012,12 @@ export default function DriverTerminal() {
           >
             {rideState === 'en_route_pickup' && (
               <>
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-start mb-4 relative">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
+                    <div className="absolute left-1/2 -translate-x-1/2 top-0 mt-[1px]">
+                      <span className="bg-[#00D26A] text-[#1A1A1E] px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap">Pick Up</span>
+                    </div>
                     <p className="text-[19px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
                     <p className="text-xl font-black text-white leading-none mt-1">3 min <span className="text-[#8E8E93] text-base font-bold">· 1.2 mi</span></p>
                   </div>
@@ -1023,12 +1062,15 @@ export default function DriverTerminal() {
 
             {rideState === 'in_progress' && (
               <>
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-start mb-4 relative">
                   <div>
-                    <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest mb-1 flex items-center gap-1">
+                    <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest flex items-center gap-1 mb-1">
                       <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
                     </p>
-                    <p className="text-[19px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <div className="absolute left-1/2 -translate-x-1/2 top-0 mt-[1px]">
+                      <span className="bg-[#FF3B30] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
+                    </div>
+                    <p className="text-[19px] font-bold text-[#FF3B30] mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                     <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left</p>
                   </div>
                   <div className="text-right">
