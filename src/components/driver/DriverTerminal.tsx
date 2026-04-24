@@ -403,13 +403,36 @@ export default function DriverTerminal() {
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   };
 
-  const handleClosePayment = () => {
+  const handleClosePayment = async () => {
+    if (activeRide?.id && activeRide?.isReal && user) {
+      try {
+        const fare = activeRide.fareEstimate || 0;
+        
+        await updateDoc(doc(db, "ride_requests", activeRide.id), {
+          status: "completed",
+          paymentMethod: "stripe_qr",
+          completedAt: serverTimestamp()
+        });
+
+        // We can update the daily driver_metrics as well
+        const today = new Date().toISOString().split('T')[0];
+        await setDoc(doc(db, "driver_metrics", user.uid), {
+          date: today,
+          dailyEarnings: increment(fare),
+          jobsDoneToday: increment(1),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+      } catch (err) {
+        console.error("Failed to complete ride via QR:", err);
+      }
+    }
     setRideState('review');
     setPaymentUrl(null);
   };
 
   const handleCashPayment = async () => {
-    if (activeRide?.id && activeRide?.isReal) {
+    if (activeRide?.id && activeRide?.isReal && user) {
       try {
         const fare = activeRide.fareEstimate || 0;
         const platformFee = fare * fareConfig.commissionRate; 
@@ -421,12 +444,18 @@ export default function DriverTerminal() {
           completedAt: serverTimestamp()
         });
 
-        // Add to driver's pending fee ledger
-        if (user?.uid) {
-          await updateDoc(doc(db, "users", user.uid), {
-            pendingPlatformFees: increment(platformFee)
-          });
-        }
+        await updateDoc(doc(db, "users", user.uid), {
+          pendingPlatformFees: increment(platformFee)
+        });
+
+        // Update driver metrics
+        const today = new Date().toISOString().split('T')[0];
+        await setDoc(doc(db, "driver_metrics", user.uid), {
+          date: today,
+          dailyEarnings: increment(fare),
+          jobsDoneToday: increment(1),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
 
         toast.warning("Cash Trip Recorded", {
           description: `£${platformFee.toFixed(2)} (${(fareConfig.commissionRate * 100).toFixed(0)}%) platform fee has been added to your pending account balance.`,
@@ -647,31 +676,11 @@ export default function DriverTerminal() {
               {/* Highlight header */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
 
-              <div className="flex items-center justify-between mb-4 shrink-0">
-                <div>
-                  <h2 className="text-base font-black text-white px-1 tracking-tight flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
-                    NEW RIDE REQUEST
-                  </h2>
-                </div>
-                
-                {/* Circular Timer Ring */}
-                <div className="relative w-12 h-12 flex items-center justify-center">
-                  <svg className="w-full h-full transform -rotate-90">
-                    <circle cx="24" cy="24" r="22" className="stroke-[#2C2C30] fill-none" strokeWidth="4" />
-                    <motion.circle 
-                      cx="24" cy="24" r="22" 
-                      className={cn("fill-none", incomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
-                      strokeWidth="4" 
-                      strokeDasharray="138" 
-                      strokeLinecap="round"
-                      initial={{ strokeDashoffset: 0 }}
-                      animate={{ strokeDashoffset: 138 - (138 * (incomingTimer / 15)) }}
-                      transition={{ duration: 1, ease: 'linear' }}
-                    />
-                  </svg>
-                  <span className="absolute text-xs font-black text-white">{incomingTimer}s</span>
-                </div>
+              <div className="flex items-center justify-center mb-3 shrink-0">
+                <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
+                  <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
+                  New Ride Request
+                </h2>
               </div>
 
               <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-2">
@@ -759,22 +768,42 @@ export default function DriverTerminal() {
                       </div>
                     )}
 
-                    <div className="relative pl-5 space-y-3 pb-1">
-                      {/* Route Line indicator */}
-                      <div className="absolute left-2 top-1.5 bottom-1.5 w-[3px] bg-[#2C2C30] rounded-full"></div>
-                      
-                      <div className="relative">
-                        <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                        <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
-                        <p className="text-[13px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                        <p className="text-[12px] text-white font-bold mt-0.5">3 min • 1.2 miles</p>
+                    <div className="flex items-center justify-between mt-2 mb-1">
+                      <div className="relative pl-5 space-y-3 flex-1">
+                        {/* Route Line indicator */}
+                        <div className="absolute left-2 top-1.5 bottom-1.5 w-[3px] bg-[#2C2C30] rounded-full"></div>
+                        
+                        <div className="relative">
+                          <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
+                          <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
+                          <p className="text-[13px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[12px] text-[#A0A0A8] font-medium mt-0.5">3 min • 1.2 miles</p>
+                        </div>
+
+                        <div className="relative">
+                          <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
+                          <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Drop-off</p>
+                          <p className="text-[13px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[12px] text-[#A0A0A8] font-medium mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
+                        </div>
                       </div>
 
-                      <div className="relative">
-                        <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                        <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Drop-off</p>
-                        <p className="text-[13px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                        <p className="text-[12px] text-white font-bold mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
+                      {/* Circular Timer Ring */}
+                      <div className="relative w-16 h-16 flex items-center justify-center shrink-0 ml-3 mr-2">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle cx="32" cy="32" r="28" className="stroke-[#2C2C30] fill-none" strokeWidth="5" />
+                          <motion.circle 
+                            cx="32" cy="32" r="28" 
+                            className={cn("fill-none", incomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
+                            strokeWidth="5" 
+                            strokeDasharray="176" 
+                            strokeLinecap="round"
+                            initial={{ strokeDashoffset: 0 }}
+                            animate={{ strokeDashoffset: 176 - (176 * (incomingTimer / 15)) }}
+                            transition={{ duration: 1, ease: 'linear' }}
+                          />
+                        </svg>
+                        <span className="absolute text-xl font-black text-white">{incomingTimer}</span>
                       </div>
                     </div>
                   </div>
