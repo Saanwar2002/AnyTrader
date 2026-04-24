@@ -1031,11 +1031,11 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-28 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
+            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-[84px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
           >
             {rideState === 'en_route_pickup' && (
               <>
-                <div className="flex justify-between items-start mb-4 relative">
+                <div className="flex justify-between items-start mb-3 relative">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
                     <div className="absolute left-1/2 -translate-x-1/2 -top-2">
@@ -1062,7 +1062,7 @@ export default function DriverTerminal() {
 
             {rideState === 'waiting' && (
               <>
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-widest mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Waiting for Rider</p>
                     <p className="text-xl font-black text-white px-0.5">2:34</p>
@@ -1085,7 +1085,7 @@ export default function DriverTerminal() {
 
             {rideState === 'in_progress' && (
               <>
-                <div className="flex justify-between items-start mb-4 relative">
+                <div className="flex justify-between items-start mb-3 relative">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest flex items-center gap-1 mb-1">
                       <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
@@ -1115,7 +1115,7 @@ export default function DriverTerminal() {
             {/* Cancel fallback */}
             {(rideState === 'en_route_pickup' || rideState === 'waiting') && (
               <>
-                <button onClick={() => setShowCancelConfirm(true)} className="w-full py-4 text-xs font-bold text-[#A0A0A8] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-1">
+                <button onClick={() => setShowCancelConfirm(true)} className="w-full py-2 text-xs font-bold text-[#A0A0A8] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-0">
                   {rideState === 'waiting' ? 'Cancel (Free in 2:26)' : 'Cancel Ride'}
                 </button>
 
