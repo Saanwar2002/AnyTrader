@@ -6,8 +6,9 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 
-export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
-  const { user } = useAuth();
+export default function DriverEarnings() {
+  const { user, profile } = useAuth();
+  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12 });
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [metrics, setMetrics] = useState({
     today: { earnings: 0, jobs: 0, goal: 200 },
@@ -20,6 +21,19 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
 
   useEffect(() => {
     if (!user) return;
+
+    // Listen to Taxi Command Settings (platform_config/rides)
+    const unsubConfig = onSnapshot(doc(db, "platform_config", "rides"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFareConfig({
+          baseFare: Number(data.baseFare) || 3.5,
+          distanceRate: Number(data.distanceRate) || 1.3,
+          minFare: Number(data.minFare) || 5.0,
+          commissionRate: data.commission ? Number(data.commission) / 100 : 0.12,
+        });
+      }
+    });
 
     // 1. Listen to Driver Metrics from Firestore
     const unsubMetrics = onSnapshot(doc(db, "driver_metrics", user.uid), (snapshot) => {
@@ -41,23 +55,19 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
       }
     });
 
-    // 2. Fetch Recent Trips
-    const fetchTrips = async () => {
-      try {
-        const q = query(
-          collection(db, "ride_requests"),
-          where("assignedDriverId", "==", user.uid),
-          where("status", "==", "completed"),
-          orderBy("createdAt", "desc"),
-          limit(5)
-        );
-        const snap = await getDocs(q);
-        setRecentTrips(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-        console.error("Error fetching trips:", err);
-      }
-    };
-    fetchTrips();
+    // 2. Fetch Recent Trips via onSnapshot for real-time updates
+    const q = query(
+      collection(db, "ride_requests"),
+      where("assignedDriverId", "==", user.uid),
+      where("status", "==", "completed"),
+      orderBy("createdAt", "desc"),
+      limit(5)
+    );
+    const unsubTrips = onSnapshot(q, (snap) => {
+      setRecentTrips(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.error("Error fetching trips:", err);
+    });
 
     // 3. Fetch Stripe Balance
     const fetchBalance = async () => {
@@ -74,7 +84,11 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
     };
     fetchBalance();
 
-    return () => unsubMetrics();
+    return () => {
+      unsubConfig();
+      unsubMetrics();
+      unsubTrips();
+    };
   }, [user]);
 
   const handleRefresh = async () => {
@@ -219,12 +233,21 @@ export default function DriverEarnings({ fareConfig }: { fareConfig: any }) {
           <p className="text-2xl font-black text-[#00D26A] -mt-1 leading-none">{metrics[period].jobs || (period === 'week' ? 42 : period === 'month' ? 156 : 0)}</p>
           <p className="text-[10px] font-bold text-[#6B6B73] uppercase tracking-wider mt-2">Trips Done</p>
         </div>
-        <div className="bg-[#FF3B30]/5 border border-[#FF3B30]/10 rounded-3xl p-5">
-          <CreditCard className="w-5 h-5 text-[#FF3B30] mb-3" />
-          <p className="text-2xl font-black text-[#FF3B30] -mt-1 leading-none">
-            £{(displayEarnings * (fareConfig.commissionRate / (1 - fareConfig.commissionRate))).toFixed(2)}
+        <div className="bg-[#FF3B30]/5 border border-[#FF3B30]/10 rounded-3xl p-5 relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#FF3B30]/0 to-[#FF3B30]/[0.05] pointer-events-none group-active:opacity-50 transition-opacity"></div>
+          <CreditCard className="w-5 h-5 text-[#FF3B30] mb-3 relative z-10" />
+          <p className="text-2xl font-black text-[#FF3B30] -mt-1 leading-none relative z-10 flex items-baseline gap-1">
+            £{(profile?.pendingPlatformFees || 0).toFixed(2)}
           </p>
-          <p className="text-[10px] font-bold text-[#FF3B30]/60 uppercase tracking-wider mt-2">Platform Fees</p>
+          <p className="text-[10px] font-bold text-[#FF3B30]/60 uppercase tracking-wider mt-2 relative z-10">Fees Owed</p>
+          {(profile?.pendingPlatformFees > 0) && (
+            <button 
+              onClick={() => toast.info('Platform Fee Settlement', { description: 'This will open a Stripe payment sheet to clear your cash trip fees.' })}
+              className="absolute top-4 right-4 text-[9px] font-black uppercase text-white bg-[#FF3B30] px-2 py-1 rounded shadow-lg active:scale-95 transition-transform z-20"
+            >
+              Settle
+            </button>
+          )}
         </div>
       </div>
 

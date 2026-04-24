@@ -408,6 +408,44 @@ export default function DriverTerminal() {
     setPaymentUrl(null);
   };
 
+  const handleCashPayment = async () => {
+    if (activeRide?.id && activeRide?.isReal) {
+      try {
+        const fare = activeRide.fareEstimate || 0;
+        const platformFee = fare * fareConfig.commissionRate; 
+        
+        await updateDoc(doc(db, "ride_requests", activeRide.id), {
+          status: "completed",
+          paymentMethod: "cash",
+          platformFeeOwed: platformFee,
+          completedAt: serverTimestamp()
+        });
+
+        // Add to driver's pending fee ledger
+        if (user?.uid) {
+          await updateDoc(doc(db, "users", user.uid), {
+            pendingPlatformFees: increment(platformFee)
+          });
+        }
+
+        toast.warning("Cash Trip Recorded", {
+          description: `£${platformFee.toFixed(2)} (${(fareConfig.commissionRate * 100).toFixed(0)}%) platform fee has been added to your pending account balance.`,
+          duration: 5000,
+        });
+
+      } catch (err) {
+        console.error("Failed to record cash payment:", err);
+      }
+    } else {
+      toast.warning("Demo: Cash Trip Recorded", {
+        description: `${(fareConfig.commissionRate * 100).toFixed(0)}% platform fee added to pending balance.`
+      });
+    }
+    
+    setRideState('review');
+    setPaymentUrl(null);
+  };
+
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans -mx-4 -mt-6 min-h-0"> {/* Full bleed container */}
       
@@ -583,7 +621,7 @@ export default function DriverTerminal() {
               </button>
               
               <button 
-                onClick={() => setRideState('idle')}
+                onClick={handleCashPayment}
                 className="mt-6 text-xs font-bold text-[#6B6B73] uppercase tracking-widest hover:text-white transition-colors"
               >
                 Skip / Cash Received
@@ -974,7 +1012,7 @@ export default function DriverTerminal() {
       )}
 
       {/* Render Other Tabs */}
-      {activeTab === 'earnings' && <DriverEarnings fareConfig={fareConfig} />}
+      {activeTab === 'earnings' && <DriverEarnings />}
       {activeTab === 'inbox' && <DriverInbox />}
       {activeTab === 'menu' && (
         <DriverMenu 

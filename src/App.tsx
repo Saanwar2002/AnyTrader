@@ -150,7 +150,7 @@ export default function App() {
                 <Route path="profile/:id" element={<PublicProfile />} />
                 <Route path="availability" element={<Availability />} />
                 <Route path="analytics" element={<Analytics />} />
-                <Route path="billing" element={profile?.role === "driver" ? <DriverEarnings fareConfig={{ baseFare: 4.50, distanceRate: 1.80, commissionRate: 0.12 }} /> : <BillingManager />} />
+                <Route path="billing" element={profile?.role === "driver" ? <DriverEarnings /> : <BillingManager />} />
                 <Route path="team" element={<BusinessTeamManagement />} />
                 <Route path="find-trades" element={<FindTrades />} />
                 <Route path="admin" element={<AdminDashboard />} />

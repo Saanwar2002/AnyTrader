@@ -28,8 +28,8 @@ export default function DriverMenu({
     {
       title: "Vehicle & Profile",
       items: [
-        { icon: User, label: "Driver Profile", desc: "⭐ 4.9 • Active Driver", color: "text-white", bg: "bg-white/10", id: "profile" },
-        { icon: Car, label: "Vehicle & Documents", desc: "1 action required", color: "text-[#FF3B30]", bg: "bg-[#FF3B30]/10", alert: true, id: "documents" },       
+        { icon: User, label: "Driver Profile", desc: `⭐ ${profile?.rating?.toFixed(1) || '4.9'} • Active Driver`, color: "text-white", bg: "bg-white/10", id: "profile" },
+        { icon: Car, label: "Vehicle & Documents", desc: profile?.documentsComplete ? "All clear" : "1 action required", color: profile?.documentsComplete ? "text-[#00D26A]" : "text-[#FF3B30]", bg: profile?.documentsComplete ? "bg-[#00D26A]/10" : "bg-[#FF3B30]/10", alert: !profile?.documentsComplete, id: "documents" },       
       ]
     },
     {
