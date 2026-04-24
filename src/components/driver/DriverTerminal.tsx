@@ -1,39 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MapContainer, TileLayer, Circle, Marker, useMap, Polyline } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff } from "lucide-react";
-import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment } from "@/src/firebase";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
 import DriverDocuments from "./DriverDocuments";
-
-// Custom pulsing blue dot for driver
-const driverIcon = new L.DivIcon({
-  html: `<div class="relative flex items-center justify-center w-8 h-8">
-           <div class="absolute inset-0 bg-[#007AFF] rounded-full opacity-30 animate-ping"></div>
-           <div class="bg-[#007AFF] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10"></div>
-         </div>`,
-  className: "bg-transparent",
-  iconSize: [32, 32],
-  iconAnchor: [16, 16]
-});
-
-function SetupMapControls({ isOnline }: { isOnline: boolean }) {
-  const map = useMap();
-  useEffect(() => {
-    map.zoomControl?.remove();
-  }, [map]);
-  return null;
-}
 
 type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progress' | 'completed' | 'review';
 
@@ -47,11 +25,14 @@ export default function DriverTerminal() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([53.6458, -1.7850]); // Default to Huddersfield from spec
   const [demandZones, setDemandZones] = useState<any[]>([]);
   
+  // Storage for directions
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  
   // Ride Simulation State
   const [rideState, setRideState] = useState<RideState>('idle');
   const [showFareBreakdown, setShowFareBreakdown] = useState(false);
   const [incomingTimer, setIncomingTimer] = useState(15);
-  
+
   // Rating State
   const [passengerRating, setPassengerRating] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
@@ -81,6 +62,56 @@ export default function DriverTerminal() {
   // Dynamic Fare & Live Ride Tracking
   const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12 });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
+
+  const mapCenterRef = useRef(mapCenter);
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+
+  useEffect(() => {
+    mapCenterRef.current = mapCenter;
+  }, [mapCenter]);
+
+  const handleCenterOnMe = () => {
+    if (mapInstance && mapCenterRef.current) {
+      mapInstance.panTo({ lat: mapCenterRef.current[0], lng: mapCenterRef.current[1] });
+      mapInstance.setZoom(15);
+    } else {
+      setMapCenter([mapCenterRef.current[0], mapCenterRef.current[1]]);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch route directions using Google Maps API
+    const fetchDirections = (destLat: number, destLng: number) => {
+      if (!window.google || !window.google.maps) return;
+      const directionsService = new window.google.maps.DirectionsService();
+      
+      const originLat = mapCenterRef.current[0];
+      const originLng = mapCenterRef.current[1];
+      
+      directionsService.route(
+        {
+          origin: new window.google.maps.LatLng(originLat, originLng),
+          destination: new window.google.maps.LatLng(destLat, destLng),
+          travelMode: window.google.maps.TravelMode.DRIVING
+        },
+        (result, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK) {
+            setDirections(result);
+          } else {
+            console.error("error fetching directions", result);
+          }
+        }
+      );
+    };
+
+    if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {
+      if (isLoaded) fetchDirections(activeRide.pickupLat, activeRide.pickupLng);
+    } else if (rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng) {
+      if (isLoaded) fetchDirections(activeRide.dropoffLat, activeRide.dropoffLng);
+    } else {
+      setDirections(null);
+    }
+  }, [rideState, activeRide?.id, isLoaded]);
 
   // Listen to Taxi Command Settings (platform_config/rides)
   useEffect(() => {
@@ -489,16 +520,71 @@ export default function DriverTerminal() {
       </button>
 
       {/* 1. Map Layer (Background) */}
-      <div className="absolute inset-0 z-0 h-full w-full">
-        <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
-          <SetupMapControls isOnline={isOnline} />
-          {/* Switched to Voyager theme for much better visibility and clarity */}
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-          />
-          {isOnline && <Marker position={mapCenter} icon={driverIcon} />}
-        </MapContainer>
+      <div className="absolute inset-0 z-0 h-full w-full bg-[#1A1A1E]">
+        {isLoaded && (
+          <GoogleMap
+            mapContainerStyle={{ width: '100%', height: '100%' }}
+            center={directions ? undefined : { lat: mapCenter[0], lng: mapCenter[1] }}
+            zoom={13}
+            onLoad={map => setMapInstance(map)}
+            options={{
+              disableDefaultUI: true,
+              keyboardShortcuts: false,
+              mapId: "a1b2c3d4e5f6g7h8", 
+            }}
+          >
+            {isOnline && (
+              <OverlayViewF position={{ lat: mapCenter[0], lng: mapCenter[1] }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
+                  <div className="absolute inset-0 bg-[#007AFF] rounded-full opacity-30 animate-ping"></div>
+                  <div className="bg-[#007AFF] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10"></div>
+                </div>
+              </OverlayViewF>
+            )}
+
+            {rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng && (
+              <OverlayViewF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                <div className="relative flex flex-col items-center justify-center -ml-10 -mt-[4.5rem] w-20 h-20 pointer-events-none">
+                  <div className="bg-[#E6F9EF] text-[#00D26A] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full mb-1 shadow-sm whitespace-nowrap border border-[#00D26A]/20">
+                    PICKUP
+                  </div>
+                  <div className="relative flex items-center justify-center w-8 h-8">
+                    <div className="absolute inset-0 bg-[#00D26A] rounded-full opacity-30 animate-ping"></div>
+                    <div className="bg-[#00D26A] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10 flex items-center justify-center text-[8px] font-bold text-white">P</div>
+                  </div>
+                </div>
+              </OverlayViewF>
+            )}
+
+            {rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng && (
+              <OverlayViewF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                <div className="relative flex flex-col items-center justify-center -ml-10 -mt-[4.5rem] w-20 h-20 pointer-events-none">
+                  <div className="bg-[#FFF4E5] text-[#FF9500] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full mb-1 shadow-sm whitespace-nowrap border border-[#FF9500]/20">
+                    DROPOFF
+                  </div>
+                  <div className="relative flex items-center justify-center w-8 h-8">
+                    <div className="absolute inset-0 bg-[#FF9500] rounded-full opacity-30 animate-ping"></div>
+                    <div className="bg-[#FF9500] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10 flex items-center justify-center text-[8px] font-bold text-white">D</div>
+                  </div>
+                </div>
+              </OverlayViewF>
+            )}
+
+            {directions && (
+              <DirectionsRenderer
+                directions={directions}
+                options={{
+                  suppressMarkers: true,
+                  polylineOptions: {
+                    strokeColor: '#007AFF', // Google Maps style Blue
+                    strokeOpacity: 0.8,
+                    strokeWeight: 6,
+                  }
+                }}
+              />
+            )}
+          </GoogleMap>
+        )}
         
         {/* Lighter, softer gradient overlays to preserve map visibility */}
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
@@ -539,7 +625,7 @@ export default function DriverTerminal() {
               </div>
 
               <button 
-                onClick={() => setMapCenter([53.6458, -1.7850])}
+                onClick={handleCenterOnMe}
                 className="w-12 h-12 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
               >
                 <Target className="w-5 h-5 text-[#A0A0A8]" />
@@ -591,16 +677,17 @@ export default function DriverTerminal() {
 
       <div className="flex-1 pointer-events-none"></div>
 
-      {/* Screen 7: Payment QR Handshake (z-[60]) */}
+      {/* Screen 7: Payment QR Handshake */}
       <AnimatePresence>
         {rideState === 'completed' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[60] bg-[#0D0D0F]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 pointer-events-auto"
+            className="fixed inset-0 z-[110] bg-[#0D0D0F]/95 backdrop-blur-md overflow-y-auto pointer-events-auto"
           >
-            <div className="w-full max-w-sm bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden">
+            <div className="min-h-full flex flex-col items-center justify-center p-6 py-12">
+              <div className="w-full max-w-sm bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden my-auto mt-16 mb-24">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-[#00D26A] to-emerald-500"></div>
               
               <h2 className="text-[13px] font-black text-[#A0A0A8] mb-1 tracking-[0.2em] uppercase">Total Fare</h2>
@@ -655,6 +742,7 @@ export default function DriverTerminal() {
               >
                 Skip / Cash Received
               </button>
+            </div>
             </div>
           </motion.div>
         )}
@@ -838,23 +926,25 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
+            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-28 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
           >
             {rideState === 'en_route_pickup' && (
               <>
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
-                    <p className="text-xl font-black text-white">3 min <span className="text-sm font-bold text-[#6B6B73] ml-1">· 1.2 mi</span></p>
+                    <p className="text-[15px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                    <p className="text-xl font-black text-white leading-none mt-1">3 min <span className="text-[#8E8E93] text-base font-bold">· 1.2 mi</span></p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                    <p className="text-[#00D26A] font-bold text-lg">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
-                <div className="flex justify-center mt-2">
+                <div className="flex justify-center gap-3 mt-2">
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${activeRide?.pickupLat || ''},${activeRide?.pickupLng || ''}`} target="_blank" rel="noreferrer" className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><Navigation className="w-5 h-5 text-white" /></a>
                   <button 
                     onClick={handleArrived}
-                    className="w-[80%] h-11 bg-[#FF9500] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
+                    className="flex-1 h-11 bg-[#FF9500] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
                   >
                     <MapPin className="w-4 h-4" /> ARRIVED AT PICKUP
                   </button>
@@ -892,16 +982,18 @@ export default function DriverTerminal() {
                     <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest mb-1 flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
                     </p>
-                    <p className="text-xl font-black text-white truncate max-w-[200px]">{activeRide?.dropoffAddress?.split(',')[0] || "Bristol"} <span className="text-sm font-bold text-[#6B6B73] ml-1">· {activeRide?.durationMinutes || 38} min left</span></p>
+                    <p className="text-[15px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                    <p className="text-[#00D26A] font-bold text-lg">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
-                <div className="flex justify-center mt-2">
+                <div className="flex justify-center gap-3 mt-2">
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${activeRide?.dropoffLat || ''},${activeRide?.dropoffLng || ''}`} target="_blank" rel="noreferrer" className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><Navigation className="w-5 h-5 text-white" /></a>
                   <button 
                     onClick={handleCompleteRide}
-                    className="w-[80%] h-11 bg-[#FF3B30] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
+                    className="flex-1 h-11 bg-[#FF3B30] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
                   >
                     <Check className="w-4 h-4 stroke-[3]" /> COMPLETE TRIP
                   </button>
