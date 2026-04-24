@@ -1015,7 +1015,7 @@ export default function DriverTerminal() {
                 <div className="flex justify-between items-start mb-4 relative">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
-                    <div className="absolute left-1/2 -translate-x-1/2 top-0 mt-[1px]">
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-2">
                       <span className="bg-[#00D26A] text-[#1A1A1E] px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap">Pick Up</span>
                     </div>
                     <p className="text-[19px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
@@ -1067,7 +1067,7 @@ export default function DriverTerminal() {
                     <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest flex items-center gap-1 mb-1">
                       <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
                     </p>
-                    <div className="absolute left-1/2 -translate-x-1/2 top-0 mt-[1px]">
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-2">
                       <span className="bg-[#FF3B30] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
                     </div>
                     <p className="text-[19px] font-bold text-[#FF3B30] mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
@@ -1241,7 +1241,7 @@ export default function DriverTerminal() {
 
       {/* Bottom Status Widget (Sticky Floating above global nav) */}
       {rideState === 'idle' && (
-        <div className="fixed bottom-[80px] left-0 right-0 px-4 z-50 pointer-events-none flex flex-col items-center">
+        <div className="fixed bottom-[74px] left-0 right-0 px-4 z-50 pointer-events-none flex flex-col items-center">
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1253,12 +1253,12 @@ export default function DriverTerminal() {
             )}
           >
             <div className="flex items-center gap-3">
-              <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#6B6B73]")} />
-              <span className={cn("text-[8px] font-black uppercase tracking-widest", isOnline ? "text-white" : "text-[#6B6B73]")}>
+              <div className={cn("w-2 h-2 rounded-full", isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#6B6B73]")} />
+              <span className={cn("text-[9px] font-black uppercase tracking-widest", isOnline ? "text-white" : "text-[#6B6B73]")}>
                 {isOnline ? "Waiting for Jobs" : "Offline"}
               </span>
             </div>
-            <span className={cn("text-[7px]", isOnline ? "font-black text-[#00D26A] drop-shadow-[0_0_2px_rgba(0,210,106,1)] brightness-150" : "font-bold text-[#6B6B73]")}>
+            <span className={cn("text-[8px]", isOnline ? "font-black text-[#00D26A] drop-shadow-[0_0_2px_rgba(0,210,106,1)] brightness-150" : "font-bold text-[#6B6B73]")}>
               {isOnline ? "ACTIVE" : "STANDBY"}
             </span>
           </motion.div>
