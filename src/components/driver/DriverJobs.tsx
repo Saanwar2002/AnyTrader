@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
-import { Clock, Car, ChevronRight, CheckCircle2, Navigation, PoundSterling } from "lucide-react";
+import { Clock, Car, ChevronRight, CheckCircle2, Navigation, PoundSterling, X } from "lucide-react";
 
-export default function DriverJobs() {
+export default function DriverJobs({ onClose }: { onClose?: () => void }) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,10 +32,17 @@ export default function DriverJobs() {
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-6 font-sans pb-24 min-h-0">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-black tracking-tighter">My Jobs</h1>
-        <div className="bg-[#2C2C30] px-3 py-1 rounded-full border border-[#333338]">
-          <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-[#00D26A]" /> {completedJobs.length} Completed
-          </p>
+        <div className="flex items-center gap-2">
+          <div className="bg-[#2C2C30] px-3 py-1 rounded-full border border-[#333338]">
+            <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-[#00D26A]" /> {completedJobs.length} Completed
+            </p>
+          </div>
+          {onClose && (
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center bg-[#1A1A1E] rounded-full border border-[#2C2C30] text-[#A1A1AA] hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 

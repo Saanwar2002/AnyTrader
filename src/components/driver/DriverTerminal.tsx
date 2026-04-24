@@ -64,8 +64,26 @@ export default function DriverTerminal() {
   });
 
   // Dynamic Fare & Live Ride Tracking
-  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12 });
+  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, timeRate: number, waitRatePerMinute: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
+  const [passengerPos, setPassengerPos] = useState<{lat: number, lng: number} | null>(null);
+
+  // Listen for passenger live tracking
+  useEffect(() => {
+    if (!activeRide?.userId) {
+      setPassengerPos(null);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, "live_tracking", activeRide.userId), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.lat && data.lng) {
+          setPassengerPos({ lat: data.lat, lng: data.lng });
+        }
+      }
+    });
+    return () => unsub();
+  }, [activeRide?.userId]);
 
   const mapCenterRef = useRef(mapCenter);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
@@ -144,6 +162,8 @@ export default function DriverTerminal() {
         setFareConfig({
           baseFare: Number(data.baseFare) || 3.5,
           distanceRate: Number(data.distanceRate) || 1.3,
+          timeRate: Number(data.timeRate) || 0.15,
+          waitRatePerMinute: Number(data.waitRatePerMinute) || 0.25,
           minFare: Number(data.minFare) || 5.0,
           commissionRate: data.commission ? Number(data.commission) / 100 : 0.12,
         });
@@ -362,6 +382,8 @@ export default function DriverTerminal() {
           driverId: user.uid,
           driverName: profile?.firstName || "Driver",
           driverPhone: profile?.phone || profile?.phoneNumber || "",
+          vehicleInfo: profile?.vehicle || "Silver Toyota Prius",
+          vehiclePlate: profile?.vehicleRegistration || profile?.plate || "WK71 BCF",
           acceptedAt: serverTimestamp()
         });
         
@@ -431,8 +453,84 @@ export default function DriverTerminal() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showJobDetails, setShowJobDetails] = useState(false);
 
+  const [waitStartTime, setWaitStartTime] = useState<number | null>(null);
+  const [elapsedWaitSeconds, setElapsedWaitSeconds] = useState(0);
+
+  // Stop wait logic
+  const [isWaitingAtStop, setIsWaitingAtStop] = useState(false);
+  const [stopWaitStartTime, setStopWaitStartTime] = useState<number | null>(null);
+  const [accumulatedPaidWaitSeconds, setAccumulatedPaidWaitSeconds] = useState(0);
+  const [currentStopWaitSeconds, setCurrentStopWaitSeconds] = useState(0);
+  const [waitStopLocation, setWaitStopLocation] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    let interval: any;
+    if (rideState === 'waiting' && waitStartTime) {
+      interval = setInterval(() => {
+        setElapsedWaitSeconds(Math.floor((Date.now() - waitStartTime) / 1000));
+      }, 1000);
+    } else if (isWaitingAtStop && stopWaitStartTime) {
+      interval = setInterval(() => {
+        setCurrentStopWaitSeconds(Math.floor((Date.now() - stopWaitStartTime) / 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [rideState, waitStartTime, isWaitingAtStop, stopWaitStartTime]);
+
+  const handleToggleWaitAtStop = () => {
+    if (isWaitingAtStop) {
+      setIsWaitingAtStop(false);
+      setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
+      setCurrentStopWaitSeconds(0);
+      setStopWaitStartTime(null);
+      setWaitStopLocation(null);
+    } else {
+      setIsWaitingAtStop(true);
+      setStopWaitStartTime(Date.now());
+      setCurrentStopWaitSeconds(0);
+      setWaitStopLocation(mapCenter); // Store location where waiting started
+    }
+  };
+
+  // Auto-resume safeguard: If driver forgets to toggle wait off and drives away
+  useEffect(() => {
+    if (isWaitingAtStop && waitStopLocation && mapCenter) {
+      // Calculate distance from wait location using Haversine formula
+      const R = 6371e3; // Earth radius in metres
+      const lat1 = waitStopLocation[0] * Math.PI/180;
+      const lat2 = mapCenter[0] * Math.PI/180;
+      const dLat = (mapCenter[0]-waitStopLocation[0]) * Math.PI/180;
+      const dLon = (mapCenter[1]-waitStopLocation[1]) * Math.PI/180;
+
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1) * Math.cos(lat2) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+
+      // If moved more than 200 meters, automatically resume trip to protect passenger fare
+      if (distance > 200) {
+        toast.success("Trip Auto-Resumed", {
+          description: "Movement detected. Paid wait timer was paused automatically to protect passenger pricing.",
+          duration: 6000
+        });
+        // Auto-pause
+        setIsWaitingAtStop(false);
+        setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
+        setCurrentStopWaitSeconds(0);
+        setStopWaitStartTime(null);
+        setWaitStopLocation(null);
+      }
+    }
+  }, [mapCenter, isWaitingAtStop, waitStopLocation, currentStopWaitSeconds]);
+
+  const totalPaidWaitSeconds = accumulatedPaidWaitSeconds + currentStopWaitSeconds;
+
   const handleArrived = async () => {
     setRideState('waiting');
+    setWaitStartTime(Date.now());
+    setElapsedWaitSeconds(0);
+    setAccumulatedPaidWaitSeconds(0);
     if (activeRide?.id && activeRide?.isReal) {
       await updateDoc(doc(db, "ride_requests", activeRide.id), {
         status: "arrived",
@@ -444,6 +542,9 @@ export default function DriverTerminal() {
 
   const handleStartRide = async () => {
     setRideState('in_progress');
+    const pickupPaidWait = Math.max(0, elapsedWaitSeconds - 180);
+    setAccumulatedPaidWaitSeconds(pickupPaidWait);
+
     if (activeRide?.id && activeRide?.isReal) {
       await updateDoc(doc(db, "ride_requests", activeRide.id), {
         status: "in_progress",
@@ -454,9 +555,20 @@ export default function DriverTerminal() {
   };
 
   const handleCompleteRide = async () => {
+    // Safety check - if driver forgot to turn off waiting at stop, turn it off now
+    if (isWaitingAtStop) {
+      setIsWaitingAtStop(false);
+      setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
+      setCurrentStopWaitSeconds(0);
+      setStopWaitStartTime(null);
+    }
+    
     setIsGeneratingPayment(true);
     setRideState('completed');
     
+    const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+    const finalFare = (activeRide?.fareEstimate || 38.50) + waitFare;
+
     // Generate the Direct-to-Driver QR Payment Link
     try {
       const response = await fetch("/api/rides/create-trip-payment", {
@@ -465,7 +577,7 @@ export default function DriverTerminal() {
         body: JSON.stringify({
           rideId: activeRide?.id || "sim_123",
           driverId: user?.uid,
-          amount: activeRide?.fareEstimate || 38.50
+          amount: finalFare
         })
       });
       
@@ -485,11 +597,14 @@ export default function DriverTerminal() {
   const handleClosePayment = async () => {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
-        const fare = activeRide.fareEstimate || 0;
+        const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+        const fare = (activeRide.fareEstimate || 0) + waitFare;
         
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "completed",
           paymentMethod: "stripe_qr",
+          finalFare: fare,
+          paidWaitSeconds: totalPaidWaitSeconds,
           completedAt: serverTimestamp()
         });
 
@@ -513,12 +628,15 @@ export default function DriverTerminal() {
   const handleCashPayment = async () => {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
-        const fare = activeRide.fareEstimate || 0;
+        const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+        const fare = (activeRide.fareEstimate || 0) + waitFare;
         const platformFee = fare * fareConfig.commissionRate; 
         
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "completed",
           paymentMethod: "cash",
+          finalFare: fare,
+          paidWaitSeconds: totalPaidWaitSeconds,
           platformFeeOwed: platformFee,
           completedAt: serverTimestamp()
         });
@@ -690,6 +808,21 @@ export default function DriverTerminal() {
                   }
                 }}
               />
+            )}
+
+            {/* Passenger Live Location */}
+            {passengerPos && (rideState === 'en_route_pickup' || rideState === 'waiting') && (
+              <OverlayViewF position={{ lat: passengerPos.lat, lng: passengerPos.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
+                  <div className="absolute inset-0 bg-[#FF3B30] rounded-full opacity-30 animate-pulse"></div>
+                  <div className="bg-[#FF3B30] border border-white w-3 h-3 rounded-full shadow-lg z-10 flex items-center justify-center">
+                    <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+                  </div>
+                  <div className="absolute -top-6 bg-black/80 px-2 py-0.5 rounded text-[9px] font-bold text-white whitespace-nowrap shadow border border-[#FF3B30]/30">
+                    PASSENGER
+                  </div>
+                </div>
+              </OverlayViewF>
             )}
           </GoogleMap>
         )}
@@ -1183,8 +1316,17 @@ export default function DriverTerminal() {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-widest mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Waiting for Rider</p>
-                    <p className="text-xl font-black text-white px-0.5">2:34</p>
-                    <p className="text-xs text-[#E4E4E7] font-bold mt-0.5">Free cancel in: 2:26</p>
+                    <p className="text-xl font-black text-white px-0.5">
+                      {Math.floor(elapsedWaitSeconds / 60)}:{(elapsedWaitSeconds % 60).toString().padStart(2, '0')}
+                    </p>
+                    <p className="text-xs font-bold mt-0.5">
+                      {elapsedWaitSeconds < 180 
+                        ? <span className="text-[#00D26A]">Free wait: {Math.floor((180 - elapsedWaitSeconds) / 60)}:{((180 - elapsedWaitSeconds) % 60).toString().padStart(2, '0')}</span>
+                        : elapsedWaitSeconds < 300
+                          ? <span className="text-[#FF9500]">Paid wait: {Math.floor((elapsedWaitSeconds - 180) / 60)}:{((elapsedWaitSeconds - 180) % 60).toString().padStart(2, '0')}</span>
+                          : <span className="text-[#FF3B30]">Eligible for Cancel Fee</span>
+                      }
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
@@ -1220,20 +1362,38 @@ export default function DriverTerminal() {
               <>
                 <div className="flex justify-between items-start mb-3 relative">
                   <div>
-                    <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest flex items-center gap-1 mb-1">
-                      <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
+                    <p className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1 mb-1 ${isWaitingAtStop ? 'text-[#FF9500]' : 'text-[#00D26A]'}`}>
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> {isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}
                     </p>
                     <div className="absolute left-1/2 -translate-x-1/2 -top-2">
-                      <span className="bg-[#FF3B30] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
+                       {activeRide?.stops?.length > 0 ? (
+                          <span className="bg-[#FF9500] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap">Multi-Stop</span>
+                       ) : (
+                          <span className="bg-[#FF3B30] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
+                       )}
                     </div>
                     <p className="text-[19px] font-bold text-[#F8F9FA] mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                    <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left</p>
+                    {isWaitingAtStop ? (
+                       <p className="text-xl font-black text-[#FF9500] leading-none mt-1">Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:{((totalPaidWaitSeconds) % 60).toString().padStart(2, '0')}</p>
+                    ) : (
+                       <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left</p>
+                    )}
                   </div>
                   <div className="text-right">
-                    <p className="text-[#00D26A] font-bold text-lg">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                    <p className="text-[#00D26A] font-bold text-lg">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
+                    {totalPaidWaitSeconds > 0 && (
+                       <p className="text-[10px] text-[#FF9500] font-bold">+Wait</p>
+                    )}
                   </div>
                 </div>
-                <div className="flex justify-center gap-3 mt-2">
+                
+                <div className="flex gap-2 mt-3">
+                   <button onClick={handleToggleWaitAtStop} className={`flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? 'bg-[#FF9500] text-white border-[#FF9500]/50' : 'bg-transparent text-[#FF9500] border-[#FF9500]/30'}`}>
+                     {isWaitingAtStop ? 'Resume Trip' : 'Wait at Stop'}
+                   </button>
+                </div>
+
+                <div className="flex justify-center gap-2 mt-2">
                   <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
                     <Info className="w-5 h-5 text-white" />
                   </button>
@@ -1244,7 +1404,7 @@ export default function DriverTerminal() {
                     onClick={handleCompleteRide}
                     className="flex-1 h-11 bg-[#FF3B30] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
                   >
-                    <Check className="w-4 h-4 stroke-[3]" /> COMPLETE TRIP
+                    <Check className="w-4 h-4 stroke-[3]" /> COMPLETE
                   </button>
                 </div>
               </>
@@ -1254,7 +1414,9 @@ export default function DriverTerminal() {
             {(rideState === 'en_route_pickup' || rideState === 'waiting') && (
               <>
                 <button onClick={() => setShowCancelConfirm(true)} className="w-full py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-0">
-                  {rideState === 'waiting' ? 'Cancel (Free in 2:26)' : 'Cancel Ride'}
+                  {rideState === 'waiting' 
+                    ? (300 - elapsedWaitSeconds > 0 ? `Cancel (No Fee in ${Math.floor((300 - elapsedWaitSeconds) / 60)}:${((300 - elapsedWaitSeconds) % 60).toString().padStart(2, '0')})` : 'Cancel (Charge Fee)')
+                    : 'Cancel Ride'}
                 </button>
 
                 <AnimatePresence>
@@ -1327,11 +1489,11 @@ export default function DriverTerminal() {
                   transition={{ type: "spring", damping: 15 }}
                   className="text-[56px] leading-[1] font-black text-white tracking-tighter"
                 >
-                  £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
+                  £{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}
                 </motion.h1>
                 <div className="mt-4 bg-[#00D26A]/10 border border-[#00D26A]/20 py-2.5 px-4 rounded-xl inline-block">
                   <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider mb-0.5">You Earned</p>
-                  <p className="text-2xl font-black text-[#00D26A]">£{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                  <p className="text-2xl font-black text-[#00D26A]">£{(((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
                 </div>
               </div>
 
@@ -1341,16 +1503,19 @@ export default function DriverTerminal() {
                   <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Base fare:</span><span className="text-white">£{fareConfig.baseFare.toFixed(2)}</span></div>
                   <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span className="text-white">£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
                   <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Time (~{activeRide?.durationMinutes || 45}min):</span><span className="text-white">£---</span></div>
+                  {totalPaidWaitSeconds > 0 && (
+                    <div className="flex justify-between text-xs text-[#FF9500]"><span>Paid Wait ({Math.floor(totalPaidWaitSeconds / 60)}m):</span><span className="font-bold">+£{((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute).toFixed(2)}</span></div>
+                  )}
                   <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge ({activeRide?.surgeMultiplier || '1.4'}x):</span><span className="font-bold">+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
                 </div>
                 <div className="border-t border-[#333338] pt-2 mb-2 flex justify-between text-sm font-bold text-white">
-                  <span>Total fare:</span><span>£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</span>
+                  <span>Total fare:</span><span>£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs font-bold text-[#FF3B30] p-1.5 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20 mb-3">
-                  <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
+                  <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{(((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)) * fareConfig.commissionRate).toFixed(2)}</span>
                 </div>
                 <div className="border-t border-[#333338] pt-2 flex justify-between text-[15px] font-black text-[#00D26A]">
-                  <span>YOUR EARNINGS:</span><span>£{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</span>
+                  <span>YOUR EARNINGS:</span><span>£{(((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)) * (1 - fareConfig.commissionRate)).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1425,15 +1590,16 @@ export default function DriverTerminal() {
       )}
 
       {/* Render Other Tabs */}
-      {activeTab === 'earnings' && <DriverEarnings />}
-      {activeTab === 'inbox' && <DriverInbox />}
-      {activeTab === 'jobs' && <DriverJobs />}
+      {activeTab === 'earnings' && <DriverEarnings onClose={() => setActiveTab('home')} />}
+      {activeTab === 'inbox' && <DriverInbox onClose={() => setActiveTab('home')} />}
+      {activeTab === 'jobs' && <DriverJobs onClose={() => setActiveTab('home')} />}
       {activeTab === 'menu' && (
         <DriverMenu 
           onNavigate={(tab) => setActiveTab(tab as any)} 
           commissionRate={fareConfig.commissionRate}
           isOnline={isOnline}
           onToggleOnline={handleToggleOnline}
+          onClose={() => setActiveTab('home')}
         />
       )}
       <AnimatePresence>

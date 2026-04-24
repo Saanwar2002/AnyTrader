@@ -23,6 +23,7 @@ export default function RidesCommandCenter() {
     baseFare: 2.5,
     distanceRate: 1.2,
     timeRate: 0.15,
+    waitRatePerMinute: 0.25,
     minFare: 5.0,
     commission: 12,
     vehicleTypes: [
@@ -114,7 +115,7 @@ export default function RidesCommandCenter() {
 
   const isConfigEqual = (c1: any, c2: any) => {
     if (!c1 || !c2) return false;
-    const keys = ['baseFare', 'distanceRate', 'timeRate', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges'];
+    const keys = ['baseFare', 'distanceRate', 'timeRate', 'waitRatePerMinute', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges'];
     return keys.every(key => JSON.stringify(c1[key]) === JSON.stringify(c2[key]));
   };
 
@@ -129,6 +130,7 @@ export default function RidesCommandCenter() {
         baseFare: Number(config.baseFare) || 0,
         distanceRate: Number(config.distanceRate) || 0,
         timeRate: Number(config.timeRate) || 0,
+        waitRatePerMinute: Number(config.waitRatePerMinute) || 0,
         minFare: Number(config.minFare) || 0,
         commission: Number(config.commission) || 0,
         vehicleTypes: (config.vehicleTypes || []).map((vt: any) => ({
@@ -580,6 +582,19 @@ export default function RidesCommandCenter() {
                     onChange={e => setConfig({...config, timeRate: parseFloat(e.target.value)})}
                     className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold text-slate-900 focus:border-emerald-500 outline-none transition-all" 
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Clock className="w-3 h-3 text-warning" /> Paid Wait Time (Per Min)
+                  </label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={isNaN(config.waitRatePerMinute) ? "" : config.waitRatePerMinute} 
+                    onChange={e => setConfig({...config, waitRatePerMinute: parseFloat(e.target.value)})}
+                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold text-slate-900 focus:border-emerald-500 outline-none transition-all" 
+                  />
+                  <p className="text-[9px] font-medium text-slate-500 italic">Charged after initial 3 min free wait</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">

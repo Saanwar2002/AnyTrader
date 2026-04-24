@@ -75,6 +75,34 @@ const CAR_CATEGORIES = [
   { id: 'wav', name: 'Wheelchair', multiplier: 1.5, wait: '10-20', capacity: 4, icon: Accessibility }
 ];
 
+function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    setElapsed(Math.floor((Date.now() - arrivedAt) / 1000));
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - arrivedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [arrivedAt]);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = (elapsed % 60).toString().padStart(2, '0');
+  
+  return (
+    <div className="text-right">
+      <p className="text-xl font-black text-warning">{mins}:{secs}</p>
+      {elapsed < 180 ? (
+        <p className="text-[10px] font-bold text-text-muted mt-0.5 uppercase tracking-widest">Free wait: {Math.floor((180 - elapsed) / 60)}:{((180 - elapsed) % 60).toString().padStart(2, '0')}</p>
+      ) : elapsed < 300 ? (
+        <p className="text-[10px] font-bold text-warning mt-0.5 uppercase tracking-widest text-[#FF9500]">Paid wait: {Math.floor((elapsed - 180) / 60)}:{((elapsed - 180) % 60).toString().padStart(2, '0')}</p>
+      ) : (
+        <p className="text-[10px] font-bold text-danger mt-0.5 uppercase tracking-widest">Cancel fee applies</p>
+      )}
+    </div>
+  );
+}
+
 export default function PassengerBooking() {
   const { user, profile } = useAuth();
   const { theme } = usePortal();
@@ -381,6 +409,7 @@ export default function PassengerBooking() {
   };
 
   const [driverPos, setDriverPos] = useState<{lat: number, lng: number} | null>(null);
+  const [passengerPos, setPassengerPos] = useState<{lat: number, lng: number} | null>(null);
 
   const getComputedFare = (catId: string) => {
     const category = CAR_CATEGORIES.find(c => c.id === catId);
@@ -433,20 +462,61 @@ export default function PassengerBooking() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.status === 'accepted' && data.driverId) {
-          setAssignedDriverInfo({ uid: data.driverId, name: data.driverName || "Driver", vehicle: data.vehicleInfo || "Taxi", code: data.handshakeCode || "---", phone: data.driverPhone || "" });
+          setAssignedDriverInfo({ 
+             uid: data.driverId, 
+             name: data.driverName || "Driver", 
+             vehicle: data.vehicleInfo || "Taxi", 
+             plate: data.vehiclePlate || "UNKNOWN",
+             code: data.handshakeCode || "---", 
+             phone: data.driverPhone || "", 
+             status: "accepted" 
+          });
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
+        }
+        if (data.status === 'arrived') {
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis() } : null);
+          setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
+          toast.success("Your driver has arrived!");
         }
         if (data.status === 'completed') { setStep("details"); setCurrentRideId(null); setAssignedDriverInfo(null); }
       }
     });
-    const unsubTrack = onSnapshot(doc(db, "live_tracking", currentRideId), (snapshot) => {
+    const unsubTrack = onSnapshot(doc(db, "live_tracking", assignedDriverInfo?.uid || "none"), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.lat && data.lng) setDriverPos({ lat: data.lat, lng: data.lng });
       }
     });
     return () => { unsubRide(); unsubTrack(); };
-  }, [currentRideId]);
+  }, [currentRideId, assignedDriverInfo?.uid]);
+
+  // Passenger Live GPS tracking for driver to see
+  useEffect(() => {
+    if (!currentRideId || !user) return;
+    if (step === "details" || step === "review" || step === "payment") return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setPassengerPos({ lat: latitude, lng: longitude });
+        try {
+          await setDoc(doc(db, "live_tracking", user.uid), {
+            passengerId: user.uid,
+            lat: latitude,
+            lng: longitude,
+            updatedAt: serverTimestamp(),
+            isPassenger: true
+          }, { merge: true });
+        } catch (err) {
+          console.error("Failed to sync passenger location:", err);
+        }
+      },
+      (err) => console.warn("Passenger GPS error:", err),
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [currentRideId, user, step]);
 
   const selectSuggestion = async (s: {label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any}) => {
     triggerHaptic(ImpactStyle.Light);
@@ -606,7 +676,28 @@ export default function PassengerBooking() {
                 </OverlayViewF>
               </React.Fragment>
             ))}
-            {driverPos && <MarkerF position={driverPos} label="🚕" />}
+            {passengerPos && (
+              <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
+                  <div className="absolute inset-0 bg-[#007AFF] rounded-full opacity-30 animate-ping"></div>
+                  <div className="bg-[#007AFF] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10"></div>
+                </div>
+              </OverlayViewF>
+            )}
+
+            {driverPos && (
+              <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
+                  <div className="absolute inset-0 bg-primary rounded-full opacity-30 animate-pulse"></div>
+                  <div className="bg-primary border-2 border-white w-4 h-4 rounded-full shadow-lg z-10 flex items-center justify-center">
+                    <span className="w-1.5 h-1.5 bg-black rounded-full"></span>
+                  </div>
+                  <div className="absolute -top-6 bg-black/80 px-2 py-0.5 rounded text-[9px] font-bold text-white whitespace-nowrap shadow border border-primary/30">
+                    TAXI
+                  </div>
+                </div>
+              </OverlayViewF>
+            )}
             {routeLine.length > 0 && <PolylineF path={routeLine} options={{ strokeColor: '#2563eb', strokeOpacity: 0.8, strokeWeight: 5 }} />}
           </GoogleMap>
        </div>
@@ -772,13 +863,40 @@ export default function PassengerBooking() {
 
             {step === "confirmed" && (
               <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] border-t border-border-main">
-                <div className="flex items-center gap-4 mb-6">
-                   <div className="w-16 h-16 bg-trust/10 rounded-2xl flex items-center justify-center"><Check className="w-8 h-8 text-trust" /></div>
-                   <div>
-                     <h2 className="text-2xl font-black text-text-main tracking-tight">Driver Assigned</h2>
-                     <p className="text-text-muted font-bold text-sm">{assignedDriverInfo?.name} • {assignedDriverInfo?.vehicle}</p>
+                {assignedDriverInfo?.status === "arrived" ? (
+                  <div className="flex items-center gap-4 mb-6">
+                     <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center"><Clock className="w-8 h-8 text-warning animate-pulse" /></div>
+                     <div>
+                       <h2 className="text-2xl font-black text-text-main tracking-tight">Driver is Outside</h2>
+                       <p className="text-text-muted font-bold text-sm">Please meet your driver now.</p>
+                     </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4 mb-6">
+                     <div className="w-16 h-16 bg-trust/10 rounded-2xl flex items-center justify-center"><Check className="w-8 h-8 text-trust" /></div>
+                     <div>
+                       <h2 className="text-2xl font-black text-text-main tracking-tight">Driver Assigned</h2>
+                       <p className="text-text-muted font-bold text-sm">{assignedDriverInfo?.name} • {assignedDriverInfo?.vehicle}</p>
+                     </div>
+                  </div>
+                )}
+                
+                {assignedDriverInfo?.status === "arrived" && assignedDriverInfo?.arrivedAt && (
+                   <div className="bg-warning/10 border border-warning/20 p-4 rounded-2xl mb-6">
+                     <div className="flex justify-between items-center">
+                       <p className="text-sm font-black text-warning">Waiting Time</p>
+                       <PassengerTimer arrivedAt={assignedDriverInfo.arrivedAt} />
+                     </div>
                    </div>
+                )}
+
+                <div className="mb-6 flex flex-col items-center justify-center p-5 bg-[#FFCC00] rounded-xl shadow-lg border-[3px] border-black">
+                   <p className="text-[10px] font-black uppercase text-black/60 mb-1">Vehicle Registration</p>
+                   <h1 className="text-5xl font-black text-black tracking-widest font-mono uppercase">
+                     {assignedDriverInfo?.plate || "WK71 BCF"}
+                   </h1>
                 </div>
+
                 <div className="grid grid-cols-2 gap-3 mb-6">
                    <div className="bg-surface p-4 rounded-2xl border border-border-main">
                       <p className="text-[10px] font-black text-text-muted uppercase mb-1">Pass Code</p>

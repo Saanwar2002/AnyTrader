@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MessageSquare, Bell, Zap, ShieldAlert, CircleAlert, CheckCircle2, ChevronRight, Car } from "lucide-react";
+import { MessageSquare, Bell, Zap, ShieldAlert, CircleAlert, CheckCircle2, ChevronRight, Car, X } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 type FilterType = 'all' | 'rides' | 'alerts' | 'anytrader';
 
-export default function DriverInbox() {
+export default function DriverInbox({ onClose }: { onClose?: () => void }) {
   const [filter, setFilter] = useState<FilterType>('all');
 
   const mockMessages = [
@@ -23,6 +23,11 @@ export default function DriverInbox() {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-black tracking-tight">Inbox</h1>
+        {onClose && (
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center bg-[#1A1A1E] rounded-full border border-[#2C2C30] text-[#A1A1AA] hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Filter Chips */}

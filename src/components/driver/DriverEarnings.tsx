@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { PoundSterling, TrendingUp, Calendar, ChevronRight, Activity, ArrowUpRight, Zap, Target, Star, History, CreditCard, ShieldCheck, Loader2, Car } from "lucide-react";
+import { PoundSterling, TrendingUp, Calendar, ChevronRight, Activity, ArrowUpRight, Zap, Target, Star, History, CreditCard, ShieldCheck, Loader2, Car, X } from "lucide-react";
 import { db, doc, onSnapshot, collection, query, where, orderBy, limit, getDocs } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 
-export default function DriverEarnings() {
+export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
   const { user, profile } = useAuth();
   const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12 });
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
@@ -117,16 +117,23 @@ export default function DriverEarnings() {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-black tracking-tight">Analytics Hub</h1>
-        <div className="bg-[#1A1A1E] rounded-full p-1 flex">
-          {(['today', 'week', 'month'] as const).map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest leading-none ${period === p ? 'bg-[#252529] text-[#00D26A] shadow-sm' : 'text-[#E4E4E7]'}`}
-            >
-              {p}
+        <div className="flex items-center gap-2">
+          <div className="bg-[#1A1A1E] rounded-full p-1 flex">
+            {(['today', 'week', 'month'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest leading-none ${period === p ? 'bg-[#252529] text-[#00D26A] shadow-sm' : 'text-[#E4E4E7]'}`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          {onClose && (
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center bg-[#1A1A1E] rounded-full border border-[#2C2C30] text-[#A1A1AA] hover:text-white transition-colors">
+              <X className="w-5 h-5" />
             </button>
-          ))}
+          )}
         </div>
       </div>
 

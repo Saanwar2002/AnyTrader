@@ -1,19 +1,21 @@
 import React from "react";
 import { useAuth } from "../AuthProvider";
 import { logout } from "@/src/firebase";
-import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin } from "lucide-react";
+import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 export default function DriverMenu({ 
   onNavigate, 
   commissionRate = 0.12,
   isOnline = false,
-  onToggleOnline
+  onToggleOnline,
+  onClose
 }: { 
   onNavigate: (tab: string) => void, 
   commissionRate?: number,
   isOnline?: boolean,
-  onToggleOnline?: () => void
+  onToggleOnline?: () => void,
+  onClose?: () => void
 }) {
   const { profile } = useAuth();
 
@@ -67,17 +69,25 @@ export default function DriverMenu({
           </div>
         </div>
 
-        <button 
-          onClick={onToggleOnline}
-          className={cn(
-            "px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95",
-            isOnline 
-              ? "bg-[#FF3B30] text-white shadow-red-500/20" 
-              : "bg-[#00D26A] text-[#0D0D0F] shadow-emerald-500/20"
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={onToggleOnline}
+            className={cn(
+              "px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95",
+              isOnline 
+                ? "bg-[#FF3B30] text-white shadow-red-500/20" 
+                : "bg-[#00D26A] text-[#0D0D0F] shadow-emerald-500/20"
+            )}
+          >
+            {isOnline ? "Go Offline" : "Go Online"}
+          </button>
+          
+          {onClose && (
+            <button onClick={onClose} className="w-10 h-10 flex shrink-0 items-center justify-center bg-[#1A1A1E] rounded-full border border-[#2C2C30] text-[#A1A1AA] hover:text-white transition-colors cursor-pointer active:scale-95">
+              <X className="w-5 h-5" />
+            </button>
           )}
-        >
-          {isOnline ? "Go Offline" : "Go Online"}
-        </button>
+        </div>
       </div>
 
       {/* Stripe Connect Onboarding Wizard */}
