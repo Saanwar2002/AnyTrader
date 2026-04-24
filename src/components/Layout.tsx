@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark } from "lucide-react";
+import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark, Clock } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc, updateDoc, arrayRemove, orderBy, limit, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
@@ -276,7 +276,7 @@ export default function Layout() {
     { name: "Terminal", path: "/driver-terminal", icon: Zap, isCta: false },
     { name: "Earnings", path: "/driver-terminal?tab=earnings", icon: PoundSterling, isCta: false },
     { name: "Messages", path: "/driver-terminal?tab=inbox", icon: MessageSquare, isCta: false },
-    { name: "Menu", path: "/driver-terminal?tab=menu", icon: Menu, isCta: false },
+    { name: "My Jobs", path: "/driver-terminal?tab=jobs", icon: Clock, isCta: false },
   ];
 
   const passengerNav = [

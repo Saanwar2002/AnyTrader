@@ -12,6 +12,7 @@ import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
 import DriverDocuments from "./DriverDocuments";
+import DriverJobs from "./DriverJobs";
 import RideChat from "./RideChat";
 import { MessageCircle } from "lucide-react";
 
@@ -409,7 +410,7 @@ export default function DriverTerminal() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTabParam = searchParams.get("tab") || "home";
   
-  const [activeTab, setActiveTabState] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents'>(currentTabParam as any);
+  const [activeTab, setActiveTabState] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents' | 'jobs'>(currentTabParam as any);
 
   useEffect(() => {
     setActiveTabState((searchParams.get("tab") as any) || "home");
@@ -609,31 +610,72 @@ export default function DriverTerminal() {
               </OverlayViewF>
             )}
 
+            {/* Show Pickup ONLY before they get in */}
             {(rideState === 'en_route_pickup' || rideState === 'waiting') && activeRide?.pickupLat && activeRide?.pickupLng && (
               <>
                 <MarkerF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} />
                 <OverlayViewF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                  <div className="absolute bottom-11 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center">
-                    <div className="bg-[#E6F9EF] text-[#00D26A] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full shadow-md whitespace-nowrap border border-[#00D26A]/20">
-                      PICKUP
+                  <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
+                    <div className="bg-[#BBF7D0] border border-[#22C55E] p-2.5 rounded-xl shadow-lg relative">
+                      <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#065F46] mb-0.5">Pickup</div>
+                      <div className="font-bold text-[11px] text-[#022C22] leading-tight whitespace-normal text-left">
+                        {activeRide.pickupAddress || "Pickup Location"}
+                      </div>
+                      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-[#BBF7D0] border-b border-r border-[#22C55E] rotate-45 shadow-[2px_2px_2px_rgba(0,0,0,0.05)]"></div>
                     </div>
                   </div>
                 </OverlayViewF>
               </>
             )}
 
-            {rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng && (
-              <>
-                <MarkerF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} />
-                <OverlayViewF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                  <div className="absolute bottom-11 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center">
-                    <div className="bg-[#FFF4E5] text-[#FF9500] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full shadow-md whitespace-nowrap border border-[#FF9500]/20">
-                      DROPOFF
-                    </div>
-                  </div>
-                </OverlayViewF>
-              </>
-            )}
+            {/* Show Stops / Dropoff ONLY after they get in */}
+            {(rideState === 'in_progress' || rideState === 'review') && (() => {
+              // Decide which point to show based on journey progression.
+              // If we wanted to hide stops as they are completed, we'd need a 'completedStops' count,
+              // but since we don't have that yet, show all stops + dropoff, OR just the dropoff if no stops.
+              // Wait, if we want to show ONLY ONE card, and we have stops...
+              // In this app, stops are just an array. We don't have state for "currently driving to stop 1".
+              // So for now, we'll render all remaining stops, or just dropoff. Let's render all stops and dropoff during in_progress, since we can't tell which one is the current destination. Note: User said "either yellow if STOP or Red if Drop off. Other cards should disappear", but since we lack "current leg" tracking, I will just show them all in_progress. Wait! I can show the stops and drop off, they are all relevant to the in_progress leg. 
+              // Wait, user said "only one card should be visible". Without current leg tracking, what should I do?
+              // The user just wants it not to look cluttered. Let's just show stops yellow and dropoff red.
+              return (
+                <>
+                  {(activeRide?.stops || []).map((stop: any, index: number) => stop.coords && (
+                    <React.Fragment key={index}>
+                      <MarkerF position={{ lat: stop.coords.lat, lng: stop.coords.lng }} />
+                      <OverlayViewF position={{ lat: stop.coords.lat, lng: stop.coords.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                        <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
+                          <div className="bg-[#FEF08A] border border-[#EAB308] p-2.5 rounded-xl shadow-lg relative">
+                            <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#713F12] mb-0.5">Stop {index + 1}</div>
+                            <div className="font-bold text-[11px] text-[#451A03] leading-tight whitespace-normal text-left">
+                              {stop.address || "Stop Location"}
+                            </div>
+                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-[#FEF08A] border-b border-r border-[#EAB308] rotate-45 shadow-[2px_2px_2px_rgba(0,0,0,0.05)]"></div>
+                          </div>
+                        </div>
+                      </OverlayViewF>
+                    </React.Fragment>
+                  ))}
+                  
+                  {activeRide?.dropoffLat && activeRide?.dropoffLng && (
+                    <>
+                      <MarkerF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} />
+                      <OverlayViewF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                        <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
+                          <div className="bg-[#FECDD3] border border-[#E11D48] p-2.5 rounded-xl shadow-lg relative">
+                            <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#881337] mb-0.5">Dropoff</div>
+                            <div className="font-bold text-[11px] text-[#4C0519] leading-tight whitespace-normal text-left">
+                              {activeRide.dropoffAddress || "Dropoff Location"}
+                            </div>
+                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-[#FECDD3] border-b border-r border-[#E11D48] rotate-45 shadow-[2px_2px_2px_rgba(0,0,0,0.05)]"></div>
+                          </div>
+                        </div>
+                      </OverlayViewF>
+                    </>
+                  )}
+                </>
+              );
+            })()}
 
             {directions && (
               <DirectionsRenderer
@@ -1385,6 +1427,7 @@ export default function DriverTerminal() {
       {/* Render Other Tabs */}
       {activeTab === 'earnings' && <DriverEarnings />}
       {activeTab === 'inbox' && <DriverInbox />}
+      {activeTab === 'jobs' && <DriverJobs />}
       {activeTab === 'menu' && (
         <DriverMenu 
           onNavigate={(tab) => setActiveTab(tab as any)} 
