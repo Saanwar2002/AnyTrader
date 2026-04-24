@@ -195,6 +195,7 @@ export default function DriverTerminal() {
           fareEstimate: data.totalFare,
           distanceMiles: data.distanceMiles || 0,
           durationMinutes: data.durationMinutes || 0,
+          comments: data.comments || data.instructions || "",
           isReal: true,
           offerExpiresAt: data.offerExpiresAt
         });
@@ -338,6 +339,7 @@ export default function DriverTerminal() {
       surgeMultiplier: surge,
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
+      comments: "Please ring the bell, the baby is sleeping. Thanks!",
       isReal: false
     });
 
@@ -570,7 +572,7 @@ export default function DriverTerminal() {
               directions
                 ? undefined
                 : rideState === 'waiting'
-                  ? 18
+                  ? 15
                   : (rideState === 'en_route_pickup' || rideState === 'in_progress') 
                     ? 13 
                     : 15 // Default driver location zoom level when idle
@@ -1031,7 +1033,7 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-[84px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
+            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
           >
             {rideState === 'en_route_pickup' && (
               <>
@@ -1072,6 +1074,15 @@ export default function DriverTerminal() {
                     <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
+
+                {activeRide?.comments && (
+                  <div className="mb-3 bg-[#FFD60A]/15 border border-[#FFD60A]/40 rounded-xl p-3">
+                    <p className="text-[#FFD60A] text-xs font-medium leading-relaxed">
+                      <span className="font-bold">Passenger Note:</span> {activeRide.comments}
+                    </p>
+                  </div>
+                )}
+                
                 <div className="flex justify-center mt-2">
                   <button 
                     onClick={handleStartRide}
