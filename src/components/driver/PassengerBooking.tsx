@@ -4,8 +4,9 @@ import {
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, 
-  Home, Briefcase, Dog, Accessibility 
+  Home, Briefcase, Dog, Accessibility, MessageCircle
 } from "lucide-react";
+import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
 import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
@@ -123,6 +124,7 @@ export default function PassengerBooking() {
   const [fareEstimate, setFareEstimate] = useState<number | null>(null);
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const [fareConfig, setFareConfig] = useState({ baseFare: 2.5, distanceRate: 1.2, minFare: 5.0 });
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Map States
   const [mapCenter, setMapCenter] = useState(defaultCenter);
@@ -398,6 +400,7 @@ export default function PassengerBooking() {
       const rideData = {
         riderId: user.uid,
         passengerName: profile?.firstName || "Passenger",
+        passengerPhone: profile?.phone || profile?.phoneNumber || "",
         pickup,
         pickupLat: pickupCoords?.lat || mapCenter.lat,
         pickupLng: pickupCoords?.lng || mapCenter.lng,
@@ -430,7 +433,7 @@ export default function PassengerBooking() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.status === 'accepted' && data.driverId) {
-          setAssignedDriverInfo({ uid: data.driverId, name: data.driverName || "Driver", vehicle: data.vehicleInfo || "Taxi", code: data.handshakeCode || "---" });
+          setAssignedDriverInfo({ uid: data.driverId, name: data.driverName || "Driver", vehicle: data.vehicleInfo || "Taxi", code: data.handshakeCode || "---", phone: data.driverPhone || "" });
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
         }
         if (data.status === 'completed') { setStep("details"); setCurrentRideId(null); setAssignedDriverInfo(null); }
@@ -608,6 +611,17 @@ export default function PassengerBooking() {
           </GoogleMap>
        </div>
 
+       {/* Chat Component */}
+       {step === "confirmed" && currentRideId && (
+         <RideChat 
+           rideId={currentRideId} 
+           isOpen={isChatOpen} 
+           onClose={() => setIsChatOpen(false)}
+           otherPartyName={assignedDriverInfo?.name || "Driver"}
+           otherPartyPhone={assignedDriverInfo?.phone || undefined}
+         />
+       )}
+       
        <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none flex flex-col justify-end">
           <AnimatePresence mode="wait">
             {step === "details" && (
@@ -775,7 +789,10 @@ export default function PassengerBooking() {
                       <p className="text-2xl font-black text-text-main">£{fareEstimate?.toFixed(2)}</p>
                    </div>
                 </div>
-                <button onClick={() => navigate("/my-rides")} className="w-full py-5 bg-text-main text-surface rounded-3xl font-black text-lg shadow-xl">Track Live Location</button>
+                <div className="flex gap-3">
+                  <button onClick={() => setIsChatOpen(true)} className="aspect-square bg-surface border border-border-main rounded-3xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><MessageCircle className="w-6 h-6 text-primary" /></button>
+                  <button onClick={() => navigate("/my-rides")} className="flex-1 py-5 bg-text-main text-surface rounded-3xl font-black text-lg shadow-xl">Track Live Location</button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

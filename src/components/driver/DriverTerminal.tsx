@@ -12,6 +12,8 @@ import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
 import DriverDocuments from "./DriverDocuments";
+import RideChat from "./RideChat";
+import { MessageCircle } from "lucide-react";
 
 type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progress' | 'completed' | 'review';
 
@@ -185,6 +187,7 @@ export default function DriverTerminal() {
           id: rideDoc.id,
           userId: data.riderId,
           name: data.passengerName || "Live Passenger",
+          passengerPhone: data.passengerPhone || undefined,
           pickupAddress: data.pickup,
           dropoffAddress: data.dropoff,
           pickupLat: data.pickupLat,
@@ -327,6 +330,7 @@ export default function DriverTerminal() {
     setActiveRide({
       id: "simulated_ride_123",
       name: "Sarah T.",
+      passengerPhone: "+447700900077",
       pickupAddress: "12 Elm Street, SE15",
       dropoffAddress: "Bristol Temple Meads",
       pickupLat: mapCenter[0] + 0.01,
@@ -355,6 +359,8 @@ export default function DriverTerminal() {
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "accepted",
           driverId: user.uid,
+          driverName: profile?.firstName || "Driver",
+          driverPhone: profile?.phone || profile?.phoneNumber || "",
           acceptedAt: serverTimestamp()
         });
         
@@ -421,6 +427,7 @@ export default function DriverTerminal() {
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleArrived = async () => {
     setRideState('waiting');
@@ -553,9 +560,9 @@ export default function DriverTerminal() {
       {/* Simulation Trigger (Dev Only) */}
       <button 
         onClick={simulateIncomingRide}
-        className="absolute top-2 left-1/2 -translate-x-1/2 z-[100] bg-purple-600 text-xs px-3 py-1 rounded-full font-bold opacity-50 hover:opacity-100"
+        className="absolute top-[80px] left-1/2 -translate-x-1/2 z-[150] bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
       >
-        Simulate Ride
+        Simulate Job
       </button>
 
       {/* 1. Map Layer (Background) */}
@@ -649,8 +656,19 @@ export default function DriverTerminal() {
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
       </div>
 
+      {/* Chat Component */}
+      {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
+        <RideChat 
+          rideId={activeRide.id} 
+          isOpen={isChatOpen} 
+          onClose={() => setIsChatOpen(false)}
+          otherPartyName={activeRide?.passengerName || activeRide?.name || "Passenger"}
+          otherPartyPhone={activeRide?.passengerPhone || undefined}
+        />
+      )}
+
       {/* Floating Map Controls & SOS */}
-      <div className="absolute top-[32%] right-4 z-40 flex flex-col items-end gap-3">
+      <div className="absolute top-[32%] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
         <button 
           onClick={() => setIsEmergencyVisible(!isEmergencyVisible)}
           className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -1052,6 +1070,9 @@ export default function DriverTerminal() {
                 </div>
                 <div className="flex justify-center gap-3 mt-2">
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${activeRide?.pickupLat || ''},${activeRide?.pickupLng || ''}`} target="_blank" rel="noreferrer" className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><Navigation className="w-5 h-5 text-white" /></a>
+                  <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                    <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                  </button>
                   <button 
                     onClick={handleArrived}
                     className="flex-1 h-11 bg-[#FF9500] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
@@ -1083,10 +1104,13 @@ export default function DriverTerminal() {
                   </div>
                 )}
                 
-                <div className="flex justify-center mt-2">
+                <div className="flex justify-center gap-3 mt-2">
+                  <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                    <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                  </button>
                   <button 
                     onClick={handleStartRide}
-                    className="w-[80%] h-11 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-emerald-950/20"
+                    className="flex-1 h-11 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-emerald-950/20"
                   >
                     <Zap className="w-4 h-4 fill-[#0D0D0F]" /> START TRIP
                   </button>
@@ -1113,6 +1137,9 @@ export default function DriverTerminal() {
                 </div>
                 <div className="flex justify-center gap-3 mt-2">
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${activeRide?.dropoffLat || ''},${activeRide?.dropoffLng || ''}`} target="_blank" rel="noreferrer" className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><Navigation className="w-5 h-5 text-white" /></a>
+                  <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                    <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                  </button>
                   <button 
                     onClick={handleCompleteRide}
                     className="flex-1 h-11 bg-[#FF3B30] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
