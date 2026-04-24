@@ -79,6 +79,20 @@ export default function DriverTerminal() {
     }
   };
 
+  // Handle center for 'waiting' state to account for drawer height
+  useEffect(() => {
+    if (mapInstance && rideState === 'waiting' && activeRide?.pickupLat && activeRide?.pickupLng) {
+      const pt = new window.google.maps.LatLng(activeRide.pickupLat, activeRide.pickupLng);
+      mapInstance.panTo(pt);
+      
+      // Shift map down by 160px so marker moves UP by 160px visually
+      const timer = setTimeout(() => {
+        mapInstance.panBy(0, 160);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [rideState, activeRide?.pickupLat, activeRide?.pickupLng, mapInstance]);
+
   useEffect(() => {
     // Fetch route directions using Google Maps API
     const fetchDirections = (destLat: number, destLng: number) => {
@@ -97,6 +111,11 @@ export default function DriverTerminal() {
         (result, status) => {
           if (status === window.google.maps.DirectionsStatus.OK) {
             setDirections(result);
+            if (mapInstance && result?.routes?.[0]?.bounds) {
+              // We fit the bounds here. Because we already set Map options `padding: { bottom: 350 }`, 
+              // Google Maps will automatically shift the visual center up!
+              mapInstance.fitBounds(result.routes[0].bounds);
+            }
           } else {
             console.error("error fetching directions", result);
           }
@@ -111,7 +130,7 @@ export default function DriverTerminal() {
     } else {
       setDirections(null);
     }
-  }, [rideState, activeRide?.id, isLoaded]);
+  }, [rideState, activeRide?.id, isLoaded, mapInstance]);
 
   // Listen to Taxi Command Settings (platform_config/rides)
   useEffect(() => {
@@ -524,13 +543,33 @@ export default function DriverTerminal() {
         {isLoaded && (
           <GoogleMap
             mapContainerStyle={{ width: '100%', height: '100%' }}
-            center={directions ? undefined : { lat: mapCenter[0], lng: mapCenter[1] }}
-            zoom={13}
+            center={
+              directions || rideState === 'waiting'
+                ? undefined
+                : { lat: mapCenter[0], lng: mapCenter[1] }
+            }
+            zoom={
+              directions
+                ? undefined
+                : rideState === 'waiting'
+                  ? 18
+                  : (rideState === 'en_route_pickup' || rideState === 'in_progress') 
+                    ? 13 
+                    : 15 // Default driver location zoom level when idle
+            }
             onLoad={map => setMapInstance(map)}
             options={{
               disableDefaultUI: true,
+              clickableIcons: false,
               keyboardShortcuts: false,
               mapId: "a1b2c3d4e5f6g7h8", 
+              gestureHandling: 'greedy',
+              padding: {
+                bottom: 350, // UI drawer height
+                top: 100,
+                left: 20,
+                right: 20
+              }
             }}
           >
             {isOnline && (
@@ -542,32 +581,30 @@ export default function DriverTerminal() {
               </OverlayViewF>
             )}
 
-            {rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng && (
-              <OverlayViewF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex flex-col items-center justify-center -ml-10 -mt-[4.5rem] w-20 h-20 pointer-events-none">
-                  <div className="bg-[#E6F9EF] text-[#00D26A] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full mb-1 shadow-sm whitespace-nowrap border border-[#00D26A]/20">
-                    PICKUP
+            {(rideState === 'en_route_pickup' || rideState === 'waiting') && activeRide?.pickupLat && activeRide?.pickupLng && (
+              <>
+                <MarkerF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} />
+                <OverlayViewF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                  <div className="absolute bottom-11 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center">
+                    <div className="bg-[#E6F9EF] text-[#00D26A] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full shadow-md whitespace-nowrap border border-[#00D26A]/20">
+                      PICKUP
+                    </div>
                   </div>
-                  <div className="relative flex items-center justify-center w-8 h-8">
-                    <div className="absolute inset-0 bg-[#00D26A] rounded-full opacity-30 animate-ping"></div>
-                    <div className="bg-[#00D26A] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10 flex items-center justify-center text-[8px] font-bold text-white">P</div>
-                  </div>
-                </div>
-              </OverlayViewF>
+                </OverlayViewF>
+              </>
             )}
 
             {rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng && (
-              <OverlayViewF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex flex-col items-center justify-center -ml-10 -mt-[4.5rem] w-20 h-20 pointer-events-none">
-                  <div className="bg-[#FFF4E5] text-[#FF9500] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full mb-1 shadow-sm whitespace-nowrap border border-[#FF9500]/20">
-                    DROPOFF
+              <>
+                <MarkerF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} />
+                <OverlayViewF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                  <div className="absolute bottom-11 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center">
+                    <div className="bg-[#FFF4E5] text-[#FF9500] font-black text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-full shadow-md whitespace-nowrap border border-[#FF9500]/20">
+                      DROPOFF
+                    </div>
                   </div>
-                  <div className="relative flex items-center justify-center w-8 h-8">
-                    <div className="absolute inset-0 bg-[#FF9500] rounded-full opacity-30 animate-ping"></div>
-                    <div className="bg-[#FF9500] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10 flex items-center justify-center text-[8px] font-bold text-white">D</div>
-                  </div>
-                </div>
-              </OverlayViewF>
+                </OverlayViewF>
+              </>
             )}
 
             {directions && (
@@ -575,6 +612,7 @@ export default function DriverTerminal() {
                 directions={directions}
                 options={{
                   suppressMarkers: true,
+                  preserveViewport: true,
                   polylineOptions: {
                     strokeColor: '#007AFF', // Google Maps style Blue
                     strokeOpacity: 0.8,
@@ -830,13 +868,21 @@ export default function DriverTerminal() {
                         <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
                         <GoogleMap
                           mapContainerStyle={{ width: '100%', height: '100%' }}
-                          center={{
-                            lat: (activeRide.pickupLat + activeRide.dropoffLat) / 2,
-                            lng: (activeRide.pickupLng + activeRide.dropoffLng) / 2,
+                          onLoad={(map) => {
+                            const bounds = new window.google.maps.LatLngBounds();
+                            if (activeRide.pickupLat && activeRide.pickupLng) bounds.extend({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
+                            if (activeRide.dropoffLat && activeRide.dropoffLng) bounds.extend({ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng });
+                            (activeRide.stops || []).forEach((s: any) => { if (s.coords) bounds.extend(s.coords); });
+                            map.fitBounds(bounds, { top: 20, bottom: 20, left: 20, right: 20 });
+                            // Apply a max zoom in case points are very close
+                            const listener = window.google.maps.event.addListener(map, 'idle', () => {
+                              if ((map.getZoom() || 0) > 13) map.setZoom(13); // Restrict to 13 as user mentioned
+                              window.google.maps.event.removeListener(listener);
+                            });
                           }}
-                          zoom={11}
                           options={{
                             disableDefaultUI: true,
+                            clickableIcons: false,
                             keyboardShortcuts: false,
                             mapId: "a1b2c3d4e5f6g7h8",
                           }}
@@ -864,14 +910,14 @@ export default function DriverTerminal() {
                         <div className="relative">
                           <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
-                          <p className="text-[13px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
                           <p className="text-[12px] text-[#A0A0A8] font-medium mt-0.5">3 min • 1.2 miles</p>
                         </div>
 
                         <div className="relative">
                           <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Drop-off</p>
-                          <p className="text-[13px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                           <p className="text-[12px] text-[#A0A0A8] font-medium mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
                         </div>
                       </div>
@@ -933,7 +979,7 @@ export default function DriverTerminal() {
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <p className="text-[10px] font-black uppercase text-[#A0A0A8] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
-                    <p className="text-[15px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                    <p className="text-[19px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
                     <p className="text-xl font-black text-white leading-none mt-1">3 min <span className="text-[#8E8E93] text-base font-bold">· 1.2 mi</span></p>
                   </div>
                   <div className="text-right">
@@ -982,7 +1028,7 @@ export default function DriverTerminal() {
                     <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest mb-1 flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse"></span> Trip in Progress
                     </p>
-                    <p className="text-[15px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <p className="text-[19px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                     <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left</p>
                   </div>
                   <div className="text-right">
