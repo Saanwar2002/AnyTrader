@@ -118,19 +118,19 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-brand-blue relative overflow-y-auto pt-8 pb-64 px-4 shadow-inner">
+    <div className="min-h-[100dvh] flex flex-col bg-brand-blue relative overflow-hidden px-4 shadow-inner">
       {/* Background Decorative Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50" />
         <div className="absolute bottom-48 -right-24 w-96 h-96 bg-primary/20 rounded-full blur-3xl opacity-50" />
       </div>
 
-      <div className="flex-1 flex items-start sm:items-center justify-center py-12 sm:py-20">
+      <div className="flex-1 flex items-center justify-center py-8">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="max-w-md w-full bg-white/95 backdrop-blur-xl p-8 sm:p-10 rounded-[40px] border border-white/20 shadow-2xl shadow-black/20 text-center space-y-8 relative z-10 mb-20"
+          className="max-w-md w-full bg-white/95 backdrop-blur-xl p-6 sm:p-10 rounded-[40px] border border-white/20 shadow-2xl shadow-black/20 text-center space-y-6 sm:space-y-8 relative z-10"
         >
         <div className="space-y-4">
           <div className="w-24 h-24 bg-primary rounded-[32px] flex items-center justify-center mx-auto shadow-2xl shadow-primary/40 transform -rotate-6 hover:rotate-0 transition-transform duration-700 ease-out group">

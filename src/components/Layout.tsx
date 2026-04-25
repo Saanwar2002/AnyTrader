@@ -905,7 +905,7 @@ export default function Layout() {
       {/* Bottom Navigation (Mobile) */}
       {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && (
         <nav className={cn(
-          "sm:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t px-4 pb-[env(safe-area-inset-bottom)] h-[calc(4rem+env(safe-area-inset-bottom))] flex items-center justify-around z-[100] transition-colors",
+          "sm:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t px-2 pb-[env(safe-area-inset-bottom)] h-[calc(4.5rem+env(safe-area-inset-bottom))] flex items-center justify-between z-[100] transition-colors",
           isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : "bg-white border-slate-200"
         )}>
           {navItems.map((item, idx) => {
@@ -923,20 +923,20 @@ export default function Layout() {
                 key={`nav-${idx}-${item.path}`}
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 transition-colors relative h-full px-2",
+                  "flex flex-col items-center justify-center gap-1 transition-colors relative h-full flex-1 min-w-0 px-0.5",
                   isActive 
                     ? (isDriverTerminal ? "text-white" : "text-blue-600 font-bold") 
-                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-500 hover:text-slate-900"),
+                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-900 hover:text-black font-medium"),
                   item.isCta && "text-blue-600"
                 )}
               >
-                <div className="relative">
-                  <Icon className={cn(isActive ? "w-6 h-6" : "w-5 h-5", item.isCta && "w-7 h-7")} />
+                <div className="relative flex-shrink-0 mt-1">
+                  <Icon className={cn(isActive ? "w-6 h-6" : "w-5 h-5", item.isCta && "w-6 h-6")} />
                   {hasUnread && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                   )}
                 </div>
-                <span className="text-xs font-medium tracking-tight">{item.name}</span>
+                <span className="text-[10px] min-[380px]:text-[11px] sm:text-xs font-bold tracking-tight text-center leading-none truncate w-full">{item.name}</span>
                 {isActive && (
                    <motion.div 
                      layoutId="navDot"

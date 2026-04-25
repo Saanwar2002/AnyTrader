@@ -436,7 +436,7 @@ export default function EmergencyJobWizard() {
             </div>
           </div>
           
-          <div className="fixed bottom-[120px] left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-red-100 rounded-2xl z-40 shadow-2xl space-y-3">
+          <div className="fixed bottom-4 left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-red-100 rounded-2xl z-40 shadow-2xl space-y-3">
             {isBoosted && (
               <div className="flex items-center justify-between px-2">
                 <span className="text-xs font-bold text-slate-500 uppercase">Emergency Boost Fee</span>

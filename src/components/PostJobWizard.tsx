@@ -272,9 +272,10 @@ export default function PostJobWizard() {
     }
   };
 
+  const safeSearchQuery = searchQuery.trim().toLowerCase();
   const filteredCategories = categories.filter(cat => 
-    cat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    cat.subcategories.some(sub => sub.toLowerCase().includes(searchQuery.toLowerCase()))
+    cat.name.toLowerCase().includes(safeSearchQuery) ||
+    (cat.subcategories && cat.subcategories.some(sub => sub.toLowerCase().includes(safeSearchQuery)))
   );
 
   // ... rest of the existing logic (handleStartCamera, handleCapturePhoto, etc.) ...
@@ -851,7 +852,7 @@ export default function PostJobWizard() {
   };
 
   const handleSubmit = async () => {
-    if (!user || !estimate) return;
+    if (!user) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -895,8 +896,25 @@ export default function PostJobWizard() {
             requestedCount: formData.selectedAssets.length > 0 ? formData.selectedAssets.length : 1
           })
         });
-        const limitData = await limitResponse.json();
-        if (!limitData.allowed) {
+        
+        let limitData;
+        try {
+          limitData = await limitResponse.json();
+        } catch (e) {
+          limitData = { allowed: true }; // Fallback to allow if API fails totally
+        }
+
+        if (!limitResponse.ok) {
+          console.error("Job limit check failed:", limitData.error);
+          // If the backend refuses to serve or user is missing, we shouldn't necessarily block if it's a 404, but let's be safe
+          if (limitResponse.status === 404) {
+             setError("Your user profile could not be verified. Please log in again.");
+             setIsSubmitting(false);
+             return;
+          }
+        }
+
+        if (limitData.allowed === false) {
           if (limitData.isTrial) {
             setError(`You have used your ${limitData.limit} free trial job posts. Please subscribe to a business plan to continue posting.`);
           } else {
@@ -941,8 +959,8 @@ export default function PostJobWizard() {
           status: editJob ? (editJob.status || "posted") : suggestedStatus,
           securityAlert: securityAlert || formData.securityAlert,
           hasReview: editJob?.hasReview || false,
-          estimateMin: estimate.min,
-          estimateMax: estimate.max,
+          estimateMin: estimate?.min || Math.floor(Number(formData.selectedBudget || 0) * 0.9),
+          estimateMax: estimate?.max || Math.floor(Number(formData.selectedBudget || 0) * 1.1),
           postedDate: editJob?.postedDate || serverTimestamp(),
           updatedAt: serverTimestamp(),
           quoteCount: editJob?.quoteCount || 0,
@@ -1108,62 +1126,12 @@ export default function PostJobWizard() {
                 <h2 className="text-xl font-bold text-slate-700">Get up to 5 quotes from verified local tradespeople</h2>
               </div>
 
-              {/* How it works */}
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                <button 
-                  onClick={() => setIsHowItWorksOpen(!isHowItWorksOpen)}
-                  className="w-full p-6 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <h3 className="text-xl font-bold text-slate-900">How it works</h3>
-                  {isHowItWorksOpen ? (
-                    <ChevronUp className="w-6 h-6 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-6 h-6 text-slate-400" />
-                  )}
-                </button>
-                
-                <AnimatePresence>
-                  {isHowItWorksOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="p-6 pt-0 space-y-6">
-                        {[
-                          { step: 1, title: "Describe your job", desc: "Add photos and details for accurate quotes", icon: FileText },
-                          { step: 2, title: "AI price estimate", desc: "Get an instant estimate before quotes arrive", icon: Zap },
-                          { step: 3, title: "Compare quotes", desc: "Up to 5 verified tradespeople will quote", icon: Search },
-                          { step: 4, title: "Accept & pay safely", desc: "Escrow protects your payment until complete", icon: ShieldCheck },
-                        ].map((item) => (
-                          <div key={item.step} className="flex gap-4">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#1e3a5f] text-white flex items-center justify-center font-bold text-sm">
-                              {item.step}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <h4 className="font-bold text-slate-900">{item.title}</h4>
-                                <item.icon className="w-5 h-5 text-slate-400" />
-                              </div>
-                              <p className="text-sm text-slate-500">{item.desc}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* AnyTrader Guarantee */}
-              <div className="bg-green-50 rounded-2xl p-4 border border-green-100 flex gap-3">
-                <ShieldCheck className="w-6 h-6 text-green-600 flex-shrink-0" />
-                <div>
-                  <h4 className="font-bold text-green-800">AnyTrader Guarantee</h4>
-                  <p className="text-sm text-green-700">Your payment is protected until the job is done to your satisfaction.</p>
-                </div>
-              </div>
+              <button 
+                onClick={() => setStep(1)}
+                className="w-full p-5 rounded-[2rem] bg-orange-500 text-white font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-orange-500/20 active:scale-95 transition-all group"
+              >
+                Post Job Manually <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+              </button>
 
               {/* Post by Voice */}
               <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
@@ -1240,6 +1208,63 @@ export default function PostJobWizard() {
                   })}
                 </div>
               </div>
+
+              {/* How it works */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                <button 
+                  onClick={() => setIsHowItWorksOpen(!isHowItWorksOpen)}
+                  className="w-full p-6 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors"
+                >
+                  <h3 className="text-xl font-bold text-slate-900">How it works</h3>
+                  {isHowItWorksOpen ? (
+                    <ChevronUp className="w-6 h-6 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-6 h-6 text-slate-400" />
+                  )}
+                </button>
+                
+                <AnimatePresence>
+                  {isHowItWorksOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-6 pt-0 space-y-6">
+                        {[
+                          { step: 1, title: "Describe your job", desc: "Add photos and details for accurate quotes", icon: FileText },
+                          { step: 2, title: "AI price estimate", desc: "Get an instant estimate before quotes arrive", icon: Zap },
+                          { step: 3, title: "Compare quotes", desc: "Up to 5 verified tradespeople will quote", icon: Search },
+                          { step: 4, title: "Accept & pay safely", desc: "Escrow protects your payment until complete", icon: ShieldCheck },
+                        ].map((item) => (
+                          <div key={item.step} className="flex gap-4">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#1e3a5f] text-white flex items-center justify-center font-bold text-sm">
+                              {item.step}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-bold text-slate-900">{item.title}</h4>
+                                <item.icon className="w-5 h-5 text-slate-400" />
+                              </div>
+                              <p className="text-sm text-slate-500">{item.desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* AnyTrader Guarantee */}
+              <div className="bg-green-50 rounded-2xl p-4 border border-green-100 flex gap-3">
+                <ShieldCheck className="w-6 h-6 text-green-600 flex-shrink-0" />
+                <div>
+                  <h4 className="font-bold text-green-800">AnyTrader Guarantee</h4>
+                  <p className="text-sm text-green-700">Your payment is protected until the job is done to your satisfaction.</p>
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -1297,27 +1322,6 @@ export default function PostJobWizard() {
                   );
                 })}
               </div>
-
-              <div className="sticky bottom-4 pt-4 flex gap-3">
-                <button 
-                  onClick={prevStep}
-                  className="flex-1 p-4 rounded-2xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Back
-                </button>
-                <button 
-                  onClick={nextStep}
-                  disabled={!formData.category}
-                  className={cn(
-                    "flex-[2] p-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all",
-                    formData.category 
-                      ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-95" 
-                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                  )}
-                >
-                  Continue <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
             </motion.div>
           )}
 
@@ -1351,14 +1355,6 @@ export default function PostJobWizard() {
                     <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
                   </button>
                 ))}
-              </div>
-              <div className="pt-6">
-                <button 
-                  onClick={prevStep}
-                  className="w-full p-4 rounded-2xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Back
-                </button>
               </div>
             </motion.div>
           )}
@@ -2181,35 +2177,15 @@ export default function PostJobWizard() {
       </div>
 
       {/* Sticky Navigation Footer */}
-      <div className="fixed bottom-[120px] sm:bottom-0 left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl z-40 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:mt-10 shadow-2xl">
-        <div className="max-w-2xl mx-auto">
-          {step === 0 ? (
-            <button 
-              onClick={() => setStep(1)}
-              className="w-full p-5 rounded-[2rem] bg-orange-500 text-white font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-orange-500/20 active:scale-95 transition-all group"
-            >
-              Post Job Manually <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-            </button>
-          ) : step === 1 || step === 2 ? (
-            <div className="flex gap-3">
-              <button 
-                onClick={prevStep}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                <ChevronLeft className="w-5 h-5" /> Back
-              </button>
+      {step !== 0 && (
+        <div className="fixed bottom-4 sm:bottom-0 left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl z-40 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:mt-10 shadow-2xl">
+          <div className="max-w-2xl mx-auto">
+            {step === 1 || step === 2 ? (
               <div className="flex-[2] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select a category to continue</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{step === 1 ? "Select a category to continue" : "Select a subcategory to continue"}</p>
               </div>
-            </div>
-          ) : step === 3 ? (
+            ) : step === 3 ? (
             <div className="flex gap-3">
-              <button 
-                onClick={prevStep}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Back
-              </button>
               <button 
                 onClick={handleGetRefinement} 
                 disabled={!formData.title || formData.title.length < 3 || !formData.description || isRefiningScope}
@@ -2227,10 +2203,13 @@ export default function PostJobWizard() {
           ) : step === 3.5 ? (
             <div className="flex gap-3">
               <button 
-                onClick={() => setStep(3)}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+                onClick={() => {
+                  setClarifyingAnswers({});
+                  setStep(4);
+                }}
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-2"
               >
-                Back
+                Skip 
               </button>
               <button 
                 onClick={() => setStep(4)}
@@ -2242,12 +2221,6 @@ export default function PostJobWizard() {
             </div>
           ) : step === 4 ? (
             <div className="flex gap-3">
-              <button 
-                onClick={prevStep}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Back
-              </button>
               <button 
                 onClick={nextStep} 
                 disabled={!formData.city || !formData.postcode || !!postcodeError}
@@ -2265,12 +2238,6 @@ export default function PostJobWizard() {
           ) : step === 5 ? (
             <div className="flex gap-3">
               <button 
-                onClick={prevStep}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Back
-              </button>
-              <button 
                 onClick={nextStep} 
                 id="wizard-next-step-5"
                 className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all"
@@ -2280,12 +2247,6 @@ export default function PostJobWizard() {
             </div>
           ) : step === 6 ? (
             <div className="flex gap-3">
-              <button 
-                onClick={prevStep}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Back
-              </button>
               <button 
                 onClick={nextStep} 
                 disabled={isUploading}
@@ -2298,23 +2259,27 @@ export default function PostJobWizard() {
           ) : step === 7 ? (
             <div className="flex gap-3">
               <button 
-                onClick={prevStep}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Back
-              </button>
-              <button 
                 onClick={handleSubmit}
-                disabled={isSubmitting || !formData.selectedBudget}
+                disabled={isSubmitting || (!estimate && !formData.selectedBudget)}
                 id="wizard-next-step-7"
                 className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 disabled:opacity-50 transition-all active:scale-95"
               >
-                {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Next Step <ChevronRight className="w-6 h-6" /></>}
+                {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Post your job <CheckCircle2 className="w-6 h-6" /></>}
               </button>
             </div>
           ) : null}
         </div>
+        
+        {step === 7 && error && (
+          <div className="max-w-2xl mx-auto mt-4 px-4">
+            <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-2">
+              <X className="w-4 h-4" />
+              {error}
+            </div>
+          </div>
+        )}
       </div>
+      )}
 
       {/* Camera Overlay */}
       <AnimatePresence>

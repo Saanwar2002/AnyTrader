@@ -127,7 +127,8 @@ service cloud.firestore {
 
     match /search_logs/{logId} {
       allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
     }
 
     match /platform_counters/{counterId} {

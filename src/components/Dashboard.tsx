@@ -243,75 +243,6 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* Homeowner Perks Section */}
-      <HomeownerPerks limit={2} />
-
-      {/* Home Health & Maintenance Predictions */}
-      {maintenancePredictions.length > 0 && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-indigo-600" />
-              </div>
-              Home Health AI
-            </h2>
-            <div className="bg-indigo-100 px-3 py-1 rounded-full text-[10px] font-black text-indigo-700 uppercase tracking-wider">
-              Predictive Maintenance
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {maintenancePredictions.map((prediction, idx) => (
-              <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4 relative overflow-hidden group">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter",
-                        prediction.Urgency === "High" ? "bg-red-100 text-red-600" :
-                        prediction.Urgency === "Medium" ? "bg-amber-100 text-amber-600" :
-                        "bg-blue-100 text-blue-600"
-                      )}>
-                        {prediction.Urgency} Priority
-                      </span>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                        {prediction.Category}
-                      </span>
-                    </div>
-                    <h4 className="text-lg font-black text-slate-900">{prediction.Title}</h4>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors">
-                    <CalendarIcon className="w-5 h-5" />
-                  </div>
-                </div>
-                
-                <p className="text-xs text-slate-500 leading-relaxed italic">"{prediction.Reason}"</p>
-                
-                <div className="flex items-center justify-between pt-2">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-slate-300" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">
-                      Due: {new Date(prediction.EstimatedDueDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
-                    </span>
-                  </div>
-                  <button 
-                    onClick={() => navigate('/post-job', { state: { initialTitle: prediction.Title, initialCategory: prediction.Category } })}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold hover:bg-indigo-700 transition-all flex items-center gap-1.5"
-                  >
-                    Get Quotes
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
-                </div>
-                
-                {/* Decorative background element */}
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-50 rounded-full blur-2xl opacity-100 md:opacity-50 md:group-hover:opacity-100 transition-opacity" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Emergency Taxi Requests Section */}
         {emergencyRides.length > 0 && (
@@ -566,35 +497,108 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* Quick Actions / Tips */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-amber-500" />
-            </div>
-            Next Steps
-          </h2>
-          <div className="space-y-4">
-            <div className="bg-blue-50 p-8 rounded-3xl border border-blue-100 space-y-4 shadow-sm">
-              <h4 className="font-bold text-blue-900 text-lg">How it works</h4>
-              <ul className="space-y-4">
-                <li className="flex items-center gap-4">
-                  <div className="w-8 h-8 bg-blue-200 rounded-xl flex items-center justify-center text-xs font-bold text-blue-700">1</div>
-                  <span className="text-blue-800 font-medium">Post your job details</span>
-                </li>
-                <li className="flex items-center gap-4">
-                  <div className="w-8 h-8 bg-blue-200 rounded-xl flex items-center justify-center text-xs font-bold text-blue-700">2</div>
-                  <span className="text-blue-800 font-medium">Receive and compare quotes</span>
-                </li>
-                <li className="flex items-center gap-4">
-                  <div className="w-8 h-8 bg-blue-200 rounded-xl flex items-center justify-center text-xs font-bold text-blue-700">3</div>
-                  <span className="text-blue-800 font-medium">Chat and hire the best pro</span>
-                </li>
-              </ul>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-8">
+          {/* Homeowner Perks Section */}
+          <HomeownerPerks limit={2} />
+
+          {/* Quick Actions / Tips */}
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+              </div>
+              Next Steps
+            </h2>
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-8 rounded-3xl border border-blue-100 space-y-4 shadow-sm">
+                <h4 className="font-bold text-blue-900 text-lg">How it works</h4>
+                <ul className="space-y-4">
+                  <li className="flex items-center gap-4">
+                    <div className="w-8 h-8 bg-blue-200 rounded-xl flex items-center justify-center text-xs font-bold text-blue-700">1</div>
+                    <span className="text-blue-800 font-medium">Post your job details</span>
+                  </li>
+                  <li className="flex items-center gap-4">
+                    <div className="w-8 h-8 bg-blue-200 rounded-xl flex items-center justify-center text-xs font-bold text-blue-700">2</div>
+                    <span className="text-blue-800 font-medium">Receive and compare quotes</span>
+                  </li>
+                  <li className="flex items-center gap-4">
+                    <div className="w-8 h-8 bg-blue-200 rounded-xl flex items-center justify-center text-xs font-bold text-blue-700">3</div>
+                    <span className="text-blue-800 font-medium">Chat and hire the best pro</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Home Health & Maintenance Predictions */}
+        {maintenancePredictions.length > 0 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                </div>
+                Home Health AI
+              </h2>
+              <div className="bg-indigo-100 px-3 py-1 rounded-full text-[10px] font-black text-indigo-700 uppercase tracking-wider">
+                Predictive Maintenance
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4">
+              {maintenancePredictions.map((prediction, idx) => (
+                <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4 relative overflow-hidden group">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter",
+                          prediction.Urgency === "High" ? "bg-red-100 text-red-600" :
+                          prediction.Urgency === "Medium" ? "bg-amber-100 text-amber-600" :
+                          "bg-blue-100 text-blue-600"
+                        )}>
+                          {prediction.Urgency} Priority
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                          {prediction.Category}
+                        </span>
+                      </div>
+                      <h4 className="text-lg font-black text-slate-900">{prediction.Title}</h4>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors">
+                      <CalendarIcon className="w-5 h-5" />
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-slate-500 leading-relaxed italic">"{prediction.Reason}"</p>
+                  
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 text-slate-300" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">
+                        Due: {new Date(prediction.EstimatedDueDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => navigate('/post-job', { state: { initialTitle: prediction.Title, initialCategory: prediction.Category } })}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold hover:bg-indigo-700 transition-all flex items-center gap-1.5"
+                    >
+                      Get Quotes
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  
+                  {/* Decorative background element */}
+                  <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-50 rounded-full blur-2xl opacity-100 md:opacity-50 md:group-hover:opacity-100 transition-opacity" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <MediaGalleryModal

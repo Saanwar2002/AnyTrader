@@ -26,7 +26,7 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "Underfloor Heating",
       "Bathroom Plumbing",
       "Kitchen Plumbing",
-      "Water Tank & Cylinder Replacement",
+      "Water Tank, Cylinder & Water Heater",
       "Unblocking (drains, toilets, sinks)",
       "Leak Detection & Repair",
       "Pipe Lagging & Insulation",

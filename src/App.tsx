@@ -87,6 +87,30 @@ export default function App() {
     return () => unsub();
   }, [isAuthReady]);
 
+  // Global auto-scroll for inputs to keep them in view, especially on mobile
+  useEffect(() => {
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      ) {
+        const type = (target as HTMLInputElement).type;
+        if (type !== 'checkbox' && type !== 'radio' && type !== 'file' && type !== 'range') {
+          // Wait for virtual keyboard to appear and viewport to resize
+          setTimeout(() => {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 300);
+        }
+      }
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+    };
+  }, []);
+
   if (!isAuthReady) return null;
 
   // Maintenance Mode Check
