@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
-import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc } from "@/src/firebase";
+import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
@@ -469,6 +469,20 @@ export default function PassengerBooking() {
     triggerHaptic(ImpactStyle.Heavy);
     hideNativeKeyboard();
     if (!user) return;
+    
+    // Check pending charges logic
+    const pendingCharges = profile?.pendingCharges || 0;
+    const cancellationCount = profile?.cancellationCount || 0;
+    
+    if (cancellationCount >= 2 && pendingCharges > 0) {
+      toast.error(`Account Hold: You have £${pendingCharges.toFixed(2)} in unpaid cancellation fees. Please pay the outstanding balance to book another ride.`);
+      return;
+    }
+    
+    if (pendingCharges > 0 && cancellationCount === 1) {
+      toast.warning(`Notice: £${pendingCharges.toFixed(2)} unpaid cancellation fee will be added to this trip's fare.`);
+    }
+
     setStep("searching");
     try {
       const rideData = {
@@ -484,13 +498,14 @@ export default function PassengerBooking() {
         stops: stops.filter(s => s.coords !== null),
         distanceMiles: Number(distanceMiles.toFixed(1)),
         durationMinutes: Number(durationMinutes.toFixed(0)),
-        fareEstimate: getComputedFare(selectedCategory),
+        fareEstimate: getComputedFare(selectedCategory) + (pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0),
         baseCalc: fareEstimate || 5.0,
         surgeMultiplier: 1.0, 
         carCategory: selectedCategory,
         isPetFriendly,
         waitTolerance,
         comments,
+        unpaidCancellationFeesOwed: pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0,
         status: "pending",
         currency: "GBP",
         handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
@@ -540,6 +555,14 @@ export default function PassengerBooking() {
         cancellationFee: fee,
         cancelledAt: serverTimestamp()
       });
+      
+      if (fee > 0 && user) {
+        await updateDoc(doc(db, "users", user.uid), {
+           pendingCharges: increment(fee),
+           cancellationCount: increment(1)
+        });
+      }
+
       setStep("details");
       setCurrentRideId(null);
       setAssignedDriverInfo(null);

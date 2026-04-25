@@ -26,6 +26,7 @@ export default function RidesCommandCenter() {
     waitRatePerMinute: 0.25,
     minFare: 5.0,
     commission: 12,
+    allowRiderAbandonment: false,
     vehicleTypes: [
       { id: "standard", name: "AnyTrader Standard", multiplier: 1.0 },
       { id: "executive", name: "AnyTrader Executive", multiplier: 1.5 },
@@ -115,7 +116,7 @@ export default function RidesCommandCenter() {
 
   const isConfigEqual = (c1: any, c2: any) => {
     if (!c1 || !c2) return false;
-    const keys = ['baseFare', 'distanceRate', 'timeRate', 'waitRatePerMinute', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges'];
+    const keys = ['baseFare', 'distanceRate', 'timeRate', 'waitRatePerMinute', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges', 'allowRiderAbandonment'];
     return keys.every(key => JSON.stringify(c1[key]) === JSON.stringify(c2[key]));
   };
 
@@ -133,6 +134,7 @@ export default function RidesCommandCenter() {
         waitRatePerMinute: Number(config.waitRatePerMinute) || 0,
         minFare: Number(config.minFare) || 0,
         commission: Number(config.commission) || 0,
+        allowRiderAbandonment: Boolean(config.allowRiderAbandonment),
         vehicleTypes: (config.vehicleTypes || []).map((vt: any) => ({
           ...vt,
           multiplier: Number(vt.multiplier) || 1
@@ -608,6 +610,24 @@ export default function RidesCommandCenter() {
                     className="w-full bg-slate-50 border-2 border-orange-100 rounded-2xl px-4 py-3 font-bold text-slate-900 focus:border-orange-500 outline-none transition-all" 
                   />
                   <p className="text-[9px] font-medium text-orange-600 italic">Guardrail for short trips.</p>
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <AlertCircle className="w-3 h-3 text-red-500" /> Rider Abandonment Protection
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-slate-200 transition-colors">
+                    <div className="relative">
+                      <input 
+                        type="checkbox" 
+                        checked={config.allowRiderAbandonment} 
+                        onChange={(e) => setConfig({ ...config, allowRiderAbandonment: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </div>
+                    <span className="text-sm font-bold text-slate-900">Enable abandonment fee collection & termination</span>
+                  </label>
+                  <p className="text-[9px] font-medium text-slate-500 italic">When enabled, drivers can charge £5.00 after 7 minutes of unresponsiveness at a stop.</p>
                 </div>
               </div>
 

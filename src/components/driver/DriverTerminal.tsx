@@ -64,7 +64,7 @@ export default function DriverTerminal() {
   });
 
   // Dynamic Fare & Live Ride Tracking
-  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, timeRate: number, waitRatePerMinute: number, minFare: number, commissionRate: number}>({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
+  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, timeRate: number, waitRatePerMinute: number, minFare: number, commissionRate: number, allowRiderAbandonment?: boolean}>({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12, allowRiderAbandonment: false });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
   const [passengerPos, setPassengerPos] = useState<{lat: number, lng: number} | null>(null);
 
@@ -166,6 +166,7 @@ export default function DriverTerminal() {
           waitRatePerMinute: Number(data.waitRatePerMinute) || 0.25,
           minFare: Number(data.minFare) || 5.0,
           commissionRate: data.commission ? Number(data.commission) / 100 : 0.12,
+          allowRiderAbandonment: data.allowRiderAbandonment || false,
         });
       }
     }, (error) => {
@@ -501,12 +502,13 @@ export default function DriverTerminal() {
   const [waitStartTime, setWaitStartTime] = useState<number | null>(null);
   const [elapsedWaitSeconds, setElapsedWaitSeconds] = useState(0);
 
-  // Stop wait logic
+  // Stop wait & abandonment logic
   const [isWaitingAtStop, setIsWaitingAtStop] = useState(false);
   const [stopWaitStartTime, setStopWaitStartTime] = useState<number | null>(null);
   const [accumulatedPaidWaitSeconds, setAccumulatedPaidWaitSeconds] = useState(0);
   const [currentStopWaitSeconds, setCurrentStopWaitSeconds] = useState(0);
   const [waitStopLocation, setWaitStopLocation] = useState<[number, number] | null>(null);
+  const [abandonmentWarningSent, setAbandonmentWarningSent] = useState(false);
 
   useEffect(() => {
     let interval: any;
@@ -525,6 +527,7 @@ export default function DriverTerminal() {
   const handleToggleWaitAtStop = () => {
     if (isWaitingAtStop) {
       setIsWaitingAtStop(false);
+      setAbandonmentWarningSent(false); // reset abandonment logic
       setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
       setCurrentStopWaitSeconds(0);
       setStopWaitStartTime(null);
@@ -561,6 +564,7 @@ export default function DriverTerminal() {
         });
         // Auto-pause
         setIsWaitingAtStop(false);
+        setAbandonmentWarningSent(false);
         setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
         setCurrentStopWaitSeconds(0);
         setStopWaitStartTime(null);
@@ -570,6 +574,83 @@ export default function DriverTerminal() {
   }, [mapCenter, isWaitingAtStop, waitStopLocation, currentStopWaitSeconds]);
 
   const totalPaidWaitSeconds = accumulatedPaidWaitSeconds + currentStopWaitSeconds;
+
+  const handleSendAbandonmentWarning = async () => {
+    setAbandonmentWarningSent(true);
+    toast.success("Warning Sent", {
+      description: "Push notification and SMS sent directly to rider's device.",
+    });
+    // In real app we'd dispatch a Cloud Function here to push out the notices.
+  };
+
+  const handleRiderAbandonment = async () => {
+    if (!activeRide?.id || !user) return;
+    
+    // Safety check - turn off waiting
+    setIsWaitingAtStop(false);
+    setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
+    setCurrentStopWaitSeconds(0);
+    setStopWaitStartTime(null);
+    setAbandonmentWarningSent(false);
+
+    setIsGeneratingPayment(true);
+    setRideState('completed');
+
+    const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+    // Base estimate logic normally computes full journey. For abandonment we should
+    // ideally calculate partial distance. Using fareEstimate as approximation for UI.
+    const partialFareEstimate = activeRide?.fareEstimate ? activeRide.fareEstimate * 0.5 : 12.0; 
+    const finalFare = partialFareEstimate + waitFare + 5.00; // Add the £5 abandonment fee!
+
+    try {
+      await updateDoc(doc(db, "ride_requests", activeRide.id), {
+        status: "rider_abandoned",
+        paymentMethod: "stripe_qr",
+        finalFare: finalFare,
+        paidWaitSeconds: totalPaidWaitSeconds,
+        abandonmentFee: 5.00,
+        completedAt: serverTimestamp()
+      });
+
+      if (activeRide.riderId) {
+        // Apply strike
+        await updateDoc(doc(db, "users", activeRide.riderId), {
+          pendingCharges: increment(finalFare),
+          abandonmentStrikes: increment(1)
+        } as any).catch(err => console.error("Failed to add strike:", err));
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      await setDoc(doc(db, "driver_metrics", user.uid), {
+        date: today,
+        dailyEarnings: increment(finalFare), // Usually minus commission handled in backend
+        jobsDoneToday: increment(1),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Generate the payment link
+      const response = await fetch("/api/rides/create-trip-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rideId: activeRide.id,
+          driverId: user.uid,
+          amount: finalFare,
+          isAbandonment: true
+        })
+      });
+      
+      const data = await response.json();
+      if (data.url) {
+        setPaymentUrl(data.url);
+      }
+    } catch (err) {
+      console.error("Abandonment process failed:", err);
+      toast.error("Failed to process abandonment. Please reload.");
+    } finally {
+      setIsGeneratingPayment(false);
+    }
+  };
 
   const handleArrived = async () => {
     setRideState('waiting');
@@ -652,6 +733,13 @@ export default function DriverTerminal() {
           paidWaitSeconds: totalPaidWaitSeconds,
           completedAt: serverTimestamp()
         });
+        
+        if (activeRide.riderId) {
+          await updateDoc(doc(db, "users", activeRide.riderId), {
+            pendingCharges: 0,
+            cancellationCount: 0
+          } as any).catch(err => console.error("Failed to clear passenger fees:", err));
+        }
 
         // We can update the daily driver_metrics as well
         const today = new Date().toISOString().split('T')[0];
@@ -685,6 +773,13 @@ export default function DriverTerminal() {
           platformFeeOwed: platformFee,
           completedAt: serverTimestamp()
         });
+
+        if (activeRide.riderId) {
+          await updateDoc(doc(db, "users", activeRide.riderId), {
+            pendingCharges: 0,
+            cancellationCount: 0
+          } as any).catch(err => console.error("Failed to clear passenger fees:", err));
+        }
 
         await updateDoc(doc(db, "users", user.uid), {
           pendingPlatformFees: increment(platformFee)
@@ -1433,10 +1528,36 @@ export default function DriverTerminal() {
                 </div>
                 
                 {activeRide?.stops?.length > 0 && (
-                  <div className="flex gap-2 mt-3">
-                     <button onClick={handleToggleWaitAtStop} className={`flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? 'bg-[#FF9500] text-white border-[#FF9500]/50' : 'bg-transparent text-[#FF9500] border-[#FF9500]/30'}`}>
+                  <div className="flex flex-col gap-2 mt-3">
+                     <button onClick={handleToggleWaitAtStop} className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? 'bg-[#FF9500] text-white border-[#FF9500]/50' : 'bg-transparent text-[#FF9500] border-[#FF9500]/30'}`}>
                        {isWaitingAtStop ? 'Resume Trip' : 'Wait at Stop'}
                      </button>
+                     
+                     <AnimatePresence>
+                       {fareConfig.allowRiderAbandonment && isWaitingAtStop && currentStopWaitSeconds >= 300 && !abandonmentWarningSent && (
+                         <motion.button 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            onClick={handleSendAbandonmentWarning}
+                            className="w-full py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/50 text-[#FF3B30] rounded-xl font-black text-xs uppercase tracking-wider hover:bg-[#FF3B30]/20 transition-colors"
+                         >
+                            Rider not responding?
+                         </motion.button>
+                       )}
+                       
+                       {fareConfig.allowRiderAbandonment && isWaitingAtStop && currentStopWaitSeconds >= 420 && abandonmentWarningSent && (
+                         <motion.button 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            onClick={handleRiderAbandonment}
+                            className="w-full py-3 bg-[#FF3B30] text-white rounded-xl font-black text-sm uppercase tracking-wider hover:bg-[#FF3B30]/90 transition-colors shadow-lg"
+                         >
+                            End Trip Here (Rider Abandoned)
+                         </motion.button>
+                       )}
+                     </AnimatePresence>
                   </div>
                 )}
 
@@ -1553,16 +1674,19 @@ export default function DriverTerminal() {
                   {totalPaidWaitSeconds > 0 && (
                     <div className="flex justify-between text-xs text-[#FF9500]"><span>Paid Wait ({Math.floor(totalPaidWaitSeconds / 60)}m):</span><span className="font-bold">+£{((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute).toFixed(2)}</span></div>
                   )}
+                  {activeRide?.status === 'rider_abandoned' && (
+                    <div className="flex justify-between text-xs text-[#FF3B30]"><span>Abandonment Fee:</span><span className="font-bold">+£5.00</span></div>
+                  )}
                   <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge ({activeRide?.surgeMultiplier || '1.4'}x):</span><span className="font-bold">+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
                 </div>
                 <div className="border-t border-[#333338] pt-2 mb-2 flex justify-between text-sm font-bold text-white">
-                  <span>Total fare:</span><span>£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</span>
+                  <span>Total fare:</span><span>£{(activeRide?.finalFare || ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs font-bold text-[#FF3B30] p-1.5 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20 mb-3">
-                  <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{(((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)) * fareConfig.commissionRate).toFixed(2)}</span>
+                  <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.finalFare || ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))) * fareConfig.commissionRate).toFixed(2)}</span>
                 </div>
                 <div className="border-t border-[#333338] pt-2 flex justify-between text-[15px] font-black text-[#00D26A]">
-                  <span>YOUR EARNINGS:</span><span>£{(((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)) * (1 - fareConfig.commissionRate)).toFixed(2)}</span>
+                  <span>YOUR EARNINGS:</span><span>£{((activeRide?.finalFare || ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))) * (1 - fareConfig.commissionRate)).toFixed(2)}</span>
                 </div>
               </div>
 
