@@ -164,6 +164,7 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "postcode": { "type": "string" },
+        "fullAddress": { "type": "string" },
         "urgency": { "type": "string" },
         "status": { "type": "string", "enum": ["posted", "quoting", "accepted", "in_progress", "completed", "cancelled", "disputed"] },
         "dispute": {

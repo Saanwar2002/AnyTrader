@@ -213,8 +213,8 @@ export default function Availability() {
   return (
     <div className="max-w-2xl mx-auto pb-24">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-50 transition-colors">
-          <ChevronLeft className="w-6 h-6 text-slate-600" />
+        <button onClick={() => navigate(-1)} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group">
+          <ChevronLeft className="w-6 h-6 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
         </button>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
           My Availability

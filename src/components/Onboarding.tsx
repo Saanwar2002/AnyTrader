@@ -426,9 +426,9 @@ export default function Onboarding() {
             <div className="space-y-6">
               <div 
                 onClick={() => logout()}
-                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2 z-[60] cursor-pointer bg-white rounded-full shadow-sm border border-slate-100"
+                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2.5 z-[60] cursor-pointer bg-white rounded-2xl shadow hover:shadow-md transition-all group border border-slate-200"
               >
-                  <ChevronLeft className="w-8 h-8" />
+                  <ChevronLeft className="w-8 h-8 group-hover:-translate-x-0.5 transition-transform" />
               </div>
               <div className="space-y-4 pt-10">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">I am a...</h2>

@@ -105,8 +105,8 @@ export default function JobTimeline() {
       {/* Header */}
       <div className="bg-[#1e3a5f] text-white p-4 sticky top-0 z-30">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
-            <ChevronLeft className="w-6 h-6" />
+          <button onClick={() => navigate(-1)} className="w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group shrink-0">
+            <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <div>
             <h1 className="text-xl font-bold">Job Timeline</h1>

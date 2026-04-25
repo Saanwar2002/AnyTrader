@@ -328,8 +328,8 @@ export default function PublicProfile() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4 relative z-50">
-          <button onClick={() => { console.log("Back button clicked"); navigate(-1); }} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-50 transition-colors">
-            <ChevronLeft className="w-6 h-6 text-slate-600" />
+          <button onClick={() => { console.log("Back button clicked"); navigate(-1); }} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group">
+            <ChevronLeft className="w-6 h-6 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <h1 className="text-2xl font-bold text-slate-900">Tradesperson Profile</h1>
         </div>
@@ -748,7 +748,7 @@ export default function PublicProfile() {
       </div>
 
       {/* Fixed Bottom Action Bar */}
-      <div className="fixed bottom-[120px] sm:bottom-0 left-4 right-4 sm:left-0 sm:right-0 bg-white/95 backdrop-blur-xl border border-slate-200 sm:border-t p-4 z-40 rounded-2xl sm:rounded-none shadow-2xl sm:shadow-none pb-safe sm:pb-4">
+      <div className="fixed bottom-4 sm:bottom-0 left-4 right-4 sm:left-0 sm:right-0 bg-white/95 backdrop-blur-xl border border-slate-200 sm:border-t p-4 z-[90] rounded-3xl sm:rounded-none shadow-2xl sm:shadow-none pb-safe sm:pb-4">
         {!currentUser ? (
           <div className="max-w-2xl mx-auto">
             <button 

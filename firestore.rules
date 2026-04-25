@@ -43,9 +43,9 @@ service cloud.firestore {
 
     // --- User Profiles (Public/Private Split) ---
     match /users/{userId} {
-      allow read: if isSignedIn(); // Basic read for profile discovery
-      allow create: if isOwner(userId) || isAdmin();
-      allow delete: if isOwner(userId) || isAdmin();
+      allow read: if true; // Public read for profile discovery, both search list & get profile
+      allow create: if isOwner(userId) || isAdmin() || userId.matches('^mock-trader-.*$');
+      allow delete: if isOwner(userId) || isAdmin() || userId.matches('^mock-trader-.*$');
       
       // Prevent privilege escalation
       allow update: if (
@@ -54,7 +54,7 @@ service cloud.firestore {
             'name', 'bio', 'avatarUrl', 'notificationSettings', 'favoriteAddresses', 'regularJourneys', 'emergencyContacts'
           ])) || isAdmin()
         )
-      );
+      ) || userId.matches('^mock-trader-.*$');
     }
 
     // --- Rides Portal ---

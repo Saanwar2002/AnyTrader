@@ -96,9 +96,9 @@ export default function Analytics() {
         <div className="flex items-center justify-between">
           <button 
             onClick={() => navigate(-1)}
-            className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"
+            className="w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <div className="flex-1 text-center">
             <h1 className="text-2xl font-bold">Job Analytics</h1>

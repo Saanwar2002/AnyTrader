@@ -44,6 +44,7 @@ import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 import { GoogleGenAI, Type } from "@google/genai";
+import { useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "sonner";
 
 const iconMap: Record<string, any> = {
@@ -99,6 +100,7 @@ export default function PostJobWizard() {
     postcode: editJob?.postcode || "",
     city: editJob?.city || "", 
     area: editJob?.area || "",
+    fullAddress: editJob?.fullAddress || "",
     photos: editJob?.photos || [] as string[],
     videos: editJob?.videos || [] as string[],
     documents: editJob?.documents || [] as { name: string; url: string }[],
@@ -112,6 +114,15 @@ export default function PostJobWizard() {
   });
   
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [addressInput, setAddressInput] = useState(editJob?.fullAddress || "");
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [addressSuggestionTimeout, setAddressSuggestionTimeout] = useState<any>(null);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
+    libraries: ['places'] as any,
+  });
   const [titleError, setTitleError] = useState("");
   const [postcodeError, setPostcodeError] = useState("");
   const [cameraMode, setCameraMode] = useState<"photo" | "video">("photo");
@@ -955,6 +966,7 @@ export default function PostJobWizard() {
           ...formData,
           city: asset?.city || finalCity,
           area: asset?.area || finalArea,
+          fullAddress: asset?.fullAddress || formData.fullAddress,
           postcode: (asset?.postcode || finalPostcode).toUpperCase(),
           description: finalDescription,
           status: editJob ? (editJob.status || "posted") : suggestedStatus,
@@ -1604,45 +1616,6 @@ export default function PostJobWizard() {
                 <p className="text-slate-500 text-sm">Help tradespeople find your location.</p>
               </div>
               <div className="space-y-4">
-                <button
-                  onClick={() => {
-                    if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(
-                        async (position) => {
-                          try {
-                            const { latitude, longitude } = position.coords;
-                            const data = await reverseLookupPostcode(latitude, longitude);
-                            if (data) {
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                city: data.city,
-                                area: data.area,
-                                postcode: data.postcode
-                              }));
-                            }
-                          } catch (err) {
-                            console.error("Error reverse geocoding:", err);
-                            setFormData(prev => ({ ...prev, city: "Detected Location" }));
-                          }
-                        },
-                        (error) => console.error(error)
-                      );
-                    }
-                  }}
-                  className="w-full p-4 rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"
-                >
-                  <MapPin className="w-5 h-5" /> Use Current Location
-                </button>
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">City</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Manchester"
-                    className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  />
-                </div>
                 <div className="space-y-1">
                   <label className="text-sm font-bold text-slate-700">Postcode</label>
                   <input 
@@ -1654,35 +1627,172 @@ export default function PostJobWizard() {
                     )}
                     value={formData.postcode}
                     onChange={(e) => {
-                      const value = e.target.value;
+                      const value = e.target.value.toUpperCase();
                       setFormData({ ...formData, postcode: value });
                       const ukPostcodeRegex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
                       if (value && !ukPostcodeRegex.test(value)) {
                         setPostcodeError("Please enter a valid UK postcode");
                       } else {
                         setPostcodeError("");
-                      }
-                    }}
-                    onBlur={async (e) => {
-                      const postcode = e.target.value;
-                      if (!postcode) return;
-                      try {
-                        const data = await lookupPostcode(postcode);
-                        if (data) {
-                          setFormData(prev => ({ 
-                            ...prev, 
-                            city: data.city,
-                            area: data.area,
-                            postcode: data.postcode // Use formatted postcode from API
-                          }));
-                          setPostcodeError("");
-                        }
-                      } catch (err) {
-                        console.error("Error looking up postcode:", err);
+                        // Auto-detect city if valid
+                        lookupPostcode(value).then(data => {
+                          if (data) {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              city: data.city,
+                              area: data.area,
+                              postcode: data.postcode
+                            }));
+                          }
+                        }).catch(console.error);
                       }
                     }}
                   />
                   {postcodeError && <p className="text-red-500 text-xs mt-1">{postcodeError}</p>}
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="text-sm font-bold text-slate-700">Select Full Address</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="Start typing your street or house number..."
+                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
+                      value={addressInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAddressInput(val);
+                        setFormData(prev => ({ ...prev, fullAddress: val })); // Keep fallback text
+                        
+                        if (addressSuggestionTimeout) clearTimeout(addressSuggestionTimeout);
+                        
+                        if (!val || val.length < 2 || !window.google) {
+                          setAddressSuggestions([]);
+                          return;
+                        }
+                        
+                        const timeout = setTimeout(async () => {
+                          try {
+                            const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
+                            const request = {
+                              input: formData.postcode ? `${val}, ${formData.postcode}` : val,
+                              includedRegionCodes: ['GB'],
+                            };
+                            const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+                            if (predictions && predictions.length > 0) {
+                              setAddressSuggestions(predictions.map((p: any) => ({
+                                label: p.placePrediction.text.text,
+                                placeId: p.placePrediction.placeId,
+                                placePrediction: p.placePrediction
+                              })));
+                            } else {
+                              setAddressSuggestions([]);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            setAddressSuggestions([]);
+                          }
+                        }, 500);
+                        setAddressSuggestionTimeout(timeout);
+                      }}
+                    />
+                    
+                    {addressSuggestions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-64 overflow-y-auto z-50">
+                        {addressSuggestions.map((suggestion, idx) => (
+                          <div 
+                            key={idx}
+                            onClick={async () => {
+                              setAddressInput(suggestion.label);
+                              setFormData(prev => ({ ...prev, fullAddress: suggestion.label }));
+                              setAddressSuggestions([]);
+                              
+                              if (!formData.postcode && suggestion.placePrediction?.placeId) {
+                                // optional: fill city/postcode from Place Details
+                                const { Place } = await window.google.maps.importLibrary("places") as any;
+                                const place = new Place({ id: suggestion.placePrediction.placeId });
+                                await place.fetchFields({ fields: ['addressComponents', 'location'] });
+                                
+                                const postcodeComp = place.addressComponents?.find((c: any) => c.types.includes("postal_code"));
+                                if (postcodeComp) {
+                                  const detectedPc = postcodeComp.longText;
+                                  const pd = await lookupPostcode(detectedPc);
+                                  if (pd) {
+                                    setFormData(prev => ({
+                                       ...prev,
+                                       postcode: pd.postcode,
+                                       city: pd.city,
+                                       area: pd.area,
+                                       fullAddress: suggestion.label
+                                    }));
+                                  } else {
+                                     setFormData(prev => ({ ...prev, postcode: detectedPc, fullAddress: suggestion.label }));
+                                  }
+                                }
+                              }
+                            }}
+                            className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 flex items-center gap-3"
+                          >
+                            <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="text-sm text-slate-700">{suggestion.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-bold text-slate-700">City (Auto-filled)</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Manchester"
+                    className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-slate-50"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          async (position) => {
+                            try {
+                              const { latitude, longitude } = position.coords;
+                              const data = await reverseLookupPostcode(latitude, longitude);
+                              if (data) {
+                                setFormData(prev => ({ 
+                                  ...prev, 
+                                  city: data.city,
+                                  area: data.area,
+                                  postcode: data.postcode
+                                }));
+                                
+                                if (window.google) {
+                                  const geocoder = new window.google.maps.Geocoder();
+                                  geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
+                                    if (status === "OK" && results?.[0]) {
+                                      setAddressInput(results[0].formatted_address);
+                                      setFormData(prev => ({ ...prev, fullAddress: results[0].formatted_address }));
+                                    }
+                                  });
+                                }
+                              }
+                            } catch (err) {
+                              console.error("Error reverse geocoding:", err);
+                              setFormData(prev => ({ ...prev, city: "Detected Location" }));
+                            }
+                          },
+                          (error) => console.error(error)
+                        );
+                      }
+                    }}
+                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white text-slate-700 font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
+                  >
+                    <MapPin className="w-5 h-5" /> Use Current Location
+                  </button>
                 </div>
               </div>
             </motion.div>

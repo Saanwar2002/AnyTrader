@@ -1789,8 +1789,8 @@ export default function JobDetails() {
               } else {
                 navigate("/");
               }
-            }} className="p-1 hover:bg-white/10 rounded-full transition-colors">
-              <ChevronLeft className="w-6 h-6" />
+            }} className="w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group shrink-0">
+              <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
             </button>
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
               <Briefcase className="w-6 h-6 text-white" />

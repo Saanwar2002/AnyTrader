@@ -287,8 +287,8 @@ export default function Chat() {
       {/* Header */}
       <div className="p-3 sm:p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <button onClick={() => navigate(-1)} className="p-1.5 sm:p-2 hover:bg-slate-200 rounded-full transition-colors shrink-0">
-            <ChevronLeft className="w-5 h-5" />
+          <button onClick={() => navigate(-1)} className="p-2 sm:p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0">
+            <ChevronLeft className="w-5 h-5 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <div className="flex flex-col min-w-0">
             <h3 className="font-bold text-slate-900 text-sm truncate">{recipientName || "Chat"}</h3>

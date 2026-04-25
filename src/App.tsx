@@ -150,9 +150,11 @@ export default function App() {
           <RecurringJobManager />
           <ReviewReminder />
           <Routes>
-          <Route path="/profile/:id" element={<PublicProfile />} />
           {!user ? (
-            <Route path="*" element={<Login />} />
+            <>
+              <Route path="/profile/:id" element={<PublicProfile />} />
+              <Route path="*" element={<Login />} />
+            </>
           ) : !profile ? (
             <Route path="*" element={<Onboarding />} />
           ) : (

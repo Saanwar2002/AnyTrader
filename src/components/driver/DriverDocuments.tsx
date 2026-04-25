@@ -56,8 +56,8 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
   return (
       <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto font-sans pb-24 absolute inset-0 z-50">
         <div className="sticky top-0 bg-[#0D0D0F]/90 backdrop-blur-xl z-20 px-4 py-4 flex items-center gap-3 border-b border-[#2C2C30]">
-           <button onClick={onBack} className="p-2 -ml-2 bg-transparent text-[#E4E4E7] active:text-white transition-colors">
-             <ChevronLeft className="w-6 h-6" />
+           <button onClick={onBack} className="w-10 h-10 bg-[#1A1A1E] border border-[#2C2C30] rounded-xl flex items-center justify-center text-[#E4E4E7] active:text-white transition-colors group">
+             <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
            </button>
            <h1 className="text-xl font-black tracking-tight">Vehicle & Docs</h1>
         </div>
