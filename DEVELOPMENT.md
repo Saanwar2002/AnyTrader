@@ -287,7 +287,16 @@ The prefix is determined by the user's primary registration role:
     *   *Geometry-Driven Map Panning:* Redesigned `MapController` offset logic in `PassengerBooking.tsx`. To compensate for the bottom UI sheet, the camera uses `L.point(x, y + window.innerHeight * 0.25)` to dynamically shove the map focal point South, effectively pushing the targeted UI Pin comfortably upwards into the visible viewport overhead. 
     *   *Intermediate Stops Engine:* Implemented full Multi-Leg routing. Sandwitched an inline "Add Stop" button (`bg-green-100` styling) allowing up to 3 intermediate waypoints. 
     *   *Routing Polylines:* Fully integrated with OSRM. Any stops appended to the state trigger a multi-coordinate array rebuild and force a live visual recalculation of the blue routing polyline snaking across the Map container. 
-## 🚕 Phase 11.9: Driver Terminal UI Polish (Completed April 23, 2026)
+## 🚕 Phase 12: AnyRide Master Admin & Driver Dashboard Revamp (Completed April 25, 2026)
+*   **The Mission:** Complete the transition of driver/rider backend management into the unified Ecosystem Admin portal, and revamp the Driver Terminal's Earnings Hub into a live system.
+*   **Master Portal Switcher:** Seamlessly embedded `AnyRideAdmin.tsx` alongside `AnyTraderAdmin.tsx` and the `Super Admin` inside a single React container (`MasterAdminLayout.tsx`). Ensures identical top-headers and unified session persistence.
+*   **Core Operational Dashboards:** Deployed real-time live map monitors (`LiveMap.tsx`), scheduling logic panels (`ScheduledRides.tsx`), and extensive active fleet dispatches (`DispatchEngine.tsx`).
+*   **Financial & Pricing Control:** Centralized variable configurations like Peak Surge algorithms, Base Fares, Vehicle classes, and Surcharge mappings via robust Admin UI inputs (`PricingFares`, `PrioritySettings`).
+*   **Safety & Compliance OS:** Built the definitive safety toolkit. Deployed a red-alert `SOSManager` to monitor critical incidents and audio ingestions. Formalized `DocumentCompliance` for tracking MOT/DBS expiration.
+*   **Driver Dashboard Revamp:** Replaced hardcoded "Mock Metrics" within the `DriverEarnings` analytics hub with a real-time historical aggregation engine computing actual `completed` trip fares (`finalFare`) and job counts traversing Stripe Connect balances over "Today", "Week", and "Month" datasets.
+*   **Support & Engagement Marketing:** Engineered multi-channel capabilities like cross-platform broadcast tools (`BroadcastMessaging`), customized `Promotions` codes, internal ticket systems, and integrated `Analytics` and Trade/Ride cross-sell funnels.
+*   **Impact:** AnyTrader's architecture is now comprehensively backed by a modern, fully-featured command center allowing real-time intervention without direct database manipulation.
+
 *   **Job Offer Card Legibility:**
     *   *Fare Visibility:* Adjusted the ride offer card anchor (`bottom-0` with `safe-area-inset-bottom` calculations) to ensure the total fare is completely visible and not obscured by the mobile navigation bar. Map viewport was adjusted accordingly.
     *   *Distance Clarity:* Redesigned the total trip distance display next to the fare. Replaced "mi total" with a clearer `({total} miles)` format, increased spacing, and changed the text color to a bright cream (`#FEF7D2`) for high-contrast, at-a-glance readability while driving.
@@ -297,5 +306,12 @@ The prefix is determined by the user's primary registration role:
     *   *Cash Payment Fallback:* Added a "Cash Received" process. If an online QR payment cannot be completed, the driver can record the trip as paid via Cash. This automatically increments a `pendingPlatformFees` ledger on the driver's profile (12% of the fare), which they can settle manually via the Analytics Hub.
     *   *Trip Conclusion Metrics Sync:* Both Stripe QR and Cash resolutions now successfully trigger native increment operations against `driver_metrics/{uid}` (tracking `dailyEarnings` & `jobsDoneToday` per day) maintaining the real-time loop with the Dashboard.
     *   *Taxi Admin Command Center:* When adding or updating features in the Driver Terminal/Passenger apps, always ensure the Taxi Admin Panel (`/admin` -> Transport) is updated if necessary to reflect these new features, data types, or statuses (e.g. tracking `pendingPlatformFees`, resolving driver metric reports).
+
+## 🏢 Phase 13: Unified Admin Subsystems (Completed April 25, 2026)
+- All admin modules (Super Admin, AnyTrader, AnyRide, Ecosystem) are now fully wired to the backend.
+- Replaced all hardcoded state in core lists with `onSnapshot` Firebase listeners.
+- **Super Admin**: Merged inside `MasterAdminLayout.tsx` and tracks global users, drivers, traders, jobs, and rides concurrently.
+- **AnyRide Modules**: Wired up `SupportTickets`, `AuditLog`, `Dashboard`, `LiveMap`, `DriversList`, `ScheduledRides`, `RidersList`, `RideHistory`, and `AdminUsers`.
+- **Ecosystem Admin**: Integrated Partners, Campaigns, and Leads.
 
 

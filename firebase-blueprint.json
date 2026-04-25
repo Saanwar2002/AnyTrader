@@ -587,6 +587,22 @@
       },
       "required": ["id", "partnerId", "title", "status", "createdAt"]
     },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "A support ticket for rider/driver issues.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subject": { "type": "string" },
+        "preview": { "type": "string" },
+        "userId": { "type": "string" },
+        "userRole": { "type": "string", "enum": ["rider", "driver"] },
+        "status": { "type": "string", "enum": ["open", "resolved"] },
+        "priority": { "type": "string", "enum": ["high", "normal", "low"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "subject", "userId", "userRole", "status", "priority", "createdAt"]
+    },
     "TaxiRide": {
       "title": "TaxiRide",
       "description": "A ride request and trip record.",
@@ -735,6 +751,10 @@
     "/campaigns/{campaignId}": {
       "schema": "Campaign",
       "description": "Monetization campaign documents."
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Support tickets for riders and drivers."
     },
     "/leads/{leadId}": {
       "schema": "Lead",

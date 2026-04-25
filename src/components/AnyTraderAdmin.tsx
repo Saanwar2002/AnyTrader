@@ -20,8 +20,7 @@ import {
 import { cn } from "@/src/lib/utils";
 import AdminTierManager from "./AdminTierManager";
 import GuestJobs from "./GuestJobs";
-import RidesCommandCenter from "./RidesCommandCenter";
-import { 
+import {  
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   Cell, PieChart as RePieChart, Pie
@@ -30,18 +29,18 @@ import {
 import { performInitialPublicRecordCheck } from "../services/verificationService";
 import { getPlatformHealthInsights, PlatformHealthInsights, generateBroadcastDraft, summarizeDisputeChat, analyzeFraudRisk, RiskAlert, analyzeDocument, suggestNewCategories, CategorySuggestion } from "../services/gemini";
 
-export default function AdminDashboard() {
+export default function AnyTraderAdmin() {
   const { user, profile } = useAuth();
   const { categories } = useCategories();
   const [searchParams, setSearchParams] = useSearchParams();
   
   const tabFromUrl = searchParams.get("tab") as any;
-  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "rides"].includes(tabFromUrl) ? tabFromUrl : "users";
+  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization"].includes(tabFromUrl) ? tabFromUrl : "users";
   
-  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "rides">(initialTab as any);
+  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization">(initialTab as any);
   
   useEffect(() => {
-    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "rides"].includes(tabFromUrl) ? tabFromUrl : "users";
+    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization"].includes(tabFromUrl) ? tabFromUrl : "users";
     if (validTab !== activeTab) {
       setActiveTab(validTab);
       setFilter(validTab === "jobs" ? "emergency" : "all");
@@ -1625,7 +1624,6 @@ export default function AdminDashboard() {
               <TabButton active={activeTab === "analytics"} onClick={() => handleTabChange("analytics")} icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
               <TabButton active={activeTab === "insights"} onClick={() => handleTabChange("insights")} icon={<Sparkles className="w-4 h-4" />} label="Insights" />
               <TabButton active={activeTab === "monetization"} onClick={() => handleTabChange("monetization")} icon={<DollarSign className="w-4 h-4" />} label="Tiers" />
-              <TabButton active={activeTab === "rides"} onClick={() => handleTabChange("rides")} icon={<Car className="w-4 h-4 text-emerald-500" />} label="Rides Command" />
             </div>
           </div>
         </div>
@@ -3232,8 +3230,6 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
-
-        {activeTab === "rides" && <RidesCommandCenter />}
         
         {activeTab === "monetization" && tempConfig && (
           <div className="p-6 space-y-12">

@@ -31,7 +31,7 @@ import FindTrades from "./components/FindTrades";
 import Portfolio from "./components/Portfolio";
 import BusinessTeamManagement from "./components/BusinessTeamManagement";
 import BillingManager from "./components/BillingManager";
-import AdminDashboard from "./components/AdminDashboard";
+import MasterAdminLayout from "./components/MasterAdminLayout";
 import EcosystemAdmin from "./components/EcosystemAdmin";
 import SavedJourneys from "./components/SavedJourneys";
 import { RecurringJobManager } from "./components/RecurringJobManager";
@@ -153,7 +153,7 @@ export default function App() {
                 <Route path="billing" element={profile?.role === "driver" ? <DriverEarnings /> : <BillingManager />} />
                 <Route path="team" element={<BusinessTeamManagement />} />
                 <Route path="find-trades" element={<FindTrades />} />
-                <Route path="admin" element={<AdminDashboard />} />
+                <Route path="admin" element={<MasterAdminLayout />} />
                 <Route path="ecosystem" element={<EcosystemAdmin />} />
                 <Route path="job/:id" element={<JobDetails />} />
                 <Route path="job/:id/timeline" element={<JobTimeline />} />
