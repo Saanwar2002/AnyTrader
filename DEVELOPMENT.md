@@ -314,4 +314,14 @@ The prefix is determined by the user's primary registration role:
 - **AnyRide Modules**: Wired up `SupportTickets`, `AuditLog`, `Dashboard`, `LiveMap`, `DriversList`, `ScheduledRides`, `RidersList`, `RideHistory`, and `AdminUsers`.
 - **Ecosystem Admin**: Integrated Partners, Campaigns, and Leads.
 
+## 🌉 Phase 14: Cross-Portal Persistent Navigation (Completed April 25, 2026)
+*   **The Mission:** Ensure users engaged in dual-portal activities (e.g. driving a taxi while a plumber is en-route to their home, or booking a ride while receiving trade quotes) never lose track of active sessions.
+*   **CrossPortalBanner:** Built a persistent, non-dismissible banner (`CrossPortalBanner.tsx`) injected directly into the core `Layout.tsx`. 
+    *   *Logic:* It uses `usePortal` to check the current environment, and runs background `onSnapshot` listeners on both `jobs` and `ride_requests`.
+    *   *Behavior:* If a user is on AnyTrader but has an active ride, a vibrant green "Ride in Progress" banner anchors the top of the screen (click-to-jump). If a user is on AnyRide but has an active trade job, a blue "Trader en route" banner appears.
+*   **Quote Motivation Badge:** Enhanced the floating `PlatformSwitcher` widget. It now queries `notifications` for unread quote alerts and appends a `red pulse` dot and a tooltip bubble (e.g., "📋 2 new quotes") specifically when the user is waiting on the AnyRide side, creating a powerful ecosystem-retention loop.
+*   **Driver Nudge Delay:** Implemented a time delay logic in `RideChat` where the driver is only allowed to send an SMS nudge to the passenger after they've been waiting at the pickup location for more than 3 minutes (180 seconds). This prevents drivers from spamming passengers immediately upon arrival during the grace period.
+*   **Priority Job Lead Notifications:** Rewrote the job notification dispatcher (`notificationService.ts`) to programmatically calculate push lead delivery times. Traders holding a tier with Priority advantages ("Gold", "Premium", "Platinum Enterprise", "Business Professional") receive instant `visibleAt` access to new posts, whereas standard accounts are dynamically time-delayed by 30 minutes, guaranteeing ecosystem ROI for paying users. Emergency jobs bypass this rule constraint.
+
+
 

@@ -1,5 +1,6 @@
 import React from "react";
 import { Star, Filter, Search, Flag, ThumbsDown, MessageSquare } from "lucide-react";
+import { cn } from "../../lib/utils";
 
 export default function RatingsReviews() {
   return (

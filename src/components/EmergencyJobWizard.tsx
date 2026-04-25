@@ -5,6 +5,7 @@ import { cn } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { lookupPostcode } from "@/src/services/postcodeService";
 import { db, collection, serverTimestamp, doc, setDoc, OperationType, handleFirestoreError, storage, ref, uploadBytesResumable, getDownloadURL, uploadBytes, uploadString, getDoc, getDocs, query, where } from "@/src/firebase";
+import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -187,15 +188,23 @@ export default function EmergencyJobWizard() {
       
       // Simulate auto-picking and notifying traders
       console.log("Notifying relevant traders for job:", jobRef.id);
-      const notificationRef = doc(collection(db, "trader_notifications"));
-      await setDoc(notificationRef, {
-        id: notificationRef.id,
-        jobId: jobRef.id,
+      await distributeJobNotifications(
+        jobRef.id,
+        formData.category,
+        formData.postcode,
+        "emergency",
+        paidBoost
+      );
+      
+      // Send urgent SMS via Backend Extension Queue
+      const smsRef = doc(collection(db, "sms_queue"));
+      await setDoc(smsRef, {
+        toRole: "tradesperson",
         category: formData.category,
-        postcode: formData.postcode.toUpperCase().replace(/\s/g, ""),
-        urgency: "emergency",
-        timestamp: serverTimestamp(),
-        processed: false
+        jobId: jobRef.id,
+        message: `EMERGENCY ALERT: New ${formData.category} job near you. Accept within 5 mins to claim.`,
+        status: "pending",
+        createdAt: serverTimestamp()
       });
       
       if (!paidBoost) {

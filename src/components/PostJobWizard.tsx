@@ -40,6 +40,7 @@ import { useCategories } from "../lib/CategoryProvider";
 import { lookupPostcode, reverseLookupPostcode } from "@/src/services/postcodeService";
 import { getJobEstimate, analyzeJobPhoto, getClarifyingQuestions, improveJobDescription, checkSafetyAndPII, type AIEstimate } from "@/src/services/gemini";
 import { db, doc, setDoc, updateDoc, collection, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, addDoc, sendNotification, getDoc, getDocs, query, where } from "@/src/firebase";
+import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -1024,15 +1025,24 @@ export default function PostJobWizard() {
 
           // Trigger matching system for the new job (standard broadcast)
           try {
-            const notificationRef = doc(collection(db, "trader_notifications"));
-            await setDoc(notificationRef, {
-              id: notificationRef.id,
-              jobId: currentJobRef.id,
+            await distributeJobNotifications(
+              currentJobRef.id,
+              formData.category,
+              asset?.postcode || formData.postcode,
+              formData.urgency,
+              paidBoost
+            );
+            
+            // Dispatch standard email notification queue
+            const emailRef = doc(collection(db, "email_queue"));
+            await setDoc(emailRef, {
+              toRole: "tradesperson",
               category: formData.category,
-              postcode: (asset?.postcode || formData.postcode).toUpperCase(),
-              urgency: formData.urgency,
-              timestamp: serverTimestamp(),
-              processed: false
+              jobId: currentJobRef.id,
+              subject: `New ${formData.category} Job near ${formData.postcode}`,
+              body: `A homeowner has posted a new job: ${formData.title}. Tap here to view and quote.`,
+              status: "pending",
+              createdAt: serverTimestamp()
             });
           } catch (err) {
             console.error("Error triggering matching system:", err);

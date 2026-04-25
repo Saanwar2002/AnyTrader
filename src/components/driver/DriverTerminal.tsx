@@ -980,6 +980,8 @@ export default function DriverTerminal() {
           onClose={() => setIsChatOpen(false)}
           otherPartyName={activeRide?.passengerName || activeRide?.name || "Passenger"}
           otherPartyPhone={activeRide?.passengerPhone || undefined}
+          passengerId={activeRide?.passengerId}
+          canSendSMS={rideState === 'waiting' && elapsedWaitSeconds >= 180}
         />
       )}
 

@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
 import { usePortal } from "../lib/PortalContext";
 import PlatformSwitcher from "./shared/PlatformSwitcher";
+import CrossPortalBanner from "./shared/CrossPortalBanner";
 
 import RoleTabBar from "./shared/RoleTabBar";
 
@@ -33,6 +34,7 @@ export default function Layout() {
   const [recentRides, setRecentRides] = useState<any[]>([]);
   const [blockedDrivers, setBlockedDrivers] = useState<string[]>([]);
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const initialNotificationsLoaded = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -201,6 +203,29 @@ export default function Layout() {
       });
       setUnreadCount(visibleUnread.length);
       setUnreadTypes(types);
+
+      if (initialNotificationsLoaded.current) {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            // Optional: You could filter out notifications that have a visibleAt in the future here as well 
+            // but usually this triggers the moment the current condition is met.
+            const visibleAt = data.visibleAt ? (data.visibleAt.toDate ? data.visibleAt.toDate() : new Date(data.visibleAt)) : now;
+            if (visibleAt <= now) {
+              toast.info(data.title || "New Notification", {
+                description: data.message || "You have a new alert.",
+                duration: 5000,
+                action: {
+                  label: "View",
+                  onClick: () => navigate("/notifications")
+                }
+              });
+            }
+          }
+        });
+      } else {
+        initialNotificationsLoaded.current = true;
+      }
     }, (error) => {
       console.error("Error fetching unread notifications:", error);
       handleFirestoreError(error, OperationType.LIST, "notifications");
@@ -342,6 +367,9 @@ export default function Layout() {
           </Link>
         </div>
       )}
+
+      {/* Cross-Portal Activity Banner */}
+      <CrossPortalBanner />
 
       {/* Header */}
       {!isDriverTerminal && activePortal !== 'anyride' && (

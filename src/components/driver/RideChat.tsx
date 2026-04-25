@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/src/firebase';
 import { useAuth } from '@/src/components/AuthProvider';
-import { X, Send, MessageSquare, Phone } from 'lucide-react';
+import { X, Send, MessageSquare, Phone, BellRing } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
+import { toast } from 'sonner';
 
 interface RideChatProps {
   rideId: string;
@@ -12,9 +13,11 @@ interface RideChatProps {
   onClose: () => void;
   otherPartyName: string;
   otherPartyPhone?: string;
+  passengerId?: string;
+  canSendSMS?: boolean;
 }
 
-export default function RideChat({ rideId, isOpen, onClose, otherPartyName, otherPartyPhone }: RideChatProps) {
+export default function RideChat({ rideId, isOpen, onClose, otherPartyName, otherPartyPhone, passengerId, canSendSMS = false }: RideChatProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -61,6 +64,27 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
     }
   };
 
+  const handleSendSMSNudge = async () => {
+    if (!passengerId) {
+       toast.error("Passenger ID not found");
+       return;
+    }
+    try {
+       const smsRef = doc(collection(db, "sms_queue"));
+       await setDoc(smsRef, {
+         toUserId: passengerId,
+         rideId: rideId,
+         message: `AnyRide: Your driver ${user?.displayName || ""} has sent you a message. Please check the app.`,
+         status: "pending",
+         createdAt: serverTimestamp()
+       });
+       toast.success("SMS Alert Sent", { description: "The passenger will receive a text message immediately." });
+    } catch (err) {
+       console.error(err);
+       toast.error("Failed to send SMS alert");
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -81,6 +105,15 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
               <p className="text-sm font-bold text-white line-clamp-1">{otherPartyName}</p>
             </div>
             <div className="flex items-center gap-2">
+              {passengerId && canSendSMS && (
+                <button 
+                  onClick={handleSendSMSNudge}
+                  className="w-8 h-8 rounded-full bg-[#252529] flex items-center justify-center hover:bg-[#333338] transition-colors"
+                  title="Send SMS Alert"
+                >
+                  <BellRing className="w-4 h-4 text-[#007AFF]" />
+                </button>
+              )}
               {otherPartyPhone && (
                 <a 
                   href={`tel:${otherPartyPhone}`}
