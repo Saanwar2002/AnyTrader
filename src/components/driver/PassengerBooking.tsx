@@ -4,7 +4,7 @@ import {
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, 
-  Home, Briefcase, Dog, Accessibility, MessageCircle
+  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle
 } from "lucide-react";
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
@@ -116,6 +116,7 @@ export default function PassengerBooking() {
   const [waitTolerance, setWaitTolerance] = useState<10 | 20 | 30>(20);
   const [selectedCategory, setSelectedCategory] = useState("standard");
   const [isPetFriendly, setIsPetFriendly] = useState(false);
+  const [isPriority, setIsPriority] = useState(false);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   
   const { isLoaded, loadError } = useJsApiLoader({
@@ -498,11 +499,12 @@ export default function PassengerBooking() {
         stops: stops.filter(s => s.coords !== null),
         distanceMiles: Number(distanceMiles.toFixed(1)),
         durationMinutes: Number(durationMinutes.toFixed(0)),
-        fareEstimate: getComputedFare(selectedCategory) + (pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0),
+        fareEstimate: getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0),
         baseCalc: fareEstimate || 5.0,
         surgeMultiplier: 1.0, 
         carCategory: selectedCategory,
         isPetFriendly,
+        isPriority,
         waitTolerance,
         comments,
         unpaidCancellationFeesOwed: pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0,
@@ -588,6 +590,8 @@ export default function PassengerBooking() {
              code: data.handshakeCode || "---", 
              phone: data.driverPhone || "", 
              status: "accepted",
+             fareEstimate: data.fareEstimate || 0,
+             rating: data.driverRating || "4.8",
              acceptedAt: data.acceptedAt?.toMillis() || Date.now()
           });
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
@@ -954,6 +958,15 @@ export default function PassengerBooking() {
                   </div>
 
                   <div className="space-y-4 pt-2">
+                    {/* Distance & ETA */}
+                    {distanceMiles > 0 && (
+                      <div className="flex items-center gap-2 px-1 mb-2">
+                        <MapPin className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-bold text-text-main">{distanceMiles.toFixed(1)} miles</span>
+                        <span className="text-text-muted text-lg leading-none mb-1">•</span>
+                        <span className="text-sm font-bold text-text-main">~{durationMinutes.toFixed(0)} min</span>
+                      </div>
+                    )}
                     <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x px-1">
                       {CAR_CATEGORIES.map((cat) => {
                         const active = selectedCategory === cat.id;
@@ -967,9 +980,61 @@ export default function PassengerBooking() {
                       })}
                     </div>
                     
-                    <button onClick={handleConfirmBooking} disabled={!pickup || !dropoff} className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all">
-                      Confirm {CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}
-                    </button>
+                    {/* Add-Ons */}
+                    <div className="space-y-3 pt-2">
+                       <label className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border-main cursor-pointer" onClick={() => setIsPriority(!isPriority)}>
+                          <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 bg-warning/10 rounded-xl flex items-center justify-center">
+                               <Zap className="w-5 h-5 text-warning" />
+                             </div>
+                             <div>
+                               <p className="font-bold text-text-main text-sm">Priority</p>
+                               <p className="text-[10px] text-text-muted mt-0.5">Skip the queue +£3</p>
+                             </div>
+                          </div>
+                          <div className={`w-11 h-6 rounded-full transition-colors relative ${isPriority ? 'bg-primary' : 'bg-border-main'}`}>
+                            <div className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full transition-transform ${isPriority ? 'right-1' : 'left-1'}`} />
+                          </div>
+                       </label>
+                       
+                       <label className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border-main cursor-pointer" onClick={() => setIsPetFriendly(!isPetFriendly)}>
+                          <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                               <Dog className="w-5 h-5 text-primary" />
+                             </div>
+                             <div>
+                               <p className="font-bold text-text-main text-sm">Pet Friendly</p>
+                               <p className="text-[10px] text-text-muted mt-0.5">Travelling with a pet +£3</p>
+                             </div>
+                          </div>
+                          <div className={`w-11 h-6 rounded-full transition-colors relative ${isPetFriendly ? 'bg-primary' : 'bg-border-main'}`}>
+                            <div className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full transition-transform ${isPetFriendly ? 'right-1' : 'left-1'}`} />
+                          </div>
+                       </label>
+                    </div>
+                    
+                    {/* Fare Summary */}
+                    <div className="bg-surface rounded-2xl p-4 text-left border border-border-main">
+                      <p className="text-[10px] font-black uppercase text-text-muted tracking-widest mb-3 border-b border-border-main pb-2">Fare Breakdown</p>
+                      <div className="space-y-1.5 mb-3">
+                        <div className="flex justify-between text-xs text-text-muted"><span>Base fare:</span><span className="text-text-main">£{(fareEstimate || 5.0).toFixed(2)}</span></div>
+                        <div className="flex justify-between text-xs text-text-muted"><span>Vehicle ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}):</span><span className="text-text-main">£{getComputedFare(selectedCategory).toFixed(2)}</span></div>
+                        {isPriority && <div className="flex justify-between text-xs text-warning"><span>Priority:</span><span className="font-bold">+£3.00</span></div>}
+                        {isPetFriendly && <div className="flex justify-between text-xs text-primary"><span>Pet:</span><span className="font-bold">+£3.00</span></div>}
+                      </div>
+                      <div className="border-t border-border-main pt-2 flex justify-between text-sm font-bold text-text-main">
+                        <span>Total estimate:</span>
+                        <span>£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0)).toFixed(2)}</span>
+                      </div>
+                      <p className="text-[9px] text-text-muted italic mt-2 text-center">Final fare may vary based on route</p>
+                    </div>
+
+                    <div className="pt-2">
+                       <p className="text-center text-xs font-bold text-text-muted mb-3">Pay via QR code at end of ride</p>
+                       <button onClick={handleConfirmBooking} disabled={!pickup || !dropoff} className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all">
+                         Confirm {CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}
+                       </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -998,11 +1063,26 @@ export default function PassengerBooking() {
                      </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-4 mb-6">
-                     <div className="w-16 h-16 bg-trust/10 rounded-2xl flex items-center justify-center"><Check className="w-8 h-8 text-trust" /></div>
-                     <div>
-                       <h2 className="text-2xl font-black text-text-main tracking-tight">Driver Assigned</h2>
-                       <p className="text-text-muted font-bold text-sm">{assignedDriverInfo?.name} • {assignedDriverInfo?.vehicle}</p>
+                  <div className="flex flex-col mb-6">
+                     <h2 className="text-2xl font-black text-text-main tracking-tight mb-4">{assignedDriverInfo?.status === "en_route_pickup" ? "Driver is on the way" : "Driver found!"}</h2>
+                     <div className="flex flex-col md:flex-row md:items-center justify-between bg-surface border border-border-main p-4 rounded-3xl shadow-sm gap-4">
+                       <div className="flex items-center gap-4">
+                         <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo?.name || "driver"}`} alt="Driver" className="w-14 h-14 rounded-full border border-border-main shadow-sm bg-card object-cover" />
+                         <div>
+                           <div className="flex items-center gap-2">
+                             <p className="font-black text-lg text-text-main">{assignedDriverInfo?.name || "Assigning..."}</p>
+                             <div className="flex items-center gap-1 bg-card px-1.5 py-0.5 rounded-md border border-border-main">
+                               <Star className="w-3 h-3 text-warning fill-warning" />
+                               <span className="text-xs font-bold text-text-main">{assignedDriverInfo?.rating || "4.8"}</span>
+                             </div>
+                           </div>
+                           <p className="text-xs font-bold text-text-muted mt-0.5">{assignedDriverInfo?.vehicle || "Silver Toyota Prius"}</p>
+                         </div>
+                       </div>
+                       
+                       <div className="bg-[#FFCC00] rounded-lg border-2 border-black px-3 py-1 flex items-center justify-center shadow-sm w-fit">
+                          <p className="font-mono font-black text-black text-sm uppercase tracking-widest">{assignedDriverInfo?.plate || "WK71 BCF"}</p>
+                       </div>
                      </div>
                   </div>
                 )}
@@ -1016,30 +1096,25 @@ export default function PassengerBooking() {
                    </div>
                 )}
 
-                <div className="mb-6 flex flex-col items-center justify-center p-5 bg-[#FFCC00] rounded-xl shadow-lg border-[3px] border-black">
-                   <p className="text-[10px] font-black uppercase text-black/60 mb-1">Vehicle Registration</p>
-                   <h1 className="text-5xl font-black text-black tracking-widest font-mono uppercase">
-                     {assignedDriverInfo?.plate || "WK71 BCF"}
-                   </h1>
-                </div>
-
                 <div className="grid grid-cols-2 gap-3 mb-6">
                    <div className="bg-surface p-4 rounded-2xl border border-border-main">
                       <p className="text-[10px] font-black text-text-muted uppercase mb-1">Pass Code</p>
-                      <p className="text-2xl font-black text-primary tracking-widest">{assignedDriverInfo?.code}</p>
+                      <p className="text-2xl font-black text-primary tracking-widest">{assignedDriverInfo?.code || "1234"}</p>
                    </div>
                    <div className="bg-surface p-4 rounded-2xl border border-border-main">
-                      <p className="text-[10px] font-black text-text-muted uppercase mb-1">Fixed Fare</p>
-                      <p className="text-2xl font-black text-text-main">£{fareEstimate?.toFixed(2)}</p>
+                      <p className="text-[10px] font-black text-text-muted uppercase mb-1">Total Estimate</p>
+                      <p className="text-2xl font-black text-text-main">£{(assignedDriverInfo?.fareEstimate || fareEstimate || 0).toFixed(2)}</p>
                    </div>
                 </div>
+                
                 <div className="flex gap-3 mb-4">
-                  <button onClick={() => setIsChatOpen(true)} className="w-[68px] shrink-0 bg-surface border border-border-main rounded-[20px] flex items-center justify-center active:scale-95 transition-transform"><MessageCircle className="w-6 h-6 text-primary" /></button>
-                  <button onClick={() => navigate("/my-rides")} className="flex-1 py-5 bg-text-main text-surface rounded-[20px] font-black text-lg shadow-xl shrink-0">Track Live Location</button>
+                  <button onClick={() => setIsChatOpen(true)} className="flex-1 py-4 shrink-0 bg-surface border-2 border-border-main rounded-2xl flex items-center justify-center active:scale-95 transition-transform"><MessageSquare className="w-6 h-6 text-text-main" /></button>
+                  <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-4 shrink-0 bg-surface border-2 border-border-main rounded-2xl flex items-center justify-center active:scale-95 transition-transform"><Phone className="w-6 h-6 text-text-main" /></a>
+                  <button onClick={() => navigate("/my-rides")} className="flex-[2] py-4 bg-header text-surface rounded-2xl font-black text-lg shadow-xl shrink-0">Track Live Map</button>
                 </div>
                 
                 <div className="text-center">
-                  <button onClick={handleCancelConfirmed} className="text-xs font-bold text-danger uppercase tracking-widest py-2 px-4 hover:bg-danger/5 rounded-lg transition-colors">
+                  <button onClick={handleCancelConfirmed} className="text-xs font-bold text-danger uppercase tracking-widest py-3 px-8 border border-danger/20 hover:bg-danger/5 rounded-xl transition-colors">
                     Cancel Ride
                   </button>
                 </div>
