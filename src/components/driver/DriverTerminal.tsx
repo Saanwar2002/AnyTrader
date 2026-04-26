@@ -225,7 +225,8 @@ export default function DriverTerminal() {
           durationMinutes: data.durationMinutes || 0,
           comments: data.comments || data.instructions || "",
           isReal: true,
-          offerExpiresAt: data.offerExpiresAt
+          offerExpiresAt: data.offerExpiresAt,
+          isPriority: data.isPriority || false
         });
         
         // Calculate remaining time for the offer
@@ -414,6 +415,7 @@ export default function DriverTerminal() {
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
       comments: "Please ring the bell, the baby is sleeping. Thanks!",
+      isPriority: Math.random() > 0.5,
       isReal: false
     });
 
@@ -1232,11 +1234,14 @@ export default function DriverTerminal() {
               {/* Highlight header */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
 
-              <div className="flex items-center justify-center mb-3 shrink-0">
+              <div className="flex items-center justify-between mb-3 shrink-0">
                 <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
                   <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
                   New Ride Request
                 </h2>
+                {activeRide?.isPriority && (
+                  <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-3 h-3 fill-amber-950" /> Priority</div>
+                )}
               </div>
 
               <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-2">

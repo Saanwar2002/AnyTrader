@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, doc, updateDoc, arrayRemove } from "@/src/firebase";
 import { motion } from "motion/react";
-import { Car, MapPin, Loader2, Bookmark, Trash2, ArrowRight } from "lucide-react";
+import { MapPin, Bookmark, Trash2, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function SavedJourneys() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const savedJourneys = profile?.savedJourneys || [];
+  const savedJourneys = profile?.regularJourneys || [];
 
   const handleRemoveJourney = async (journey: any) => {
     if (!user) return;
@@ -18,7 +18,7 @@ export default function SavedJourneys() {
     setLoading(true);
     try {
       await updateDoc(doc(db, "users", user.uid), {
-        savedJourneys: arrayRemove(journey)
+        regularJourneys: arrayRemove(journey)
       });
     } catch (err) {
       console.error("Failed to remove journey:", err);
@@ -27,10 +27,15 @@ export default function SavedJourneys() {
     }
   };
 
-  const handleBookJourney = (journey: any) => {
+  const handleBookJourney = (journey: any, reverse = false) => {
     const params = new URLSearchParams();
-    if (journey.pickup) params.set("pickup", journey.pickup);
-    if (journey.dropoff) params.set("dropoff", journey.dropoff);
+    if (reverse) {
+      if (journey.to) params.set("pickup", journey.to);
+      if (journey.from) params.set("dropoff", journey.from);
+    } else {
+      if (journey.from) params.set("pickup", journey.from);
+      if (journey.to) params.set("dropoff", journey.to);
+    }
     navigate(`/book-ride?${params.toString()}`);
   };
 
@@ -71,17 +76,20 @@ export default function SavedJourneys() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
-              key={`${journey.pickup}-${journey.dropoff}-${idx}`}
+              key={`${journey.from}-${journey.to}-${idx}`}
               className="bg-card rounded-3xl border border-border-main shadow-sm overflow-hidden p-4 group"
             >
               <div className="space-y-4 mb-4">
+                {journey.name && (
+                  <h3 className="text-sm font-black text-slate-800">{journey.name}</h3>
+                )}
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-surface border border-border-main flex items-center justify-center shrink-0 mt-0.5">
                     <div className="w-2.5 h-2.5 rounded-full bg-primary" />
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">Pickup</p>
-                    <p className="text-sm font-bold text-text-main line-clamp-1">{journey.pickup}</p>
+                    <p className="text-sm font-bold text-text-main line-clamp-1">{journey.from}</p>
                   </div>
                 </div>
 
@@ -93,7 +101,7 @@ export default function SavedJourneys() {
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">Dropoff</p>
-                    <p className="text-sm font-bold text-text-main line-clamp-1">{journey.dropoff}</p>
+                    <p className="text-sm font-bold text-text-main line-clamp-1">{journey.to}</p>
                   </div>
                 </div>
               </div>
@@ -103,12 +111,27 @@ export default function SavedJourneys() {
                   onClick={() => handleRemoveJourney(journey)}
                   disabled={loading}
                   className="p-3 text-text-muted bg-surface rounded-xl hover:bg-danger/10 hover:text-danger transition-colors disabled:opacity-50"
+                  title="Remove"
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>
+                <div className="flex w-full gap-2 hidden group-hover:flex">
+                  <button
+                    onClick={() => handleBookJourney(journey, false)}
+                    className="flex-1 flex items-center justify-center gap-1 py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-xs hover:bg-emerald-100 transition-colors"
+                  >
+                    Go
+                  </button>
+                  <button
+                    onClick={() => handleBookJourney(journey, true)}
+                    className="flex-1 flex items-center justify-center gap-1 py-3 bg-orange-50 text-orange-700 rounded-xl font-bold text-xs hover:bg-orange-100 transition-colors"
+                  >
+                    Return
+                  </button>
+                </div>
                 <button
-                  onClick={() => handleBookJourney(journey)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl font-black text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+                  onClick={() => handleBookJourney(journey, false)}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl font-black text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 group-hover:hidden"
                 >
                   Book This Journey <ArrowRight className="w-4 h-4 opacity-70" />
                 </button>

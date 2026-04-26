@@ -35,6 +35,7 @@ const mapOptions: google.maps.MapOptions = {
   streetViewControl: false,
   mapTypeControl: false,
   fullscreenControl: false,
+  gestureHandling: "greedy",
   styles: [
     {
       "featureType": "poi",
@@ -155,6 +156,37 @@ function SearchingTimer() {
   );
 }
 
+function CancelRideButton_ConfirmedPhase({ acceptedAt, onCancel }: { acceptedAt: number, onCancel: () => void }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    setElapsed(Math.floor((Date.now() - acceptedAt) / 1000));
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - acceptedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [acceptedAt]);
+
+  const timeLimit = 120; // 2 minutes
+  const isFree = elapsed < timeLimit;
+  const remaining = isFree ? timeLimit - elapsed : 0;
+  const mins = Math.floor(remaining / 60);
+  const secs = (remaining % 60).toString().padStart(2, '0');
+
+  return (
+    <button onClick={onCancel} className={cn("text-xs font-bold uppercase tracking-widest py-3 px-8 border transition-colors flex items-center justify-center gap-2 mx-auto rounded-xl", 
+      isFree ? "border-emerald-500/50 text-emerald-600 hover:bg-emerald-50" : "border-danger/20 text-danger hover:bg-danger/5"
+    )}>
+      Cancel Ride
+      {isFree ? (
+        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-mono">{mins}:{secs}</span>
+      ) : (
+        <span className="bg-danger/10 text-danger px-2 py-0.5 rounded-md font-mono">Fee Applies</span>
+      )}
+    </button>
+  );
+}
+
 export default function PassengerBooking() {
   const { user, profile } = useAuth();
   const { theme, switchPortal } = usePortal();
@@ -210,6 +242,7 @@ export default function PassengerBooking() {
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showRegularJourneys, setShowRegularJourneys] = useState(false);
   
   const [detailsView, setDetailsView] = useState<"address" | "vehicle">("address");
 
@@ -596,19 +629,24 @@ export default function PassengerBooking() {
     } catch (err) { setStep("details"); }
   };
 
-  const handleBoostPriority = async () => {
-    if (!currentRideId || isPriority) return;
+  const handleTogglePriority = async () => {
+    if (!currentRideId) return;
+    const newPriority = !isPriority;
     try {
-      setIsPriority(true);
+      setIsPriority(newPriority);
       await updateDoc(doc(db, "ride_requests", currentRideId), {
-         isPriority: true,
-         fareEstimate: increment(3)
+         isPriority: newPriority,
+         fareEstimate: increment(newPriority ? 3 : -3)
       });
-      toast.success("Priority Boost Activated!");
+      if (newPriority) {
+        toast.success("Priority Boost Activated! (+£3)");
+      } else {
+        toast.info("Priority Boost Removed (-£3)");
+      }
     } catch (e) {
       console.error(e);
-      setIsPriority(false);
-      toast.error("Failed to boost priority");
+      setIsPriority(!newPriority);
+      toast.error("Failed to update priority");
     }
   };
 
@@ -618,6 +656,21 @@ export default function PassengerBooking() {
     }
     setStep("details");
     setCurrentRideId(null);
+  };
+
+  const handleAbandonSearch = async () => {
+    if (currentRideId) {
+      try {
+        await updateDoc(doc(db, "ride_requests", currentRideId), { status: "cancelled", cancelledBy: "passenger", cancelledAt: serverTimestamp() });
+      } catch (err) {
+        console.error("Cancel failed", err);
+      }
+    }
+    setStep("details");
+    setCurrentRideId(null);
+    setDropoff("");
+    setDropoffCoords(null);
+    setPickupCoords(null);
   };
 
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
@@ -1120,10 +1173,98 @@ export default function PassengerBooking() {
                       </AnimatePresence>
                       
                       <div className="flex gap-2 py-2 ml-6 overflow-x-auto no-scrollbar pr-1">
-                        <button onClick={() => { setDropoff(profile?.homeAddress || "Home"); if (pickup) setDetailsView("vehicle"); }} className="flex-none px-4 py-2 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm"><Home className="w-4 h-4 text-blue-500" /> Home</button>
-                        <button onClick={() => { setDropoff(profile?.workAddress || "Work"); if (pickup) setDetailsView("vehicle"); }} className="flex-none px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"><Briefcase className="w-4 h-4 text-indigo-500" /> Work</button>
-                        <button onClick={() => { toast.info("Regular Journeys feature coming soon!"); }} className="flex-none px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors shadow-sm"><History className="w-4 h-4 text-emerald-500" /> Regular Journeys</button>
+                        <button 
+                          onClick={() => { 
+                            const home = favoriteAddresses.find(f => f.name.toLowerCase() === 'home');
+                            if (!home) {
+                              toast.info("Please save an address as 'Home' to use this quick link.");
+                            } else {
+                              setDropoff(home.address); 
+                              if (pickup) setDetailsView("vehicle"); 
+                            }
+                          }} 
+                          className="flex-none px-4 py-2 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm"
+                        >
+                          <Home className="w-4 h-4 text-blue-500" /> Home
+                        </button>
+                        <button 
+                          onClick={() => { 
+                            const work = favoriteAddresses.find(f => f.name.toLowerCase() === 'work');
+                            if (!work) {
+                              toast.info("Please save an address as 'Work' to use this quick link.");
+                            } else {
+                              setDropoff(work.address); 
+                              if (pickup) setDetailsView("vehicle"); 
+                            }
+                          }} 
+                          className="flex-none px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"
+                        >
+                          <Briefcase className="w-4 h-4 text-indigo-500" /> Work
+                        </button>
+                        <button 
+                          onClick={() => setShowRegularJourneys(!showRegularJourneys)} 
+                          className={cn("flex-none px-4 py-2 border rounded-2xl flex items-center gap-2 text-[12px] font-bold transition-colors shadow-sm", showRegularJourneys ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300")}
+                        >
+                          <History className="w-4 h-4 text-emerald-500" /> Regular Journeys
+                        </button>
                       </div>
+
+                      <AnimatePresence>
+                        {showRegularJourneys && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: "auto" }} 
+                            exit={{ opacity: 0, height: 0 }} 
+                            className="ml-6 overflow-hidden pr-1"
+                          >
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2">
+                              {profile?.regularJourneys && profile.regularJourneys.length > 0 ? (
+                                profile.regularJourneys.map((j: any, idx: number) => (
+                                  <div key={idx} className="flex flex-col gap-2 p-2 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                    <div className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1 mb-1">{j.name || "Saved Route"}</div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <MapPin className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                                      <span className="font-semibold text-slate-600 truncate">{j.from}</span>
+                                    </div>
+                                    <div className="w-0.5 h-2 bg-slate-200 ml-1.5" />
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <MapPin className="w-3 h-3 text-red-500 flex-shrink-0" />
+                                      <span className="font-semibold text-slate-600 truncate">{j.to}</span>
+                                    </div>
+                                    <div className="flex gap-2 mt-2">
+                                      <button 
+                                        onClick={() => {
+                                          setPickup(j.from);
+                                          setDropoff(j.to);
+                                          setDetailsView("vehicle");
+                                        }}
+                                        className="flex-1 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
+                                      >
+                                        Book Outward
+                                      </button>
+                                      <button 
+                                        onClick={() => {
+                                          setPickup(j.to);
+                                          setDropoff(j.from);
+                                          setDetailsView("vehicle");
+                                        }}
+                                        className="flex-1 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"
+                                      >
+                                        Book Return
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-center py-4">
+                                  <p className="text-xs text-slate-500 font-medium mb-3">No regular journeys saved yet.</p>
+                                  <p className="text-[10px] text-slate-400">Save routes in My Rides as regular journeys.</p>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </div>
 
@@ -1277,7 +1418,7 @@ export default function PassengerBooking() {
             )}
 
             {step === "searching" && (
-              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-8 pb-[calc(4rem+env(safe-area-inset-bottom)+2rem)] flex flex-col items-center border-t border-border-main">
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-8 pb-[calc(4rem+env(safe-area-inset-bottom)+2rem)] flex flex-col items-center border-t border-border-main pointer-events-auto">
                 <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center relative mb-4">
                   <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
                   <Car className="w-10 h-10 text-primary animate-pulse" />
@@ -1287,30 +1428,31 @@ export default function PassengerBooking() {
                 
                 <SearchingTimer />
                 
-                {!isPriority && (
-                  <div onClick={handleBoostPriority} className="w-full max-w-xs mt-4 mb-2 bg-gradient-to-r from-amber-200 to-amber-300 rounded-2xl p-4 shadow-sm border border-amber-400 relative overflow-hidden group cursor-pointer active:scale-95 transition-all">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-400/50 rounded-full blur-xl group-hover:scale-150 transition-transform"></div>
-                    <div className="flex items-start gap-3 relative z-10">
-                      <div className="p-2 bg-white/50 rounded-full shrink-0">
-                        <Zap className="w-5 h-5 text-amber-700" />
-                      </div>
-                      <div>
-                        <h4 className="text-amber-950 font-black text-sm">Boost Priority</h4>
-                        <p className="text-amber-800 text-[11px] font-semibold leading-tight mt-0.5">Jump to the top of the queue. Get a driver faster.</p>
-                      </div>
+                <div onClick={handleTogglePriority} className="w-full max-w-xs mt-4 mb-2 bg-gradient-to-r from-amber-200 to-amber-300 rounded-2xl p-4 shadow-sm border border-amber-400 relative overflow-hidden group cursor-pointer active:scale-95 transition-all">
+                  <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-400/50 rounded-full blur-xl group-hover:scale-150 transition-transform"></div>
+                  <div className="flex items-center gap-3 relative z-10 w-full">
+                    <div className="p-2 bg-white/50 rounded-full shrink-0">
+                      <Zap className="w-5 h-5 text-amber-700" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-amber-950 font-black text-sm">Boost Priority (+£3)</h4>
+                      <p className="text-amber-800 text-[11px] font-semibold leading-tight mt-0.5">Jump to the top of the queue.</p>
+                    </div>
+                    <div className={cn("w-10 h-6 rounded-full p-1 transition-colors relative flex items-center shrink-0", isPriority ? "bg-amber-600" : "bg-black/20")}>
+                      <div className={cn("w-4 h-4 bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
                     </div>
                   </div>
-                )}
+                </div>
 
                 <div className="flex gap-4 w-full max-w-xs mt-2">
                   <button onClick={handleCancelSearching} className="flex-1 text-text-main font-black text-sm py-4 rounded-2xl border-2 border-border-main hover:bg-surface transition-colors active:scale-95">Edit</button>
-                  <button onClick={handleCancelSearching} className="flex-1 text-danger font-black text-sm py-4 rounded-2xl bg-danger/5 border-2 border-danger/10 hover:bg-danger/10 shadow-sm active:scale-95 transition-colors">Cancel</button>
+                  <button onClick={handleAbandonSearch} className="flex-1 text-danger font-black text-sm py-4 rounded-2xl bg-danger/5 border-2 border-danger/10 hover:bg-danger/10 shadow-sm active:scale-95 transition-colors">Cancel</button>
                 </div>
               </motion.div>
             )}
 
             {step === "confirmed" && (
-              <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] border-t border-border-main">
+              <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] border-t border-border-main pointer-events-auto">
                 {assignedDriverInfo?.status === "arrived" ? (
                   <div className="flex items-center gap-4 mb-6">
                      <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center"><Clock className="w-8 h-8 text-warning animate-pulse" /></div>
@@ -1375,9 +1517,7 @@ export default function PassengerBooking() {
                 </div>
                 
                 <div className="text-center">
-                  <button onClick={handleCancelConfirmed} className="text-xs font-bold text-danger uppercase tracking-widest py-3 px-8 border border-danger/20 hover:bg-danger/5 rounded-xl transition-colors">
-                    Cancel Ride
-                  </button>
+                  <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
                 </div>
                 
                 <AnimatePresence>

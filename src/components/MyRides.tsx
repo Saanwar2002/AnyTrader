@@ -13,14 +13,15 @@ export default function MyRides() {
   const [rides, setRides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "completed">("active");
 
   const handleSaveJourney = async (ride: any) => {
     if (!user) return;
     try {
       await updateDoc(doc(db, "users", user.uid), {
-        savedJourneys: arrayUnion({
-          pickup: ride.pickup,
-          dropoff: ride.dropoff
+        regularJourneys: arrayUnion({
+          from: ride.pickup,
+          to: ride.dropoff
         })
       });
       toast.success("Journey saved to regulars!");
@@ -77,35 +78,74 @@ export default function MyRides() {
     );
   }
 
+  const filteredRides = rides.filter(ride => {
+    if (activeTab === "active") {
+      return ride.status !== "completed" && ride.status !== "cancelled";
+    }
+    return ride.status === activeTab;
+  });
+
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 pb-24">
       {/* Header */}
       <div className="bg-white px-4 py-6 border-b border-slate-100 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-tight">My Rides</h1>
-            <p className="text-slate-500 font-medium text-sm mt-1">View your ride history and receipts</p>
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-tight">My Rides</h1>
+              <p className="text-slate-500 font-medium text-sm mt-1">View your ride history and receipts</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+              <Car className="w-6 h-6" />
+            </div>
           </div>
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-            <Car className="w-6 h-6" />
+          
+          <div className="flex bg-slate-100 p-1 rounded-2xl">
+            <button
+              onClick={() => setActiveTab("active")}
+              className={cn(
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
+                activeTab === "active" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+              )}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => setActiveTab("cancelled")}
+              className={cn(
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
+                activeTab === "cancelled" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+              )}
+            >
+              Cancelled
+            </button>
+            <button
+              onClick={() => setActiveTab("completed")}
+              className={cn(
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
+                activeTab === "completed" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+              )}
+            >
+              Completed
+            </button>
           </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="max-w-2xl mx-auto p-4 space-y-4">
-        {rides.length === 0 ? (
+        {filteredRides.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <Car className="w-8 h-8 text-slate-300" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No rides yet</h3>
+            <h3 className="text-lg font-bold text-slate-900">No {activeTab} rides yet</h3>
             <p className="text-sm text-slate-500 mt-1 mb-6 max-w-[250px] mx-auto">
-              When you book a ride, it will appear here.
+              When you have {activeTab} rides, they will appear here.
             </p>
           </div>
         ) : (
-          rides.map((ride, idx) => (
+          filteredRides.map((ride, idx) => (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}

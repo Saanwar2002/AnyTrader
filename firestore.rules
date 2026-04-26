@@ -59,10 +59,14 @@ service cloud.firestore {
 
     // --- Rides Portal ---
     match /ride_requests/{rideId} {
-      allow read: if isSignedIn() && (resource.data.riderId == request.auth.uid || resource.data.driverId == request.auth.uid || resource.data.assignedDriverId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.get('riderId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && request.resource.data.riderId == request.auth.uid;
       allow update: if isSignedIn() && (
-        (resource.data.riderId == request.auth.uid || resource.data.driverId == request.auth.uid || request.resource.data.driverId == request.auth.uid || request.resource.data.assignedDriverId == request.auth.uid || isAdmin())
+        resource.data.get('riderId', '') == request.auth.uid || 
+        resource.data.get('driverId', '') == request.auth.uid || 
+        request.resource.data.get('driverId', '') == request.auth.uid || 
+        request.resource.data.get('assignedDriverId', '') == request.auth.uid || 
+        isAdmin()
       );
       allow list: if isSignedIn();
 
