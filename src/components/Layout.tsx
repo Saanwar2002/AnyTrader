@@ -299,7 +299,7 @@ export default function Layout() {
   ];
 
   const passengerNav = [
-    { name: "Book Ride", path: "/book-ride", icon: Car, isCta: false },
+    { name: "Taxi", path: "/book-ride", icon: Car, isCta: false },
     { name: "My Rides", path: "/my-rides", icon: MapPin, isCta: false },
     { name: "Saved", path: "/saved-journeys", icon: Bookmark, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
