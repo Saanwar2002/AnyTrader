@@ -1344,9 +1344,17 @@ export default function DriverTerminal() {
                           <p className="text-[12px] text-[#E4E4E7] font-medium mt-0.5">3 min • 1.2 miles</p>
                         </div>
 
-                        <div className="relative">
-                          <div className="absolute w-3.5 h-3.5 bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                          <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Drop-off</p>
+                        {(activeRide?.stops || []).map((stop: any, idx: number) => (
+                          <div key={idx} className="relative mt-3">
+                            <div className="absolute w-3.5 h-3.5 rounded-full bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
+                            <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
+                            <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stop.address}</p>
+                          </div>
+                        ))}
+
+                        <div className="relative mt-3">
+                          <div className="absolute w-3.5 h-3.5 bg-[#FF3B30] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
+                          <p className="text-[10px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
                           <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                           <p className="text-[12px] text-[#E4E4E7] font-medium mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
                         </div>

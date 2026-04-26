@@ -1147,8 +1147,14 @@ export default function PassengerBooking() {
                           <div className="w-2 h-2 rounded-full border-2 border-text-main bg-surface shrink-0" />
                           <span className="text-sm font-bold text-text-main truncate max-w-full">{pickup || "Current Location"}</span>
                         </div>
+                        {stops.map((stop, i) => stop.address ? (
+                          <div key={i} className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-surface shrink-0" />
+                            <span className="text-sm font-bold text-text-main truncate max-w-full">{stop.address}</span>
+                          </div>
+                        ) : null)}
                         <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full border-2 border-transparent bg-header shrink-0 mx-[2px] w-[5px] h-[5px]" />
+                          <div className="w-4 h-4 -ml-1 rounded-sm border-2 border-transparent bg-red-500 shrink-0 mx-[2px] w-[6px] h-[6px]" />
                           <span className="text-sm font-bold text-text-main truncate max-w-full">{dropoff}</span>
                         </div>
                       </div>
