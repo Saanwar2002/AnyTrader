@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock } from "lucide-react";
+import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { lookupPostcode } from "@/src/services/postcodeService";
@@ -8,12 +8,14 @@ import { db, collection, serverTimestamp, doc, setDoc, OperationType, handleFire
 import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { AnimatePresence, motion } from "framer-motion";
+import { useJsApiLoader } from "@react-google-maps/api";
 
 export default function EmergencyJobWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   
   const [step, setStep] = useState(1);
+  const [addressInput, setAddressInput] = useState("");
   const [formData, setFormData] = useState({
     category: "",
     description: "",
@@ -21,6 +23,7 @@ export default function EmergencyJobWizard() {
     city: "",
     area: "",
     county: "",
+    fullAddress: "",
     mobileNumber: "",
     urgency: "emergency",
     photos: [] as string[]
@@ -34,6 +37,40 @@ export default function EmergencyJobWizard() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{label: string, placeId: string, placePrediction: any}>>([]);
+  const [addressSuggestionTimeout, setAddressSuggestionTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [useRegisteredAddress, setUseRegisteredAddress] = useState(false);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    libraries: ['places'] as any,
+  });
+
+  React.useEffect(() => {
+    if (!user) return;
+    const fetchUser = async () => {
+      const uDoc = await getDoc(doc(db, "users", user.uid));
+      if (uDoc.exists()) {
+        const data = uDoc.data();
+        setUserProfile(data);
+        if (data.postcode) {
+          setUseRegisteredAddress(true);
+          setFormData(prev => ({
+            ...prev,
+            postcode: prev.postcode || data.postcode,
+            city: prev.city || data.city || "",
+            area: prev.area || data.area || "",
+            county: prev.county || data.county || "",
+            fullAddress: prev.fullAddress || data.postcode
+          }));
+        }
+      }
+    };
+    fetchUser();
+  }, [user]);
 
   const filteredCategories = TRADE_CATEGORIES.filter(cat => 
     cat.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -326,7 +363,7 @@ export default function EmergencyJobWizard() {
 
           <h2 className="text-xl font-bold">Describe the emergency</h2>
           <textarea 
-            className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+            className="w-full p-4 border-2 border-slate-300 shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal h-32 resize-none"
             placeholder="e.g. Pipe burst in kitchen..."
             rows={4}
             value={formData.description}
@@ -381,40 +418,224 @@ export default function EmergencyJobWizard() {
             )}
           </div>
 
-          <input 
-            className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 uppercase"
-            placeholder="Postcode (e.g. M1 2AB)"
-            value={formData.postcode}
-            onChange={(e) => setFormData({...formData, postcode: e.target.value})}
-            onBlur={async (e) => {
-              const postcode = e.target.value;
-              if (!postcode) return;
-              try {
-                const data = await lookupPostcode(postcode);
-                if (data) {
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    city: data.city,
-                    area: data.area,
-                    county: data.county,
-                    postcode: data.postcode
-                  }));
-                }
-              } catch (err) {
-                console.error("Error looking up postcode:", err);
-              }
-            }}
-          />
-          {formData.area && (
-            <div className="px-4 py-2 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-slate-400" />
-              <span className="text-sm text-slate-600 font-medium">
-                {formData.area}{formData.county ? `, ${formData.county}` : ""}
-              </span>
+          <div className="space-y-4">
+            <div className="relative">
+              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input 
+                className="w-full p-4 pl-12 pr-12 border-2 border-slate-300 shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
+                placeholder="Start typing your address or postcode..."
+                value={addressInput}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAddressInput(val);
+                  setUseRegisteredAddress(false);
+                  
+                  if (addressSuggestionTimeout) clearTimeout(addressSuggestionTimeout);
+                  
+                  if (!val || val.length < 2 || !window.google) {
+                    setAddressSuggestions([]);
+                    return;
+                  }
+                  
+                  const timeout = setTimeout(async () => {
+                    try {
+                      const { AutocompleteSuggestion } = await google.maps.importLibrary("places") as any;
+                      const request = {
+                        input: val,
+                        includedRegionCodes: ['gb']
+                      };
+                      
+                      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+                      
+                      if (suggestions && suggestions.length > 0) {
+                        setAddressSuggestions(suggestions.map((p: any) => ({
+                          label: p.placePrediction.text.text,
+                          placeId: p.placePrediction.placeId,
+                          placePrediction: p.placePrediction
+                        })));
+                      } else {
+                        setAddressSuggestions([]);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      setAddressSuggestions([]);
+                    }
+                  }, 500);
+                  setAddressSuggestionTimeout(timeout);
+                }}
+                onBlur={async (e) => {
+                  const val = e.target.value;
+                  if (!val || addressSuggestions.length > 0) return;
+                  if (useRegisteredAddress) return;
+                  try {
+                    const data = await lookupPostcode(val);
+                    if (data) {
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        city: data.city,
+                        area: data.area,
+                        county: data.county,
+                        postcode: data.postcode,
+                        fullAddress: data.postcode
+                      }));
+                    }
+                  } catch (err) {
+                    console.error("Error looking up postcode:", err);
+                  }
+                }}
+              />
+              
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
+                title="Auto-detect location"
+                onClick={() => {
+                  if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition(async (position) => {
+                      try {
+                        const { latitude: lat, longitude: lng } = position.coords;
+                        const geocoder = new google.maps.Geocoder();
+                        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                          if (status === "OK" && results?.[0]) {
+                            const foundAddress = results[0].formatted_address;
+                            setAddressInput(foundAddress);
+                            setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
+                            
+                            let newCity = "";
+                            let newArea = "";
+                            let newPostcode = "";
+
+                            results[0].address_components.forEach((comp) => {
+                              if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
+                              if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
+                              if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
+                            });
+
+                            if (!newPostcode) {
+                              const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                              newPostcode = pcMatch ? pcMatch[0] : "";
+                            }
+
+                            setFormData(prev => ({
+                              ...prev,
+                              city: newCity,
+                              area: newArea,
+                              postcode: newPostcode
+                            }));
+                          }
+                        });
+                      } catch (err) {
+                        console.error("Geocoding failed:", err);
+                      }
+                    });
+                  }
+                }}
+              >
+                <Locate className="w-5 h-5" />
+              </button>
+              
+              {addressSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-64 overflow-y-auto z-50">
+                  {addressSuggestions.map((suggestion, idx) => (
+                    <div 
+                      key={idx}
+                      onClick={async () => {
+                        setAddressInput(suggestion.label);
+                        setFormData(prev => ({ ...prev, fullAddress: suggestion.label }));
+                        setAddressSuggestions([]);
+                        setUseRegisteredAddress(false);
+                        
+                        if (suggestion.placeId) {
+                          try {
+                            const { Place } = await google.maps.importLibrary("places") as any;
+                            const place = new Place({ id: suggestion.placeId });
+                            await place.fetchFields({ fields: ['addressComponents'] });
+                            
+                            if (place.addressComponents) {
+                              let newCity = formData.city;
+                              let newArea = formData.area;
+                              let newPostcode = "";
+
+                              place.addressComponents.forEach((comp: any) => {
+                                if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.longText;
+                                if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.longText;
+                                if (comp.types.includes("postal_code")) newPostcode = comp.longText;
+                              });
+
+                              // If no postcode is found from components, fallback to trying to extract from label or use label
+                              if (!newPostcode) {
+                                const pcMatch = suggestion.label.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                                newPostcode = pcMatch ? pcMatch[0] : "";
+                              }
+
+                              setFormData(prev => ({
+                                ...prev,
+                                city: newCity || prev.city,
+                                area: newArea || prev.area,
+                                postcode: newPostcode
+                              }));
+                            }
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }
+                      }}
+                      className="p-3 hover:bg-slate-50 cursor-pointer flex items-center gap-3 border-b border-slate-50 last:border-0"
+                    >
+                      <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="text-sm text-slate-700 truncate">{suggestion.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="space-y-2">
+              {formData.fullAddress && (
+                <div 
+                  className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", !useRegisteredAddress ? "border-red-200 bg-red-50/50" : "border-slate-200 hover:bg-slate-50")}
+                  onClick={() => setUseRegisteredAddress(false)}
+                >
+                  <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", !useRegisteredAddress ? "border-red-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
+                  <div>
+                    <div className="font-bold text-sm text-slate-900">Use selected address</div>
+                    <div className="text-xs text-slate-600">
+                      {formData.fullAddress}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {userProfile?.postcode && (
+                <div 
+                  className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", useRegisteredAddress ? "border-red-200 bg-red-50/50" : "border-slate-200 hover:bg-slate-50")}
+                  onClick={() => {
+                    setUseRegisteredAddress(true);
+                    setAddressInput("");
+                    setFormData(prev => ({
+                      ...prev,
+                      postcode: userProfile.postcode,
+                      city: userProfile.city || prev.city,
+                      area: userProfile.area || prev.area,
+                      county: userProfile.county || prev.county,
+                      fullAddress: userProfile.postcode
+                    }));
+                  }}
+                >
+                  <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", useRegisteredAddress ? "border-red-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
+                  <div>
+                    <div className="font-bold text-sm text-slate-900">Use my registered address</div>
+                    <div className="text-xs text-slate-600">
+                      {userProfile.postcode} {userProfile.city ? `, ${userProfile.city}` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
           <input 
-            className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+            className="w-full p-4 border-2 border-slate-300 shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
             placeholder="Mobile Number"
             value={formData.mobileNumber}
             onChange={(e) => setFormData({...formData, mobileNumber: e.target.value})}

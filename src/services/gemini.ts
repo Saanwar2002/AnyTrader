@@ -1,19 +1,46 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Helper to call the server-side AI proxy
-async function callAiProxy(prompt: string, model: string = "gemini-1.5-flash", config?: any) {
-  const response = await fetch("/api/ai/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, model, config })
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "AI Proxy request failed");
+// Initialize the Gemini client lazily to avoid crashes if API key is missing on startup
+let genAI: GoogleGenAI | null = null;
+function getGenAI() {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    genAI = new GoogleGenAI({ apiKey });
   }
+  return genAI;
+}
 
-  return await response.json();
+// Helper to call Gemini directly from the frontend
+async function callGemini(params: {
+  prompt: string;
+  model?: string;
+  config?: any;
+  history?: { role: "user" | "model"; parts: { text: string }[] }[];
+}) {
+  try {
+    const ai = getGenAI();
+    const model = params.model || "gemini-3-flash-preview";
+
+    if (params.history) {
+      const chat = ai.chats.create({
+        model,
+        history: params.history,
+        config: params.config
+      });
+      const result = await chat.sendMessage({ message: params.prompt });
+      return { text: result.text };
+    }
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: params.prompt }] }],
+      config: params.config
+    });
+    return response;
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    throw error;
+  }
 }
 
 export interface PlatformHealthInsights {
@@ -60,44 +87,43 @@ export async function getPlatformHealthInsights(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          healthScore: { type: Type.NUMBER },
-          summary: { type: Type.STRING },
-          performanceData: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                metric: { type: Type.STRING },
-                value: { type: Type.STRING },
-                trend: { type: Type.STRING, enum: ["up", "down", "neutral"] },
-                status: { type: Type.STRING, enum: ["good", "warning", "critical"] }
-              },
-              required: ["metric", "value", "trend", "status"]
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            healthScore: { type: Type.NUMBER },
+            summary: { type: Type.STRING },
+            performanceData: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  metric: { type: Type.STRING },
+                  value: { type: Type.STRING },
+                  trend: { type: Type.STRING, enum: ["up", "down", "neutral"] },
+                  status: { type: Type.STRING, enum: ["good", "warning", "critical"] }
+                },
+                required: ["metric", "value", "trend", "status"]
+              }
+            },
+            improvements: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
             }
           },
-          improvements: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          }
-        },
-        required: ["healthScore", "summary", "performanceData", "improvements"]
+          required: ["healthScore", "summary", "performanceData", "improvements"]
+        }
       }
     });
 
     const text = response.text;
-    if (!text || text === "undefined") throw new Error("Empty or invalid response from Gemini");
+    if (!text) throw new Error("Empty or invalid response from Gemini");
     
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.error("Gemini response is not valid JSON:", text);
-      throw new Error("Invalid format from Gemini");
-    }
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Platform Health Error:", error);
     return {
@@ -171,43 +197,47 @@ export async function getJobEstimate(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          isAvailable: { type: Type.BOOLEAN },
-          unavailableReason: { type: Type.STRING },
-          min: { type: Type.NUMBER },
-          max: { type: Type.NUMBER },
-          confidence: { type: Type.NUMBER },
-          breakdown: {
-            type: Type.OBJECT,
-            properties: {
-              materials: { type: Type.STRING },
-              labour: { type: Type.STRING },
-              duration: { type: Type.STRING }
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            isAvailable: { type: Type.BOOLEAN },
+            unavailableReason: { type: Type.STRING },
+            min: { type: Type.NUMBER },
+            max: { type: Type.NUMBER },
+            confidence: { type: Type.NUMBER },
+            breakdown: {
+              type: Type.OBJECT,
+              properties: {
+                materials: { type: Type.STRING },
+                labour: { type: Type.STRING },
+                duration: { type: Type.STRING }
+              },
+              required: ["materials", "labour", "duration"]
             },
-            required: ["materials", "labour", "duration"]
+            reasoning: { type: Type.STRING },
+            pricingInsights: {
+              type: Type.OBJECT,
+              properties: {
+                seasonalImpact: { type: Type.STRING },
+                regionalPremium: { type: Type.STRING },
+                costSavingTips: { type: Type.ARRAY, items: { type: Type.STRING } },
+                marketTrend: { type: Type.STRING, enum: ["rising", "stable", "falling"] }
+              },
+              required: ["seasonalImpact", "regionalPremium", "costSavingTips", "marketTrend"]
+            }
           },
-          reasoning: { type: Type.STRING },
-          pricingInsights: {
-            type: Type.OBJECT,
-            properties: {
-              seasonalImpact: { type: Type.STRING },
-              regionalPremium: { type: Type.STRING },
-              costSavingTips: { type: Type.ARRAY, items: { type: Type.STRING } },
-              marketTrend: { type: Type.STRING, enum: ["rising", "stable", "falling"] }
-            },
-            required: ["seasonalImpact", "regionalPremium", "costSavingTips", "marketTrend"]
-          }
-        },
-        required: ["isAvailable", "min", "max", "confidence", "breakdown", "reasoning", "pricingInsights"]
+          required: ["isAvailable", "min", "max", "confidence", "breakdown", "reasoning", "pricingInsights"]
+        }
       }
     });
 
     const text = response.text;
-    if (!text || text === "undefined") throw new Error("Empty response from Gemini");
+    if (!text) throw new Error("Empty response from Gemini");
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Estimate Error:", error);
@@ -242,7 +272,10 @@ export async function generateBroadcastDraft(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash");
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview"
+    });
     return response.text || "";
   } catch (error) {
     console.error("Gemini Broadcast Draft Error:", error);
@@ -274,7 +307,10 @@ export async function generateQuoteDraft(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash");
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview"
+    });
 
     return response.text || "I would be happy to help with this job. Please let me know if you have any questions.";
   } catch (error) {
@@ -321,24 +357,28 @@ export async function summarizeDisputeChat(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          summary: { type: Type.STRING },
-          timeline: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING },
+            timeline: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            faultAnalysis: { type: Type.STRING }
           },
-          faultAnalysis: { type: Type.STRING }
-        },
-        required: ["summary", "timeline", "faultAnalysis"]
+          required: ["summary", "timeline", "faultAnalysis"]
+        }
       }
     });
 
     const text = response.text;
-    if (!text || text === "undefined") throw new Error("Empty response from Gemini");
+    if (!text) throw new Error("Empty response from Gemini");
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Dispute Summary Error:", error);
@@ -365,7 +405,10 @@ export async function getReviewSummary(reviews: any[]): Promise<string> {
   `;
  
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash");
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview"
+    });
     return response.text || "Consistently high-quality work with positive customer feedback.";
   } catch (error) {
     console.error("Gemini Review Summary Error:", error);
@@ -413,28 +456,32 @@ export async function analyzeFraudRisk(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            targetId: { type: Type.STRING },
-            targetName: { type: Type.STRING },
-            type: { type: Type.STRING },
-            riskScore: { type: Type.NUMBER },
-            riskLevel: { type: Type.STRING },
-            reason: { type: Type.STRING },
-            recommendedAction: { type: Type.STRING }
-          },
-          required: ["targetId", "targetName", "type", "riskScore", "riskLevel", "reason", "recommendedAction"]
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              targetId: { type: Type.STRING },
+              targetName: { type: Type.STRING },
+              type: { type: Type.STRING },
+              riskScore: { type: Type.NUMBER },
+              riskLevel: { type: Type.STRING },
+              reason: { type: Type.STRING },
+              recommendedAction: { type: Type.STRING }
+            },
+            required: ["targetId", "targetName", "type", "riskScore", "riskLevel", "reason", "recommendedAction"]
+          }
         }
       }
     });
 
     const text = response.text;
-    if (!text || text === "undefined") throw new Error("Empty response from Gemini");
+    if (!text) throw new Error("Empty response from Gemini");
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Fraud Risk Error:", error);
@@ -473,20 +520,26 @@ export async function analyzeJobPhoto(imageUrls: string[]): Promise<{ category: 
       };
     }));
 
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          category: { type: Type.STRING },
-          urgency: { type: Type.STRING },
-          reasoning: { type: Type.STRING }
-        },
-        required: ["category", "urgency", "reasoning"]
+    const result = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview", // Use Pro for image analysis
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            category: { type: Type.STRING },
+            urgency: { type: Type.STRING },
+            reasoning: { type: Type.STRING }
+          },
+          required: ["category", "urgency", "reasoning"]
+        }
       }
     });
 
-    return result;
+    const text = result.text;
+    if (!text) throw new Error("Empty response from Gemini");
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Photo Analysis Error:", error);
     return {
@@ -515,15 +568,21 @@ export async function getClarifyingQuestions(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING }
+    const result = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
       }
     });
 
-    return result || [];
+    const text = result.text;
+    if (!text) return [];
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Clarifying Questions Error:", error);
     return [
@@ -551,15 +610,21 @@ export async function getMaterialList(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING }
+    const result = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
       }
     });
 
-    return result || [];
+    const text = result.text;
+    if (!text) return [];
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Material List Error:", error);
     return ["Standard trade materials related to " + category];
@@ -594,11 +659,17 @@ export async function analyzeSecurityThreat(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json"
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json"
+      }
     });
 
-    return result || { isThreat: false, threatType: null, riskScore: 0, details: "No threat detected." };
+    const text = response.text;
+    if (!text) return { isThreat: false, threatType: null, riskScore: 0, details: "No response from AI." };
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Security Threat Analysis Error:", error);
     return { isThreat: false, threatType: null, riskScore: 0, details: "Error analyzing text." };
@@ -625,8 +696,11 @@ export async function improveJobDescription(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash");
-    return result || description;
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview"
+    });
+    return response.text || description;
   } catch (error) {
     console.error("Gemini Improve Description Error:", error);
     return description;
@@ -651,11 +725,17 @@ export async function parseNaturalLanguageSearch(query: string): Promise<{
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json"
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json"
+      }
     });
 
-    return result || { categories: [], urgency: null, keywords: [] };
+    const text = response.text;
+    if (!text) return { categories: [], urgency: null, keywords: [] };
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Search Parse Error:", error);
     return { categories: [], urgency: null, keywords: [] };
@@ -684,11 +764,17 @@ export async function checkSafetyAndPII(text: string): Promise<{
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json"
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json"
+      }
     });
 
-    return result || { isSafe: true, hasPII: false, redactedText: text, issues: [] };
+    const text = response.text;
+    if (!text) return { isSafe: true, hasPII: false, redactedText: text, issues: [] };
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Safety Check Error:", error);
     return { isSafe: true, hasPII: false, redactedText: text, issues: [] };
@@ -721,11 +807,17 @@ export async function getDisputeResolution(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json"
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json"
+      }
     });
 
-    return result || { summary: "Unable to analyze", suggestion: "Manual review required" };
+    const text = response.text;
+    if (!text) return { summary: "Unable to analyze", suggestion: "Manual review required" };
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Dispute Mediator Error:", error);
     return { summary: "Error analyzing dispute", suggestion: "Please contact support" };
@@ -777,22 +869,28 @@ export async function getRecommendedJobs(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            reason: { type: Type.STRING }
-          },
-          required: ["id", "reason"]
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              reason: { type: Type.STRING }
+            },
+            required: ["id", "reason"]
+          }
         }
       }
     });
 
-    return result || [];
+    const text = response.text;
+    if (!text) return [];
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Job Recommendation Error:", error);
     return [];
@@ -819,7 +917,10 @@ export async function getMaintenancePredictions(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash");
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview"
+    });
     const text = response.text || "[]";
     const jsonMatch = text.match(/\[.*\]/s);
     return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
@@ -855,7 +956,10 @@ export async function generateMarketingPost(
   `;
 
   try {
-    const response = await callAiProxy(prompt, "gemini-1.5-flash");
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview"
+    });
     return response.text || "Just finished another great job! Check out my profile on AnyTrader for your next project.";
   } catch (error) {
     console.error("Gemini Marketing Post Error:", error);
@@ -908,10 +1012,16 @@ export async function analyzeQuote(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json"
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json"
+      }
     });
-    return result;
+    const text = response.text;
+    if (!text) throw new Error("Empty response");
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Quote Analysis Error:", error);
     // Fallback logic
@@ -963,10 +1073,16 @@ export async function getRejectionFeedback(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json"
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json"
+      }
     });
-    return result;
+    const text = response.text;
+    if (!text) throw new Error("Empty response");
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Rejection Feedback Error:", error);
     return {
@@ -1021,32 +1137,38 @@ export async function analyzeDocument(
       },
     };
 
-    const aiResponse = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          isValid: { type: Type.BOOLEAN },
-          confidence: { type: Type.NUMBER },
-          extractedData: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              expiryDate: { type: Type.STRING },
-              documentNumber: { type: Type.STRING }
-            }
+    const aiResponse = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            isValid: { type: Type.BOOLEAN },
+            confidence: { type: Type.NUMBER },
+            extractedData: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                expiryDate: { type: Type.STRING },
+                documentNumber: { type: Type.STRING }
+              }
+            },
+            flags: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            reasoning: { type: Type.STRING }
           },
-          flags: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          },
-          reasoning: { type: Type.STRING }
-        },
-        required: ["isValid", "confidence", "extractedData", "flags", "reasoning"]
+          required: ["isValid", "confidence", "extractedData", "flags", "reasoning"]
+        }
       }
     });
 
-    return aiResponse;
+    const text = aiResponse.text;
+    if (!text) throw new Error("Empty response");
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Document Analysis Error:", error);
     return {
@@ -1104,27 +1226,33 @@ export async function suggestNewCategories(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            category: { type: Type.STRING },
-            reason: { type: Type.STRING },
-            demandScore: { type: Type.NUMBER },
-            trend: { type: Type.STRING, enum: ["rising", "stable", "falling"] },
-            scope: { type: Type.STRING },
-            source: { type: Type.STRING, enum: ["google_trends", "internal_search", "combined"] },
-            topKeywords: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["category", "reason", "demandScore", "trend", "scope", "source", "topKeywords"]
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              category: { type: Type.STRING },
+              reason: { type: Type.STRING },
+              demandScore: { type: Type.NUMBER },
+              trend: { type: Type.STRING, enum: ["rising", "stable", "falling"] },
+              scope: { type: Type.STRING },
+              source: { type: Type.STRING, enum: ["google_trends", "internal_search", "combined"] },
+              topKeywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["category", "reason", "demandScore", "trend", "scope", "source", "topKeywords"]
+          }
         }
       }
     });
 
-    return result || [];
+    const text = response.text;
+    if (!text) return [];
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Category Suggestion Error:", error);
     return [];
@@ -1169,30 +1297,78 @@ export async function getMonetizationOpportunities(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            description: { type: Type.STRING },
-            type: { type: Type.STRING, enum: ["Seasonal", "Behavioral", "Trend"] },
-            impact: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
-            action: { type: Type.STRING },
-            targetRole: { type: Type.STRING, enum: ["homeowner", "tradesperson", "both"] },
-            suggestedPartnerCategory: { type: Type.STRING }
-          },
-          required: ["title", "description", "type", "impact", "action", "targetRole", "suggestedPartnerCategory"]
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ["Seasonal", "Behavioral", "Trend"] },
+              impact: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
+              action: { type: Type.STRING },
+              targetRole: { type: Type.STRING, enum: ["homeowner", "tradesperson", "both"] },
+              suggestedPartnerCategory: { type: Type.STRING }
+            },
+            required: ["title", "description", "type", "impact", "action", "targetRole", "suggestedPartnerCategory"]
+          }
         }
       }
     });
 
-    return result || [];
+    const text = response.text;
+    if (!text) return [];
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Monetization Error:", error);
     return [];
+  }
+}
+
+export async function processVoiceTranscript(transcript: string, categories: string[]) {
+  const prompt = `Extract job details from this description: "${transcript}". 
+    Return a JSON object with: 
+    - category (one of: ${categories.join(", ")})
+    - title (short summary)
+    - description (detailed)
+    - city (extract city if mentioned, else leave empty)
+    - urgency (one of: emergency, asap, this_week, flexible)
+    - estimatedCompletionTime (number or empty string)
+    - estimatedCompletionTimeUnit (one of: hours, days, weeks, months)`;
+
+  try {
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            category: { type: Type.STRING },
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            city: { type: Type.STRING },
+            urgency: { type: Type.STRING },
+            estimatedCompletionTime: { type: Type.STRING },
+            estimatedCompletionTimeUnit: { type: Type.STRING }
+          },
+          required: ["category", "title", "description", "urgency", "estimatedCompletionTime", "estimatedCompletionTimeUnit"]
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response from Gemini");
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Gemini Voice Process Error:", error);
+    throw error;
   }
 }
 
@@ -1225,26 +1401,123 @@ export async function getEquipmentRecommendations(
   `;
 
   try {
-    const result = await callAiProxy(prompt, "gemini-1.5-flash", {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            item: { type: Type.STRING },
-            reason: { type: Type.STRING },
-            category: { type: Type.STRING, enum: ["Safety", "Performance", "Efficiency"] },
-            estimatedPrice: { type: Type.STRING }
-          },
-          required: ["item", "reason", "category"]
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              item: { type: Type.STRING },
+              reason: { type: Type.STRING },
+              category: { type: Type.STRING, enum: ["Safety", "Performance", "Efficiency"] },
+              estimatedPrice: { type: Type.STRING }
+            },
+            required: ["item", "reason", "category"]
+          }
         }
       }
     });
 
-    return result || [];
+    const text = response.text;
+    if (!text) return [];
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Equipment Rec Error:", error);
     return [];
+  }
+}
+
+export async function getShopRecommendations(role: string, category: string) {
+  const prompt = `You are a smart equipment and workwear recommender for an e-commerce store. 
+    A user with the role "${role}" and trade/business category "${category}" is opening the store popup.
+    Suggest exactly 3 highly specific, highly relevant categories of equipment, workwear, or tools they are likely to need.
+
+    Return a JSON array of 3 objects:
+    {
+      "name": "Category Name",
+      "reason": "Clear explanation (max 15 words)",
+      "icon": "One specific Lucide icon name (e.g., Shield, Wrench, Droplets, Zap, Ruler, Hammer)"
+    }`;
+
+  try {
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response");
+    const result = JSON.parse(text);
+    return Array.isArray(result) ? result : result.recommendations || [];
+  } catch (error) {
+    console.error("Gemini Shop Recommendations Error:", error);
+    return [
+      { name: "Safety Boots", reason: "Standard site requirement", icon: "Shield" },
+      { name: "Heavy Duty Gloves", reason: "Protect your hands on the job", icon: "Wrench" },
+      { name: "First Aid Kit", reason: "Essential for any worksite", icon: "Activity" }
+    ];
+  }
+}
+
+export async function callTradeBot(userMessage: string, history: {role: "user" | "model", text: string}[]) {
+  const systemInstruction = `You are AnyTrader Bot, an expert assistant for the AnyTrader platform. Your goal is to provide homeowners with instant UK pricing advice, help them understand trade categories, and give tips on job planning. Be helpful, professional, and use UK English. If asked about prices, provide typical ranges based on current UK market rates. Always remind users that these are estimates and they should get multiple quotes.
+      
+      Additionally, you are plugged into the AnyTrader AI Smart Shop. If a user asks about tools, equipment, or workwear needed for a job or trade, gently mention they can use the "AI Smart Shop" icon in the top right to get curated recommendations for their specific trade and category.`;
+
+  try {
+    const response = await callGemini({
+      prompt: userMessage,
+      model: "gemini-3.1-pro-preview",
+      config: {
+        systemInstruction
+      },
+      history: history.map(msg => ({
+        role: msg.role === "model" ? "model" as const : "user" as const,
+        parts: [{ text: msg.text }]
+      }))
+    });
+
+    return response.text || "I'm sorry, I couldn't process that. Please try again.";
+  } catch (error) {
+    console.error("Gemini TradeBot Error:", error);
+    throw error;
+  }
+}
+
+export async function processTaxiVoiceCommand(text: string) {
+  const prompt = `Extract taxi booking details from: "${text}". 
+    Return a JSON object with keys: pickup, dropoff, comments.`;
+
+  try {
+    const response = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            pickup: { type: Type.STRING },
+            dropoff: { type: Type.STRING },
+            comments: { type: Type.STRING }
+          },
+          required: ["pickup", "dropoff", "comments"]
+        }
+      }
+    });
+
+    const textResponse = response.text;
+    if (!textResponse) throw new Error("Empty response from Gemini");
+    return JSON.parse(textResponse);
+  } catch (error) {
+    console.error("Gemini Taxi Voice Process Error:", error);
+    throw error;
   }
 }

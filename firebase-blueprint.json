@@ -165,6 +165,8 @@
         "description": { "type": "string" },
         "postcode": { "type": "string" },
         "fullAddress": { "type": "string" },
+        "houseNumber": { "type": "string" },
+        "locationInstructions": { "type": "string" },
         "urgency": { "type": "string" },
         "status": { "type": "string", "enum": ["posted", "quoting", "accepted", "in_progress", "completed", "cancelled", "disputed"] },
         "dispute": {

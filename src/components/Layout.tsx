@@ -12,6 +12,7 @@ import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
 import { usePortal } from "../lib/PortalContext";
 import PlatformSwitcher from "./shared/PlatformSwitcher";
 import CrossPortalBanner from "./shared/CrossPortalBanner";
+import { getShopRecommendations } from "@/src/services/gemini";
 
 import RoleTabBar from "./shared/RoleTabBar";
 
@@ -99,18 +100,11 @@ export default function Layout() {
 
     setIsLoadingShop(true);
     try {
-      const res = await fetch("/api/shop-recommendations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: profile?.role || "general",
-          category: profile?.category || profile?.businessCategory || "general"
-        })
-      });
-      const data = await res.json();
-      if (data.recommendations) {
-        setShopRecommendations(data.recommendations);
-      }
+      const recommendations = await getShopRecommendations(
+        profile?.role || "general",
+        profile?.category || profile?.businessCategory || "general"
+      );
+      setShopRecommendations(recommendations);
     } catch (err) {
       console.error("Failed to load shop recommendations:", err);
     } finally {
@@ -387,15 +381,48 @@ export default function Layout() {
                   <Menu className="w-6 h-6" />
                 </button>
               )}
-              <Link to="/" className="flex items-center gap-3 group">
-                <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform duration-500">
-                  <Logo size={32} className="text-white" />
-                </div>
-                <div className="hidden sm:block">
-                  <span className="text-xl font-display font-black text-slate-900 tracking-tight">AnyTrader</span>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mt-1">Every Skill</p>
-                </div>
-              </Link>
+              <button 
+                onClick={() => {
+                  triggerHaptic();
+                  if (activePortal === "anytrader") {
+                    switchPortal("anyride");
+                    if (profile?.role === "driver" || profile?.role === "fleet_driver") {
+                      navigate("/driver-terminal");
+                    } else {
+                      navigate("/book-ride");
+                    }
+                  } else {
+                    switchPortal("anytrader");
+                    navigate("/");
+                  }
+                }}
+                className="flex items-center gap-3 group text-left"
+              >
+                {activePortal === "anytrader" ? (
+                  <>
+                    <div className="w-12 h-12 bg-[#FEED2C] border-2 border-slate-900 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-[#FEED2C]/20 group-hover:scale-110 transition-transform duration-500 relative overflow-hidden shrink-0">
+                      <Car className="w-5 h-5 text-slate-900 relative z-10" />
+                      <span className="text-[10px] font-black text-slate-900 leading-none mt-0.5 relative z-10">TAXI</span>
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent"></div>
+                    </div>
+                    <div className="hidden sm:block">
+                      <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRide</span>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-12 h-12 bg-blue-600 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
+                      <Hammer className="w-5 h-5 text-white" />
+                      <span className="text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+                    </div>
+                    <div className="hidden sm:block">
+                      <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+                    </div>
+                  </>
+                )}
+              </button>
 
               {/* Desktop Navigation */}
               {activePortal !== 'anyride' && (

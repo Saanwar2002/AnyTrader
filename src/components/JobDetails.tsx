@@ -10,7 +10,7 @@ import {
   MessageSquare, PoundSterling, Calendar, Loader2, User as UserIcon, Video, Star,
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
-  BarChart3, ShieldCheck, Info, QrCode, TrendingDown
+  BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
@@ -2319,6 +2319,35 @@ export default function JobDetails() {
                 {canSeeFullDetails ? job.postcode : getOutwardPostcode(job.postcode || job.area)}
               </span>
             </div>
+            
+            {canSeeFullDetails && (job.fullAddress || job.houseNumber || job.locationInstructions) && (
+              <div className="mt-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col gap-3">
+                <div className="font-bold flex items-center gap-2 text-slate-900 border-b border-slate-200 pb-2 mb-1">
+                  <Home className="w-4 h-4 text-blue-500" /> Exact Location Details
+                </div>
+                {job.houseNumber && (
+                  <div className="flex gap-2">
+                    <span className="text-sm font-bold text-slate-500 min-w-[80px]">Unit/No:</span>
+                    <span className="text-sm text-slate-900 font-medium">{job.houseNumber}</span>
+                  </div>
+                )}
+                {job.fullAddress && (
+                  <div className="flex gap-2">
+                    <span className="text-sm font-bold text-slate-500 min-w-[80px]">Street:</span>
+                    <span className="text-sm text-slate-900 font-medium">{job.fullAddress}</span>
+                  </div>
+                )}
+                {job.locationInstructions && (
+                  <div className="flex flex-col gap-1 mt-1 pt-3 border-t border-slate-200/60">
+                    <span className="text-sm font-bold text-slate-500 flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5" /> Instructions:
+                    </span>
+                    <span className="text-sm text-slate-700 italic bg-white p-3 rounded-lg border border-slate-100 shadow-sm leading-relaxed whitespace-pre-wrap">{job.locationInstructions}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center gap-2 text-slate-500">
               <Calendar className="w-4 h-4" />
               <span className="text-sm font-bold">

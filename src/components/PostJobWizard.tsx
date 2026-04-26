@@ -32,18 +32,18 @@ import {
   TrendingDown,
   Minus,
   Zap as ZapIcon,
-  BarChart3
+  BarChart3,
+  Locate
 } from "lucide-react";
 import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
 import { useCategories } from "../lib/CategoryProvider";
 import { lookupPostcode, reverseLookupPostcode } from "@/src/services/postcodeService";
-import { getJobEstimate, analyzeJobPhoto, getClarifyingQuestions, improveJobDescription, checkSafetyAndPII, type AIEstimate } from "@/src/services/gemini";
+import { getJobEstimate, analyzeJobPhoto, getClarifyingQuestions, improveJobDescription, checkSafetyAndPII, processVoiceTranscript, type AIEstimate } from "@/src/services/gemini";
 import { db, doc, setDoc, updateDoc, collection, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, addDoc, sendNotification, getDoc, getDocs, query, where } from "@/src/firebase";
 import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
-import { GoogleGenAI, Type } from "@google/genai";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "sonner";
 
@@ -101,6 +101,8 @@ export default function PostJobWizard() {
     city: editJob?.city || "", 
     area: editJob?.area || "",
     fullAddress: editJob?.fullAddress || "",
+    houseNumber: editJob?.houseNumber || "",
+    locationInstructions: editJob?.locationInstructions || "",
     photos: editJob?.photos || [] as string[],
     videos: editJob?.videos || [] as string[],
     documents: editJob?.documents || [] as { name: string; url: string }[],
@@ -114,13 +116,28 @@ export default function PostJobWizard() {
   });
   
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [useRegisteredAddress, setUseRegisteredAddress] = useState(false);
   const [addressInput, setAddressInput] = useState(editJob?.fullAddress || "");
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [addressSuggestionTimeout, setAddressSuggestionTimeout] = useState<any>(null);
 
+  React.useEffect(() => {
+    if (profile?.postcode && !editJob) {
+      setUseRegisteredAddress(true);
+      setFormData(prev => ({
+        ...prev,
+        postcode: profile.postcode || "",
+        city: profile.city || "",
+        area: profile.area || "",
+        county: profile.county || "",
+        fullAddress: profile.postcode || ""
+      }));
+    }
+  }, [profile, editJob]);
+
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries: ['places'] as any,
   });
   const [titleError, setTitleError] = useState("");
@@ -219,51 +236,7 @@ export default function PostJobWizard() {
     if (!voiceText) return;
     setIsProcessingVoice(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ 
-          role: "user", 
-          parts: [{ 
-            text: `Extract job details from this description: "${voiceText}". 
-            Return a JSON object with: 
-            - category (one of: ${categories.map(c => c.name).join(", ")})
-            - title (short summary)
-            - description (detailed)
-            - city (extract city if mentioned, else leave empty)
-            - urgency (one of: emergency, asap, this_week, flexible)
-            - estimatedCompletionTime (number or empty string)
-            - estimatedCompletionTimeUnit (one of: hours, days, weeks, months)` 
-          }] 
-        }],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              category: { type: Type.STRING },
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              city: { type: Type.STRING },
-              urgency: { type: Type.STRING },
-              estimatedCompletionTime: { type: Type.STRING },
-              estimatedCompletionTimeUnit: { type: Type.STRING }
-            },
-            required: ["category", "title", "description", "urgency", "estimatedCompletionTime", "estimatedCompletionTimeUnit"]
-          }
-        }
-      });
-
-      const text = response.text;
-      if (!text || text === "undefined") throw new Error("Empty or invalid response from AI");
-      
-      let parsedResult;
-      try {
-        parsedResult = JSON.parse(text);
-      } catch (e) {
-        console.error("AI response is not valid JSON:", text);
-        throw new Error("Invalid response format from AI");
-      }
+      const parsedResult = await processVoiceTranscript(voiceText, categories.map(c => c.name));
 
       setFormData(prev => ({
         ...prev,
@@ -278,7 +251,7 @@ export default function PostJobWizard() {
       setStep(3); // Go to job details step
     } catch (err) {
       console.error("Error processing voice:", err);
-      setError("AI could not understand the job details. Please try manual posting.");
+      toast.error("AI could not understand the job details. Please try manual posting.");
     } finally {
       setIsProcessingVoice(false);
     }
@@ -1042,7 +1015,7 @@ export default function PostJobWizard() {
               formData.category,
               asset?.postcode || formData.postcode,
               formData.urgency,
-              paidBoost
+              false
             );
             
             // Dispatch standard email notification queue
@@ -1170,18 +1143,28 @@ export default function PostJobWizard() {
                   <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NEW</span>
                 </div>
                 
-                {isListening ? (
+                {isListening || voiceText ? (
                   <div className="space-y-4">
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 min-h-[100px]">
                       <p className="text-slate-700 italic">{voiceText || "Listening..."}</p>
                     </div>
                     <div className="flex gap-3">
-                      <button 
-                        onClick={handleToggleListening}
-                        className="flex-1 p-3 rounded-xl bg-red-600 text-white font-bold flex items-center justify-center gap-2"
-                      >
-                        <StopCircle className="w-5 h-5" /> Stop
-                      </button>
+                      {isListening ? (
+                        <button 
+                          onClick={handleToggleListening}
+                          className="flex-1 p-3 rounded-xl bg-red-600 text-white font-bold flex items-center justify-center gap-2"
+                        >
+                          <StopCircle className="w-5 h-5" /> Stop
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => { setVoiceText(""); setIsListening(false); }}
+                          className="flex-1 p-3 rounded-xl bg-slate-200 text-slate-700 font-bold flex items-center justify-center gap-2 hover:bg-slate-300 transition-colors"
+                        >
+                          <X className="w-5 h-5" /> Clear
+                        </button>
+                      )}
+                      
                       <button 
                         onClick={handleProcessVoice}
                         disabled={!voiceText || isProcessingVoice}
@@ -1308,7 +1291,7 @@ export default function PostJobWizard() {
                 <input 
                   type="text"
                   placeholder="Search or describe (e.g. leaky)"
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -1520,12 +1503,12 @@ export default function PostJobWizard() {
                     <input 
                       type="number" 
                       placeholder="e.g. 4"
-                      className="w-24 p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
+                      className="w-24 p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
                       value={formData.estimatedCompletionTime}
                       onChange={(e) => setFormData({ ...formData, estimatedCompletionTime: e.target.value })}
                     />
                     <select 
-                      className="w-32 p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700"
+                      className="w-32 p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700 transition-all font-medium"
                       value={formData.estimatedCompletionTimeUnit}
                       onChange={(e) => setFormData({ ...formData, estimatedCompletionTimeUnit: e.target.value })}
                     >
@@ -1616,53 +1599,17 @@ export default function PostJobWizard() {
                 <p className="text-slate-500 text-sm">Help tradespeople find your location.</p>
               </div>
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">Postcode</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. M1 1AA"
-                    className={cn(
-                      "w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white uppercase",
-                      postcodeError ? "border-red-500" : "border-slate-200"
-                    )}
-                    value={formData.postcode}
-                    onChange={(e) => {
-                      const value = e.target.value.toUpperCase();
-                      setFormData({ ...formData, postcode: value });
-                      const ukPostcodeRegex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
-                      if (value && !ukPostcodeRegex.test(value)) {
-                        setPostcodeError("Please enter a valid UK postcode");
-                      } else {
-                        setPostcodeError("");
-                        // Auto-detect city if valid
-                        lookupPostcode(value).then(data => {
-                          if (data) {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              city: data.city,
-                              area: data.area,
-                              postcode: data.postcode
-                            }));
-                          }
-                        }).catch(console.error);
-                      }
-                    }}
-                  />
-                  {postcodeError && <p className="text-red-500 text-xs mt-1">{postcodeError}</p>}
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">Select Full Address</label>
+                <div className="space-y-4">
                   <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <input 
-                      type="text" 
-                      placeholder="Start typing your street or house number..."
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
+                      className="w-full p-4 pl-12 pr-12 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
+                      placeholder="Start typing your address or postcode..."
                       value={addressInput}
                       onChange={(e) => {
                         const val = e.target.value;
                         setAddressInput(val);
-                        setFormData(prev => ({ ...prev, fullAddress: val })); // Keep fallback text
+                        setUseRegisteredAddress(false);
                         
                         if (addressSuggestionTimeout) clearTimeout(addressSuggestionTimeout);
                         
@@ -1673,14 +1620,16 @@ export default function PostJobWizard() {
                         
                         const timeout = setTimeout(async () => {
                           try {
-                            const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
+                            const { AutocompleteSuggestion } = await google.maps.importLibrary("places") as any;
                             const request = {
-                              input: formData.postcode ? `${val}, ${formData.postcode}` : val,
-                              includedRegionCodes: ['GB'],
+                              input: val,
+                              includedRegionCodes: ['gb']
                             };
-                            const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
-                            if (predictions && predictions.length > 0) {
-                              setAddressSuggestions(predictions.map((p: any) => ({
+                            
+                            const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+                            
+                            if (suggestions && suggestions.length > 0) {
+                              setAddressSuggestions(suggestions.map((p: any) => ({
                                 label: p.placePrediction.text.text,
                                 placeId: p.placePrediction.placeId,
                                 placePrediction: p.placePrediction
@@ -1695,7 +1644,75 @@ export default function PostJobWizard() {
                         }, 500);
                         setAddressSuggestionTimeout(timeout);
                       }}
+                      onBlur={async (e) => {
+                        const val = e.target.value;
+                        if (!val || addressSuggestions.length > 0) return;
+                        if (useRegisteredAddress) return;
+                        try {
+                          const data = await lookupPostcode(val);
+                          if (data) {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              city: data.city,
+                              area: data.area,
+                              postcode: data.postcode,
+                              fullAddress: data.postcode
+                            }));
+                          }
+                        } catch (err) {
+                          console.error("Error looking up postcode:", err);
+                        }
+                      }}
                     />
+                    
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
+                      title="Auto-detect location"
+                      onClick={() => {
+                        if ("geolocation" in navigator) {
+                          navigator.geolocation.getCurrentPosition(async (position) => {
+                            try {
+                              const { latitude: lat, longitude: lng } = position.coords;
+                              const geocoder = new google.maps.Geocoder();
+                              geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                                if (status === "OK" && results?.[0]) {
+                                  const foundAddress = results[0].formatted_address;
+                                  setAddressInput(foundAddress);
+                                  setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
+                                  
+                                  let newCity = "";
+                                  let newArea = "";
+                                  let newPostcode = "";
+
+                                  results[0].address_components.forEach((comp) => {
+                                    if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
+                                    if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
+                                    if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
+                                  });
+
+                                  if (!newPostcode) {
+                                    const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                                    newPostcode = pcMatch ? pcMatch[0] : "";
+                                  }
+
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    city: newCity,
+                                    area: newArea,
+                                    postcode: newPostcode
+                                  }));
+                                }
+                              });
+                            } catch (err) {
+                              console.error("Geocoding failed:", err);
+                            }
+                          });
+                        }
+                      }}
+                    >
+                      <Locate className="w-5 h-5" />
+                    </button>
                     
                     {addressSuggestions.length > 0 && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-64 overflow-y-auto z-50">
@@ -1706,28 +1723,39 @@ export default function PostJobWizard() {
                               setAddressInput(suggestion.label);
                               setFormData(prev => ({ ...prev, fullAddress: suggestion.label }));
                               setAddressSuggestions([]);
+                              setUseRegisteredAddress(false);
                               
-                              if (!formData.postcode && suggestion.placePrediction?.placeId) {
-                                // optional: fill city/postcode from Place Details
-                                const { Place } = await window.google.maps.importLibrary("places") as any;
-                                const place = new Place({ id: suggestion.placePrediction.placeId });
-                                await place.fetchFields({ fields: ['addressComponents', 'location'] });
-                                
-                                const postcodeComp = place.addressComponents?.find((c: any) => c.types.includes("postal_code"));
-                                if (postcodeComp) {
-                                  const detectedPc = postcodeComp.longText;
-                                  const pd = await lookupPostcode(detectedPc);
-                                  if (pd) {
+                              if (suggestion.placeId) {
+                                try {
+                                  const { Place } = await google.maps.importLibrary("places") as any;
+                                  const place = new Place({ id: suggestion.placeId });
+                                  await place.fetchFields({ fields: ['addressComponents'] });
+                                  
+                                  if (place.addressComponents) {
+                                    let newCity = formData.city;
+                                    let newArea = formData.area;
+                                    let newPostcode = "";
+
+                                    place.addressComponents.forEach((comp: any) => {
+                                      if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.longText;
+                                      if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.longText;
+                                      if (comp.types.includes("postal_code")) newPostcode = comp.longText;
+                                    });
+
+                                    if (!newPostcode) {
+                                      const pcMatch = suggestion.label.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                                      newPostcode = pcMatch ? pcMatch[0] : "";
+                                    }
+
                                     setFormData(prev => ({
-                                       ...prev,
-                                       postcode: pd.postcode,
-                                       city: pd.city,
-                                       area: pd.area,
-                                       fullAddress: suggestion.label
+                                      ...prev,
+                                      city: newCity || prev.city,
+                                      area: newArea || prev.area,
+                                      postcode: newPostcode
                                     }));
-                                  } else {
-                                     setFormData(prev => ({ ...prev, postcode: detectedPc, fullAddress: suggestion.label }));
                                   }
+                                } catch (err) {
+                                  console.error(err);
                                 }
                               }
                             }}
@@ -1740,6 +1768,70 @@ export default function PostJobWizard() {
                       </div>
                     )}
                   </div>
+
+                  <div className="space-y-2">
+                    {formData.fullAddress && (
+                      <div 
+                        className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", !useRegisteredAddress ? "border-blue-200 bg-blue-50/50" : "border-slate-200 hover:bg-slate-50")}
+                        onClick={() => setUseRegisteredAddress(false)}
+                      >
+                        <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", !useRegisteredAddress ? "border-blue-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
+                        <div>
+                          <div className="font-bold text-sm text-slate-900">Use selected address</div>
+                          <div className="text-xs text-slate-600">
+                            {formData.fullAddress}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {profile?.postcode && (
+                      <div 
+                        className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", useRegisteredAddress ? "border-blue-200 bg-blue-50/50" : "border-slate-200 hover:bg-slate-50")}
+                        onClick={() => {
+                          setUseRegisteredAddress(true);
+                          setAddressInput("");
+                          setFormData(prev => ({
+                            ...prev,
+                            postcode: profile.postcode,
+                            city: profile.city || prev.city,
+                            area: profile.area || prev.area,
+                            county: profile.county || prev.county,
+                            fullAddress: profile.postcode
+                          }));
+                        }}
+                      >
+                        <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", useRegisteredAddress ? "border-blue-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
+                        <div>
+                          <div className="font-bold text-sm text-slate-900">Use my registered address</div>
+                          <div className="text-xs text-slate-600">
+                            {profile.postcode} {profile.city ? `, ${profile.city}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-bold text-slate-700">House Number / Flat / Building Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. 42 or Flat 3B"
+                    className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
+                    value={formData.houseNumber}
+                    onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-bold text-slate-700">Location Instructions (Optional)</label>
+                  <textarea 
+                    placeholder="Any specific instructions for finding you? (e.g., Use side gate, park on driveway, ring doorbell twice)"
+                    className="w-full p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white resize-none h-24 transition-all font-medium placeholder:font-normal"
+                    value={formData.locationInstructions}
+                    onChange={(e) => setFormData({ ...formData, locationInstructions: e.target.value })}
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -1747,7 +1839,7 @@ export default function PostJobWizard() {
                   <input 
                     type="text" 
                     placeholder="e.g. Manchester"
-                    className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-slate-50"
+                    className="w-full p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-slate-50 transition-all font-medium placeholder:font-normal"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   />
@@ -1852,7 +1944,7 @@ export default function PostJobWizard() {
                     <label className="text-sm font-bold text-slate-700 block mb-2">Select Date</label>
                     <input 
                       type="date" 
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
+                      className="w-full p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
                       value={formData.jobDate}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setFormData({ ...formData, jobDate: e.target.value })}

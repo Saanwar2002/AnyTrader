@@ -4,7 +4,7 @@ import {
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, 
-  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle
+  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer
 } from "lucide-react";
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
@@ -13,7 +13,7 @@ import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { GoogleGenAI, Type } from "@google/genai";
+import { processTaxiVoiceCommand } from "@/src/services/gemini";
 import { triggerHaptic, ImpactStyle, hideNativeKeyboard } from "@/src/lib/capacitor";
 
 // Google Maps Imports
@@ -105,7 +105,7 @@ function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
 
 export default function PassengerBooking() {
   const { user, profile } = useAuth();
-  const { theme } = usePortal();
+  const { theme, switchPortal } = usePortal();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<BookingStep>("details");
@@ -319,13 +319,7 @@ export default function PassengerBooking() {
     setIsAiProcessing(true);
     toast.info("AI extracting details...");
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ parts: [{ text: `Extract taxi booking details from: "${text}". Return JSON with keys: pickup, dropoff, comments.` }] }],
-        config: { responseMimeType: "application/json" }
-      });
-      const result = JSON.parse(response.text || "{}");
+      const result = await processTaxiVoiceCommand(text);
       
       const geocodeLocation = (address: string, setter: (val: string) => void, coordSetter: (coords: {lat: number, lng: number}) => void) => {
         if (!window.google || !window.google.maps) {
@@ -824,6 +818,26 @@ export default function PassengerBooking() {
             {routeLine.length > 0 && <PolylineF path={routeLine} options={{ strokeColor: '#2563eb', strokeOpacity: 0.8, strokeWeight: 5 }} />}
           </GoogleMap>
        </div>
+
+       {/* Platform Switcher Button in Passenger Taxi View */}
+       <button 
+         onClick={() => {
+           triggerHaptic();
+           switchPortal("anytrader");
+           navigate("/");
+         }}
+         className="absolute top-[60px] left-4 z-[50] flex items-center gap-3 group text-left px-2 py-2 bg-white/70 backdrop-blur-md rounded-[20px] shadow-sm border border-slate-200/50"
+         title="Switch to AnyTrader"
+       >
+         <div className="w-12 h-12 bg-blue-600 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 active:scale-95 transition-transform duration-300 shrink-0">
+           <Hammer className="w-5 h-5 text-white" />
+           <span className="text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+         </div>
+         <div className="pr-3">
+           <span className="text-sm font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
+           <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+         </div>
+       </button>
 
        {/* Chat Component */}
        {step === "confirmed" && currentRideId && (

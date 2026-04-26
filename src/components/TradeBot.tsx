@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Bot, X, Send, Loader2, User, Sparkles } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { callTradeBot } from "@/src/services/gemini";
 
 interface Message {
   role: "user" | "model";
@@ -38,24 +39,7 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/ai/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          prompt: userMessage,
-          model: "gemini-1.5-flash",
-          config: {
-            systemInstruction: `You are AnyTrader Bot, an expert assistant for the AnyTrader platform. Your goal is to provide homeowners with instant UK pricing advice, help them understand trade categories, and give tips on job planning. Be helpful, professional, and use UK English. If asked about prices, provide typical ranges based on current UK market rates. Always remind users that these are estimates and they should get multiple quotes.
-      
-      Additionally, you are plugged into the AnyTrader AI Smart Shop. If a user asks about tools, equipment, or workwear needed for a job or trade, gently mention they can use the "AI Smart Shop" icon in the top right to get curated recommendations for their specific trade and category.`
-          }
-        })
-      });
-
-      if (!response.ok) throw new Error("AI Proxy failed");
-      const data = await response.json();
-
-      const modelText = data.text || "I'm sorry, I couldn't process that. Please try again.";
+      const modelText = await callTradeBot(userMessage, messages);
       setMessages(prev => [...prev, { role: "model", text: modelText }]);
     } catch (error) {
       console.error("TradeBot Error:", error);

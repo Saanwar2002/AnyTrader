@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { usePortal } from "../../lib/PortalContext";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff } from "lucide-react";
+import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment } from "@/src/firebase";
 import DriverEarnings from "./DriverEarnings";
@@ -22,6 +23,8 @@ const libraries: any[] = ['places'];
 
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
+  const { switchPortal } = usePortal();
+  const navigate = useNavigate();
   const [isOnline, setIsOnline] = useState(false);
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
   const [onlineDurationText, setOnlineDurationText] = useState("0 min");
@@ -817,6 +820,22 @@ export default function DriverTerminal() {
       
       {activeTab === 'home' && (
       <>
+      {/* Platform Switcher Button in Driver Terminal */}
+      <button 
+        onClick={() => {
+          triggerHaptic();
+          switchPortal("anytrader");
+          navigate("/");
+        }}
+        className="absolute top-[60px] left-4 z-[150] flex items-center gap-3 group text-left pt-2 pl-2"
+        title="Switch to AnyTrader"
+      >
+        <div className="w-12 h-12 bg-blue-600 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 active:scale-95 transition-transform duration-300 shrink-0">
+          <Hammer className="w-5 h-5 text-white" />
+          <span className="text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+        </div>
+      </button>
+
       {/* Simulation Trigger (Dev Only) */}
       <button 
         onClick={simulateIncomingRide}

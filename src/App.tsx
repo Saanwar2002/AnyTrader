@@ -146,7 +146,7 @@ export default function App() {
       <Toaster position="top-center" richColors />
       <BrowserRouter>
         <PortalProvider>
-          <PlatformSwitcher />
+          {/* <PlatformSwitcher /> */}
           <RecurringJobManager />
           <ReviewReminder />
           <Routes>
