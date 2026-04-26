@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   MapPin, Navigation, Car, Clock, X, Check, Target, 
-  MessageSquare, ChevronRight, Zap, History, Loader2, 
+  MessageSquare, ChevronRight, ChevronLeft, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, 
   Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer
 } from "lucide-react";
@@ -44,6 +44,36 @@ const mapOptions: google.maps.MapOptions = {
       "featureType": "transit",
       "stylers": [{ "visibility": "simplified" }]
     }
+  ]
+};
+
+const premiumMapOptions: google.maps.MapOptions = {
+  ...mapOptions,
+  styles: [
+    { "elementType": "geometry", "stylers": [{ "color": "#ebe3cd" }] },
+    { "elementType": "labels.text.fill", "stylers": [{ "color": "#523735" }] },
+    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f1e6" }] },
+    { "featureType": "administrative", "elementType": "geometry.stroke", "stylers": [{ "color": "#c9b2a6" }] },
+    { "featureType": "administrative.land_parcel", "elementType": "geometry.stroke", "stylers": [{ "color": "#dcd2be" }] },
+    { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#ae9e90" }] },
+    { "featureType": "landscape.natural", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#93817c" }] },
+    { "featureType": "poi.park", "elementType": "geometry.fill", "stylers": [{ "color": "#a5b076" }] },
+    { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#447530" }] },
+    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#f5f1e6" }] },
+    { "featureType": "road.arterial", "elementType": "geometry", "stylers": [{ "color": "#fdfcf8" }] },
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#f8c967" }] },
+    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#e9bc62" }] },
+    { "featureType": "road.highway.controlled_access", "elementType": "geometry", "stylers": [{ "color": "#e98d58" }] },
+    { "featureType": "road.highway.controlled_access", "elementType": "geometry.stroke", "stylers": [{ "color": "#db8555" }] },
+    { "featureType": "road.local", "elementType": "labels.text.fill", "stylers": [{ "color": "#806b63" }] },
+    { "featureType": "transit.line", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "transit.line", "elementType": "labels.text.fill", "stylers": [{ "color": "#8f7d77" }] },
+    { "featureType": "transit.line", "elementType": "labels.text.stroke", "stylers": [{ "color": "#ebe3cd" }] },
+    { "featureType": "transit.station", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "water", "elementType": "geometry.fill", "stylers": [{ "color": "#b9d3c2" }] },
+    { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#92998d" }] }
   ]
 };
 
@@ -103,6 +133,28 @@ function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
   );
 }
 
+function SearchingTimer() {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = (elapsed % 60).toString().padStart(2, '0');
+  
+  return (
+    <div className="flex flex-col items-center justify-center bg-surface border border-border-main px-4 py-2 rounded-2xl shadow-sm mb-6">
+      <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-1">Time Elapsed</p>
+      <p className="text-xl font-black text-primary font-mono">{mins.toString().padStart(2, '0')}:{secs}</p>
+    </div>
+  );
+}
+
 export default function PassengerBooking() {
   const { user, profile } = useAuth();
   const { theme, switchPortal } = usePortal();
@@ -117,6 +169,7 @@ export default function PassengerBooking() {
   const [selectedCategory, setSelectedCategory] = useState("standard");
   const [isPetFriendly, setIsPetFriendly] = useState(false);
   const [isPriority, setIsPriority] = useState(false);
+  const [hasPaymentMeans, setHasPaymentMeans] = useState(false);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   
   const { isLoaded, loadError } = useJsApiLoader({
@@ -157,6 +210,20 @@ export default function PassengerBooking() {
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [isChatOpen, setIsChatOpen] = useState(false);
+  
+  const [detailsView, setDetailsView] = useState<"address" | "vehicle">("address");
+
+  const bottomSheetRef = useRef<HTMLDivElement>(null);
+  const vehicleSelectionRef = useRef<HTMLDivElement>(null);
+  
+  // Auto-scroll when route is calculated
+  useEffect(() => {
+    if (distanceMiles > 0 && vehicleSelectionRef.current && bottomSheetRef.current) {
+      setTimeout(() => {
+        vehicleSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 500);
+    }
+  }, [distanceMiles]);
 
   // Map States
   const [mapCenter, setMapCenter] = useState(defaultCenter);
@@ -322,16 +389,29 @@ export default function PassengerBooking() {
       const result = await processTaxiVoiceCommand(text);
       
       const geocodeLocation = (address: string, setter: (val: string) => void, coordSetter: (coords: {lat: number, lng: number}) => void) => {
+        if (!address || address.trim() === "" || address.toLowerCase() === "uk" || address.toLowerCase() === "united kingdom") return;
+        
         if (!window.google || !window.google.maps) {
            setter(address);
            return;
         }
         const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: address + ', UK' }, (results, status) => {
+        geocoder.geocode({ 
+          address: address,
+          componentRestrictions: { country: "GB" }
+        }, (results, status) => {
           if (status === "OK" && results && results[0]) {
             const loc = results[0].geometry.location;
             coordSetter({ lat: loc.lat(), lng: loc.lng() });
-            setter(results[0].formatted_address);
+            
+            const isJustCountry = results[0].types.includes('country');
+            const formatted = results[0].formatted_address;
+            
+            if (isJustCountry || formatted === 'United Kingdom' || formatted === 'UK') {
+              setter(address);
+            } else {
+              setter(formatted);
+            }
           } else {
             setter(address);
           }
@@ -516,6 +596,22 @@ export default function PassengerBooking() {
     } catch (err) { setStep("details"); }
   };
 
+  const handleBoostPriority = async () => {
+    if (!currentRideId || isPriority) return;
+    try {
+      setIsPriority(true);
+      await updateDoc(doc(db, "ride_requests", currentRideId), {
+         isPriority: true,
+         fareEstimate: increment(3)
+      });
+      toast.success("Priority Boost Activated!");
+    } catch (e) {
+      console.error(e);
+      setIsPriority(false);
+      toast.error("Failed to boost priority");
+    }
+  };
+
   const handleCancelSearching = async () => {
     if (currentRideId) {
       await updateDoc(doc(db, "ride_requests", currentRideId), { status: "cancelled", cancelledBy: "passenger", cancelledAt: serverTimestamp() });
@@ -595,6 +691,23 @@ export default function PassengerBooking() {
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
           toast.success("Your driver has arrived!");
         }
+        if (data.status === 'in_progress') {
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis() } : null);
+          setStep("confirmed");
+          
+          // Trigger the 'end of journey' pop-up after a short delay for preview purposes
+          setTimeout(() => {
+            toast('Journey finishing soon', {
+               description: "Please have your phone ready to scan the driver's QR code to pay via Stripe.",
+               action: { label: 'Got it', onClick: () => console.log('Ready to scan') },
+               duration: 20000,
+               icon: <X className="w-5 h-5 text-warning" />
+            });
+            triggerHaptic(ImpactStyle.Heavy);
+            // Vibrate pattern for alert
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          }, 15000); // 15s after ride starts
+        }
         if (data.status === 'completed') { setStep("details"); setCurrentRideId(null); setAssignedDriverInfo(null); }
       }
     });
@@ -639,12 +752,17 @@ export default function PassengerBooking() {
     triggerHaptic(ImpactStyle.Light);
     
     const finalizeSelection = (coords: {lat: number, lng: number} | null, finalAddr: string) => {
+      let currentPickup = pickup;
+      let currentDropoff = dropoff;
+
       if (activeField === "pickup") { 
         setPickup(finalAddr); 
+        currentPickup = finalAddr;
         if (coords) { setMapCenter(coords); setPickupCoords(coords); } 
       }
       else if (activeField === "dropoff") { 
         setDropoff(finalAddr); 
+        currentDropoff = finalAddr;
         if (coords) { setMapCenter(coords); setDropoffCoords(coords); } 
       }
       else if (activeField?.startsWith("stop-")) {
@@ -655,6 +773,10 @@ export default function PassengerBooking() {
         if (coords) setMapCenter(coords);
       }
       setSuggestions([]); setActiveField(null);
+      
+      if (currentPickup && currentDropoff) {
+         setDetailsView("vehicle");
+      }
     };
 
     if (s.placePrediction) {
@@ -731,7 +853,7 @@ export default function PassengerBooking() {
             center={mapCenter}
             zoom={15}
             onLoad={setMap}
-            options={theme === "dark" ? darkMapOptions : mapOptions}
+            options={theme === "dark" ? darkMapOptions : premiumMapOptions}
             onClick={(e) => {
                if (e.latLng && step === "details") {
                   const lat = e.latLng.lat();
@@ -819,26 +941,6 @@ export default function PassengerBooking() {
           </GoogleMap>
        </div>
 
-       {/* Platform Switcher Button in Passenger Taxi View */}
-       <button 
-         onClick={() => {
-           triggerHaptic();
-           switchPortal("anytrader");
-           navigate("/");
-         }}
-         className="absolute top-[60px] left-4 z-[50] flex items-center gap-3 group text-left px-2 py-2 bg-white/70 backdrop-blur-md rounded-[20px] shadow-sm border border-slate-200/50"
-         title="Switch to AnyTrader"
-       >
-         <div className="w-12 h-12 bg-blue-600 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 active:scale-95 transition-transform duration-300 shrink-0">
-           <Hammer className="w-5 h-5 text-white" />
-           <span className="text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
-         </div>
-         <div className="pr-3">
-           <span className="text-sm font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
-           <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
-         </div>
-       </button>
-
        {/* Chat Component */}
        {step === "confirmed" && currentRideId && (
          <RideChat 
@@ -860,132 +962,219 @@ export default function PassengerBooking() {
                 exit={{ y: "100%" }}
                 className="bg-card rounded-t-[40px] shadow-2xl pointer-events-auto flex flex-col max-h-[65vh] w-full border-t border-border-main pb-[calc(4rem+env(safe-area-inset-bottom))]"
               >
-                <div className="w-12 h-1.5 bg-border-main rounded-full mx-auto mt-3 mb-1" />
-                <div className="p-5 pt-2 overflow-y-auto space-y-4 no-scrollbar">
-                  <div className="relative">
-                    <div className="absolute left-4 top-10 bottom-6 w-0.5 border-l-2 border-dashed border-border-main" />
-                    <div className="space-y-3 relative">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between ml-4 pr-1">
-                          <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">Pickup</label>
-                          <div className="flex items-center gap-2">
-                             <button onClick={startListening} className={cn("p-2 rounded-xl transition-all", isListening ? "bg-danger/20 text-danger animate-pulse" : "bg-warning/10 text-warning hover:bg-warning/20")}><Mic className="w-4 h-4" /></button>
-                             <button onClick={handleDetectLocation} className="p-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-all"><Target className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                        <div className="relative">
-                          <div className="flex gap-2">
-                            <div className="w-[84px] shrink-0 relative">
-                               <input type="text" className="w-full pl-3 pr-2 py-3 bg-surface border-2 border-transparent focus:border-primary rounded-2xl font-bold text-text-main outline-none transition-all placeholder:text-text-muted text-center" placeholder="Flat No" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} />
-                            </div>
-                            <div className="relative flex-1">
-                              <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-primary bg-surface z-10" />
-                              <input type="text" className="w-full pl-12 pr-4 py-3 bg-surface border-2 border-transparent focus:border-primary rounded-2xl font-bold text-text-main outline-none transition-all placeholder:text-text-muted" placeholder="Where from?" value={pickup} onFocus={() => setActiveField("pickup")} onChange={(e) => setPickup(e.target.value)} />
-                            </div>
-                          </div>
-                          
-                          <AnimatePresence>
-                            {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
-                              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full mt-2 left-0 right-0 z-[100] w-full bg-surface border border-border-main shadow-2xl rounded-2xl overflow-hidden">
-                                {suggestions.map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full p-4 text-left hover:bg-card border-b border-border-main last:border-0 flex items-center gap-3">
-                                    <MapPin className="w-4 h-4 text-primary shrink-0" />
-                                    <span className="font-bold text-text-main text-sm truncate">{s.label}</span>
-                                  </button>
-                                ))}
-                                {suggestions.length === 0 && isLoadingAddress && (
-                                  <div className="p-4 flex items-center justify-center text-text-muted bg-card">
-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
-                                  </div>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      </div>
-
-                      {stops.map((stop, i) => (
-                        <div key={i} className="relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-warning rounded-full z-10 border-2 border-surface" />
-                          <input type="text" className="w-full pl-12 pr-12 py-3 bg-surface border-2 border-transparent focus:border-warning rounded-2xl font-bold text-text-main outline-none placeholder:text-text-muted" placeholder={`Stop ${i+1}`} value={stop.address} onFocus={() => setActiveField(`stop-${i}`)} onChange={(e) => {
-                             const ns = [...stops]; ns[i].address = e.target.value; setStops(ns);
-                          }} />
-                          <button onClick={() => setStops(stops.filter((_, idx) => idx !== i))} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-danger"><X className="w-4 h-4" /></button>
-
-                          <AnimatePresence>
-                            {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
-                              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full mt-2 left-0 right-0 z-[100] w-full bg-surface border border-border-main shadow-2xl rounded-2xl overflow-hidden">
-                                {suggestions.map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full p-4 text-left hover:bg-card border-b border-border-main last:border-0 flex items-center gap-3">
-                                    <MapPin className="w-4 h-4 text-warning shrink-0" />
-                                    <span className="font-bold text-text-main text-sm truncate">{s.label}</span>
-                                  </button>
-                                ))}
-                                {suggestions.length === 0 && isLoadingAddress && (
-                                  <div className="p-4 flex items-center justify-center text-text-muted bg-card">
-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
-                                  </div>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      ))}
-
-                      {stops.length < 3 && (
-                        <button className="ml-8 flex items-center gap-1.5 px-3 py-1 bg-trust/10 text-trust rounded-full border-2 border-card text-[9px] font-black uppercase" onClick={() => setStops([...stops, { address: "", coords: null }])}>
-                          <Plus className="w-3.5 h-3.5" /> Add Stop
+                <div className="w-12 h-1.5 bg-border-main rounded-full mx-auto mt-3 mb-1 shrink-0" />
+                <div ref={bottomSheetRef} className="p-4 pt-2 overflow-x-hidden overflow-y-auto space-y-4 no-scrollbar flex-1">
+                  {detailsView === "address" ? (
+                    <>
+                      <div className="mb-1">
+                        <button onClick={startListening} disabled={isListening || isAiProcessing} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-4 px-4 rounded-3xl flex items-center justify-center gap-3 font-bold shadow-lg active:scale-95 transition-all">
+                          {isListening ? (
+                            <>
+                              <div className="relative flex items-center justify-center">
+                                <div className="absolute inset-0 bg-current opacity-20 rounded-full animate-ping" />
+                                <Mic className="w-5 h-5 animate-pulse" />
+                              </div>
+                              Listening...
+                            </>
+                          ) : isAiProcessing ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin"/> Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Mic className="w-5 h-5"/> Tap to Book by Voice
+                            </>
+                          )}
                         </button>
-                      )}
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-4">Dropoff</label>
-                        <div className="relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 bg-header rounded-sm z-10" />
-                          <input type="text" className="w-full pl-12 pr-4 py-3 bg-surface border-2 border-transparent focus:border-header rounded-2xl font-bold text-text-main outline-none placeholder:text-text-muted" placeholder="Where to?" value={dropoff} onFocus={() => setActiveField("dropoff")} onChange={(e) => setDropoff(e.target.value)} />
-                          
-                          <AnimatePresence>
-                            {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
-                              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full mb-2 left-0 right-0 z-[100] w-full bg-surface border border-border-main shadow-2xl rounded-2xl overflow-hidden">
-                                {suggestions.map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full p-4 text-left hover:bg-card border-b border-border-main last:border-0 flex items-center gap-3">
-                                    <MapPin className="w-4 h-4 text-header shrink-0" />
-                                    <span className="font-bold text-text-main text-sm truncate">{s.label}</span>
-                                  </button>
-                                ))}
-                                {suggestions.length === 0 && isLoadingAddress && (
-                                  <div className="p-4 flex items-center justify-center text-text-muted bg-card">
-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
-                                  </div>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                      </div>
+                      <div className="bg-surface rounded-3xl p-2 pb-3 border border-border-main shadow-sm mb-4 shrink-0">
+                    <div className="space-y-2 relative">
+                      <div className="absolute left-3 top-8 bottom-8 w-0.5 border-l-2 border-dashed border-border-main/60" />
+                      
+                      {/* Pickup */}
+                      <div className="relative flex items-center group w-full">
+                        <div className="w-6 flex justify-center shrink-0">
+                           <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-surface z-10 
+                             group-focus-within:border-emerald-500 group-focus-within:scale-125 transition-all" />
+                        </div>
+                        <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-2xl group-focus-within:bg-white group-focus-within:border-emerald-500 group-focus-within:ring-4 group-focus-within:ring-emerald-500/10 transition-all shadow-sm min-w-0 pr-1">
+                          <input 
+                            type="text" 
+                            className="flex-none w-14 bg-transparent text-center font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] border-r border-slate-200 py-3.5 focus:bg-emerald-500/5 rounded-l-2xl transition-colors shrink-0 min-w-0" 
+                            placeholder="Flat" 
+                            value={houseNumber} 
+                            onChange={(e) => setHouseNumber(e.target.value)} 
+                          />
+                          <input 
+                            type="text" 
+                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-emerald-500/5 transition-colors min-w-0" 
+                            placeholder="Current Location" 
+                            value={pickup} 
+                            onFocus={() => setActiveField("pickup")} 
+                            onChange={(e) => setPickup(e.target.value)} 
+                          />
+                          <button onClick={handleDetectLocation} className="p-2 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-full tooltip-trigger shrink-0 transition-colors">
+                            <Target className={`w-5 h-5 ${isDetecting ? 'animate-spin' : ''}`} />
+                          </button>
                         </div>
                       </div>
                       
-                      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                        <button onClick={() => setDropoff(profile?.homeAddress || "")} className="flex-none px-3 py-1.5 bg-surface rounded-full flex items-center gap-1.5 border border-border-main text-[10px] font-black text-text-muted"><Home className="w-3 h-3" /> Home</button>
-                        <button onClick={() => setDropoff(profile?.workAddress || "")} className="flex-none px-3 py-1.5 bg-surface rounded-full flex items-center gap-1.5 border border-border-main text-[10px] font-black text-text-muted"><Briefcase className="w-3 h-3" /> Work</button>
+                      <AnimatePresence>
+                        {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
+                            {suggestions.map((s, idx) => (
+                              <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
+                                <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
+                                <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                              </button>
+                            ))}
+                            {suggestions.length === 0 && isLoadingAddress && (
+                              <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Stops */}
+                      {stops.map((stop, i) => (
+                        <React.Fragment key={i}>
+                          <div className="relative flex items-center group w-full">
+                          <div className="w-6 flex justify-center shrink-0">
+                             <div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-surface z-10" />
+                          </div>
+                          <div className="flex-1 flex bg-slate-50 border border-slate-200 rounded-2xl group-focus-within:bg-white group-focus-within:border-amber-500 group-focus-within:ring-4 group-focus-within:ring-amber-500/10 transition-all pr-1 shadow-sm min-w-0">
+                            <input 
+                              type="text" 
+                              className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-amber-500/5 rounded-l-2xl transition-colors min-w-0" 
+                              placeholder={`Stop ${i+1}`} 
+                              value={stop.address} 
+                              onFocus={() => setActiveField(`stop-${i}`)} 
+                              onChange={(e) => {
+                                const ns = [...stops]; ns[i].address = e.target.value; setStops(ns);
+                              }} 
+                            />
+                            <button onClick={() => setStops(stops.filter((_, idx) => idx !== i))} className="p-2 text-text-muted hover:text-danger rounded-full shrink-0"><X className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                        
+                        <AnimatePresence>
+                          {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
+                              {suggestions.map((s, idx) => (
+                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
+                                  <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
+                                  <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                </button>
+                              ))}
+                              {suggestions.length === 0 && isLoadingAddress && (
+                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
+                                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </React.Fragment>
+                    ))}
+
+                    {/* Dropoff */}
+                      <div className="relative flex items-center group w-full">
+                        <div className="w-6 flex justify-center shrink-0">
+                           <div className="w-2.5 h-2.5 bg-red-500 rounded-sm z-10 group-focus-within:bg-red-500 group-focus-within:scale-125 transition-all" />
+                        </div>
+                        <div className="flex-1 flex bg-slate-50 border border-slate-200 rounded-2xl group-focus-within:bg-white group-focus-within:border-red-500 group-focus-within:ring-4 group-focus-within:ring-red-500/10 transition-all pr-1 shadow-sm min-w-0">
+                          <input 
+                            type="text" 
+                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-red-500/5 rounded-l-2xl transition-colors min-w-0" 
+                            placeholder="Where to?" 
+                            value={dropoff} 
+                            onFocus={() => setActiveField("dropoff")} 
+                            onChange={(e) => setDropoff(e.target.value)} 
+                          />
+                          {stops.length < 3 && (
+                            <button onClick={() => setStops([...stops, { address: "", coords: null }])} className="p-2 text-text-main hover:bg-black/5 rounded-full tooltip-trigger shrink-0">
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
+                            {suggestions.map((s, idx) => (
+                              <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
+                                <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
+                                <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                              </button>
+                            ))}
+                            {suggestions.length === 0 && isLoadingAddress && (
+                              <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      
+                      <div className="flex gap-2 py-2 ml-6 overflow-x-auto no-scrollbar pr-1">
+                        <button onClick={() => { setDropoff(profile?.homeAddress || "Home"); if (pickup) setDetailsView("vehicle"); }} className="flex-none px-4 py-2 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm"><Home className="w-4 h-4 text-blue-500" /> Home</button>
+                        <button onClick={() => { setDropoff(profile?.workAddress || "Work"); if (pickup) setDetailsView("vehicle"); }} className="flex-none px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"><Briefcase className="w-4 h-4 text-indigo-500" /> Work</button>
+                        <button onClick={() => { toast.info("Regular Journeys feature coming soon!"); }} className="flex-none px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors shadow-sm"><History className="w-4 h-4 text-emerald-500" /> Regular Journeys</button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4 pt-2">
-                    {/* Distance & ETA */}
+                  <AnimatePresence>
+                    {distanceMiles > 0 && pickup && dropoff && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                        <button onClick={() => setDetailsView("vehicle")} className="w-full py-4 bg-primary text-white rounded-[20px] font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all mb-4">
+                          Continue to Vehicles
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between bg-surface-hover rounded-2xl p-4 border border-border-main shadow-sm mb-4 shrink-0">
+                    <div className="flex flex-1 items-start gap-2 overflow-hidden">
+                      <button onClick={() => setDetailsView("address")} className="p-2 -mt-1 -ml-2 rounded-xl text-text-muted hover:bg-black/5 transition-colors shrink-0 tooltip-trigger"><ChevronLeft className="w-5 h-5" /></button>
+                      <div className="space-y-1.5 flex-1 overflow-hidden pt-0.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full border-2 border-text-main bg-surface shrink-0" />
+                          <span className="text-sm font-bold text-text-main truncate max-w-full">{pickup || "Current Location"}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full border-2 border-transparent bg-header shrink-0 mx-[2px] w-[5px] h-[5px]" />
+                          <span className="text-sm font-bold text-text-main truncate max-w-full">{dropoff}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
                     {distanceMiles > 0 && (
-                      <div className="flex items-center gap-2 px-1 mb-2">
+                      <motion.div 
+                        ref={vehicleSelectionRef}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="space-y-4 pt-2 overflow-hidden"
+                      >
+                        {/* Distance & ETA */}
+                        <div className="flex items-center gap-2 px-1 mb-2">
                         <MapPin className="w-4 h-4 text-primary" />
                         <span className="text-sm font-bold text-text-main">{distanceMiles.toFixed(1)} miles</span>
                         <span className="text-text-muted text-lg leading-none mb-1">•</span>
                         <span className="text-sm font-bold text-text-main">~{durationMinutes.toFixed(0)} min</span>
                       </div>
-                    )}
                     <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x px-1">
                       {CAR_CATEGORIES.map((cat) => {
                         const active = selectedCategory === cat.id;
                         return (
-                          <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={cn("flex-none w-[100px] snap-center p-3 rounded-2xl border-2 transition-all", active ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-surface border-border-main text-text-main hover:border-primary/50")}>
+                          <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={cn("flex-none w-[100px] snap-center p-3 rounded-2xl border-2 transition-all shadow-sm", active ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-surface border-slate-300 text-text-main hover:border-primary/50")}>
                             <cat.icon className={cn("w-5 h-5 mb-2", active ? "text-white" : "text-primary")} />
                             <p className="text-[10px] font-black uppercase tracking-tight line-clamp-1">{cat.name}</p>
                             <p className="text-lg font-black tracking-tighter">£{getComputedFare(cat.id).toFixed(2)}</p>
@@ -995,36 +1184,44 @@ export default function PassengerBooking() {
                     </div>
                     
                     {/* Add-Ons */}
-                    <div className="space-y-3 pt-2">
-                       <label className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border-main cursor-pointer" onClick={() => setIsPriority(!isPriority)}>
-                          <div className="flex items-center gap-3">
-                             <div className="w-10 h-10 bg-warning/10 rounded-xl flex items-center justify-center">
-                               <Zap className="w-5 h-5 text-warning" />
-                             </div>
-                             <div>
-                               <p className="font-bold text-text-main text-sm">Priority</p>
-                               <p className="text-[10px] text-text-muted mt-0.5">Skip the queue +£3</p>
-                             </div>
-                          </div>
-                          <div className={`w-11 h-6 rounded-full transition-colors relative ${isPriority ? 'bg-primary' : 'bg-border-main'}`}>
-                            <div className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full transition-transform ${isPriority ? 'right-1' : 'left-1'}`} />
-                          </div>
-                       </label>
-                       
-                       <label className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border-main cursor-pointer" onClick={() => setIsPetFriendly(!isPetFriendly)}>
-                          <div className="flex items-center gap-3">
-                             <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                               <Dog className="w-5 h-5 text-primary" />
-                             </div>
-                             <div>
-                               <p className="font-bold text-text-main text-sm">Pet Friendly</p>
-                               <p className="text-[10px] text-text-muted mt-0.5">Travelling with a pet +£3</p>
-                             </div>
-                          </div>
-                          <div className={`w-11 h-6 rounded-full transition-colors relative ${isPetFriendly ? 'bg-primary' : 'bg-border-main'}`}>
-                            <div className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full transition-transform ${isPetFriendly ? 'right-1' : 'left-1'}`} />
-                          </div>
-                       </label>
+                    <div className="pt-2">
+                      <div className="flex items-center gap-3">
+                         <button 
+                           onClick={() => setIsPriority(!isPriority)}
+                           className={cn("flex-1 p-2.5 rounded-xl border-2 flex items-center justify-between transition-colors", isPriority ? "bg-warning/10 border-warning text-warning" : "bg-surface border-slate-200 hover:border-warning/50 text-slate-700")}
+                         >
+                           <div className="flex items-center gap-2">
+                             <Zap className={cn("w-4 h-4", isPriority ? "text-warning" : "text-slate-500")} />
+                             <span className="text-xs font-bold leading-tight">Priority</span>
+                           </div>
+                           <div className={`w-8 h-4 rounded-full transition-colors relative shrink-0 ${isPriority ? 'bg-warning' : 'bg-slate-300'}`}>
+                             <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${isPriority ? 'right-0.5' : 'left-0.5'}`} />
+                           </div>
+                         </button>
+
+                         <button 
+                           onClick={() => setIsPetFriendly(!isPetFriendly)}
+                           className={cn("flex-1 p-2.5 rounded-xl border-2 flex items-center justify-between transition-colors", isPetFriendly ? "bg-primary/10 border-primary text-primary" : "bg-surface border-slate-200 hover:border-primary/50 text-slate-700")}
+                         >
+                           <div className="flex items-center gap-2">
+                             <Dog className={cn("w-4 h-4", isPetFriendly ? "text-primary" : "text-slate-500")} />
+                             <span className="text-xs font-bold leading-tight">Pet</span>
+                           </div>
+                           <div className={`w-8 h-4 rounded-full transition-colors relative shrink-0 ${isPetFriendly ? 'bg-primary' : 'bg-slate-300'}`}>
+                             <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${isPetFriendly ? 'right-0.5' : 'left-0.5'}`} />
+                           </div>
+                         </button>
+                      </div>
+
+                      <AnimatePresence>
+                        {(isPriority || isPetFriendly) && (
+                          <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:"auto"}} exit={{opacity:0, height:0}} className="overflow-hidden">
+                            <div className="text-[10px] font-bold text-slate-500 bg-slate-100 p-2.5 rounded-xl mt-3 text-center border border-slate-200">
+                              <span className="text-warning">Notice:</span> Each active option adds <span className="text-slate-800">£3.00</span> to the base fare.
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                     
                     {/* Fare Summary */}
@@ -1043,26 +1240,66 @@ export default function PassengerBooking() {
                       <p className="text-[9px] text-text-muted italic mt-2 text-center">Final fare may vary based on route</p>
                     </div>
 
-                    <div className="pt-2">
-                       <p className="text-center text-xs font-bold text-text-muted mb-3">Pay via QR code at end of ride</p>
-                       <button onClick={handleConfirmBooking} disabled={!pickup || !dropoff} className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all">
+                    <div className="pt-2 space-y-4">
+                       <label className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl cursor-pointer">
+                         <input 
+                           type="checkbox" 
+                           checked={hasPaymentMeans}
+                           onChange={(e) => setHasPaymentMeans(e.target.checked)}
+                           className="w-5 h-5 rounded text-primary focus:ring-primary border-primary/30"
+                         />
+                         <div className="flex-1">
+                           <p className="text-xs font-bold text-text-main">I confirm I have means to pay (QR Code / Cash)</p>
+                         </div>
+                       </label>
+
+                       <button 
+                         onClick={handleConfirmBooking} 
+                         disabled={!pickup || !dropoff || !hasPaymentMeans} 
+                         className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+                       >
                          Confirm {CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}
                        </button>
                     </div>
-                  </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  </>
+                  )}
                 </div>
               </motion.div>
             )}
 
             {step === "searching" && (
               <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-8 pb-[calc(4rem+env(safe-area-inset-bottom)+2rem)] flex flex-col items-center border-t border-border-main">
-                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center relative mb-6">
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center relative mb-4">
                   <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
                   <Car className="w-10 h-10 text-primary animate-pulse" />
                 </div>
                 <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">Requesting...</h2>
-                <p className="text-text-muted font-bold text-sm text-center mb-8">Pinging the fleet to find your professional driver.</p>
-                <button onClick={handleCancelSearching} className="text-danger font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl bg-danger/5">Cancel</button>
+                <p className="text-text-muted font-bold text-sm text-center mb-6">Pinging the fleet to find your professional driver.</p>
+                
+                <SearchingTimer />
+                
+                {!isPriority && (
+                  <div onClick={handleBoostPriority} className="w-full max-w-xs mt-4 mb-2 bg-gradient-to-r from-amber-200 to-amber-300 rounded-2xl p-4 shadow-sm border border-amber-400 relative overflow-hidden group cursor-pointer active:scale-95 transition-all">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-400/50 rounded-full blur-xl group-hover:scale-150 transition-transform"></div>
+                    <div className="flex items-start gap-3 relative z-10">
+                      <div className="p-2 bg-white/50 rounded-full shrink-0">
+                        <Zap className="w-5 h-5 text-amber-700" />
+                      </div>
+                      <div>
+                        <h4 className="text-amber-950 font-black text-sm">Boost Priority</h4>
+                        <p className="text-amber-800 text-[11px] font-semibold leading-tight mt-0.5">Jump to the top of the queue. Get a driver faster.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-4 w-full max-w-xs mt-2">
+                  <button onClick={handleCancelSearching} className="flex-1 text-text-main font-black text-sm py-4 rounded-2xl border-2 border-border-main hover:bg-surface transition-colors active:scale-95">Edit</button>
+                  <button onClick={handleCancelSearching} className="flex-1 text-danger font-black text-sm py-4 rounded-2xl bg-danger/5 border-2 border-danger/10 hover:bg-danger/10 shadow-sm active:scale-95 transition-colors">Cancel</button>
+                </div>
               </motion.div>
             )}
 
@@ -1078,7 +1315,11 @@ export default function PassengerBooking() {
                   </div>
                 ) : (
                   <div className="flex flex-col mb-6">
-                     <h2 className="text-2xl font-black text-text-main tracking-tight mb-4">{assignedDriverInfo?.status === "en_route_pickup" ? "Driver is on the way" : "Driver found!"}</h2>
+                     <h2 className="text-2xl font-black text-text-main tracking-tight mb-4">
+                       {assignedDriverInfo?.status === "en_route_pickup" ? "Driver is on the way" : 
+                        assignedDriverInfo?.status === "in_progress" ? "Heading to destination" : 
+                        "Driver found!"}
+                     </h2>
                      <div className="flex flex-col md:flex-row md:items-center justify-between bg-surface border border-border-main p-4 rounded-3xl shadow-sm gap-4">
                        <div className="flex items-center gap-4">
                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo?.name || "driver"}`} alt="Driver" className="w-14 h-14 rounded-full border border-border-main shadow-sm bg-card object-cover" />

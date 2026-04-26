@@ -2391,13 +2391,22 @@ export default function PostJobWizard() {
       {/* Sticky Navigation Footer */}
       {step !== 0 && (
         <div className="fixed bottom-4 sm:bottom-0 left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl z-40 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:mt-10 shadow-2xl">
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto flex gap-3">
+            {step > 0 && (
+              <button 
+                onClick={prevStep} 
+                className="flex-[1] p-4 rounded-2xl border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center"
+              >
+                Back
+              </button>
+            )}
+            
             {step === 1 || step === 2 ? (
-              <div className="flex-[2] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{step === 1 ? "Select a category to continue" : "Select a subcategory to continue"}</p>
+              <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{step === 1 ? "Category Selection" : "Subcategory Selection"}</p>
               </div>
             ) : step === 3 ? (
-            <div className="flex gap-3">
+            <div className="flex-[3] flex gap-3">
               <button 
                 onClick={handleGetRefinement} 
                 disabled={!formData.title || formData.title.length < 3 || !formData.description || isRefiningScope}
@@ -2413,7 +2422,7 @@ export default function PostJobWizard() {
               </button>
             </div>
           ) : step === 3.5 ? (
-            <div className="flex gap-3">
+            <div className="flex-[3] flex gap-3">
               <button 
                 onClick={() => {
                   setClarifyingAnswers({});
@@ -2432,7 +2441,7 @@ export default function PostJobWizard() {
               </button>
             </div>
           ) : step === 4 ? (
-            <div className="flex gap-3">
+            <div className="flex-[3] flex gap-3">
               <button 
                 onClick={nextStep} 
                 disabled={!formData.city || !formData.postcode || !!postcodeError}
@@ -2448,7 +2457,7 @@ export default function PostJobWizard() {
               </button>
             </div>
           ) : step === 5 ? (
-            <div className="flex gap-3">
+            <div className="flex-[3] flex gap-3">
               <button 
                 onClick={nextStep} 
                 id="wizard-next-step-5"
@@ -2458,7 +2467,7 @@ export default function PostJobWizard() {
               </button>
             </div>
           ) : step === 6 ? (
-            <div className="flex gap-3">
+            <div className="flex-[3] flex gap-3">
               <button 
                 onClick={nextStep} 
                 disabled={isUploading}
@@ -2469,7 +2478,7 @@ export default function PostJobWizard() {
               </button>
             </div>
           ) : step === 7 ? (
-            <div className="flex gap-3">
+            <div className="flex-[3] flex gap-3">
               <button 
                 onClick={handleSubmit}
                 disabled={isSubmitting || (!estimate && !formData.selectedBudget)}
