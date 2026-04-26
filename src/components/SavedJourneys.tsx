@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { MapPin, Bookmark, Trash2, ArrowRight, Plus, Search, Heart, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
+import { toast } from "sonner";
 import { useJsApiLoader } from "@react-google-maps/api";
 
 const libraries: any[] = ["places"];
@@ -119,6 +120,7 @@ export default function SavedJourneys() {
     if (!user) return;
     if (confirmRemoveFavIndex !== index) {
       setConfirmRemoveFavIndex(index);
+      toast("Double tap to confirm deletion", { icon: '⚠️', duration: 2500 });
       setTimeout(() => setConfirmRemoveFavIndex(null), 3000);
       return;
     }
@@ -128,9 +130,11 @@ export default function SavedJourneys() {
       await updateDoc(doc(db, "users", user.uid), {
         favoriteAddresses: arrayRemove(fav)
       });
+      toast.success("Address deleted");
       setConfirmRemoveFavIndex(null);
     } catch (err) {
       console.error("Failed to remove favorite:", err);
+      toast.error("Failed to delete address");
     } finally {
       setLoading(false);
     }
@@ -140,6 +144,7 @@ export default function SavedJourneys() {
     if (!user) return;
     if (confirmRemoveJourneyIndex !== index) {
       setConfirmRemoveJourneyIndex(index);
+      toast("Double tap to confirm deletion", { icon: '⚠️', duration: 2500 });
       setTimeout(() => setConfirmRemoveJourneyIndex(null), 3000);
       return;
     }
@@ -149,9 +154,11 @@ export default function SavedJourneys() {
       await updateDoc(doc(db, "users", user.uid), {
         regularJourneys: arrayRemove(journey)
       });
+      toast.success("Journey deleted");
       setConfirmRemoveJourneyIndex(null);
     } catch (err) {
       console.error("Failed to remove journey:", err);
+      toast.error("Failed to delete journey");
     } finally {
       setLoading(false);
     }

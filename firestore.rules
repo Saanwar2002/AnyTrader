@@ -68,6 +68,7 @@ service cloud.firestore {
         request.resource.data.get('assignedDriverId', '') == request.auth.uid || 
         isAdmin()
       );
+      allow delete: if isSignedIn() && (resource.data.get('riderId', '') == request.auth.uid || isAdmin());
       allow list: if isSignedIn();
 
       match /chat/{messageId} {

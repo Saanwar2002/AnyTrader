@@ -5,7 +5,7 @@ import InboxTab from "./InboxTab";
 import MenuTab from "./MenuTab";
 import SavedJourneys from "../SavedJourneys";
 import BillingTab from "../BillingTab";
-import { Car, Clock, Inbox, Menu, Bookmark, Wallet } from "lucide-react";
+import { Car, Clock, Inbox, Menu, Bookmark, Wallet, Star } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import PlatformSwitcher from "../shared/PlatformSwitcher";
 
@@ -26,7 +26,7 @@ export default function RideDashboardLayout() {
   const navItems = [
     { id: "taxi", name: "Taxi", icon: Car },
     { id: "activity", name: "My Rides", icon: Clock },
-    { id: "saved", name: "Saved", icon: Bookmark },
+    { id: "saved", name: "Favorite", icon: (props: any) => <Star {...props} className={cn(props.className, "text-amber-500 fill-amber-400")} /> },
     { id: "inbox", name: "Messages", icon: Inbox },
     { id: "menu", name: "Menu", icon: Menu },
   ];

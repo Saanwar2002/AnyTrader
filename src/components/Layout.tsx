@@ -301,7 +301,7 @@ export default function Layout() {
   const passengerNav = [
     { name: "Taxi", path: "/book-ride", icon: Car, isCta: false },
     { name: "My Rides", path: "/my-rides", icon: MapPin, isCta: false },
-    { name: "Saved", path: "/saved-journeys", icon: Bookmark, isCta: false },
+    { name: "Favorite", path: "/saved-journeys", icon: (props: any) => <Star {...props} className={cn(props.className, "text-amber-500 fill-amber-400")} />, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
     { name: "Menu", path: "/profile", icon: Menu, isCta: false },
   ];

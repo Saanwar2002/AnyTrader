@@ -199,6 +199,7 @@ export default function MyRides() {
                             handleDeleteRide(ride.id);
                           } else {
                             setConfirmDeleteId(ride.id);
+                            toast("Double tap to confirm deletion", { icon: '⚠️', duration: 2500 });
                             // reset confirm state after 3 sec
                             setTimeout(() => setConfirmDeleteId(null), 3000);
                           }
