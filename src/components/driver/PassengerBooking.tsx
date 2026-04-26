@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, ChevronLeft, Zap, History, Loader2, 
-  Mic, MicOff, Star, Users, Repeat, Shield, Plus, 
+  Mic, MicOff, Star, Users, Repeat, Shield, Plus, Heart,
   Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer
 } from "lucide-react";
 import RideChat from "./RideChat";
@@ -156,6 +156,32 @@ function SearchingTimer() {
   );
 }
 
+function SearchingCancelButton({ onCancel, startTime }: { onCancel: () => void, startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  const timeLeft = 120 - elapsed;
+  const isPenalty = timeLeft <= 0;
+
+  const displayTime = Math.abs(timeLeft);
+  const mins = Math.floor(displayTime / 60);
+  const secs = (displayTime % 60).toString().padStart(2, '0');
+
+  return (
+    <button onClick={onCancel} className={cn("flex-1 font-black text-sm py-4 rounded-2xl border-2 shadow-sm active:scale-95 transition-colors flex items-center justify-center gap-2", isPenalty ? "bg-danger/5 border-danger/10 hover:bg-danger/10 text-danger" : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-700")}>
+      Cancel
+      <span className={cn("font-mono text-[10px] px-1.5 py-0.5 rounded-md border text-center min-w-[34px]", isPenalty ? "bg-danger/10 border-danger/20" : "bg-emerald-100 border-emerald-300")}>{isPenalty ? "+" : ""}{mins}:{secs}</span>
+    </button>
+  );
+}
+
 function CancelRideButton_ConfirmedPhase({ acceptedAt, onCancel }: { acceptedAt: number, onCancel: () => void }) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -243,6 +269,7 @@ export default function PassengerBooking() {
   const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showRegularJourneys, setShowRegularJourneys] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
   
   const [detailsView, setDetailsView] = useState<"address" | "vehicle">("address");
 
@@ -572,6 +599,7 @@ export default function PassengerBooking() {
   };
 
   const [currentRideId, setCurrentRideId] = useState<string | null>(null);
+  const searchingStartTimeRef = useRef<number | null>(null);
 
   const handleConfirmBooking = async () => {
     triggerHaptic(ImpactStyle.Heavy);
@@ -592,6 +620,7 @@ export default function PassengerBooking() {
     }
 
     setStep("searching");
+    searchingStartTimeRef.current = Date.now();
     try {
       const rideData = {
         riderId: user.uid,
@@ -619,9 +648,10 @@ export default function PassengerBooking() {
         currency: "GBP",
         handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
       };
-      if (editId) {
-         await updateDoc(doc(db, "ride_requests", editId), { ...rideData, updatedAt: serverTimestamp() });
-         setCurrentRideId(editId);
+      const activeId = editId || currentRideId;
+      if (activeId) {
+         await updateDoc(doc(db, "ride_requests", activeId), { ...rideData, updatedAt: serverTimestamp() });
+         setCurrentRideId(activeId);
       } else {
          const docRef = await addDoc(collection(db, "ride_requests"), { ...rideData, createdAt: serverTimestamp() });
          setCurrentRideId(docRef.id);
@@ -652,25 +682,50 @@ export default function PassengerBooking() {
 
   const handleCancelSearching = async () => {
     if (currentRideId) {
-      await updateDoc(doc(db, "ride_requests", currentRideId), { status: "cancelled", cancelledBy: "passenger", cancelledAt: serverTimestamp() });
+      await updateDoc(doc(db, "ride_requests", currentRideId), { status: "draft" });
     }
     setStep("details");
-    setCurrentRideId(null);
+    // Do not clear currentRideId here, just let them edit
   };
 
   const handleAbandonSearch = async () => {
-    if (currentRideId) {
-      try {
-        await updateDoc(doc(db, "ride_requests", currentRideId), { status: "cancelled", cancelledBy: "passenger", cancelledAt: serverTimestamp() });
-      } catch (err) {
-        console.error("Cancel failed", err);
-      }
+    if (!currentRideId) return;
+
+    let fee = 0;
+    if (searchingStartTimeRef.current) {
+        const diffMs = Date.now() - searchingStartTimeRef.current;
+        if (diffMs > 120000) { // 2 minutes
+            fee = fareConfig.baseFare; 
+        }
     }
-    setStep("details");
-    setCurrentRideId(null);
-    setDropoff("");
-    setDropoffCoords(null);
-    setPickupCoords(null);
+
+    if (fee > 0 && !showCancelPrompt) {
+        setCancelFeeToApply(fee);
+        setShowCancelPrompt(true);
+        return; 
+    }
+
+    try {
+      await updateDoc(doc(db, "ride_requests", currentRideId), { 
+        status: "cancelled", 
+        cancelledBy: "passenger", 
+        cancellationFee: fee,
+        cancelledAt: serverTimestamp() 
+      });
+      
+      if (fee > 0 && user) {
+        await updateDoc(doc(db, "users", user.uid), {
+           pendingCharges: increment(fee),
+           cancellationCount: increment(1)
+        });
+      }
+
+      toast.success("Ride cancelled.");
+      navigate("/my-rides");
+    } catch (err) {
+      console.error("Cancel failed", err);
+      toast.error("Failed to cancel ride.");
+    }
   };
 
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
@@ -684,6 +739,11 @@ export default function PassengerBooking() {
       const diffMs = Date.now() - assignedDriverInfo.acceptedAt;
       if (diffMs > 120000) { // 2 minutes
         fee = fareConfig.baseFare; 
+      }
+    } else if (step === "searching" && searchingStartTimeRef.current) {
+      const diffMs = Date.now() - searchingStartTimeRef.current;
+      if (diffMs > 120000) {
+        fee = fareConfig.baseFare;
       }
     }
 
@@ -708,11 +768,9 @@ export default function PassengerBooking() {
         });
       }
 
-      setStep("details");
-      setCurrentRideId(null);
-      setAssignedDriverInfo(null);
       setShowCancelPrompt(false);
       toast.success("Ride cancelled.");
+      navigate("/my-rides");
     } catch (err) {
       console.error(err);
       toast.error("Failed to cancel ride.");
@@ -1207,7 +1265,67 @@ export default function PassengerBooking() {
                         >
                           <History className="w-4 h-4 text-emerald-500" /> Regular Journeys
                         </button>
+                        <button 
+                          onClick={() => setShowFavorites(!showFavorites)} 
+                          className={cn("flex-none px-4 py-2 border rounded-2xl flex items-center gap-2 text-[12px] font-bold transition-colors shadow-sm", showFavorites ? "bg-rose-100 border-rose-300 text-rose-800" : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300")}
+                        >
+                          <Heart className="w-4 h-4 text-rose-500" /> Favorites
+                        </button>
                       </div>
+
+                      <AnimatePresence>
+                        {showFavorites && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: "auto" }} 
+                            exit={{ opacity: 0, height: 0 }} 
+                            className="ml-6 overflow-hidden pr-1"
+                          >
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2">
+                              {favoriteAddresses && favoriteAddresses.length > 0 ? (
+                                favoriteAddresses.map((fav: any, idx: number) => (
+                                  <button
+                                    key={`fav-${idx}`}
+                                    onClick={() => {
+                                      const coords = fav.lat && fav.lng ? { lat: fav.lat, lng: fav.lng } : null;
+                                      if (activeField === "pickup") {
+                                        setPickup(fav.address);
+                                        if (coords) { setPickupCoords(coords); setMapCenter(coords); }
+                                      } else if (activeField === "dropoff") {
+                                        setDropoff(fav.address);
+                                        if (coords) { setDropoffCoords(coords); setMapCenter(coords); }
+                                      } else if (activeField?.startsWith("stop-")) {
+                                        const stopIdx = parseInt(activeField.split('-')[1]);
+                                        const newStops = [...stops];
+                                        newStops[stopIdx].address = fav.address;
+                                        if (coords) newStops[stopIdx].coords = coords;
+                                        setStops(newStops);
+                                        if (coords) setMapCenter(coords);
+                                      } else {
+                                        setDropoff(fav.address);
+                                        if (coords) { setDropoffCoords(coords); setMapCenter(coords); }
+                                      }
+                                      setShowFavorites(false);
+                                      if (pickup) setDetailsView("vehicle");
+                                    }}
+                                    className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:border-rose-300 transition-colors flex items-center gap-3"
+                                  >
+                                    <div className="w-8 h-8 rounded-full bg-rose-50 flex flex-shrink-0 items-center justify-center">
+                                      <Heart className="w-4 h-4 text-rose-500" />
+                                    </div>
+                                    <span className="font-bold text-sm text-slate-800 truncate">{fav.address}</span>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="text-center py-4">
+                                  <p className="text-xs text-slate-500 font-medium mb-1">No favorite addresses saved.</p>
+                                  <p className="text-[10px] text-slate-400">Add them in the Saved tab.</p>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
                       <AnimatePresence>
                         {showRegularJourneys && (
@@ -1446,7 +1564,7 @@ export default function PassengerBooking() {
 
                 <div className="flex gap-4 w-full max-w-xs mt-2">
                   <button onClick={handleCancelSearching} className="flex-1 text-text-main font-black text-sm py-4 rounded-2xl border-2 border-border-main hover:bg-surface transition-colors active:scale-95">Edit</button>
-                  <button onClick={handleAbandonSearch} className="flex-1 text-danger font-black text-sm py-4 rounded-2xl bg-danger/5 border-2 border-danger/10 hover:bg-danger/10 shadow-sm active:scale-95 transition-colors">Cancel</button>
+                  <SearchingCancelButton onCancel={handleAbandonSearch} startTime={searchingStartTimeRef.current || Date.now()} />
                 </div>
               </motion.div>
             )}
@@ -1528,7 +1646,10 @@ export default function PassengerBooking() {
                           <AlertCircle className="w-8 h-8 text-danger" />
                         </div>
                         <h3 className="text-xl font-black text-text-main mb-2">Cancel Ride?</h3>
-                        <p className="text-sm font-bold text-text-muted mb-6">Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-text-main font-black">£{cancelFeeToApply.toFixed(2)}</span> will apply to compensate the driver.</p>
+                        <p className="text-sm font-bold text-text-muted mb-6">
+                          {step === "searching" ? "You have been searching for over 2 minutes. " : "Your driver has been on the way for over 2 minutes. "}
+                          A cancellation fee of <span className="text-text-main font-black">£{cancelFeeToApply.toFixed(2)}</span> will apply.
+                        </p>
                         <div className="flex gap-3">
                           <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-4 bg-surface rounded-2xl font-black text-text-main hover:bg-surface-hover transition-colors">Go Back</button>
                           <button onClick={handleCancelConfirmed} className="flex-1 py-4 bg-danger text-white rounded-2xl font-black hover:bg-danger/90 transition-colors">Yes, Cancel</button>

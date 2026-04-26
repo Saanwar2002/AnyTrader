@@ -10,6 +10,8 @@ import { useAuth } from "./AuthProvider";
 import { AnimatePresence, motion } from "framer-motion";
 import { useJsApiLoader } from "@react-google-maps/api";
 
+const libraries: any[] = ['places'];
+
 export default function EmergencyJobWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -46,7 +48,8 @@ export default function EmergencyJobWizard() {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
-    libraries: ['places'] as any,
+    libraries,
+    version: "weekly"
   });
 
   React.useEffect(() => {

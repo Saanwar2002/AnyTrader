@@ -51,6 +51,8 @@ const iconMap: Record<string, any> = {
   Droplets, Zap, Thermometer, Home, Layout, Palette, Wrench, Maximize, Grid, Leaf, Box, Sparkles, Lock
 };
 
+const libraries: any[] = ['places'];
+
 export default function PostJobWizard() {
   const { user, profile } = useAuth();
   const { categories } = useCategories();
@@ -138,7 +140,8 @@ export default function PostJobWizard() {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
-    libraries: ['places'] as any,
+    libraries,
+    version: "weekly"
   });
   const [titleError, setTitleError] = useState("");
   const [postcodeError, setPostcodeError] = useState("");

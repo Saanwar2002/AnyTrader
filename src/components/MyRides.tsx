@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, arrayUnion } from "@/src/firebase";
+import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, arrayUnion, deleteDoc, serverTimestamp } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion } from "motion/react";
-import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark } from "lucide-react";
+import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function MyRides() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [rides, setRides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "completed">("active");
 
   const handleSaveJourney = async (ride: any) => {
@@ -32,19 +35,33 @@ export default function MyRides() {
   };
 
   const handleCancelRide = async (rideId: string) => {
-    if (!window.confirm("Are you sure you want to cancel this ride request?")) return;
-    
     setCancellingId(rideId);
     try {
       await updateDoc(doc(db, "ride_requests", rideId), {
         status: "cancelled",
-        updatedAt: new Date()
+        updatedAt: serverTimestamp()
       });
+      toast.success("Ride cancelled successfully");
     } catch (error) {
       console.error("Error cancelling ride:", error);
-      alert("Failed to cancel ride. Please try again.");
+      toast.error("Failed to cancel ride. Please try again.");
     } finally {
       setCancellingId(null);
+      setConfirmCancelId(null);
+    }
+  };
+
+  const handleDeleteRide = async (rideId: string) => {
+    setDeletingId(rideId);
+    try {
+      await deleteDoc(doc(db, "ride_requests", rideId));
+      toast.success("Ride deleted successfully");
+    } catch (error) {
+      console.error("Error deleting ride:", error);
+      toast.error("Failed to delete ride. Please try again.");
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -145,105 +162,145 @@ export default function MyRides() {
             </p>
           </div>
         ) : (
-          filteredRides.map((ride, idx) => (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              key={ride.id}
-              className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-4 group"
-            >
-              <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
-                    ride.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                    ride.status === "cancelled" ? "bg-red-100 text-red-700" :
-                    "bg-blue-100 text-blue-700"
-                  )}>
-                    {ride.status}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400">
-                    {ride.createdAt?.toDate ? new Date(ride.createdAt.toDate()).toLocaleDateString() : 'Pending'}
-                  </span>
-                </div>
-                {ride.price && (
-                  <span className="font-extrabold text-slate-900">£{parseFloat(ride.price).toFixed(2)}</span>
-                )}
-              </div>
-
-              <div className="space-y-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</p>
-                    <p className="text-sm font-bold text-slate-700 line-clamp-1">{ride.pickup}</p>
-                  </div>
-                </div>
-
-                <div className="w-0.5 h-4 bg-slate-200 ml-[15px] -my-2" />
-
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <MapPin className="w-4 h-4 text-emerald-500" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dropoff</p>
-                    <p className="text-sm font-bold text-slate-700 line-clamp-1">
-                      {ride.rideType === "hourly" ? `${ride.duration}h Hourly Ride` : ride.dropoff}
-                    </p>
-                  </div>
-                </div>
-              </div>
+            filteredRides.map((ride, idx) => {
+              const isSaved = profile?.regularJourneys?.some((j: any) => j.from === ride.pickup && j.to === ride.dropoff);
               
-              {ride.driverName && (
-                <div className="bg-slate-50 rounded-2xl p-3 flex items-center gap-3">
-                   <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName)}`} alt={ride.driverName} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
-                   <div>
-                     <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Driver</p>
-                     <p className="text-xs font-bold text-slate-700">{ride.driverName}</p>
-                   </div>
-                </div>
-              )}
-              
-              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
-                <button
-                  onClick={() => handleSaveJourney(ride)}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-100 transition-colors"
-                >
-                  <Bookmark className="w-4 h-4" />
-                  Save as Regular
-                </button>
-              </div>
-              
-              {ride.status === "pending" && (
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    onClick={() => navigate(`/book-ride?edit=${ride.id}`)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleCancelRide(ride.id)}
-                    disabled={cancellingId === ride.id}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
-                  >
-                    {cancellingId === ride.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <XCircle className="w-4 h-4" />
+              return (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                key={ride.id}
+                className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-4 group"
+              >
+                <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
+                      ride.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                      ride.status === "cancelled" ? "bg-red-100 text-red-700" :
+                      "bg-blue-100 text-blue-700"
+                    )}>
+                      {ride.status}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">
+                      {ride.createdAt?.toDate ? new Date(ride.createdAt.toDate()).toLocaleDateString() : 'Pending'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {ride.price && (
+                      <span className="font-extrabold text-slate-900">£{parseFloat(ride.price).toFixed(2)}</span>
                     )}
-                    Cancel
+                    {ride.status === "cancelled" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirmDeleteId === ride.id) {
+                            handleDeleteRide(ride.id);
+                          } else {
+                            setConfirmDeleteId(ride.id);
+                            // reset confirm state after 3 sec
+                            setTimeout(() => setConfirmDeleteId(null), 3000);
+                          }
+                        }}
+                        disabled={deletingId === ride.id}
+                        className={cn(
+                          "p-1.5 rounded-full transition-colors flex items-center justify-center",
+                          confirmDeleteId === ride.id ? "bg-red-100 text-red-600" : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                        )}
+                      >
+                        {deletingId === ride.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</p>
+                      <p className="text-sm font-bold text-slate-700 line-clamp-1">{ride.pickup}</p>
+                    </div>
+                  </div>
+
+                  <div className="w-0.5 h-4 bg-slate-200 ml-[15px] -my-2" />
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <MapPin className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dropoff</p>
+                      <p className="text-sm font-bold text-slate-700 line-clamp-1">
+                        {ride.rideType === "hourly" ? `${ride.duration}h Hourly Ride` : ride.dropoff}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {ride.driverName && (
+                  <div className="bg-slate-50 rounded-2xl p-3 flex items-center gap-3">
+                     <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName)}`} alt={ride.driverName} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
+                     <div>
+                       <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Driver</p>
+                       <p className="text-xs font-bold text-slate-700">{ride.driverName}</p>
+                     </div>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+                  <button
+                    onClick={() => handleSaveJourney(ride)}
+                    disabled={isSaved}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors",
+                      isSaved ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                    )}
+                  >
+                    <Bookmark className="w-4 h-4" />
+                    {isSaved ? "Saved to Regulars" : "Save as Regular"}
                   </button>
                 </div>
-              )}
-            </motion.div>
-          ))
-        )}
+                
+                {ride.status === "pending" && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => navigate(`/book-ride?edit=${ride.id}`)}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirmCancelId === ride.id) {
+                          handleCancelRide(ride.id);
+                        } else {
+                          setConfirmCancelId(ride.id);
+                          setTimeout(() => setConfirmCancelId(null), 3000);
+                        }
+                      }}
+                      disabled={cancellingId === ride.id}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
+                    >
+                      {cancellingId === ride.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : confirmCancelId === ride.id ? (
+                        <AlertCircle className="w-4 h-4" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                      {confirmCancelId === ride.id ? "Confirm Cancel" : "Cancel"}
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+              )
+            })
+          )}
       </div>
     </div>
   );
