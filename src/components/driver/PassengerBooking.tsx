@@ -102,8 +102,8 @@ const CAR_CATEGORIES = [
   { id: 'executive', name: 'Executive', multiplier: 1.5, wait: '5-8', capacity: 4, icon: Shield },
   { id: 'luxury', name: 'Luxury', multiplier: 2.2, wait: '8-12', capacity: 4, icon: Star },
   { id: '6seater', name: '6-Seater XL', multiplier: 1.4, wait: '6-10', capacity: 6, icon: Users },
-  { id: '8seater', name: '8-Seater Max', multiplier: 1.8, wait: '8-15', capacity: 8, icon: Users },
-  { id: 'wav', name: 'Wheelchair', multiplier: 1.5, wait: '10-20', capacity: 4, icon: Accessibility }
+  { id: '8seater', name: '8-Seater Max', multiplier: 2.0, wait: '8-15', capacity: 8, icon: Users },
+  { id: 'wav', name: 'Wheelchair', multiplier: 2.5, wait: '10-20', capacity: 4, icon: Accessibility }
 ];
 
 function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
@@ -222,6 +222,8 @@ export default function PassengerBooking() {
   const [houseNumber, setHouseNumber] = useState("");
   const [pickup, setPickup] = useState(searchParams.get("pickup") || "");
   const [dropoff, setDropoff] = useState(searchParams.get("dropoff") || "");
+  const pickupInputRef = useRef<HTMLInputElement>(null);
+  const dropoffInputRef = useRef<HTMLInputElement>(null);
   const [comments, setComments] = useState(searchParams.get("comments") || "");
   const [waitTolerance, setWaitTolerance] = useState<10 | 20 | 30>(20);
   const [selectedCategory, setSelectedCategory] = useState("standard");
@@ -339,12 +341,20 @@ export default function PassengerBooking() {
               path.forEach((p: any) => bounds.extend(p));
               map.fitBounds(bounds, { 
                 padding: { 
-                  top: window.innerHeight * 0.15, 
+                  top: window.innerHeight * 0.08, 
                   right: 50, 
-                  bottom: window.innerHeight * 0.45, 
+                  bottom: window.innerHeight * 0.62, 
                   left: 50 
                 } 
               });
+              
+              // Zoom out 1-2 ticks after bounds are set to give more breathing room
+              setTimeout(() => {
+                const currentZoom = map.getZoom();
+                if (currentZoom) {
+                   map.setZoom(currentZoom - 1);
+                }
+              }, 150);
             }
 
             // Calculate distance/fare
@@ -956,10 +966,19 @@ export default function PassengerBooking() {
         setStops(ns);
         if (coords) setMapCenter(coords);
       }
-      setSuggestions([]); setActiveField(null);
+      setSuggestions([]); 
       
-      if (currentPickup && currentDropoff) {
-         setDetailsView("vehicle");
+      if (activeField === "pickup" && !currentDropoff) {
+        dropoffInputRef.current?.focus();
+        setActiveField("dropoff");
+      } else if (activeField === "dropoff" && !currentPickup) {
+        pickupInputRef.current?.focus();
+        setActiveField("pickup");
+      } else {
+        setActiveField(null);
+        if (currentPickup && currentDropoff) {
+          setDetailsView("vehicle");
+        }
       }
     };
 
@@ -1190,6 +1209,7 @@ export default function PassengerBooking() {
                             onChange={(e) => setHouseNumber(e.target.value)} 
                           />
                           <input 
+                            ref={pickupInputRef}
                             type="text" 
                             className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-emerald-500/5 transition-colors min-w-0" 
                             placeholder="Current Location" 
@@ -1272,6 +1292,7 @@ export default function PassengerBooking() {
                         </div>
                         <div className="flex-1 flex items-center bg-red-50/20 border border-red-200/60 rounded-2xl group-focus-within:bg-white group-focus-within:border-red-500 group-focus-within:ring-4 group-focus-within:ring-red-500/10 transition-all pr-1 shadow-sm min-w-0 overflow-hidden">
                           <input 
+                            ref={dropoffInputRef}
                             type="text" 
                             className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-red-500/5 transition-colors min-w-0" 
                             placeholder="Where to?" 
@@ -1316,7 +1337,7 @@ export default function PassengerBooking() {
                               toast.info("Please save an address as 'Home' to use this quick link.");
                             } else {
                               setDropoff(home.address); 
-                              if (pickup) setDetailsView("vehicle"); 
+                              if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
                             }
                           }} 
                           className="flex-none px-4 py-2 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm"
@@ -1330,7 +1351,7 @@ export default function PassengerBooking() {
                               toast.info("Please save an address as 'Work' to use this quick link.");
                             } else {
                               setDropoff(work.address); 
-                              if (pickup) setDetailsView("vehicle"); 
+                              if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
                             }
                           }} 
                           className="flex-none px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"
@@ -1369,9 +1390,11 @@ export default function PassengerBooking() {
                                       if (activeField === "pickup") {
                                         setPickup(fav.address);
                                         if (coords) { setPickupCoords(coords); setMapCenter(coords); }
+                                        if (!dropoff) { dropoffInputRef.current?.focus(); setActiveField("dropoff"); } else { setDetailsView("vehicle"); setActiveField(null); }
                                       } else if (activeField === "dropoff") {
                                         setDropoff(fav.address);
                                         if (coords) { setDropoffCoords(coords); setMapCenter(coords); }
+                                        if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
                                       } else if (activeField?.startsWith("stop-")) {
                                         const stopIdx = parseInt(activeField.split('-')[1]);
                                         const newStops = [...stops];
@@ -1379,12 +1402,13 @@ export default function PassengerBooking() {
                                         if (coords) newStops[stopIdx].coords = coords;
                                         setStops(newStops);
                                         if (coords) setMapCenter(coords);
+                                        setActiveField(null);
                                       } else {
                                         setDropoff(fav.address);
                                         if (coords) { setDropoffCoords(coords); setMapCenter(coords); }
+                                        if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
                                       }
                                       setShowFavorites(false);
-                                      if (pickup) setDetailsView("vehicle");
                                     }}
                                     className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:border-rose-300 transition-colors flex items-center gap-3"
                                   >

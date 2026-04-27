@@ -192,26 +192,33 @@ export default function MyRides() {
                       <span className="font-extrabold text-slate-900">£{parseFloat(ride.price).toFixed(2)}</span>
                     )}
                     {ride.status === "cancelled" && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirmDeleteId === ride.id) {
-                            handleDeleteRide(ride.id);
-                          } else {
-                            setConfirmDeleteId(ride.id);
-                            toast("Double tap to confirm deletion", { icon: '⚠️', duration: 2500 });
-                            // reset confirm state after 3 sec
-                            setTimeout(() => setConfirmDeleteId(null), 3000);
-                          }
-                        }}
-                        disabled={deletingId === ride.id}
-                        className={cn(
-                          "p-1.5 rounded-full transition-colors flex items-center justify-center",
-                          confirmDeleteId === ride.id ? "bg-red-100 text-red-600" : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      <div className="relative flex items-center justify-center">
+                        {confirmDeleteId === ride.id && (
+                          <div className="absolute bottom-full mb-2 right-1/2 translate-x-1/2 md:translate-x-0 md:right-0 md:left-auto whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom flex items-center gap-1.5 border border-amber-500/30">
+                            <span className="text-[10px]">⚠️</span> Double tap to delete
+                            <div className="absolute -bottom-1 right-1/2 translate-x-1/2 md:translate-x-0 md:right-3 w-2 h-2 bg-amber-400 rotate-45 border-r border-b border-amber-500/30" />
+                          </div>
                         )}
-                      >
-                        {deletingId === ride.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirmDeleteId === ride.id) {
+                              handleDeleteRide(ride.id);
+                            } else {
+                              setConfirmDeleteId(ride.id);
+                              // reset confirm state after 2.5 sec
+                              setTimeout(() => setConfirmDeleteId(null), 2500);
+                            }
+                          }}
+                          disabled={deletingId === ride.id}
+                          className={cn(
+                            "p-1.5 rounded-full transition-colors flex items-center justify-center",
+                            confirmDeleteId === ride.id ? "bg-red-100 text-red-600 shadow-sm" : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                          )}
+                        >
+                          {deletingId === ride.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

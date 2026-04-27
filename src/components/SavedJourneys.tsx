@@ -120,8 +120,7 @@ export default function SavedJourneys() {
     if (!user) return;
     if (confirmRemoveFavIndex !== index) {
       setConfirmRemoveFavIndex(index);
-      toast("Double tap to confirm deletion", { icon: '⚠️', duration: 2500 });
-      setTimeout(() => setConfirmRemoveFavIndex(null), 3000);
+      setTimeout(() => setConfirmRemoveFavIndex(null), 2500);
       return;
     }
     
@@ -144,8 +143,7 @@ export default function SavedJourneys() {
     if (!user) return;
     if (confirmRemoveJourneyIndex !== index) {
       setConfirmRemoveJourneyIndex(index);
-      toast("Double tap to confirm deletion", { icon: '⚠️', duration: 2500 });
-      setTimeout(() => setConfirmRemoveJourneyIndex(null), 3000);
+      setTimeout(() => setConfirmRemoveJourneyIndex(null), 2500);
       return;
     }
     
@@ -268,13 +266,19 @@ export default function SavedJourneys() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border-main">
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border-main relative">
+                    {confirmRemoveJourneyIndex === idx && (
+                      <div className="absolute bottom-full mb-2 left-0 whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom flex items-center gap-1.5 border border-amber-500/30">
+                        <span className="text-[10px]">⚠️</span> Double tap to delete
+                        <div className="absolute -bottom-1 left-5 w-2 h-2 bg-amber-400 rotate-45 border-r border-b border-amber-500/30" />
+                      </div>
+                    )}
                     <button
                       onClick={() => handleRemoveJourney(journey, idx)}
                       disabled={loading}
                       className={cn(
                         "p-3 rounded-xl transition-colors disabled:opacity-50",
-                        confirmRemoveJourneyIndex === idx ? "bg-danger/20 text-danger" : "text-text-muted bg-surface hover:bg-danger/10 hover:text-danger"
+                        confirmRemoveJourneyIndex === idx ? "bg-danger/20 text-danger shadow-sm" : "text-text-muted bg-surface hover:bg-danger/10 hover:text-danger"
                       )}
                       title="Remove"
                     >
@@ -343,16 +347,24 @@ export default function SavedJourneys() {
                       <p className="text-sm font-bold text-text-main truncate">{fav.address}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleRemoveFavorite(fav, idx)}
-                    disabled={loading}
-                    className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors",
-                      confirmRemoveFavIndex === idx ? "bg-danger/20 text-danger" : "bg-surface text-text-muted hover:bg-danger/10 hover:text-danger"
+                  <div className="relative flex items-center justify-center">
+                    {confirmRemoveFavIndex === idx && (
+                      <div className="absolute bottom-full mb-2 right-0 md:right-1/2 md:translate-x-1/2 whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom flex items-center gap-1.5 border border-amber-500/30">
+                        <span className="text-[10px]">⚠️</span> Double tap to delete
+                        <div className="absolute -bottom-1 right-4 md:right-1/2 md:translate-x-1/2 w-2 h-2 bg-amber-400 rotate-45 border-r border-b border-amber-500/30" />
+                      </div>
                     )}
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                    <button
+                      onClick={() => handleRemoveFavorite(fav, idx)}
+                      disabled={loading}
+                      className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors",
+                        confirmRemoveFavIndex === idx ? "bg-danger/20 text-danger shadow-sm" : "bg-surface text-text-muted hover:bg-danger/10 hover:text-danger"
+                      )}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 </motion.div>
               ))
             )}
