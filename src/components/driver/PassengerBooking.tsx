@@ -227,6 +227,8 @@ export default function PassengerBooking() {
   const [selectedCategory, setSelectedCategory] = useState("standard");
   const [isPetFriendly, setIsPetFriendly] = useState(false);
   const [isPriority, setIsPriority] = useState(false);
+  const [showPriorityPrompt, setShowPriorityPrompt] = useState(false);
+  const [priorityInlineToast, setPriorityInlineToast] = useState<{message: string, type: 'success' | 'info'} | null>(null);
   const [hasPaymentMeans, setHasPaymentMeans] = useState(false);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   
@@ -694,20 +696,30 @@ export default function PassengerBooking() {
     } catch (err) { setStep("details"); }
   };
 
-  const handleTogglePriority = async () => {
+  const handleTogglePriorityClick = () => {
     if (!currentRideId) return;
-    const newPriority = !isPriority;
+    if (!isPriority) {
+      setShowPriorityPrompt(true);
+    } else {
+      confirmTogglePriority(false);
+    }
+  };
+
+  const confirmTogglePriority = async (newPriority: boolean) => {
+    if (!currentRideId) return;
     try {
       setIsPriority(newPriority);
       await updateDoc(doc(db, "ride_requests", currentRideId), {
          isPriority: newPriority,
          fareEstimate: increment(newPriority ? 3 : -3)
       });
+      setShowPriorityPrompt(false);
       if (newPriority) {
-        toast.success("Priority Boost Activated! (+£3)");
+        setPriorityInlineToast({ message: "Priority Boost Activated! (+£3)", type: "success" });
       } else {
-        toast.info("Priority Boost Removed (-£3)");
+        setPriorityInlineToast({ message: "Priority Boost Removed. Normal fare applies.", type: "info" });
       }
+      setTimeout(() => setPriorityInlineToast(null), 4000);
     } catch (e) {
       console.error(e);
       setIsPriority(!newPriority);
@@ -1539,10 +1551,11 @@ export default function PassengerBooking() {
                         <div className="flex justify-between text-xs text-text-muted"><span>Vehicle ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}):</span><span className="text-text-main">£{getComputedFare(selectedCategory).toFixed(2)}</span></div>
                         {isPriority && <div className="flex justify-between text-xs text-warning"><span>Priority:</span><span className="font-bold">+£3.00</span></div>}
                         {isPetFriendly && <div className="flex justify-between text-xs text-primary"><span>Pet:</span><span className="font-bold">+£3.00</span></div>}
+                        {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-xs text-danger"><span>Unpaid Cancellation Fee:</span><span className="font-bold">+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
                       </div>
                       <div className="border-t border-border-main pt-2 flex justify-between text-sm font-bold text-text-main">
                         <span>Total estimate:</span>
-                        <span>£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0)).toFixed(2)}</span>
+                        <span>£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</span>
                       </div>
                       <p className="text-[9px] text-text-muted italic mt-2 text-center">Final fare may vary based on route</p>
                     </div>
@@ -1593,18 +1606,38 @@ export default function PassengerBooking() {
                   <p className="text-3xl font-black text-primary">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
                 </div>
                 
-                <div onClick={handleTogglePriority} className="w-full max-w-xs mt-4 mb-2 bg-gradient-to-r from-amber-200 to-amber-300 rounded-2xl p-4 shadow-sm border border-amber-400 relative overflow-hidden group cursor-pointer active:scale-95 transition-all">
-                  <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-400/50 rounded-full blur-xl group-hover:scale-150 transition-transform"></div>
-                  <div className="flex items-center gap-3 relative z-10 w-full">
-                    <div className="p-2 bg-white/50 rounded-full shrink-0">
-                      <Zap className="w-5 h-5 text-amber-700" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-amber-950 font-black text-sm">Boost Priority (+£3)</h4>
-                      <p className="text-amber-800 text-[11px] font-semibold leading-tight mt-0.5">Jump to the top of the queue.</p>
-                    </div>
-                    <div className={cn("w-10 h-6 rounded-full p-1 transition-colors relative flex items-center shrink-0", isPriority ? "bg-amber-600" : "bg-black/20")}>
-                      <div className={cn("w-4 h-4 bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
+                <div className="w-full max-w-xs mt-4 relative">
+                  <AnimatePresence>
+                    {priorityInlineToast && !showPriorityPrompt && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className={cn("absolute -top-12 left-0 right-0 p-2 rounded-xl text-center text-xs font-bold shadow-lg z-20 flex items-center justify-center gap-2", priorityInlineToast.type === 'success' ? "bg-emerald-500 text-white" : "bg-warning text-warning-content")}>
+                        {priorityInlineToast.type === 'success' ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                        {priorityInlineToast.message}
+                      </motion.div>
+                    )}
+                    {showPriorityPrompt && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white border-2 border-warning/50 shadow-xl rounded-2xl z-20">
+                        <p className="text-xs font-bold text-slate-800 text-center mb-2">Are you sure you want to add Priority Boost for <span className="text-warning font-black">£3.00</span>?</p>
+                        <div className="flex gap-2">
+                           <button onClick={() => setShowPriorityPrompt(false)} className="flex-1 py-2 bg-slate-100 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200">Cancel</button>
+                           <button onClick={() => confirmTogglePriority(true)} className="flex-1 py-2 bg-warning rounded-xl text-xs font-black text-white shadow-sm hover:bg-warning/90">Confirm</button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  
+                  <div onClick={handleTogglePriorityClick} className="w-full mb-2 bg-gradient-to-r from-amber-200 to-amber-300 rounded-2xl p-4 shadow-sm border border-amber-400 relative overflow-hidden group cursor-pointer active:scale-95 transition-all">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-400/50 rounded-full blur-xl group-hover:scale-150 transition-transform"></div>
+                    <div className="flex items-center gap-3 relative z-10 w-full">
+                      <div className="p-2 bg-white/50 rounded-full shrink-0">
+                        <Zap className="w-5 h-5 text-amber-700" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-amber-950 font-black text-sm">Boost Priority (+£3)</h4>
+                        <p className="text-amber-800 text-[11px] font-semibold leading-tight mt-0.5">Jump to the top of the queue.</p>
+                      </div>
+                      <div className={cn("w-10 h-6 rounded-full p-1 transition-colors relative flex items-center shrink-0", isPriority ? "bg-amber-600" : "bg-black/20")}>
+                        <div className={cn("w-4 h-4 bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
+                      </div>
                     </div>
                   </div>
                 </div>
