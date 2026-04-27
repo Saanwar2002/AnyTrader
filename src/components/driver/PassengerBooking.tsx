@@ -264,6 +264,8 @@ export default function PassengerBooking() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef<string>("");
   const [fareEstimate, setFareEstimate] = useState<number | null>(null);
   const [distanceMiles, setDistanceMiles] = useState<number>(0);
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
@@ -339,7 +341,7 @@ export default function PassengerBooking() {
                 padding: { 
                   top: window.innerHeight * 0.15, 
                   right: 50, 
-                  bottom: window.innerHeight * 0.60, 
+                  bottom: window.innerHeight * 0.45, 
                   left: 50 
                 } 
               });
@@ -459,22 +461,46 @@ export default function PassengerBooking() {
     }
   };
 
-  const startListening = () => {
+  const toggleListening = () => {
     triggerHaptic(ImpactStyle.Light);
+    
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast.error("Speech recognition not supported.");
       return;
     }
+
     const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
     recognition.lang = "en-GB";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    transcriptRef.current = "";
+
     recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
-    recognition.onresult = async (event: any) => {
-      const transcript = event.results[0][0].transcript;
+    recognition.onend = () => {
       setIsListening(false);
-      await processVoiceCommand(transcript);
+      if (transcriptRef.current.trim().length > 0) {
+        processVoiceCommand(transcriptRef.current);
+        transcriptRef.current = "";
+      }
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onresult = (event: any) => {
+      let currentTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          currentTranscript += event.results[i][0].transcript + ' ';
+        }
+      }
+      if (currentTranscript) {
+        transcriptRef.current += currentTranscript;
+      }
     };
     recognition.start();
   };
@@ -1118,33 +1144,33 @@ export default function PassengerBooking() {
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                className="bg-card rounded-t-[40px] shadow-2xl pointer-events-auto flex flex-col max-h-[65vh] w-full border-t border-border-main pb-[calc(4rem+env(safe-area-inset-bottom))]"
+                className="bg-card rounded-t-[32px] shadow-2xl pointer-events-auto flex flex-col max-h-[55vh] w-full border-t border-border-main pb-[calc(4rem+env(safe-area-inset-bottom))] overflow-hidden"
               >
-                <div className="w-12 h-1.5 bg-border-main rounded-full mx-auto mt-3 mb-1 shrink-0" />
-                <div ref={bottomSheetRef} className="p-4 pt-2 overflow-x-hidden overflow-y-auto space-y-4 no-scrollbar flex-1">
+                {detailsView === "address" && (
+                    <button onClick={toggleListening} disabled={isAiProcessing} className="w-full bg-slate-900 border-b border-white/10 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-1 px-4 flex items-center justify-center gap-1.5 font-bold shadow-sm active:scale-95 transition-all text-[11px] uppercase tracking-wider shrink-0 z-10 relative rounded-none h-8">
+                      {isListening ? (
+                        <>
+                          <div className="relative flex items-center justify-center">
+                            <div className="absolute inset-0 bg-danger/20 rounded-full animate-ping" />
+                            <div className="w-2.5 h-2.5 bg-danger rounded-sm animate-pulse" />
+                          </div>
+                          Tap to Stop & Process...
+                        </>
+                      ) : isAiProcessing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin"/> Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="w-4 h-4"/> Tap to Book by Voice
+                        </>
+                      )}
+                    </button>
+                )}
+                
+                <div ref={bottomSheetRef} className={cn("p-4 overflow-x-hidden overflow-y-auto space-y-4 no-scrollbar flex-1", detailsView === "address" ? "pt-2" : "pt-4")}>
                   {detailsView === "address" ? (
                     <>
-                      <div className="mb-1">
-                        <button onClick={startListening} disabled={isListening || isAiProcessing} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-4 px-4 rounded-3xl flex items-center justify-center gap-3 font-bold shadow-lg active:scale-95 transition-all">
-                          {isListening ? (
-                            <>
-                              <div className="relative flex items-center justify-center">
-                                <div className="absolute inset-0 bg-current opacity-20 rounded-full animate-ping" />
-                                <Mic className="w-5 h-5 animate-pulse" />
-                              </div>
-                              Listening...
-                            </>
-                          ) : isAiProcessing ? (
-                            <>
-                              <Loader2 className="w-5 h-5 animate-spin"/> Processing...
-                            </>
-                          ) : (
-                            <>
-                              <Mic className="w-5 h-5"/> Tap to Book by Voice
-                            </>
-                          )}
-                        </button>
-                      </div>
                       <div className="bg-surface rounded-3xl p-2 pb-3 border border-border-main shadow-sm mb-4 shrink-0">
                     <div className="space-y-2 relative">
                       <div className="absolute left-3 top-8 bottom-8 w-0.5 border-l-2 border-dashed border-border-main/60" />
@@ -1155,10 +1181,10 @@ export default function PassengerBooking() {
                            <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-surface z-10 
                              group-focus-within:border-emerald-500 group-focus-within:scale-125 transition-all" />
                         </div>
-                        <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-2xl group-focus-within:bg-white group-focus-within:border-emerald-500 group-focus-within:ring-4 group-focus-within:ring-emerald-500/10 transition-all shadow-sm min-w-0 pr-1">
+                        <div className="flex-1 flex items-center bg-emerald-50/20 border border-emerald-200/60 rounded-2xl group-focus-within:bg-white group-focus-within:border-emerald-500 group-focus-within:ring-4 group-focus-within:ring-emerald-500/10 transition-all shadow-sm min-w-0 pr-1 overflow-hidden">
                           <input 
                             type="text" 
-                            className="flex-none w-14 bg-transparent text-center font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] border-r border-slate-200 py-3.5 focus:bg-emerald-500/5 rounded-l-2xl transition-colors shrink-0 min-w-0" 
+                            className="flex-none w-14 bg-transparent text-center font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] border-r border-emerald-200/60 py-3.5 focus:bg-emerald-500/5 transition-colors shrink-0 min-w-0" 
                             placeholder="Flat" 
                             value={houseNumber} 
                             onChange={(e) => setHouseNumber(e.target.value)} 
@@ -1171,9 +1197,11 @@ export default function PassengerBooking() {
                             onFocus={() => setActiveField("pickup")} 
                             onChange={(e) => setPickup(e.target.value)} 
                           />
-                          <button onClick={handleDetectLocation} className="p-2 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-full tooltip-trigger shrink-0 transition-colors">
-                            <Target className={`w-5 h-5 ${isDetecting ? 'animate-spin' : ''}`} />
-                          </button>
+                          <div className="pl-1.5 pr-0.5 py-1.5 border-l border-emerald-200/60 flex items-center justify-center shrink-0 h-full">
+                            <button onClick={handleDetectLocation} className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg tooltip-trigger shrink-0 transition-colors">
+                              <Target className={`w-5 h-5 ${isDetecting ? 'animate-spin' : ''}`} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                       
@@ -1242,19 +1270,22 @@ export default function PassengerBooking() {
                         <div className="w-6 flex justify-center shrink-0">
                            <div className="w-2.5 h-2.5 bg-red-500 rounded-sm z-10 group-focus-within:bg-red-500 group-focus-within:scale-125 transition-all" />
                         </div>
-                        <div className="flex-1 flex bg-slate-50 border border-slate-200 rounded-2xl group-focus-within:bg-white group-focus-within:border-red-500 group-focus-within:ring-4 group-focus-within:ring-red-500/10 transition-all pr-1 shadow-sm min-w-0">
+                        <div className="flex-1 flex items-center bg-red-50/20 border border-red-200/60 rounded-2xl group-focus-within:bg-white group-focus-within:border-red-500 group-focus-within:ring-4 group-focus-within:ring-red-500/10 transition-all pr-1 shadow-sm min-w-0 overflow-hidden">
                           <input 
                             type="text" 
-                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-red-500/5 rounded-l-2xl transition-colors min-w-0" 
+                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-red-500/5 transition-colors min-w-0" 
                             placeholder="Where to?" 
                             value={dropoff} 
                             onFocus={() => setActiveField("dropoff")} 
                             onChange={(e) => setDropoff(e.target.value)} 
                           />
                           {stops.length < 3 && (
-                            <button onClick={() => setStops([...stops, { address: "", coords: null }])} className="p-2 text-text-main hover:bg-black/5 rounded-full tooltip-trigger shrink-0">
-                              <Plus className="w-4 h-4" />
-                            </button>
+                            <div className="pl-2 pr-1 py-1 border-l border-red-200/60 flex items-center justify-center shrink-0 h-full">
+                              <button onClick={() => setStops([...stops, { address: "", coords: null }])} className="w-[30px] h-[34px] bg-[#FFB800] text-black hover:bg-[#E6A600] rounded-[10px] border-[1.5px] border-black flex flex-col items-center justify-center shrink-0 transition-colors shadow-sm" title="Add a stop">
+                                <Plus className="w-3.5 h-3.5 -mb-[1px]" strokeWidth={4} />
+                                <span className="text-[9px] font-black tracking-tighter leading-none mb-0.5 ml-0.5">STP</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
