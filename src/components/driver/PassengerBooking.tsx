@@ -272,6 +272,7 @@ export default function PassengerBooking() {
   const [distanceMiles, setDistanceMiles] = useState<number>(0);
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
   const [nearbyDriversCount, setNearbyDriversCount] = useState<number>(0);
+  const [driversAvailableSoonCount, setDriversAvailableSoonCount] = useState<number>(0);
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -397,19 +398,17 @@ export default function PassengerBooking() {
   useEffect(() => {
     if (!pickupCoords) {
       setNearbyDriversCount(0);
+      setDriversAvailableSoonCount(0);
       return;
     }
     const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
     const unsub = onSnapshot(q, (snapshot) => {
-      let count = 0;
+      let countNow = 0;
+      let countSoon = 0;
       snapshot.docs.forEach(docSnap => {
         const data = docSnap.data();
-        if (data.lat && data.lng) {
-          const lat1 = pickupCoords.lat;
-          const lon1 = pickupCoords.lng;
-          const lat2 = data.lat;
-          const lon2 = data.lng;
-          
+        
+        const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
           const R = 3958.8; // Radius of Earth in miles
           const dLat = (lat2 - lat1) * Math.PI / 180;
           const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -418,12 +417,23 @@ export default function PassengerBooking() {
             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          const distance = R * c; 
+          return R * c; 
+        };
 
-          if (distance <= 2) count++;
+        if (data.status === 'on_ride' && data.dropoffLat && data.dropoffLng) {
+          if (data.isStackingEnabled !== false && data.isLastJob !== true) {
+            const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.dropoffLat, data.dropoffLng);
+            if (distToPickup <= 3) countSoon++;
+          }
+        } else if (data.lat && data.lng && data.status !== 'on_ride') {
+          if (data.isLastJob !== true) {
+            const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.lat, data.lng);
+            if (distToPickup <= 3) countNow++;
+          }
         }
       });
-      setNearbyDriversCount(count);
+      setNearbyDriversCount(countNow);
+      setDriversAvailableSoonCount(countSoon);
     });
     return () => unsub();
   }, [pickupCoords]);
@@ -866,7 +876,7 @@ export default function PassengerBooking() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.status === 'accepted' && data.driverId) {
-          setAssignedDriverInfo({ 
+          setAssignedDriverInfo(prev => ({ 
              uid: data.driverId, 
              name: data.driverName || "Driver", 
              vehicle: data.vehicleInfo || "Taxi", 
@@ -876,8 +886,9 @@ export default function PassengerBooking() {
              status: "accepted",
              fareEstimate: data.fareEstimate || 0,
              rating: data.driverRating || "4.8",
-             acceptedAt: data.acceptedAt?.toMillis() || Date.now()
-          });
+             acceptedAt: data.acceptedAt?.toMillis() || Date.now(),
+             isFinishingTrip: prev?.isFinishingTrip !== undefined ? prev.isFinishingTrip : (nearbyDriversCount === 0 && driversAvailableSoonCount > 0)
+          }));
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
         }
         if (data.status === 'arrived') {
@@ -1533,13 +1544,23 @@ export default function PassengerBooking() {
                         {/* Driver Availability */}
                         <div className={cn(
                           "flex items-center gap-2 px-3 py-2 mb-2 rounded-lg font-bold text-sm transition-colors duration-300",
-                          nearbyDriversCount > 0 ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                          nearbyDriversCount > 0 
+                            ? "bg-emerald-100 text-emerald-800" 
+                            : driversAvailableSoonCount > 0 
+                              ? "bg-lime-100 text-lime-800"
+                              : "bg-red-100 text-red-800"
                         )}>
                           <Car className="w-5 h-5 shrink-0" />
                           <span>
-                            {nearbyDriversCount === 0 && "No drivers available nearby"}
-                            {nearbyDriversCount > 0 && nearbyDriversCount <= 5 && `${nearbyDriversCount} driver${nearbyDriversCount > 1 ? 's' : ''} available`}
-                            {nearbyDriversCount > 5 && "5+ drivers available"}
+                            {nearbyDriversCount === 0 && driversAvailableSoonCount === 0 && (
+                              <span className="flex flex-col">
+                                <span>No drivers available nearby (within 15 mins)</span>
+                                <span className="text-[10px] opacity-80 font-normal">Post your ride and we'll match you when available.</span>
+                              </span>
+                            )}
+                            {nearbyDriversCount > 0 && nearbyDriversCount <= 5 && `${nearbyDriversCount} driver${nearbyDriversCount > 1 ? 's' : ''} available now`}
+                            {nearbyDriversCount > 5 && "5+ drivers available now"}
+                            {nearbyDriversCount === 0 && driversAvailableSoonCount > 0 && `${driversAvailableSoonCount} driver${driversAvailableSoonCount > 1 ? 's' : ''} finishing nearby trips`}
                           </span>
                         </div>
                     <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x px-1">
@@ -1716,11 +1737,20 @@ export default function PassengerBooking() {
                   </div>
                 ) : (
                   <div className="flex flex-col mb-6">
-                     <h2 className="text-2xl font-black text-text-main tracking-tight mb-4">
+                     <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">
                        {assignedDriverInfo?.status === "en_route_pickup" ? "Driver is on the way" : 
                         assignedDriverInfo?.status === "in_progress" ? "Heading to destination" : 
                         "Driver found!"}
                      </h2>
+                     {assignedDriverInfo?.isFinishingTrip && assignedDriverInfo?.status === "accepted" && (
+                       <div className="bg-lime-50 border border-lime-200 text-lime-800 px-3 py-2 rounded-xl mb-4 text-sm font-bold flex items-center justify-center gap-2">
+                         <span className="relative flex h-3 w-3">
+                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-400 opacity-75"></span>
+                           <span className="relative inline-flex rounded-full h-3 w-3 bg-lime-500"></span>
+                         </span>
+                         Currently finishing another trip nearby. Will head to you soon.
+                       </div>
+                     )}
                      <div className="flex flex-col md:flex-row md:items-center justify-between bg-surface border border-border-main p-4 rounded-3xl shadow-sm gap-4">
                        <div className="flex items-center gap-4">
                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo?.name || "driver"}`} alt="Driver" className="w-14 h-14 rounded-full border border-border-main shadow-sm bg-card object-cover" />

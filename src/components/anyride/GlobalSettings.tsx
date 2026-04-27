@@ -43,6 +43,20 @@ export default function GlobalSettings() {
                   <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-6 peer-checked:after:border-white"></div>
                 </div>
              </div>
+
+             <div className="flex items-center justify-between border-t border-slate-100 pt-6">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">Automated Payout Mode (Stripe Connect)</h4>
+                  <p className="text-xs text-slate-500 font-medium mt-1 pr-6 hover:text-slate-700 transition-colors">
+                    When active, passengers are charged automatically via card-on-file, and drivers receive background payouts.<br />
+                    If disabled, the system defaults to the driver displaying a <strong>QR Code</strong> at drop-off.
+                  </p>
+                </div>
+                <div className="relative inline-block w-14 h-7 cursor-pointer shrink-0">
+                  <input type="checkbox" defaultChecked className="sr-only peer" />
+                  <div className="w-14 h-7 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-1.5 after:left-1.5 after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-7 peer-checked:after:border-white shadow-inner"></div>
+                </div>
+             </div>
            </div>
         </div>
 

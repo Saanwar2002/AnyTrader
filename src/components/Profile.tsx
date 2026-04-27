@@ -222,6 +222,7 @@ export default function Profile() {
   const location = useLocation();
   const { isInstallable, installApp } = usePWAInstall();
   const [isEditing, setIsEditing] = useState(false);
+  const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
   const [isEditingNotifications, setIsEditingNotifications] = useState(false);
   const [showBioInfo, setShowBioInfo] = useState(false);
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
@@ -1779,65 +1780,181 @@ export default function Profile() {
           <div key={group.title} className="space-y-4">
             <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider px-2 ml-2">{group.title}</h3>
             <div className="flex flex-col gap-3">
-              {group.items.map((item, index) => (
-                item.path === "#tradebot" ? (
-                  <button
-                    key={index}
-                    onClick={() => setIsTradeBotOpen(true)}
-                    className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
-                  >
-                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                      <item.icon className="w-6 h-6" />
+              {group.items.map((item, index) => {
+                if (item.path === "#tradebot") {
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => setIsTradeBotOpen(true)}
+                      className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
+                    >
+                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <item.icon className="w-6 h-6" />
+                      </div>
+                      <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
+                        {item.label}
+                      </span>
+                      <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                    </button>
+                  );
+                } else if (item.path === "#userguide") {
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => setShowUserGuide(true)}
+                      className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
+                    >
+                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <item.icon className="w-6 h-6" />
+                      </div>
+                      <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
+                        {item.label}
+                      </span>
+                      <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                    </button>
+                  );
+                } else if (item.path === "#switch_portal") {
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => switchPortal('anytrader')}
+                      className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
+                    >
+                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-amber-500 hover:bg-amber-50 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
+                        <item.icon className="w-6 h-6" />
+                      </div>
+                      <span className="flex-1 font-bold text-slate-700 group-hover:text-amber-700 transition-colors text-lg">
+                        {item.label}
+                      </span>
+                      <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-amber-600 transition-colors" />
+                    </button>
+                  );
+                } else if (item.path?.startsWith("#") && activePortal === "anyride") {
+                  const isExpanded = expandedMenuId === item.path;
+                  return (
+                    <div key={index} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+                      <button
+                        onClick={() => setExpandedMenuId(isExpanded ? null : item.path)}
+                        className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 transition-all group text-left"
+                      >
+                        <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors shrink-0">
+                          <item.icon className="w-6 h-6" />
+                        </div>
+                        <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
+                          {item.label}
+                        </span>
+                        <motion.div animate={{ rotate: isExpanded ? 180 : 0 }}>
+                          <ChevronDown className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                        </motion.div>
+                      </button>
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="border-t border-slate-100"
+                          >
+                            {item.path === "#payments" ? (
+                              <div className="p-6 md:p-8 bg-slate-50/50">
+                                {/* How it Works Banner */}
+                                <details className="bg-blue-50/50 border border-blue-100 rounded-2xl mb-8 group [&_summary::-webkit-details-marker]:hidden">
+                                  <summary className="flex items-center justify-between p-4 cursor-pointer list-none select-none">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                        <ShieldCheck className="w-5 h-5 text-blue-600" />
+                                      </div>
+                                      <h4 className="text-sm font-bold text-slate-900">How Automated Payments Work</h4>
+                                    </div>
+                                    <ChevronDown className="w-5 h-5 text-slate-400 transition-transform group-open:rotate-180" />
+                                  </summary>
+                                  
+                                  <div className="p-4 pt-1 border-t border-blue-100/30">
+                                    <p className="text-xs text-slate-600 leading-relaxed mb-3">
+                                      Add your card securely once. At the end of every trip, we automatically process the payment transparently. 
+                                      You no longer need to scan QR codes or pay cash. 
+                                    </p>
+                                    <div className="flex items-center gap-1.5 text-[10px] uppercase font-black tracking-wider text-slate-400 bg-white inline-flex px-2 py-1 rounded-md border border-slate-100 shadow-sm">
+                                      <Shield className="w-3 h-3 text-emerald-500" />
+                                      Zero Data Stored Locally
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-blue-100/50">
+                                      <strong>Security Note:</strong> AnyRide does not store or process your credit card details on our servers. 
+                                      Your confidential data is transmitted directly to <strong>Stripe's PCI-compliant vault</strong>. 
+                                      We only hold a secure token used exclusively to charge you for completed journeys.
+                                    </p>
+                                  </div>
+                                </details>
+
+                                {/* Saved Cards / Add Card */}
+                                {profile?.stripeCustomerId ? (
+                                  <div className="bg-white border text-left border-emerald-200 rounded-2xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                    <div className="flex items-center gap-4 relative z-10">
+                                      <div className="w-12 h-8 rounded bg-slate-800 text-white flex items-center justify-center font-black text-xs tracking-widest shadow-sm">
+                                        VISA
+                                      </div>
+                                      <div>
+                                        <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• 4242</h4>
+                                        <p className="text-xs text-slate-500">Expires 12/28</p>
+                                      </div>
+                                    </div>
+                                    <button className="relative z-10 text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
+                                      Remove Card
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-4">
+                                    <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center">
+                                      <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
+                                        <CreditCard className="w-5 h-5 text-slate-400" />
+                                      </div>
+                                      <h3 className="text-sm font-bold text-slate-900 mb-1">No payment method added</h3>
+                                      <p className="text-xs text-slate-500 mb-4">Add a card for fast, seamless automated payments at drop-off.</p>
+                                      
+                                      <button 
+                                        onClick={() => {
+                                          alert("Stripe Checkout Modal would open here to securely tokenize card.");
+                                        }}
+                                        className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all"
+                                      >
+                                        Add Credit or Debit Card
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-8 text-center bg-slate-50">
+                                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
+                                  <item.icon className="w-5 h-5 text-slate-400" />
+                                </div>
+                                <p className="text-slate-500 font-medium">Settings for {item.label} coming soon.</p>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
-                      {item.label}
-                    </span>
-                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
-                  </button>
-                ) : item.path === "#userguide" ? (
-                  <button
-                    key={index}
-                    onClick={() => setShowUserGuide(true)}
-                    className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
-                  >
-                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                      <item.icon className="w-6 h-6" />
-                    </div>
-                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
-                      {item.label}
-                    </span>
-                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
-                  </button>
-                ) : item.path === "#switch_portal" ? (
-                  <button
-                    key={index}
-                    onClick={() => switchPortal('anytrader')}
-                    className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
-                  >
-                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-amber-500 hover:bg-amber-50 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
-                      <item.icon className="w-6 h-6" />
-                    </div>
-                    <span className="flex-1 font-bold text-slate-700 group-hover:text-amber-700 transition-colors text-lg">
-                      {item.label}
-                    </span>
-                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-amber-600 transition-colors" />
-                  </button>
-                ) : (
-                  <Link 
-                    key={index}
-                    to={item.path}
-                    className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group"
-                  >
-                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                      <item.icon className="w-6 h-6" />
-                    </div>
-                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
-                      {item.label}
-                    </span>
-                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
-                  </Link>
-                )
-              ))}
+                  );
+                } else {
+                  return (
+                    <Link 
+                      key={index}
+                      to={item.path}
+                      className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <item.icon className="w-6 h-6" />
+                      </div>
+                      <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
+                        {item.label}
+                      </span>
+                      <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                    </Link>
+                  );
+                }
+              })}
             </div>
           </div>
         ))}
@@ -2024,33 +2141,7 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Payment Methods Placeholder */}
-        <div id="payments" className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-6">
-          <div className="p-6 border-b border-slate-50">
-            <h2 className="text-lg font-bold text-slate-900">Payment Methods</h2>
-            <p className="text-sm text-slate-500">Manage your payout methods and billing information.</p>
-          </div>
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CreditCard className="w-8 h-8 text-slate-300" />
-            </div>
-            <p className="text-slate-500 font-medium">Payment settings coming soon.</p>
-          </div>
-        </div>
-
-        {/* Privacy & Security Placeholder */}
-        <div id="privacy" className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-6">
-          <div className="p-6 border-b border-slate-50">
-            <h2 className="text-lg font-bold text-slate-900">Privacy & Security</h2>
-            <p className="text-sm text-slate-500">Manage your account security and data privacy.</p>
-          </div>
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Shield className="w-8 h-8 text-slate-300" />
-            </div>
-            <p className="text-slate-500 font-medium">Security settings coming soon.</p>
-          </div>
-        </div>
+        {/* Payment Methods (AnyRide Rider Only) */}
 
       {/* Verification Center (Tradespeople only) */}
       {profile.role === "tradesperson" && (

@@ -7,7 +7,7 @@ import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
-import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment } from "@/src/firebase";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
@@ -29,7 +29,11 @@ export default function DriverTerminal() {
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
   const [onlineDurationText, setOnlineDurationText] = useState("0 min");
   const [mapCenter, setMapCenter] = useState<[number, number]>([53.6458, -1.7850]); // Default to Huddersfield from spec
-  const [demandZones, setDemandZones] = useState<any[]>([]);
+  const [demandZones, setDemandZones] = useState<any[]>([
+    { lat: 53.6458, lng: -1.7850, radius: 500, intensity: "high", label: "£5.00 Surge" },
+    { lat: 53.6558, lng: -1.7750, radius: 800, intensity: "medium", label: "£2.50 Surge" },
+  ]);
+  const [showPredictiveSurge, setShowPredictiveSurge] = useState(true);
   
   // Storage for directions
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -359,7 +363,12 @@ export default function DriverTerminal() {
             lat: latitude,
             lng: longitude,
             updatedAt: serverTimestamp(),
-            isOnline: true
+            isOnline: true,
+            status: activeRide ? 'on_ride' : 'available',
+            dropoffLat: activeRide?.dropoffLat || null,
+            dropoffLng: activeRide?.dropoffLng || null,
+            isStackingEnabled: profile?.isStackingEnabled !== false,
+            isLastJob: profile?.isLastJob === true
           }, { merge: true });
           
           await setDoc(doc(db, "driver_status", user.uid), {
@@ -382,7 +391,7 @@ export default function DriverTerminal() {
         updateDoc(doc(db, "live_tracking", user.uid), { isOnline: false }).catch(console.error);
       }
     };
-  }, [isOnline, user]);
+  }, [isOnline, user, activeRide]);
 
   const simulateIncomingRide = () => {
     if (!isOnline) {
@@ -971,6 +980,29 @@ export default function DriverTerminal() {
               />
             )}
 
+            {/* AI Predictive Surge Heatmap */}
+            {showPredictiveSurge && !activeRide && demandZones.map((zone, idx) => (
+              <React.Fragment key={`surge-${idx}`}>
+                <CircleF
+                  center={{ lat: zone.lat, lng: zone.lng }}
+                  radius={zone.radius}
+                  options={{
+                    strokeColor: "transparent",
+                    fillColor: zone.intensity === 'high' ? '#FF3B30' : '#FF9500',
+                    fillOpacity: 0.35,
+                    clickable: false
+                  }}
+                />
+                <OverlayViewF position={{ lat: zone.lat, lng: zone.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                    <div className="bg-black/80 px-2 py-1 rounded-md text-[10px] font-black text-white whitespace-nowrap shadow border border-white/20 flex items-center gap-1">
+                      <TrendingUp className="w-3 h-3 text-[#FF3B30]" /> {zone.label}
+                    </div>
+                  </div>
+                </OverlayViewF>
+              </React.Fragment>
+            ))}
+
             {/* Passenger Live Location */}
             {passengerPos && (rideState === 'en_route_pickup' || rideState === 'waiting') && (
               <OverlayViewF position={{ lat: passengerPos.lat, lng: passengerPos.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
@@ -1038,16 +1070,31 @@ export default function DriverTerminal() {
                   <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
                 </div>
               </div>
-
-              <button 
-                onClick={handleCenterOnMe}
-                className="w-12 h-12 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
-              >
-                <Target className="w-5 h-5 text-[#E4E4E7]" />
-              </button>
             </motion.div>
           )}
         </AnimatePresence>
+
+        <button 
+          onClick={handleCenterOnMe}
+          className="w-10 h-10 mt-2 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
+        >
+          <Target className="w-4 h-4 text-[#E4E4E7]" />
+        </button>
+        
+        {isOnline && !activeRide && (
+          <button 
+            onClick={() => setShowPredictiveSurge(!showPredictiveSurge)}
+            className={cn(
+              "w-10 h-10 mt-2 backdrop-blur-md border rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-all overflow-hidden relative",
+              showPredictiveSurge ? "bg-[#FF3B30]/20 border-[#FF3B30]/50" : "bg-[#1A1A1E]/80 border-[#2C2C30]"
+            )}
+          >
+            {showPredictiveSurge && (
+               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,59,48,0.4)0%,transparent_70%)] animate-pulse" />
+            )}
+            <TrendingUp className={cn("w-4 h-4 relative z-10", showPredictiveSurge ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
+          </button>
+        )}
       </div>
 
       {/* Floating Map Navigation (Left Side) - Decreased size and moved to left side corner */}
@@ -1763,9 +1810,15 @@ export default function DriverTerminal() {
               </div>
 
               <button 
-                onClick={() => {
+                onClick={async () => {
                   setRideState('idle');
-                  setIsOnline(true);
+                  setIsOnline(profile?.isLastJob ? false : true);
+                  
+                  if (profile?.isLastJob && user) {
+                    toast.success("Shift Ended", { description: "You are now offline." });
+                    await updateDoc(doc(db, "users", user.uid), { isLastJob: false });
+                  }
+                  
                   setPassengerRating(5);
                   setRatingComment("");
                   setActiveRide(null);
