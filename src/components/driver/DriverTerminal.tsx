@@ -1250,9 +1250,6 @@ export default function DriverTerminal() {
                   <div className="flex justify-between items-end mb-1">
                     <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
                       £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
-                      <span className="text-[13px] text-[#FEF7D2] font-bold tracking-wide pb-[2px]">
-                        ({((activeRide?.distanceMiles || 22) + 1.2).toFixed(1)} miles)
-                      </span>
                     </h1>
                     <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
                   </div>
@@ -1268,8 +1265,7 @@ export default function DriverTerminal() {
                         className="border-t border-[#333338] mt-3 pt-3 flex flex-col gap-1.5"
                       >
                         <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Distance ({activeRide?.distanceMiles?.toFixed(1) || '22'}mi):</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
-                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Time (~{activeRide?.durationMinutes || 45}m):</span><span>£---</span></div>
+                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Estimated Distance:</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
                         <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge:</span><span>+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
                         <div className="flex justify-between text-[11px] font-bold text-[#FF3B30] mt-1 p-1 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20">
                           <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
@@ -1346,7 +1342,6 @@ export default function DriverTerminal() {
                           <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
                           <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                          <p className="text-[12px] text-[#E4E4E7] font-medium mt-0.5">3 min • 1.2 miles</p>
                         </div>
 
                         {(activeRide?.stops || []).map((stop: any, idx: number) => (
@@ -1361,7 +1356,6 @@ export default function DriverTerminal() {
                           <div className="absolute w-3.5 h-3.5 bg-[#FF3B30] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
                           <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[12px] text-[#E4E4E7] font-medium mt-0.5">~{activeRide?.durationMinutes || 45} min • {activeRide?.distanceMiles?.toFixed(1) || 22} miles</p>
                         </div>
                       </div>
 

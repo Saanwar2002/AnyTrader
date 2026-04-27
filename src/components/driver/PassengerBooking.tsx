@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
-import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment } from "@/src/firebase";
+import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
@@ -265,6 +265,7 @@ export default function PassengerBooking() {
   const [fareEstimate, setFareEstimate] = useState<number | null>(null);
   const [distanceMiles, setDistanceMiles] = useState<number>(0);
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
+  const [nearbyDriversCount, setNearbyDriversCount] = useState<number>(0);
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -297,7 +298,7 @@ export default function PassengerBooking() {
     map.panTo(coords);
     // Offset North-South based on screen height to keep the pin visible above the sheet
     setTimeout(() => {
-       map.panBy(0, window.innerHeight * 0.15); 
+       map.panBy(0, window.innerHeight * 0.25); 
     }, 100);
   }, [map]);
 
@@ -334,9 +335,9 @@ export default function PassengerBooking() {
               path.forEach((p: any) => bounds.extend(p));
               map.fitBounds(bounds, { 
                 padding: { 
-                  top: 100, 
+                  top: window.innerHeight * 0.15, 
                   right: 50, 
-                  bottom: window.innerHeight * 0.45, 
+                  bottom: window.innerHeight * 0.60, 
                   left: 50 
                 } 
               });
@@ -377,6 +378,40 @@ export default function PassengerBooking() {
         setPickupCoords(c);
       });
     }
+  }, [pickupCoords]);
+
+  useEffect(() => {
+    if (!pickupCoords) {
+      setNearbyDriversCount(0);
+      return;
+    }
+    const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
+    const unsub = onSnapshot(q, (snapshot) => {
+      let count = 0;
+      snapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.lat && data.lng) {
+          const lat1 = pickupCoords.lat;
+          const lon1 = pickupCoords.lng;
+          const lat2 = data.lat;
+          const lon2 = data.lng;
+          
+          const R = 3958.8; // Radius of Earth in miles
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLon = (lon2 - lon1) * Math.PI / 180;
+          const a = 
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const distance = R * c; 
+
+          if (distance <= 2) count++;
+        }
+      });
+      setNearbyDriversCount(count);
+    });
+    return () => unsub();
   }, [pickupCoords]);
 
   useEffect(() => {
@@ -1428,21 +1463,28 @@ export default function PassengerBooking() {
                         animate={{ opacity: 1, height: 'auto' }}
                         className="space-y-4 pt-2 overflow-hidden"
                       >
-                        {/* Distance & ETA */}
-                        <div className="flex items-center gap-2 px-1 mb-2">
-                        <MapPin className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-bold text-text-main">{distanceMiles.toFixed(1)} miles</span>
-                        <span className="text-text-muted text-lg leading-none mb-1">•</span>
-                        <span className="text-sm font-bold text-text-main">~{durationMinutes.toFixed(0)} min</span>
-                      </div>
+                        {/* Driver Availability */}
+                        <div className={cn(
+                          "flex items-center gap-2 px-3 py-2 mb-2 rounded-lg font-bold text-sm transition-colors duration-300",
+                          nearbyDriversCount > 0 ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                        )}>
+                          <Car className="w-5 h-5 shrink-0" />
+                          <span>
+                            {nearbyDriversCount === 0 && "No drivers available nearby"}
+                            {nearbyDriversCount > 0 && nearbyDriversCount <= 5 && `${nearbyDriversCount} driver${nearbyDriversCount > 1 ? 's' : ''} available`}
+                            {nearbyDriversCount > 5 && "5+ drivers available"}
+                          </span>
+                        </div>
                     <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x px-1">
                       {CAR_CATEGORIES.map((cat) => {
                         const active = selectedCategory === cat.id;
                         return (
-                          <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={cn("flex-none w-[100px] snap-center p-3 rounded-2xl border-2 transition-all shadow-sm", active ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-surface border-slate-300 text-text-main hover:border-primary/50")}>
-                            <cat.icon className={cn("w-5 h-5 mb-2", active ? "text-white" : "text-primary")} />
-                            <p className="text-[10px] font-black uppercase tracking-tight line-clamp-1">{cat.name}</p>
-                            <p className="text-lg font-black tracking-tighter">£{getComputedFare(cat.id).toFixed(2)}</p>
+                          <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={cn("flex-none min-w-[110px] snap-center p-2 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-center", active ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-surface border-slate-300 text-text-main hover:border-primary/50")}>
+                            <div className="flex items-center gap-1.5 w-full">
+                              <cat.icon className={cn("w-4 h-4 shrink-0", active ? "text-white" : "text-primary")} />
+                              <span className="text-[10px] font-black uppercase tracking-tight truncate flex-1 text-left">{cat.name}</span>
+                            </div>
+                            <span className="text-xl font-black tracking-tighter mt-1 text-left w-full">£{getComputedFare(cat.id).toFixed(2)}</span>
                           </button>
                         );
                       })}
@@ -1545,6 +1587,11 @@ export default function PassengerBooking() {
                 <p className="text-text-muted font-bold text-sm text-center mb-6">Pinging the fleet to find your professional driver.</p>
                 
                 <SearchingTimer />
+
+                <div className="w-full max-w-xs mt-2 bg-surface rounded-2xl p-4 border-2 border-primary/20 flex flex-col items-center justify-center shadow-sm">
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-1">Total Fare Estimate</p>
+                  <p className="text-3xl font-black text-primary">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
+                </div>
                 
                 <div onClick={handleTogglePriority} className="w-full max-w-xs mt-4 mb-2 bg-gradient-to-r from-amber-200 to-amber-300 rounded-2xl p-4 shadow-sm border border-amber-400 relative overflow-hidden group cursor-pointer active:scale-95 transition-all">
                   <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-400/50 rounded-full blur-xl group-hover:scale-150 transition-transform"></div>
