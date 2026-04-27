@@ -284,6 +284,18 @@ export default function PassengerBooking() {
   const bottomSheetRef = useRef<HTMLDivElement>(null);
   const vehicleSelectionRef = useRef<HTMLDivElement>(null);
   
+  // Auto-focus pickup field on mount
+  useEffect(() => {
+    if (step === "details" && detailsView === "address") {
+      setTimeout(() => {
+        if (!pickup) {
+          pickupInputRef.current?.focus();
+          setActiveField("pickup");
+        }
+      }, 300); // 300ms delay to ensure animation finishes
+    }
+  }, [step, detailsView]);
+
   // Auto-scroll when route is calculated
   useEffect(() => {
     if (distanceMiles > 0 && vehicleSelectionRef.current && bottomSheetRef.current) {
@@ -525,41 +537,41 @@ export default function PassengerBooking() {
     recognition.start();
   };
 
+  const geocodeLocation = (address: string, setter: (val: string) => void, coordSetter: (coords: {lat: number, lng: number}) => void) => {
+    if (!address || address.trim() === "" || address.toLowerCase() === "uk" || address.toLowerCase() === "united kingdom") return;
+    
+    if (!window.google || !window.google.maps) {
+       setter(address);
+       return;
+    }
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ 
+      address: address,
+      componentRestrictions: { country: "GB" }
+    }, (results, status) => {
+      if (status === "OK" && results && results[0]) {
+        const loc = results[0].geometry.location;
+        coordSetter({ lat: loc.lat(), lng: loc.lng() });
+        
+        const isJustCountry = results[0].types.includes('country');
+        const formatted = results[0].formatted_address;
+        
+        if (isJustCountry || formatted === 'United Kingdom' || formatted === 'UK') {
+          setter(address);
+        } else {
+          setter(formatted);
+        }
+      } else {
+        setter(address);
+      }
+    });
+  };
+
   const processVoiceCommand = async (text: string) => {
     setIsAiProcessing(true);
     toast.info("AI extracting details...");
     try {
       const result = await processTaxiVoiceCommand(text);
-      
-      const geocodeLocation = (address: string, setter: (val: string) => void, coordSetter: (coords: {lat: number, lng: number}) => void) => {
-        if (!address || address.trim() === "" || address.toLowerCase() === "uk" || address.toLowerCase() === "united kingdom") return;
-        
-        if (!window.google || !window.google.maps) {
-           setter(address);
-           return;
-        }
-        const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ 
-          address: address,
-          componentRestrictions: { country: "GB" }
-        }, (results, status) => {
-          if (status === "OK" && results && results[0]) {
-            const loc = results[0].geometry.location;
-            coordSetter({ lat: loc.lat(), lng: loc.lng() });
-            
-            const isJustCountry = results[0].types.includes('country');
-            const formatted = results[0].formatted_address;
-            
-            if (isJustCountry || formatted === 'United Kingdom' || formatted === 'UK') {
-              setter(address);
-            } else {
-              setter(formatted);
-            }
-          } else {
-            setter(address);
-          }
-        });
-      };
 
       if (result.pickup) geocodeLocation(result.pickup, setPickup, setPickupCoords);
       if (result.dropoff) geocodeLocation(result.dropoff, setDropoff, setDropoffCoords);
@@ -965,7 +977,7 @@ export default function PassengerBooking() {
         currentPickup = finalAddr;
         if (coords) { setMapCenter(coords); setPickupCoords(coords); } 
       }
-      else if (activeField === "dropoff") { 
+      else if (activeField === "dropoff" || !activeField) { 
         setDropoff(finalAddr); 
         currentDropoff = finalAddr;
         if (coords) { setMapCenter(coords); setDropoffCoords(coords); } 
@@ -1022,6 +1034,24 @@ export default function PassengerBooking() {
       }
     } else {
       const coords = s.lat && s.lon ? { lat: s.lat, lng: s.lon } : null;
+      if (!coords && window.google?.maps) {
+        try {
+          setIsLoadingAddress(true);
+          const geocoder = new window.google.maps.Geocoder();
+          const req = s.placeId ? { placeId: s.placeId } : { address: s.label };
+          const res = await geocoder.geocode(req);
+          if (res.results && res.results.length > 0) {
+            const loc = res.results[0].geometry.location;
+            finalizeSelection({ lat: loc.lat(), lng: loc.lng() }, s.label);
+            setIsLoadingAddress(false);
+            return;
+          }
+        } catch (e) {
+          console.error("Geocoding failed:", e);
+        } finally {
+          setIsLoadingAddress(false);
+        }
+      }
       finalizeSelection(coords, s.label);
     }
   };
@@ -1340,46 +1370,44 @@ export default function PassengerBooking() {
                         )}
                       </AnimatePresence>
                       
-                      <div className="flex gap-2 py-2 ml-6 overflow-x-auto no-scrollbar pr-1">
+                      <div className="flex justify-between gap-1 py-2 mt-1 mx-2 sm:ml-6 sm:mx-0 pr-1 items-center">
                         <button 
                           onClick={() => { 
-                            const home = favoriteAddresses.find(f => f.name.toLowerCase() === 'home');
+                            const home = favoriteAddresses.find(f => f?.name?.toLowerCase() === 'home');
                             if (!home) {
                               toast.info("Please save an address as 'Home' to use this quick link.");
                             } else {
-                              setDropoff(home.address); 
-                              if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
+                              selectSuggestion({ label: home.address, lat: home.lat, lon: home.lng, placeId: home.placeId });
                             }
                           }} 
-                          className="flex-none px-4 py-2 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm"
+                          className="flex-1 justify-center px-2 py-1.5 bg-blue-50 border border-blue-200 rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm whitespace-nowrap"
                         >
-                          <Home className="w-4 h-4 text-blue-500" /> Home
+                          <Home className="w-3 h-3 text-blue-500" /> Home
                         </button>
                         <button 
                           onClick={() => { 
-                            const work = favoriteAddresses.find(f => f.name.toLowerCase() === 'work');
+                            const work = favoriteAddresses.find(f => f?.name?.toLowerCase() === 'work');
                             if (!work) {
                               toast.info("Please save an address as 'Work' to use this quick link.");
                             } else {
-                              setDropoff(work.address); 
-                              if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
+                              selectSuggestion({ label: work.address, lat: work.lat, lon: work.lng, placeId: work.placeId });
                             }
                           }} 
-                          className="flex-none px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center gap-2 text-[12px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"
+                          className="flex-1 justify-center px-2 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm whitespace-nowrap"
                         >
-                          <Briefcase className="w-4 h-4 text-indigo-500" /> Work
+                          <Briefcase className="w-3 h-3 text-indigo-500" /> Work
                         </button>
                         <button 
                           onClick={() => setShowRegularJourneys(!showRegularJourneys)} 
-                          className={cn("flex-none px-4 py-2 border rounded-2xl flex items-center gap-2 text-[12px] font-bold transition-colors shadow-sm", showRegularJourneys ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300")}
+                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showRegularJourneys ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300")}
                         >
-                          <History className="w-4 h-4 text-emerald-500" /> Regular Journeys
+                          <History className="w-3 h-3 text-emerald-500" /> Regular
                         </button>
                         <button 
                           onClick={() => setShowFavorites(!showFavorites)} 
-                          className={cn("flex-none px-4 py-2 border rounded-2xl flex items-center gap-2 text-[12px] font-bold transition-colors shadow-sm", showFavorites ? "bg-rose-100 border-rose-300 text-rose-800" : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300")}
+                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showFavorites ? "bg-rose-100 border-rose-300 text-rose-800" : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300")}
                         >
-                          <Heart className="w-4 h-4 text-rose-500" /> Favorites
+                          <Heart className="w-3 h-3 text-rose-500" /> Favorite
                         </button>
                       </div>
 
@@ -1397,28 +1425,7 @@ export default function PassengerBooking() {
                                   <button
                                     key={`fav-${idx}`}
                                     onClick={() => {
-                                      const coords = fav.lat && fav.lng ? { lat: fav.lat, lng: fav.lng } : null;
-                                      if (activeField === "pickup") {
-                                        setPickup(fav.address);
-                                        if (coords) { setPickupCoords(coords); setMapCenter(coords); }
-                                        if (!dropoff) { dropoffInputRef.current?.focus(); setActiveField("dropoff"); } else { setDetailsView("vehicle"); setActiveField(null); }
-                                      } else if (activeField === "dropoff") {
-                                        setDropoff(fav.address);
-                                        if (coords) { setDropoffCoords(coords); setMapCenter(coords); }
-                                        if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
-                                      } else if (activeField?.startsWith("stop-")) {
-                                        const stopIdx = parseInt(activeField.split('-')[1]);
-                                        const newStops = [...stops];
-                                        newStops[stopIdx].address = fav.address;
-                                        if (coords) newStops[stopIdx].coords = coords;
-                                        setStops(newStops);
-                                        if (coords) setMapCenter(coords);
-                                        setActiveField(null);
-                                      } else {
-                                        setDropoff(fav.address);
-                                        if (coords) { setDropoffCoords(coords); setMapCenter(coords); }
-                                        if (!pickup) { pickupInputRef.current?.focus(); setActiveField("pickup"); } else { setDetailsView("vehicle"); setActiveField(null); }
-                                      }
+                                      selectSuggestion({ label: fav.address, lat: fav.lat, lon: fav.lng, placeId: fav.placeId });
                                       setShowFavorites(false);
                                     }}
                                     className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:border-rose-300 transition-colors flex items-center gap-3"
@@ -1465,8 +1472,8 @@ export default function PassengerBooking() {
                                     <div className="flex gap-2 mt-2">
                                       <button 
                                         onClick={() => {
-                                          setPickup(j.from);
-                                          setDropoff(j.to);
+                                          geocodeLocation(j.from, setPickup, setPickupCoords);
+                                          geocodeLocation(j.to, setDropoff, setDropoffCoords);
                                           setDetailsView("vehicle");
                                         }}
                                         className="flex-1 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
@@ -1475,8 +1482,8 @@ export default function PassengerBooking() {
                                       </button>
                                       <button 
                                         onClick={() => {
-                                          setPickup(j.to);
-                                          setDropoff(j.from);
+                                          geocodeLocation(j.to, setPickup, setPickupCoords);
+                                          geocodeLocation(j.from, setDropoff, setDropoffCoords);
                                           setDetailsView("vehicle");
                                         }}
                                         className="flex-1 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"
@@ -1535,11 +1542,9 @@ export default function PassengerBooking() {
 
                   <AnimatePresence>
                     {distanceMiles > 0 && (
-                      <motion.div 
+                      <div 
                         ref={vehicleSelectionRef}
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="space-y-4 pt-2 overflow-hidden"
+                        className="space-y-4 pt-2 pb-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
                       >
                         {/* Driver Availability */}
                         <div className={cn(
@@ -1657,7 +1662,7 @@ export default function PassengerBooking() {
                          Confirm {CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}
                        </button>
                     </div>
-                      </motion.div>
+                      </div>
                     )}
                   </AnimatePresence>
                   </>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, doc, updateDoc, arrayRemove, arrayUnion } from "@/src/firebase";
 import { motion, AnimatePresence } from "motion/react";
-import { MapPin, Bookmark, Trash2, ArrowRight, Plus, Search, Heart, X } from "lucide-react";
+import { MapPin, Bookmark, Trash2, ArrowRight, Plus, Search, Heart, X, Home, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ export default function SavedJourneys() {
   
   const [searchAddress, setSearchAddress] = useState("");
   const [favHouseNumber, setFavHouseNumber] = useState("");
+  const [favName, setFavName] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
 
@@ -93,18 +94,24 @@ export default function SavedJourneys() {
         }
       }
 
+      const favoriteObj: any = {
+        address: finalAddress,
+        placeId: place.placeId,
+        lat,
+        lng,
+        addedAt: Date.now()
+      };
+      if (favName.trim()) {
+        favoriteObj.name = favName.trim();
+      }
+
       await updateDoc(doc(db, "users", user.uid), {
-        favoriteAddresses: arrayUnion({
-          address: finalAddress,
-          placeId: place.placeId,
-          lat,
-          lng,
-          addedAt: Date.now()
-        })
+        favoriteAddresses: arrayUnion(favoriteObj)
       });
       setShowAddFavorite(false);
       setSearchAddress("");
       setFavHouseNumber("");
+      setFavName("");
       setSuggestions([]);
     } catch (err) {
       console.error("Failed to add favorite:", err);
@@ -344,7 +351,8 @@ export default function SavedJourneys() {
                       <Heart className="w-6 h-6 text-primary fill-primary" />
                     </div>
                     <div className="min-w-0 pr-4">
-                      <p className="text-sm font-bold text-text-main truncate">{fav.address}</p>
+                      {fav.name && <p className="text-sm font-black text-text-main truncate mb-0.5">{fav.name}</p>}
+                      <p className={cn("truncate", fav.name ? "text-xs text-text-muted" : "text-sm font-bold text-text-main")}>{fav.address}</p>
                     </div>
                   </div>
                   <div className="relative flex items-center justify-center">
@@ -383,26 +391,57 @@ export default function SavedJourneys() {
                       <button onClick={() => setShowAddFavorite(false)} className="w-10 h-10 rounded-full bg-surface flex items-center justify-center"><X className="w-6 h-6 text-text-main" /></button>
                     </div>
                     
-                    <div className="p-4 border-b border-border-main shrink-0 flex items-center justify-between gap-4">
-                      <div className="flex-none bg-surface border border-border-main rounded-2xl flex items-center shadow-inner group-focus-within:border-primary transition-colors pr-1">
+                    <div className="p-4 border-b border-border-main shrink-0 flex flex-col gap-3">
+                      <div className="relative">
                         <input
                           type="text"
-                          placeholder="House No"
-                          value={favHouseNumber}
-                          onChange={(e) => setFavHouseNumber(e.target.value)}
-                          className="w-24 bg-transparent outline-none text-text-main font-bold py-4 text-center placeholder:text-text-muted/60 text-[15px]"
+                          placeholder="Name (e.g. Home, Work, Gym)"
+                          value={favName}
+                          onChange={(e) => setFavName(e.target.value)}
+                          className="w-full bg-surface border border-border-main rounded-2xl py-3 px-4 font-bold text-text-main placeholder:text-text-muted shadow-inner focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                         />
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          <button 
+                            onClick={() => setFavName("Home")} 
+                            className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border", favName.trim().toLowerCase() === "home" ? "bg-blue-600 text-white border-blue-600 shadow-sm" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100")}
+                          >
+                            <span className="flex items-center gap-1.5"><Home className="w-3.5 h-3.5" /> Save as Home</span>
+                          </button>
+                          <button 
+                            onClick={() => setFavName("Work")} 
+                            className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border", favName.trim().toLowerCase() === "work" ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100")}
+                          >
+                            <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> Save as Work</span>
+                          </button>
+                          <button 
+                            onClick={() => { if (favName.trim().toLowerCase() === "home" || favName.trim().toLowerCase() === "work") setFavName(""); }} 
+                            className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border", (favName.trim().toLowerCase() !== "home" && favName.trim().toLowerCase() !== "work") ? "bg-rose-600 text-white border-rose-600 shadow-sm" : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100")}
+                          >
+                            <span className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5" /> Save as Favorite</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="relative flex-1">
-                        <Search className="absolute left-4 top-[18px] w-5 h-5 text-text-muted" />
-                        <input
-                          type="text"
-                          placeholder="Enter Postcode or Area..."
-                          value={searchAddress}
-                          onChange={(e) => setSearchAddress(e.target.value)}
-                          className="w-full bg-surface border border-border-main rounded-2xl py-4 pl-12 pr-4 font-bold text-text-main placeholder:text-text-muted shadow-inner focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                          autoFocus
-                        />
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-none bg-surface border border-border-main rounded-2xl flex items-center shadow-inner focus-within:border-primary transition-colors pr-1">
+                          <input
+                            type="text"
+                            placeholder="House No"
+                            value={favHouseNumber}
+                            onChange={(e) => setFavHouseNumber(e.target.value)}
+                            className="w-24 bg-transparent outline-none text-text-main font-bold py-4 text-center placeholder:text-text-muted/60 text-[15px]"
+                          />
+                        </div>
+                        <div className="relative flex-1">
+                          <Search className="absolute left-4 top-[18px] w-5 h-5 text-text-muted" />
+                          <input
+                            type="text"
+                            placeholder="Enter Postcode or Area..."
+                            value={searchAddress}
+                            onChange={(e) => setSearchAddress(e.target.value)}
+                            className="w-full bg-surface border border-border-main rounded-2xl py-4 pl-12 pr-4 font-bold text-text-main placeholder:text-text-muted shadow-inner focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                            autoFocus
+                          />
+                        </div>
                       </div>
                     </div>
 
