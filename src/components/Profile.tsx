@@ -5,11 +5,13 @@ import { logout, db, doc, updateDoc, handleFirestoreError, OperationType, storag
 import { 
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
-  ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone
+  ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
+  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { usePWAInstall } from "@/src/hooks/usePWAInstall";
+import { usePortal } from "@/src/lib/PortalContext";
 import { cn } from "@/src/lib/utils";
 import { 
   DndContext, 
@@ -215,6 +217,7 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 
 export default function Profile() {
   const { user, profile, setProfile } = useAuth();
+  const { activePortal, switchPortal } = usePortal();
   const navigate = useNavigate();
   const location = useLocation();
   const { isInstallable, installApp } = usePWAInstall();
@@ -798,6 +801,50 @@ export default function Profile() {
     }
   ];
 
+  const passengerMenuGroups = [
+    {
+      title: "Account",
+      items: [
+        { icon: CreditCard, label: "Payment Methods", path: "#payments" },
+        { icon: Ticket, label: "Promotions & Promo Codes", path: "#promotions" },
+        { icon: Gift, label: "Refer a Friend — Earn £5", path: "#referrals" },
+        { icon: FileText, label: "Ride Receipts", path: "/my-rides" },
+      ]
+    },
+    {
+      title: "Ride Preferences",
+      items: [
+        { icon: Accessibility, label: "Accessibility Settings", path: "#accessibility" },
+        { icon: Users, label: "Ride for Someone Else", path: "#rideforself" },
+        { icon: MapPin, label: "Saved Places", path: "/saved-journeys" },
+      ]
+    },
+    {
+      title: "Safety",
+      items: [
+        { icon: ShieldAlert, label: "Emergency Contacts", path: "#emergency" },
+        { icon: Users, label: "Trusted Contacts", path: "#trusted" },
+      ]
+    },
+    {
+      title: "Support",
+      items: [
+        { icon: HelpCircle, label: "Help Centre", path: "#help" },
+        { icon: Ticket, label: "My Support Tickets", path: "#tickets" },
+        { icon: MessageSquare, label: "Live Chat", path: "#chat" },
+      ]
+    },
+    {
+      title: "App",
+      items: [
+        { icon: Repeat, label: "Switch to AnyTrader", path: "#switch_portal" },
+        { icon: Bell, label: "Notifications", path: "/notifications" },
+        { icon: Settings, label: "App Settings", path: "#settings" },
+        { icon: Shield, label: "Legal & Privacy", path: "#privacy" },
+      ]
+    }
+  ];
+
   const tradespersonMenuGroups = [
     {
       title: "Account",
@@ -837,7 +884,9 @@ export default function Profile() {
     }
   ];
 
-  const menuGroups = profile.role === "tradesperson" ? tradespersonMenuGroups : homeownerMenuGroups;
+  const menuGroups = activePortal === "anyride" 
+    ? passengerMenuGroups 
+    : (profile.role === "tradesperson" ? tradespersonMenuGroups : homeownerMenuGroups);
 
   const handleSubscribe = async () => {
     if (!user || !showCheckoutForTier) return;
@@ -911,8 +960,14 @@ export default function Profile() {
   return (
     <div id="account" className="max-w-2xl mx-auto pb-24 px-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-slate-900">Profile</h1>
+      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Profile</h1>
+        <button 
+          onClick={() => navigate("/")} 
+          className="w-12 h-12 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-full flex items-center justify-center transition-all shadow-sm text-slate-600 hover:text-slate-900 focus:ring-2 focus:ring-slate-200"
+        >
+          <X className="w-6 h-6" />
+        </button>
       </div>
 
       {error && (
@@ -930,7 +985,7 @@ export default function Profile() {
 
       {/* Subscription Plan Card */}
       {(profile.role === "tradesperson" || (profile.role === "homeowner" && profile.subscriptionType === "business")) && platformConfig && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8">
           {platformConfig.paywallEnabled === false && (
             <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
@@ -1094,7 +1149,7 @@ export default function Profile() {
       )}
 
       {/* Profile Card */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8 relative">
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8 relative">
         <div className="flex flex-col items-center">
           <div className="relative mb-4">
             <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-4xl font-bold overflow-hidden border-4 border-white shadow-lg relative">
@@ -1250,7 +1305,7 @@ export default function Profile() {
 
       {/* Phase 1: Certifications/Achievements */}
       {profile.role === "tradesperson" && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 mb-8">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-4 mb-8">
           <div 
             className="flex items-center justify-between cursor-pointer px-2"
             onClick={() => setIsAchievementsExpanded(!isAchievementsExpanded)}
@@ -1317,7 +1372,7 @@ export default function Profile() {
 
       {/* Products and Services Section */}
       {profile.role === "tradesperson" && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8 relative">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8 relative">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
@@ -1460,7 +1515,7 @@ export default function Profile() {
       )}
 
       {/* Phase 2: About & Specializations */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h3 className="text-xl font-bold text-slate-900">About</h3>
@@ -1571,7 +1626,7 @@ export default function Profile() {
 
       {/* Portfolio Section (Tradespeople only) */}
       {profile.role === "tradesperson" && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
@@ -1627,7 +1682,7 @@ export default function Profile() {
 
       {/* Safety & Emergency Section */}
       {profile.role === "homeowner" && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8" id="safety">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8" id="safety">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
@@ -1719,53 +1774,67 @@ export default function Profile() {
       )}
 
       {/* Phase 3: Grouped Menu List */}
-      <div className="space-y-6 mb-8">
+      <div className="space-y-10 mb-12">
         {menuGroups.map((group) => (
-          <div key={group.title} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider p-5 pb-2">{group.title}</h3>
-            <div className="divide-y divide-slate-100">
+          <div key={group.title} className="space-y-4">
+            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider px-2 ml-2">{group.title}</h3>
+            <div className="flex flex-col gap-3">
               {group.items.map((item, index) => (
                 item.path === "#tradebot" ? (
                   <button
                     key={index}
                     onClick={() => setIsTradeBotOpen(true)}
-                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-50 transition-colors group text-left"
+                    className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
                   >
-                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                      <item.icon className="w-5 h-5" />
+                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                      <item.icon className="w-6 h-6" />
                     </div>
-                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors">
+                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
                       {item.label}
                     </span>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
                   </button>
                 ) : item.path === "#userguide" ? (
                   <button
                     key={index}
                     onClick={() => setShowUserGuide(true)}
-                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-50 transition-colors group text-left"
+                    className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
                   >
-                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                      <item.icon className="w-5 h-5" />
+                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                      <item.icon className="w-6 h-6" />
                     </div>
-                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors">
+                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
                       {item.label}
                     </span>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                  </button>
+                ) : item.path === "#switch_portal" ? (
+                  <button
+                    key={index}
+                    onClick={() => switchPortal('anytrader')}
+                    className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group text-left"
+                  >
+                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-amber-500 hover:bg-amber-50 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
+                      <item.icon className="w-6 h-6" />
+                    </div>
+                    <span className="flex-1 font-bold text-slate-700 group-hover:text-amber-700 transition-colors text-lg">
+                      {item.label}
+                    </span>
+                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-amber-600 transition-colors" />
                   </button>
                 ) : (
                   <Link 
                     key={index}
                     to={item.path}
-                    className="flex items-center gap-4 p-5 hover:bg-slate-50 transition-colors group"
+                    className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group"
                   >
-                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                      <item.icon className="w-5 h-5" />
+                    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                      <item.icon className="w-6 h-6" />
                     </div>
-                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors">
+                    <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
                       {item.label}
                     </span>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
                   </Link>
                 )
               ))}
@@ -1776,7 +1845,7 @@ export default function Profile() {
 
         {/* Notification Settings Section */}
         {profile.role === "tradesperson" && (
-          <div id="notifications" className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mb-6">
+          <div id="notifications" className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-6">
             <button 
               onClick={() => setIsNotificationsExpanded(!isNotificationsExpanded)}
               className="w-full p-6 border-b border-slate-50 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
@@ -1956,7 +2025,7 @@ export default function Profile() {
         )}
 
         {/* Payment Methods Placeholder */}
-        <div id="payments" className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mb-6">
+        <div id="payments" className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-6">
           <div className="p-6 border-b border-slate-50">
             <h2 className="text-lg font-bold text-slate-900">Payment Methods</h2>
             <p className="text-sm text-slate-500">Manage your payout methods and billing information.</p>
@@ -1970,7 +2039,7 @@ export default function Profile() {
         </div>
 
         {/* Privacy & Security Placeholder */}
-        <div id="privacy" className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mb-6">
+        <div id="privacy" className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-6">
           <div className="p-6 border-b border-slate-50">
             <h2 className="text-lg font-bold text-slate-900">Privacy & Security</h2>
             <p className="text-sm text-slate-500">Manage your account security and data privacy.</p>
@@ -1985,7 +2054,7 @@ export default function Profile() {
 
       {/* Verification Center (Tradespeople only) */}
       {profile.role === "tradesperson" && (
-        <div id="verification" className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+        <div id="verification" className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-8">
           <button 
             onClick={() => setIsVerificationExpanded(!isVerificationExpanded)}
             className="w-full p-8 flex items-center justify-between hover:bg-slate-50 transition-colors"
@@ -2280,7 +2349,7 @@ export default function Profile() {
       )}
 
       {/* Recurring Services Section */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-8">
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-6 mb-8">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
             <RefreshCw className="w-5 h-5" />
@@ -2407,7 +2476,7 @@ export default function Profile() {
           ) : reviews.length > 0 ? (
             <div className="space-y-4">
               {reviews.map((review) => (
-                <div key={review.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                <div key={review.id} className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-[0_4px_20px_rgb(0,0,0,0.05)] bg-gradient-to-b from-white to-slate-50/30 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
                       {[...Array(5)].map((_, i) => (
@@ -2429,7 +2498,7 @@ export default function Profile() {
               ))}
             </div>
           ) : (
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center">
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-[0_4px_20px_rgb(0,0,0,0.05)] bg-gradient-to-b from-white to-slate-50/30 text-center">
               <p className="text-slate-500 text-sm">No reviews yet.</p>
             </div>
           )}
@@ -2451,7 +2520,7 @@ export default function Profile() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+              className="bg-white rounded-[2rem] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
             >
               <div className="p-8 pb-4 flex items-center justify-between shrink-0 border-b border-slate-50">
                 <h3 className="text-xl font-bold text-slate-900">Edit Profile</h3>
@@ -2676,7 +2745,7 @@ export default function Profile() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl"
+              className="bg-white rounded-[2rem] p-6 max-w-md w-full shadow-2xl"
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -2753,7 +2822,7 @@ export default function Profile() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl max-h-[80vh] overflow-y-auto custom-scrollbar"
+              className="bg-white rounded-[2rem] p-6 max-w-md w-full shadow-2xl max-h-[80vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex items-center justify-between mb-6 sticky top-0 bg-white pt-2 pb-4 border-b border-slate-100 z-10">
                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -2834,7 +2903,7 @@ export default function Profile() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+              className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
             >
               <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">

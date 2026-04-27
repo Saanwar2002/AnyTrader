@@ -49,35 +49,31 @@ export default function PlatformSwitcher() {
 
   const isAnyTrader = activePortal === "anytrader";
 
+  if (isAnyTrader) {
+    return null;
+  }
+
   return (
-    <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
-      <motion.div
-        drag
-        dragElastic={0.1}
-        dragMomentum={false}
-        // approximate bounds so it doesn't get lost off-screen
-        dragConstraints={{ left: 16, right: window.innerWidth > 0 ? window.innerWidth - 60 : 340, top: 16, bottom: window.innerHeight > 0 ? window.innerHeight - 100 : 800 }}
-        initial={{ x: window.innerWidth > 0 ? window.innerWidth - 60 : 340, y: window.innerHeight > 0 ? window.innerHeight - 200 : 700 }}
-        className="pointer-events-auto absolute"
-      >
+    <div className="fixed top-24 left-4 z-[100] pointer-events-none">
+      <div className="pointer-events-auto relative">
         <AnimatePresence>
           {quoteCount > 0 && !isAnyTrader && (
             <motion.div 
               initial={{ opacity: 0, scale: 0.8, x: -10 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.8, x: -10 }}
-              className="absolute -left-28 -top-8 bg-blue-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-lg border border-blue-500 whitespace-nowrap flex items-center gap-1.5 pointer-events-auto cursor-pointer"
+              className="absolute left-14 top-0 bg-blue-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-lg border border-blue-500 whitespace-nowrap flex items-center gap-1.5 pointer-events-auto cursor-pointer"
               onClick={handleSwitch}
             >
+              <div className="absolute left-[-4px] top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-600 rotate-45 border-b border-l border-blue-500"></div>
               📋 {quoteCount} new quote{quoteCount > 1 ? 's' : ''}
-              <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-600 rotate-45 border-r border-t border-blue-500"></div>
             </motion.div>
           )}
         </AnimatePresence>
         
         <motion.button
           onClick={handleSwitch}
-          className={`relative flex flex-col items-center justify-center w-10 h-10 rounded-xl shadow-lg transition-colors border ${
+          className={`relative flex flex-col items-center justify-center w-12 h-12 rounded-xl shadow-lg transition-colors border ${
             isAnyTrader 
               ? "bg-slate-900 text-white border-slate-700 hover:bg-slate-800 shadow-slate-900/30" 
               : "bg-blue-600 text-white border-blue-500 hover:bg-blue-700 shadow-blue-600/30"
@@ -86,12 +82,12 @@ export default function PlatformSwitcher() {
           whileTap={{ scale: 0.95 }}
         >
           <div className="relative">
-            {isAnyTrader ? <Car className="w-4 h-4 text-cyan-400" /> : <Hammer className="w-4 h-4 text-white" />}
+            {isAnyTrader ? <Car className="w-5 h-5 text-cyan-400" /> : <Hammer className="w-5 h-5 text-white" />}
             <div className="absolute -bottom-1 -right-1.5 bg-white rounded-full p-0.5 shadow-sm">
-              <Repeat className="w-2 h-2 text-slate-800" />
+              <Repeat className="w-2.5 h-2.5 text-slate-800" />
             </div>
           </div>
-          <span className="text-[8px] font-black uppercase tracking-tighter mt-0.5 truncate max-w-full px-0.5">
+          <span className="text-[8px] font-black uppercase tracking-tighter mt-1 truncate max-w-full px-0.5">
             {isAnyTrader ? "AnyRide" : "AnyTrader"}
           </span>
           
@@ -99,7 +95,7 @@ export default function PlatformSwitcher() {
              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
           )}
         </motion.button>
-      </motion.div>
+      </div>
     </div>
   );
 }
