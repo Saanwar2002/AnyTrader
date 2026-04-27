@@ -97,7 +97,10 @@ export default function MyRides() {
 
   const filteredRides = rides.filter(ride => {
     if (activeTab === "active") {
-      return ride.status !== "completed" && ride.status !== "cancelled";
+      return ride.status !== "completed" && ride.status !== "cancelled" && ride.status !== "draft";
+    }
+    if (activeTab === "cancelled") {
+      return ride.status === "cancelled" || ride.status === "draft";
     }
     return ride.status === activeTab;
   });
@@ -171,7 +174,7 @@ export default function MyRides() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
                 key={ride.id}
-                className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-4 group"
+                className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 group"
               >
                 <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-2">
@@ -191,12 +194,12 @@ export default function MyRides() {
                     {ride.price && (
                       <span className="font-extrabold text-slate-900">£{parseFloat(ride.price).toFixed(2)}</span>
                     )}
-                    {ride.status === "cancelled" && (
+                    {(ride.status === "cancelled" || ride.status === "draft") && (
                       <div className="relative flex items-center justify-center">
                         {confirmDeleteId === ride.id && (
-                          <div className="absolute bottom-full mb-2 right-1/2 translate-x-1/2 md:translate-x-0 md:right-0 md:left-auto whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom flex items-center gap-1.5 border border-amber-500/30">
+                          <div className="absolute bottom-full mb-2 right-0 whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom-right flex items-center gap-1.5 border border-amber-500/30">
                             <span className="text-[10px]">⚠️</span> Double tap to delete
-                            <div className="absolute -bottom-1 right-1/2 translate-x-1/2 md:translate-x-0 md:right-3 w-2 h-2 bg-amber-400 rotate-45 border-r border-b border-amber-500/30" />
+                            <div className="absolute -bottom-1 right-3 w-2 h-2 bg-amber-400 rotate-45 border-r border-b border-amber-500/30" />
                           </div>
                         )}
                         <button

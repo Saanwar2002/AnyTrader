@@ -16,6 +16,7 @@ import PrioritySettings from "./anyride/PrioritySettings";
 import DispatchEngine from "./anyride/DispatchEngine";
 import ZonesGeofences from "./anyride/ZonesGeofences";
 import LiveMap from "./anyride/LiveMap";
+import SubscriptionManager from "./anyride/SubscriptionManager";
 
 import DriversList from "./anyride/DriversList";
 import RidersList from "./anyride/RidersList";
@@ -43,6 +44,7 @@ const SIDEBAR_ITEMS = [
   { id: "payments", label: "Payments & Revenue", icon: DollarSign, category: "Financials" },
   { id: "priority", label: "Priority Settings", icon: Star, category: "Financials" },
   { id: "pricing", label: "Pricing & Fares", icon: Tag, category: "Financials" },
+  { id: "subscriptions", label: "Subscriptions & B2B", icon: StarHalf, category: "Financials" },
 
   { id: "drivers", label: "Drivers", icon: Users, category: "Users" },
   { id: "riders", label: "Riders", icon: UserCircle, category: "Users" },
@@ -149,6 +151,8 @@ export default function AnyRideAdmin() {
              <PaymentsRevenue />
            ) : activeScreen === "priority" ? (
              <PrioritySettings />
+           ) : activeScreen === "subscriptions" ? (
+             <SubscriptionManager />
            ) : activeScreen === "pricing" ? (
              <PricingFares />
            ) : activeScreen === "vehicles" ? (

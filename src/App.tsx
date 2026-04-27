@@ -47,6 +47,7 @@ import DriverInbox from "./components/driver/DriverInbox";
 import MyRides from "./components/MyRides";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
+import CorporatePortal from "./components/anyride/CorporatePortal";
 
 function IndexRoute() {
   const { activePortal, activeRole } = usePortal();
@@ -181,6 +182,7 @@ export default function App() {
                 <Route path="find-trades" element={<FindTrades />} />
                 <Route path="admin" element={<MasterAdminLayout />} />
                 <Route path="ecosystem" element={<EcosystemAdmin />} />
+                <Route path="corporate" element={<CorporatePortal />} />
                 <Route path="job/:id" element={<JobDetails />} />
                 <Route path="job/:id/timeline" element={<JobTimeline />} />
                 

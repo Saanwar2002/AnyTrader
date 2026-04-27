@@ -233,7 +233,23 @@ export default function PassengerBooking() {
   const [priorityInlineToast, setPriorityInlineToast] = useState<{message: string, type: 'success' | 'info'} | null>(null);
   const [hasPaymentMeans, setHasPaymentMeans] = useState(false);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
+  const [showTipModal, setShowTipModal] = useState(false);
+  const [selectedTip, setSelectedTip] = useState<number | null>(null);
+  const [customTip, setCustomTip] = useState("");
+  const [rideContext, setRideContext] = useState<"personal" | "business">("personal");
   
+  // Mock settings for demonstrating corporate and card functionality
+  const hasCorporateAccount = profile?.corporateAccountId ? true : true; 
+  const hasCardOnFile = profile?.hasCardOnFile ? true : false;
+  
+  useEffect(() => {
+    if (rideContext === "business" || hasCardOnFile) {
+      setHasPaymentMeans(true);
+    } else {
+      setHasPaymentMeans(false);
+    }
+  }, [rideContext, hasCardOnFile]);
+
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
@@ -882,6 +898,14 @@ export default function PassengerBooking() {
     }
   };
 
+  const handleAddTip = async (amount: number) => {
+    if (currentRideId) {
+       await updateDoc(doc(db, "ride_requests", currentRideId), { tipAmount: amount, tipAddedAt: serverTimestamp() });
+       toast.success(amount > 0 ? `£${amount.toFixed(2)} tip added. Thank you!` : "Tip skipped.");
+    }
+    setShowTipModal(false);
+  };
+
   useEffect(() => {
     if (!currentRideId) return;
     const unsubRide = onSnapshot(doc(db, "ride_requests", currentRideId), (snapshot) => {
@@ -912,14 +936,9 @@ export default function PassengerBooking() {
           setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis() } : null);
           setStep("confirmed");
           
-          // Trigger the 'end of journey' pop-up after a short delay for preview purposes
+          // Trigger the tip modal after a short delay for preview purposes
           setTimeout(() => {
-            toast('Journey finishing soon', {
-               description: "Please have your phone ready to scan the driver's QR code to pay via Stripe.",
-               action: { label: 'Got it', onClick: () => console.log('Ready to scan') },
-               duration: 20000,
-               icon: <X className="w-5 h-5 text-warning" />
-            });
+            setShowTipModal(true);
             triggerHaptic(ImpactStyle.Heavy);
             // Vibrate pattern for alert
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
@@ -1519,21 +1538,21 @@ export default function PassengerBooking() {
               ) : (
                 <>
                   <div className="flex items-start justify-between bg-surface-hover rounded-2xl p-4 border border-border-main shadow-sm mb-4 shrink-0">
-                    <div className="flex flex-1 items-start gap-2 overflow-hidden">
-                      <button onClick={() => setDetailsView("address")} className="p-2 -mt-1 -ml-2 rounded-xl text-text-muted hover:bg-black/5 transition-colors shrink-0 tooltip-trigger"><ChevronLeft className="w-5 h-5" /></button>
-                      <div className="space-y-1.5 flex-1 overflow-hidden pt-0.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full border-2 border-text-main bg-surface shrink-0" />
+                    <div className="flex flex-1 items-start gap-3 overflow-hidden">
+                      <button onClick={() => setDetailsView("address")} className="p-2.5 rounded-xl bg-slate-100/80 text-slate-700 hover:bg-slate-200 border border-slate-200/60 transition-colors shrink-0 shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
+                      <div className="space-y-2 flex-1 overflow-hidden pt-0.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-surface shrink-0" />
                           <span className="text-sm font-bold text-text-main truncate max-w-full">{pickup || "Current Location"}</span>
                         </div>
                         {stops.map((stop, i) => stop.address ? (
-                          <div key={i} className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-surface shrink-0" />
+                          <div key={i} className="flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full border-2 border-amber-400 bg-surface shrink-0" />
                             <span className="text-sm font-bold text-text-main truncate max-w-full">{stop.address}</span>
                           </div>
                         ) : null)}
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 -ml-1 rounded-sm border-2 border-transparent bg-red-500 shrink-0 mx-[2px] w-[6px] h-[6px]" />
+                        <div className="flex items-center gap-3">
+                          <div className="w-2.5 h-2.5 bg-red-500 rounded-sm shrink-0" />
                           <span className="text-sm font-bold text-text-main truncate max-w-full">{dropoff}</span>
                         </div>
                       </div>
@@ -1582,6 +1601,26 @@ export default function PassengerBooking() {
                         );
                       })}
                     </div>
+
+                    {/* Ride Context Selector (Corporate vs Personal) */}
+                    {hasCorporateAccount && (
+                      <div className="pt-2">
+                        <div className="flex p-1 bg-surface border border-border-main rounded-xl">
+                          <button
+                            onClick={() => setRideContext("personal")}
+                            className={cn("flex-1 py-3 text-xs font-bold rounded-lg transition-all", rideContext === "personal" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text-main")}
+                          >
+                            Personal Ride
+                          </button>
+                          <button
+                            onClick={() => setRideContext("business")}
+                            className={cn("flex-1 py-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2", rideContext === "business" ? "bg-slate-900 text-white shadow-sm" : "text-text-muted hover:text-text-main")}
+                          >
+                            <Briefcase className="w-3.5 h-3.5" /> Business Ride
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Add-Ons */}
                     <div className="pt-2">
@@ -1642,17 +1681,19 @@ export default function PassengerBooking() {
                     </div>
 
                     <div className="pt-2 space-y-4">
-                       <label className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl cursor-pointer">
-                         <input 
-                           type="checkbox" 
-                           checked={hasPaymentMeans}
-                           onChange={(e) => setHasPaymentMeans(e.target.checked)}
-                           className="w-5 h-5 rounded text-primary focus:ring-primary border-primary/30"
-                         />
-                         <div className="flex-1">
-                           <p className="text-xs font-bold text-text-main">I confirm I have means to pay (QR Code / Cash)</p>
-                         </div>
-                       </label>
+                       {!((rideContext === "business") || (rideContext === "personal" && hasCardOnFile)) && (
+                         <label className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl cursor-pointer">
+                           <input 
+                             type="checkbox" 
+                             checked={hasPaymentMeans}
+                             onChange={(e) => setHasPaymentMeans(e.target.checked)}
+                             className="w-5 h-5 rounded text-primary focus:ring-primary border-primary/30"
+                           />
+                           <div className="flex-1">
+                             <p className="text-xs font-bold text-text-main">I confirm I have means to pay (QR Code / Cash)</p>
+                           </div>
+                         </label>
+                       )}
 
                        <button 
                          onClick={handleConfirmBooking} 
@@ -1823,6 +1864,67 @@ export default function PassengerBooking() {
                         <div className="flex gap-3">
                           <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-4 bg-surface rounded-2xl font-black text-text-main hover:bg-surface-hover transition-colors">Go Back</button>
                           <button onClick={handleCancelConfirmed} className="flex-1 py-4 bg-danger text-white rounded-2xl font-black hover:bg-danger/90 transition-colors">Yes, Cancel</button>
+                        </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {showTipModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                      <motion.div initial={{ opacity: 0, scale: 0.9, y: 50 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 50 }} className="bg-card w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-border-main text-center relative overflow-hidden">
+                        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+                        <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+                          <Heart className="w-8 h-8 text-emerald-500 fill-emerald-500" />
+                        </div>
+                        <h3 className="text-xl font-black text-text-main mb-1">Journey almost over</h3>
+                        <p className="text-sm font-bold text-text-muted mb-6">
+                          Want to leave a tip for your driver? 100% of tips go directly to them.
+                        </p>
+                        
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          {[1, 2, 5].map((amount) => (
+                            <button
+                              key={amount}
+                              onClick={() => { setSelectedTip(amount); setCustomTip(""); }}
+                              className={cn(
+                                "py-3 rounded-xl font-black text-sm transition-all border-2",
+                                selectedTip === amount ? "bg-emerald-50 text-emerald-600 border-emerald-500" : "bg-surface text-text-main border-border-main hover:border-emerald-200"
+                              )}
+                            >
+                              £{amount}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <div className="mb-6 relative">
+                          <input
+                            type="number"
+                            value={customTip}
+                            onChange={(e) => {
+                               setCustomTip(e.target.value);
+                               setSelectedTip(null);
+                            }}
+                            placeholder="Custom amount"
+                            className="w-full bg-surface border-2 border-border-main rounded-xl py-3 pl-8 pr-4 font-bold text-text-main focus:border-emerald-500 focus:outline-none transition-colors"
+                          />
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-text-muted">£</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          <button
+                            onClick={() => handleAddTip(selectedTip || parseFloat(customTip) || 0)}
+                            className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg hover:opacity-90 transition-all active:scale-95"
+                          >
+                            Add Tip & Continue
+                          </button>
+                          <button
+                            onClick={() => handleAddTip(0)}
+                            className="w-full py-3 bg-transparent text-text-muted font-bold hover:text-text-main transition-colors"
+                          >
+                            No thanks
+                          </button>
                         </div>
                       </motion.div>
                     </div>

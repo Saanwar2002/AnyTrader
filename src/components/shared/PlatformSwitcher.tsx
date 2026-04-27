@@ -54,7 +54,7 @@ export default function PlatformSwitcher() {
   }
 
   return (
-    <div className="fixed top-24 left-4 z-[100] pointer-events-none">
+    <div className="fixed top-16 left-4 z-[100] pointer-events-none">
       <div className="pointer-events-auto relative">
         <AnimatePresence>
           {quoteCount > 0 && !isAnyTrader && (

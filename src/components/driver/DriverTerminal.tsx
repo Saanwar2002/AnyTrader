@@ -707,7 +707,8 @@ export default function DriverTerminal() {
     setRideState('completed');
     
     const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
-    const finalFare = (activeRide?.fareEstimate || 38.50) + waitFare;
+    const baseFinalFare = (activeRide?.fareEstimate || 38.50) + waitFare;
+    const finalFare = baseFinalFare + (activeRide?.tipAmount || 0);
 
     // Generate the Direct-to-Driver QR Payment Link
     try {
@@ -738,12 +739,13 @@ export default function DriverTerminal() {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
         const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
-        const fare = (activeRide.fareEstimate || 0) + waitFare;
+        const baseFare = (activeRide.fareEstimate || 0) + waitFare;
+        const totalFare = baseFare + (activeRide.tipAmount || 0);
         
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "completed",
           paymentMethod: "stripe_qr",
-          finalFare: fare,
+          finalFare: totalFare,
           paidWaitSeconds: totalPaidWaitSeconds,
           completedAt: serverTimestamp()
         });
@@ -759,7 +761,7 @@ export default function DriverTerminal() {
         const today = new Date().toISOString().split('T')[0];
         await setDoc(doc(db, "driver_metrics", user.uid), {
           date: today,
-          dailyEarnings: increment(fare),
+          dailyEarnings: increment(totalFare),
           jobsDoneToday: increment(1),
           updatedAt: serverTimestamp()
         }, { merge: true });
@@ -776,13 +778,14 @@ export default function DriverTerminal() {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
         const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
-        const fare = (activeRide.fareEstimate || 0) + waitFare;
-        const platformFee = fare * fareConfig.commissionRate; 
+        const baseFare = (activeRide.fareEstimate || 0) + waitFare;
+        const totalFare = baseFare + (activeRide.tipAmount || 0);
+        const platformFee = baseFare * fareConfig.commissionRate; 
         
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "completed",
           paymentMethod: "cash",
-          finalFare: fare,
+          finalFare: totalFare,
           paidWaitSeconds: totalPaidWaitSeconds,
           platformFeeOwed: platformFee,
           completedAt: serverTimestamp()
@@ -1167,7 +1170,14 @@ export default function DriverTerminal() {
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-[#00D26A] to-emerald-500"></div>
               
               <h2 className="text-[13px] font-black text-[#E4E4E7] mb-1 tracking-[0.2em] uppercase">Total Fare</h2>
-              <h1 className="text-[52px] leading-tight font-black text-white mb-8">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</h1>
+              <h1 className="text-[52px] leading-tight font-black text-white mb-2">
+			    £{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute) + (activeRide?.tipAmount || 0)).toFixed(2)}
+			  </h1>
+			  {activeRide?.tipAmount ? (
+			     <p className="text-emerald-400 font-bold text-sm mb-6 bg-emerald-500/10 inline-block px-3 py-1 rounded-full border border-emerald-500/20">Includes £{activeRide.tipAmount.toFixed(2)} Tip</p>
+			  ) : (
+                 <p className="text-slate-500 font-bold text-xs mb-8">Passenger can scan to pay & tip</p>
+			  )}
               
               <div className="relative mb-8 bg-white p-4 rounded-3xl inline-block shadow-[0_0_50px_rgba(255,255,255,0.05)] border-4 border-white/10 min-w-[212px] min-h-[212px]">
                 {isGeneratingPayment || !paymentUrl ? (
@@ -1286,9 +1296,14 @@ export default function DriverTerminal() {
                   <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
                   New Ride Request
                 </h2>
-                {activeRide?.isPriority && (
-                  <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-3 h-3 fill-amber-950" /> Priority</div>
-                )}
+                <div className="flex gap-2">
+                  {/* Mock rider plus member displaying here */}
+                  <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Star className="w-3 h-3 fill-amber-950" /> Rider Plus</div>
+
+                  {activeRide?.isPriority && (
+                    <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-3 h-3 fill-amber-950" /> Priority</div>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-2">

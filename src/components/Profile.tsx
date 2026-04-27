@@ -6,7 +6,7 @@ import {
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
-  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility
+  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -809,6 +809,7 @@ export default function Profile() {
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
         { icon: Ticket, label: "Promotions & Promo Codes", path: "#promotions" },
         { icon: Gift, label: "Refer a Friend — Earn £5", path: "#referrals" },
+        { icon: Briefcase, label: "Business Profile", path: "#business" },
         { icon: FileText, label: "Ride Receipts", path: "/my-rides" },
       ]
     },
@@ -985,6 +986,74 @@ export default function Profile() {
       )}
 
       {/* Subscription Plan Card */}
+      {activePortal === 'rides' && profile.role === "homeowner" && (
+        <div className="bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-500 rounded-[2rem] shadow-[0_8px_30px_rgb(251,191,36,0.25)] overflow-hidden p-8 mb-8 relative">
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/30 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-amber-600/20 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="flex justify-between items-start mb-6 relative z-10">
+            <div>
+              <h3 className="text-2xl font-black text-amber-950 flex items-center gap-2">
+                <Star className="w-6 h-6 outline-amber-900 fill-amber-200" />
+                Rider Plus
+              </h3>
+              <p className="text-sm font-bold text-amber-900/80 mt-1">Unlock the ultimate AnyRide experience.</p>
+            </div>
+            {profile.tierId === "rider_plus" && (
+               <div className="px-3 py-1.5 bg-amber-950 text-amber-300 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                 <CheckCircle2 className="w-4 h-4" /> Active
+               </div>
+            )}
+          </div>
+
+          <div className="space-y-4 mb-8 relative z-10 bg-white/20 backdrop-blur-sm p-4 rounded-3xl border border-white/30">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+                <Zap className="w-4 h-4 text-amber-950 fill-amber-950" />
+              </div>
+              <p className="text-sm font-bold text-amber-950">Priority Matching during peak hours</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+                <Percent className="w-4 h-4 text-amber-950" />
+              </div>
+              <p className="text-sm font-bold text-amber-950">10% discount on every journey</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+                <Award className="w-4 h-4 text-amber-950" />
+              </div>
+              <p className="text-sm font-bold text-amber-950">Exclusive Rider Plus badge on your profile</p>
+            </div>
+          </div>
+
+          <div className="relative z-10">
+            {profile.tierId !== "rider_plus" ? (
+              <button 
+                onClick={() => {
+                  setShowCheckoutForTier({ 
+                    name: "rider_plus", 
+                    price: 9.99, 
+                    limitPeriod: "monthly", 
+                    description: "Premium privileges for AnyRide passengers." 
+                  });
+                }}
+                className="w-full py-4 bg-amber-950 text-amber-300 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-amber-900 transition-colors shadow-xl active:scale-95 flex justify-center items-center gap-2"
+              >
+                Subscribe for £9.99 <span className="text-[10px] text-amber-500">/ month</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleCancelSubscription}
+                className="w-full py-3 bg-white/30 border border-white/50 text-amber-950 rounded-2xl font-bold text-sm hover:bg-white/40 transition-colors"
+              >
+                Cancel Subscription
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {(profile.role === "tradesperson" || (profile.role === "homeowner" && profile.subscriptionType === "business")) && platformConfig && (
         <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8">
           {platformConfig.paywallEnabled === false && (
@@ -1924,6 +1993,66 @@ export default function Profile() {
                                   </div>
                                 )}
                               </div>
+                            ) : item.path === "#business" ? (
+                               <div className="p-6 md:p-8 bg-slate-50/50">
+                                 {profile.corporateAccountId ? (
+                                    <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm text-center">
+                                      <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                        <Briefcase className="w-8 h-8 text-blue-600" />
+                                      </div>
+                                      <h3 className="text-xl font-bold text-slate-900 mb-1">Business Profile Linked</h3>
+                                      <p className="text-sm text-slate-500 mb-6">Your account is linked to your corporate account.</p>
+                                      
+                                      <div className="flex flex-col gap-3 max-w-sm mx-auto">
+                                        <button 
+                                          onClick={() => window.location.href = '/corporate'}
+                                          className="flex items-center justify-center gap-2 w-full py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors"
+                                        >
+                                          <span>Go to Corporate Portal</span>
+                                        </button>
+                                        <button 
+                                          className="text-sm font-bold text-slate-400 hover:text-red-500 transition-colors"
+                                        >
+                                          Unlink Business Profile
+                                        </button>
+                                      </div>
+                                    </div>
+                                 ) : (
+                                    <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm text-center">
+                                      <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                        <Briefcase className="w-8 h-8 text-slate-400" />
+                                      </div>
+                                      <h3 className="text-xl font-bold text-slate-900 mb-1">Set up a Business Profile</h3>
+                                      <p className="text-sm text-slate-500 mb-6">Add a business email to keep work rides and receipts separate. If your company uses AnyRide Corporate, this will link your account.</p>
+                                      
+                                      <div className="flex flex-col sm:flex-row items-center gap-3 max-w-lg mx-auto">
+                                        <div className="relative flex-1 w-full">
+                                          <Mail className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                                          <input 
+                                            type="email" 
+                                            placeholder="Work email address" 
+                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                          />
+                                        </div>
+                                        <button 
+                                          className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 active:scale-95 transition-all whitespace-nowrap shadow-sm shadow-blue-500/20"
+                                        >
+                                          Link Account
+                                        </button>
+                                      </div>
+                                      
+                                      <div className="mt-8 pt-6 border-t border-slate-100 inline-block w-full">
+                                        <p className="text-xs text-slate-500 mb-3">Does your company need an AnyRide Corporate account?</p>
+                                        <button 
+                                          onClick={() => window.location.href = '/corporate'}
+                                          className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                                        >
+                                          Learn about AnyRide Corporate &rarr;
+                                        </button>
+                                      </div>
+                                    </div>
+                                 )}
+                               </div>
                             ) : (
                               <div className="p-8 text-center bg-slate-50">
                                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
