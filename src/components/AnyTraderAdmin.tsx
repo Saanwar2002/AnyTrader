@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { db, collection, query, onSnapshot, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, orderBy, limit, sendNotification, getDoc, addDoc, getDocs } from "@/src/firebase";
+import { db, collection, query, onSnapshot, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, orderBy, limit, sendNotification, getDoc, addDoc, getDocs, handleFirestoreError as handleGlobalFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { useCategories } from "../lib/CategoryProvider";
 import { TRADE_CATEGORIES } from "@/src/constants";
@@ -228,43 +228,46 @@ export default function AnyTraderAdmin() {
 
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "users"));
 
     const unsubJobs = onSnapshot(collection(db, "jobs"), (snapshot) => {
       setJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "jobs"));
 
     const unsubLogs = onSnapshot(
       query(collection(db, "audit_logs"), orderBy("createdAt", "desc"), limit(50)), 
       (snapshot) => {
         setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
+      },
+      (error) => handleGlobalFirestoreError(error, OperationType.GET, "audit_logs")
     );
 
     const unsubInvites = onSnapshot(collection(db, "invitations"), (snapshot) => {
       setInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "invitations"));
 
     const unsubBroadcasts = onSnapshot(
       query(collection(db, "broadcasts"), orderBy("createdAt", "desc"), limit(20)), 
       (snapshot) => {
         setBroadcasts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
+      },
+      (error) => handleGlobalFirestoreError(error, OperationType.GET, "broadcasts")
     );
 
     const unsubReviews = onSnapshot(collection(db, "reviews"), (snapshot) => {
       setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "reviews"));
 
     const unsubSearchLogs = onSnapshot(collection(db, "search_logs"), (snapshot) => {
       setSearchLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "search_logs"));
 
     const unsubSecurityAlerts = onSnapshot(
       collection(db, "security_alerts"),
       (snapshot) => {
         setSecurityAlerts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
+      },
+      (error) => handleGlobalFirestoreError(error, OperationType.GET, "security_alerts")
     );
 
     const unsubSecrets = onSnapshot(doc(db, "platform_config", "secrets"), (doc) => {
@@ -273,7 +276,7 @@ export default function AnyTraderAdmin() {
       } else {
         setPlatformSecrets({});
       }
-    });
+    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "platform_config/secrets"));
 
     const unsubConfig = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
       if (doc.exists()) {
@@ -306,7 +309,7 @@ export default function AnyTraderAdmin() {
         setPlatformConfig(defaultConfig);
         setTempConfig(defaultConfig);
       }
-    });
+    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "platform_config/global"));
 
     setLoading(false);
 
@@ -4098,28 +4101,26 @@ export default function AnyTraderAdmin() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
-                  {/* Tiers and Monetization moved to the 'Tiers' tab */}
-                  <div className="p-12 bg-blue-50/30 rounded-[40px] border border-blue-100 border-dashed text-center space-y-4">
-                    <div className="w-16 h-16 rounded-3xl bg-blue-600 text-white flex items-center justify-center mx-auto shadow-xl shadow-blue-100">
-                      <DollarSign className="w-8 h-8" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-xl font-black text-slate-900">Monetization Settings Moved</h4>
-                      <p className="text-sm text-slate-500 max-w-sm mx-auto">To provide a more comprehensive overview and easier management, all subscription tiers and paywall controls have been relocated.</p>
-                    </div>
-                    <button 
-                      onClick={() => handleTabChange("monetization")}
-                      className="inline-flex items-center gap-2 bg-white px-6 py-2.5 rounded-2xl border border-slate-200 text-slate-900 font-bold text-sm hover:border-blue-600 hover:text-blue-600 transition-all shadow-sm group"
-                    >
-                      Open Tiers Tab
-                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                    </button>
+              <div className="p-8 bg-blue-50/30 rounded-[32px] border border-blue-100 border-dashed flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-6 text-left">
+                  <div className="w-16 h-16 rounded-3xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xl shadow-blue-100">
+                    <DollarSign className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black text-slate-900 mb-1">Monetization Settings Moved</h4>
+                    <p className="text-sm text-slate-500 max-w-lg">To provide a more comprehensive overview and easier management, all subscription tiers and paywall controls have been relocated.</p>
                   </div>
                 </div>
+                <button 
+                  onClick={() => handleTabChange("monetization")}
+                  className="shrink-0 inline-flex items-center gap-2 bg-white px-6 py-3 rounded-2xl border border-slate-200 text-slate-900 font-bold text-sm hover:border-blue-600 hover:text-blue-600 transition-all shadow-sm group"
+                >
+                  Open Tiers Tab
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </button>
+              </div>
 
-                <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                   {/* Referral Program */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Referral Program</h4>
@@ -4289,9 +4290,9 @@ export default function AnyTraderAdmin() {
                     </div>
                   </div>
 
-                  {/* System Status */}
+                  {/* System Status & Maintenance */}
                   <div id="maintenance-control" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 scroll-mt-20">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">System Status</h4>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">System Status & Maintenance</h4>
                     
                     <div className="space-y-4">
                       {/* Maintenance Mode */}
@@ -4319,17 +4320,77 @@ export default function AnyTraderAdmin() {
                         </button>
                       </div>
 
-                      {/* Global Monetization Mode */}
-                      <div className="lg:col-span-3 p-8 bg-blue-50/30 rounded-[32px] border border-blue-100 border-dashed text-center space-y-3">
-                         <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-200">
-                            <DollarSign className="w-6 h-6" />
-                         </div>
-                         <h5 className="font-bold text-slate-900">Monetization Controls have moved.</h5>
-                         <p className="text-xs text-slate-500 max-w-md mx-auto">The Global Paywall toggle and Tier Management are now centralized in the <span className="font-bold text-blue-600 uppercase tracking-widest text-[10px]">Tiers</span> tab for a better management experience.</p>
+                      {/* Scheduled Maintenance Toggle */}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
+                        <div className="flex items-center gap-3">
+                          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", tempConfig.scheduledMaintenance?.enabled ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-400")}>
+                            <Calendar className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">Scheduled Maintenance</p>
+                            <p className="text-[10px] text-slate-500">{tempConfig.scheduledMaintenance?.enabled ? "Scheduled ahead" : "Not scheduled"}</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setTempConfig({ 
+                            ...tempConfig, 
+                            scheduledMaintenance: { 
+                              ...tempConfig.scheduledMaintenance, 
+                              enabled: !tempConfig.scheduledMaintenance?.enabled 
+                            } 
+                          })}
+                          className={cn(
+                            "w-12 h-6 rounded-full relative transition-all",
+                            tempConfig.scheduledMaintenance?.enabled ? "bg-amber-500" : "bg-slate-200"
+                          )}
+                        >
+                          <div className={cn(
+                            "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                            tempConfig.scheduledMaintenance?.enabled ? "right-1" : "left-1"
+                          )} />
+                        </button>
                       </div>
+
+                      {tempConfig.scheduledMaintenance?.enabled && (
+                        <div className="pt-4 space-y-4 border-t border-slate-100">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Maintenance Time</label>
+                            <div className="relative">
+                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <input 
+                                type="text"
+                                value={tempConfig.scheduledMaintenance?.time || ""}
+                                onChange={(e) => setTempConfig({
+                                  ...tempConfig,
+                                  scheduledMaintenance: { ...tempConfig.scheduledMaintenance, time: e.target.value }
+                                })}
+                                placeholder="e.g. Monday 14th April, 2:00 PM"
+                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-600/10 focus:border-amber-600 transition-all text-sm font-medium bg-slate-50 focus:bg-white"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Announcement Message</label>
+                            <textarea 
+                              value={tempConfig.scheduledMaintenance?.message || ""}
+                              onChange={(e) => setTempConfig({
+                                ...tempConfig,
+                                scheduledMaintenance: { ...tempConfig.scheduledMaintenance, message: e.target.value }
+                              })}
+                              rows={3}
+                              placeholder="Message to show to users..."
+                              className="w-full px-4 py-3 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-600/10 focus:border-amber-600 transition-all text-sm font-medium bg-slate-50 focus:bg-white resize-none"
+                            />
+                            <p className="text-[10px] text-slate-500 italic mt-1">
+                              This will show a dismissible banner to all users on their dashboard.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-3 pt-4 border-t border-slate-100">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-500">Last Updated</span>
                         <span className="font-bold text-slate-900">
@@ -4345,71 +4406,9 @@ export default function AnyTraderAdmin() {
                     </div>
                   </div>
 
-                  {/* Scheduled Maintenance */}
-                  <div id="scheduled-maintenance" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 scroll-mt-20">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Scheduled Maintenance</h4>
-                      <button 
-                        onClick={() => setTempConfig({ 
-                          ...tempConfig, 
-                          scheduledMaintenance: { 
-                            ...tempConfig.scheduledMaintenance, 
-                            enabled: !tempConfig.scheduledMaintenance?.enabled 
-                          } 
-                        })}
-                        className={cn(
-                          "w-12 h-6 rounded-full relative transition-all",
-                          tempConfig.scheduledMaintenance?.enabled ? "bg-amber-500" : "bg-slate-200"
-                        )}
-                      >
-                        <div className={cn(
-                          "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
-                          tempConfig.scheduledMaintenance?.enabled ? "right-1" : "left-1"
-                        )} />
-                      </button>
-                    </div>
+              </div>
 
-                    {tempConfig.scheduledMaintenance?.enabled && (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Maintenance Time</label>
-                          <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input 
-                              type="text"
-                              value={tempConfig.scheduledMaintenance?.time || ""}
-                              onChange={(e) => setTempConfig({
-                                ...tempConfig,
-                                scheduledMaintenance: { ...tempConfig.scheduledMaintenance, time: e.target.value }
-                              })}
-                              placeholder="e.g. Monday 14th April, 2:00 PM"
-                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-600/10 focus:border-amber-600 transition-all text-sm font-medium"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Announcement Message</label>
-                          <textarea 
-                            value={tempConfig.scheduledMaintenance?.message || ""}
-                            onChange={(e) => setTempConfig({
-                              ...tempConfig,
-                              scheduledMaintenance: { ...tempConfig.scheduledMaintenance, message: e.target.value }
-                            })}
-                            rows={3}
-                            placeholder="Message to show to users..."
-                            className="w-full px-4 py-3 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-600/10 focus:border-amber-600 transition-all text-sm font-medium resize-none"
-                          />
-                        </div>
-                        
-                        <p className="text-[10px] text-slate-500 italic">
-                          This will show a dismissible banner to all users on their dashboard.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Global Master Command Center */}
+              {/* Global Master Command Center */}
                   <div id="quick-actions" className="bg-white/95 backdrop-blur-2xl p-8 sm:p-10 rounded-[48px] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.1)] space-y-10 scroll-mt-20 border border-slate-200/60 overflow-hidden relative group">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                       <div className="space-y-1">
@@ -4599,8 +4598,6 @@ export default function AnyTraderAdmin() {
                     <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-500/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
                     <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-500/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
                   </div>
-                </div>
-              </div>
             </div>
           )}
         </div>

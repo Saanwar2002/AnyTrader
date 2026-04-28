@@ -4,7 +4,7 @@ import AnyRideAdmin from "./AnyRideAdmin";
 import { useAuth } from "./AuthProvider";
 import { Building2, Car, Shield, LogOut, Users, Activity, PoundSterling, Briefcase } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { auth, db } from "@/src/firebase";
+import { auth, db, handleFirestoreError, OperationType } from "@/src/firebase";
 import { signOut } from "firebase/auth";
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 
@@ -38,15 +38,15 @@ export default function MasterAdminLayout() {
         totalTraders: users.filter(u => u.role === "tradesperson").length,
         totalDrivers: users.filter(u => u.services?.includes("Taxi & Transport")).length
       }));
-    });
+    }, (error) => handleFirestoreError(error, OperationType.GET, "users"));
 
     const unsubJobs = onSnapshot(collection(db, "jobs"), (snapshot) => {
       setMetrics(prev => ({ ...prev, totalJobs: snapshot.docs.length }));
-    });
+    }, (error) => handleFirestoreError(error, OperationType.GET, "jobs"));
 
     const unsubRides = onSnapshot(collection(db, "ride_requests"), (snapshot) => {
       setMetrics(prev => ({ ...prev, totalRides: snapshot.docs.length }));
-    });
+    }, (error) => handleFirestoreError(error, OperationType.GET, "ride_requests"));
 
     setLoadingMetrics(false);
 
