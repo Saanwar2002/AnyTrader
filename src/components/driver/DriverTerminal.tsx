@@ -1293,93 +1293,94 @@ export default function DriverTerminal() {
               </div>
 
               <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-2">
-                {/* Fare Section */}
-                <div className="bg-[#252529] rounded-xl p-3 mb-3 relative overflow-hidden group/fare cursor-pointer" onClick={() => setShowFareBreakdown(!showFareBreakdown)}>
-                  <div className="flex justify-between items-end mb-1">
-                    <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
-                      £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
-                    </h1>
-                    <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
+                {/* Map Section (Moved to top) */}
+                {isLoaded && activeRide?.pickupLat && activeRide?.dropoffLat && (
+                  <div className="w-full h-[120px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-3">
+                    <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
+                    <GoogleMap
+                      mapContainerStyle={{ width: '100%', height: '100%' }}
+                      onLoad={(map) => {
+                        const bounds = new window.google.maps.LatLngBounds();
+                        if (activeRide.pickupLat && activeRide.pickupLng) bounds.extend({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
+                        if (activeRide.dropoffLat && activeRide.dropoffLng) bounds.extend({ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng });
+                        (activeRide.stops || []).forEach((s: any) => { if (s.coords) bounds.extend(s.coords); });
+                        map.fitBounds(bounds, { top: 20, bottom: 20, left: 20, right: 20 });
+                        // Apply a max zoom in case points are very close
+                        const listener = window.google.maps.event.addListener(map, 'idle', () => {
+                          if ((map.getZoom() || 0) > 13) map.setZoom(13); // Restrict to 13 as user mentioned
+                          window.google.maps.event.removeListener(listener);
+                        });
+                      }}
+                      options={{
+                        disableDefaultUI: true,
+                        clickableIcons: false,
+                        keyboardShortcuts: false,
+                        mapId: "a1b2c3d4e5f6g7h8",
+                      }}
+                    >
+                      {activeRide.pickupLat && (
+                        <MarkerF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} label="P" />
+                      )}
+                      {activeRide.dropoffLat && (
+                        <MarkerF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} label="D" />
+                      )}
+                      {(activeRide.stops || []).map((s: any, i: number) => s.coords && (
+                        <React.Fragment key={i}>
+                          <MarkerF position={s.coords} label={`${i+1}`} />
+                        </React.Fragment>
+                      ))}
+                    </GoogleMap>
                   </div>
-                  <p className="text-[#00D26A] text-[12px] font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
-
-                  {/* Collapsible Breakdown */}
-                  <AnimatePresence>
-                    {showFareBreakdown && (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="border-t border-[#333338] mt-3 pt-3 flex flex-col gap-1.5"
-                      >
-                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Estimated Distance:</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
-                        <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge:</span><span>+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
-                        <div className="flex justify-between text-[11px] font-bold text-[#FF3B30] mt-1 p-1 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20">
-                          <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  
-                  {!showFareBreakdown && (
-                    <div className="w-full text-center mt-1.5 group-hover/fare:bg-white/5 py-0.5 rounded transition-colors">
-                      <ChevronDown className="w-4 h-4 text-[#A1A1AA] mx-auto" />
-                    </div>
-                  )}
-                </div>
+                )}
 
                 {/* Rider Details */}
-                <div className="border-t border-[#2C2C30] pt-4 pb-1">
+                <div className="border-t border-[#2C2C30] pt-3 pb-1">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-base border border-white">
+                    <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-base border border-white shrink-0">
                       {(activeRide?.name || "S")[0]}
                     </div>
-                    <div className="flex-1">
-                      <h3 className="text-sm font-bold text-white leading-tight">{activeRide?.name || "Sarah T."}</h3>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold text-white leading-tight truncate">{activeRide?.name || "Sarah T."}</h3>
                       <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    {isLoaded && activeRide?.pickupLat && activeRide?.dropoffLat && (
-                      <div className="w-full h-[120px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0">
-                        <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
-                        <GoogleMap
-                          mapContainerStyle={{ width: '100%', height: '100%' }}
-                          onLoad={(map) => {
-                            const bounds = new window.google.maps.LatLngBounds();
-                            if (activeRide.pickupLat && activeRide.pickupLng) bounds.extend({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
-                            if (activeRide.dropoffLat && activeRide.dropoffLng) bounds.extend({ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng });
-                            (activeRide.stops || []).forEach((s: any) => { if (s.coords) bounds.extend(s.coords); });
-                            map.fitBounds(bounds, { top: 20, bottom: 20, left: 20, right: 20 });
-                            // Apply a max zoom in case points are very close
-                            const listener = window.google.maps.event.addListener(map, 'idle', () => {
-                              if ((map.getZoom() || 0) > 13) map.setZoom(13); // Restrict to 13 as user mentioned
-                              window.google.maps.event.removeListener(listener);
-                            });
-                          }}
-                          options={{
-                            disableDefaultUI: true,
-                            clickableIcons: false,
-                            keyboardShortcuts: false,
-                            mapId: "a1b2c3d4e5f6g7h8",
-                          }}
-                        >
-                          {activeRide.pickupLat && (
-                            <MarkerF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} label="P" />
-                          )}
-                          {activeRide.dropoffLat && (
-                            <MarkerF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} label="D" />
-                          )}
-                          {(activeRide.stops || []).map((s: any, i: number) => s.coords && (
-                            <React.Fragment key={i}>
-                              <MarkerF position={s.coords} label={`${i+1}`} />
-                            </React.Fragment>
-                          ))}
-                        </GoogleMap>
+                    {/* Fare Section (Moved below rider profile) */}
+                    <div className="bg-[#252529] rounded-xl p-3 relative overflow-hidden group/fare cursor-pointer shrink-0" onClick={() => setShowFareBreakdown(!showFareBreakdown)}>
+                      <div className="flex justify-between items-end mb-1">
+                        <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
+                          £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
+                        </h1>
+                        <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
                       </div>
-                    )}
+                      <p className="text-[#00D26A] text-[12px] font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+
+                      {/* Collapsible Breakdown */}
+                      <AnimatePresence>
+                        {showFareBreakdown && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="border-t border-[#333338] mt-3 pt-3 flex flex-col gap-1.5"
+                          >
+                            <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Estimated Distance:</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
+                            <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge:</span><span>+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
+                            <div className="flex justify-between text-[11px] font-bold text-[#FF3B30] mt-1 p-1 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20">
+                              <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      
+                      {!showFareBreakdown && (
+                        <div className="w-full text-center mt-1.5 group-hover/fare:bg-white/5 py-0.5 rounded transition-colors">
+                          <ChevronDown className="w-4 h-4 text-[#A1A1AA] mx-auto" />
+                        </div>
+                      )}
+                    </div>
 
                     <div className="flex items-center justify-between mt-2 mb-1">
                       <div className="relative pl-5 space-y-3 flex-1">
