@@ -1043,7 +1043,7 @@ export default function DriverTerminal() {
               animate={{ opacity: 1, x: 0, height: 'auto', overflow: 'visible' }}
               exit={{ opacity: 0, x: 20, height: 0, overflow: 'hidden' }}
               transition={{ duration: 0.2 }}
-              className="flex flex-col items-end gap-3"
+              className="flex flex-col items-end gap-3 pb-2"
             >
               <div className="flex flex-col items-end">
                 <button 
@@ -1055,20 +1055,20 @@ export default function DriverTerminal() {
                 >
                   <AlertCircle className="w-6 h-6 text-white" />
                 </button>
-                <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm">
+                <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm mb-1">
                   <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
                 </div>
               </div>
+
+              <button 
+                onClick={handleCenterOnMe}
+                className="w-10 h-10 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform mr-1"
+              >
+                <Target className="w-4 h-4 text-[#E4E4E7]" />
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
-
-        <button 
-          onClick={handleCenterOnMe}
-          className="w-10 h-10 mt-2 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
-        >
-          <Target className="w-4 h-4 text-[#E4E4E7]" />
-        </button>
         
         {/*
         {isOnline && !activeRide && (
