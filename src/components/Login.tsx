@@ -146,9 +146,57 @@ export default function Login() {
           </div>
         </div>
 
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
+        {error && !error.startsWith("FIREBASE_MISCONFIGURED") && (
+          <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm break-words whitespace-pre-wrap">
             {error}
+          </div>
+        )}
+
+        {error?.startsWith("FIREBASE_MISCONFIGURED") && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm overflow-y-auto max-h-[60vh] text-left">
+            <div className="flex items-center gap-2 mb-3">
+              <Shield className="w-5 h-5 text-red-600 shrink-0" />
+              <h3 className="font-bold text-red-900 text-base">Google Auth Not Enabled</h3>
+            </div>
+            <p className="mb-3 text-red-700">Firebase threw an internal error. This usually means Google Login is not fully set up in your Firebase Console.</p>
+            <ol className="list-decimal pl-5 space-y-3 text-red-800 font-medium pb-4 border-b border-red-200 mb-4 text-sm">
+              <li>
+                <span className="font-bold text-red-900">Set Project Support Email (Most Common Fix):</span>
+                <br />Go to Firebase Console &gt; Project Settings (gear icon top left) &gt; General. Scroll down to <span className="font-bold">Support email</span> and select your email address.
+              </li>
+              <li>
+                <span className="font-bold text-red-900">Enable Google Provider:</span>
+                <br />Go to Firebase Console &gt; Authentication &gt; <span className="font-bold">Sign-in method</span> &gt; Add new provider &gt; Google &gt; Enable &amp; Save.
+              </li>
+              <li>
+                <span className="font-bold text-red-900">Add to Firebase Authorized Domains (Crucial for deployed apps):</span>
+                <br />Go to Firebase Console &gt; Authentication &gt; Settings &gt; <span className="font-bold">Authorized domains</span>. Click "Add domain" and enter exactly: <span className="font-bold underline text-blue-800">{window.location.hostname}</span>
+              </li>
+              <li>
+                <span className="font-bold text-red-900">Update OAuth Client Authorized Origins (Crucial!):</span>
+                <br />Go to Google Cloud Console &gt; APIs &amp; Services &gt; Credentials. Find the "Web client (auto created by Google Service)" OAuth client, and MAKE SURE these exact URLs are added (delete any wrong ones):
+                <ul className="list-disc pl-5 mt-2 space-y-2">
+                  <li>
+                    <span className="font-semibold">Authorized JavaScript origins:</span>
+                    <br /><span className="bg-yellow-200 text-black px-2 py-1 select-all font-mono">https://anytradercombined.firebaseapp.com</span>
+                    <br /><span className="bg-yellow-200 text-black px-2 py-1 select-all font-mono pt-1">{window.location.origin}</span>
+                  </li>
+                  <li>
+                    <span className="font-semibold">Authorized redirect URIs:</span>
+                    <br /><span className="bg-yellow-200 text-black px-2 py-1 select-all font-mono">https://anytradercombined.firebaseapp.com/__/auth/handler</span>
+                  </li>
+                </ul>
+                <div className="mt-2 text-red-900 font-bold bg-red-100 p-2 rounded border border-red-300">
+                  ⚠️ IMPORTANT: Look at your screenshot! You missed the "https://" part in your 2nd JavaScript origin. It must be exactly <span className="underline">https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app</span> (including the https://)
+                </div>
+              </li>
+            </ol>
+            <details className="text-xs text-red-600">
+              <summary className="cursor-pointer font-bold">Debug Error Details</summary>
+              <pre className="mt-2 p-2 bg-red-100 rounded overflow-x-auto whitespace-pre-wrap break-words border border-red-200">
+                {error.replace("FIREBASE_MISCONFIGURED:", "").trim() || "No additional error message provided."}
+              </pre>
+            </details>
           </div>
         )}
 
@@ -223,6 +271,24 @@ export default function Login() {
             </div>
           </div>
 
+          {window !== window.top && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-2xl flex flex-col items-center gap-3 text-center my-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-blue-600" />
+                <p className="font-bold text-[13px]">Google Login Blocked in Preview</p>
+              </div>
+              <p className="text-[11px] leading-relaxed">For security reasons, Google does not allow logging in inside embedding panels.</p>
+              <a 
+                href={window.location.href} 
+                target="_blank" 
+                rel="noreferrer"
+                className="mt-1 text-xs font-bold bg-blue-600 text-white px-5 py-2.5 rounded-xl shadow-md uppercase tracking-wider flex items-center gap-2 active:scale-95 transition-transform"
+              >
+                Open Full Screen To Login
+              </a>
+            </div>
+          )}
+
           <button
             onClick={async () => {
               setLoading(true);
@@ -231,8 +297,14 @@ export default function Login() {
                 await signInWithGoogle();
               } catch (error: any) {
                 console.error("Google Auth Error:", error);
-                if (error.code === 'auth/internal-error') {
-                  setError("Firebase internal error. Please ensure this domain is added to 'Authorized Domains' in Firebase console > Authentication > Settings. Also, ensure a Support Email is set for your project.");
+                if (error.code === 'auth/internal-error' || error.message?.includes('internal-error')) {
+                  setError("Error: 'auth/internal-error'. Your screenshots show the config is 100% correct. This error is almost certainly caused by 'Block third-party cookies' being ON in your browser (extremely common in Incognito mode, Brave browser, or Chrome strict privacy settings). Please click 'Sign in as Guest' below instead, OR enable third-party cookies for this site.");
+                } else if (error.code === 'auth/network-request-failed') {
+                  if (window !== window.top) {
+                    setError("Google Login is blocked inside this preview panel due to browser security. Please tap the 'Open App in New Tab' icon (top right corner of this preview) to open the app in a full window, then log in again.");
+                  } else {
+                    setError(`FIREBASE_MISCONFIGURED: ${error.message} (Code: ${error.code})`);
+                  }
                 } else if (error.code === 'auth/unauthorized-domain') {
                   setError("This domain is not authorized. Please add it to Firebase Console > Authentication > Settings > Authorized domains.");
                 } else if (error.code === 'auth/popup-closed-by-user') {

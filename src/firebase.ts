@@ -13,7 +13,7 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Auth Helpers
-export const signInWithGoogle = () => signInWithRedirect(auth, googleProvider);
+export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 export const handleRedirectResult = () => getRedirectResult(auth);
 export const signInAsGuest = () => signInAnonymously(auth);
 export const logout = () => auth.signOut();

@@ -86,6 +86,22 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   // Sync role if portal switches to anyride (force driver or customer)
   useEffect(() => {
+    // Force activeRole update when profile becomes available
+    if (profile) {
+      const saved = localStorage.getItem("anytrader_active_role") as ActiveRoleType;
+      // If user is admin but current role state is customer, we need to fix it
+      if (profile.role === "admin" && activeRole !== "admin") {
+        setActiveRoleState("admin");
+        return;
+      }
+      if (profile.role === "ecosystem_manager" && activeRole !== "ecosystem_manager") {
+        setActiveRoleState("ecosystem_manager");
+        return;
+      }
+    }
+
+    if (profile?.role === "admin" || profile?.role === "ecosystem_manager") return;
+
     if (activePortal === "anyride") {
        if (profile?.role === "fleet_driver") setActiveRoleState("driver");
        else setActiveRoleState("customer");

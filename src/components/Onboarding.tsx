@@ -111,64 +111,73 @@ export default function Onboarding() {
 
   const handleSubmit = async () => {
     console.log("handleSubmit called. State:", { user: !!user, role, name, postcode, phone });
-    if (!user || !role || !name || !postcode || !phone) {
+    // Administrators can skip providing phone/postcode initially if needed,
+    // but the db still requires name to exist for users.
+    if (!user || !role || (role !== 'admin' && (!name || !postcode || !phone))) {
       console.log("handleSubmit returning early: Missing required fields");
       return;
     }
 
-    // 1. Block Temporary Emails
-    const emailDomain = user.email?.split("@")[1]?.toLowerCase();
-    if (emailDomain && BLOCKED_DOMAINS.includes(emailDomain)) {
-      setError("Sorry, we do not accept registrations from this email provider. Please use a standard email address.");
-      return;
-    }
+    const cleanPhone = phone ? phone.replace(/\s/g, "") : "";
 
-    // 2. Phone Number Validation (Basic UK format check)
-    const cleanPhone = phone.replace(/\s/g, "");
-    if (!/^(\+44|0)7\d{9}$/.test(cleanPhone)) {
-      setError("Please enter a valid UK mobile number (e.g., 07123 456789).");
-      return;
-    }
-
-    // 3. Duplicate Profile Detection (Name + Postcode)
-    try {
-      setLoading(true);
-      const duplicateQuery = query(
-        collection(db, "users"),
-        where("name", "==", name),
-        where("postcode", "==", postcode.toUpperCase().replace(/\s/g, ""))
-      );
-      const duplicateSnap = await getDocs(duplicateQuery);
-      if (!duplicateSnap.empty && duplicateSnap.docs[0].id !== user.uid) {
-        setError("An account with this name and postcode already exists. If you've lost access, please contact support.");
-        setLoading(false);
+    if (role !== 'admin') {
+      // 1. Block Temporary Emails
+      const emailDomain = user.email?.split("@")[1]?.toLowerCase();
+      if (emailDomain && BLOCKED_DOMAINS.includes(emailDomain)) {
+        setError("Sorry, we do not accept registrations from this email provider. Please use a standard email address.");
         return;
       }
 
-      // 4. Restriction check
-      if (platformConfig?.onboardingRestrictionsEnabled) {
-        const allowedPostcodes = platformConfig.allowedPostcodes || [];
-        const userClean = postcode.toUpperCase().replace(/\s/g, "");
-        
-        const isAllowed = allowedPostcodes.some((p: string) => {
-          const allowed = p.toUpperCase().replace(/\s/g, "");
-          
-          // Area Level: If allowed is just letters (e.g. "B", "HD"), match any postcode starting with it
-          if (/^[A-Z]+$/.test(allowed)) {
-            return userClean.startsWith(allowed);
-          }
-          
-          // District Level: Match the outward code exactly (e.g. "B1" matches "B1 1AA" but not "B10 1AA")
-          // In UK postcodes, the outward code is everything except the last 3 characters
-          const userOutward = userClean.length > 3 ? userClean.slice(0, -3) : userClean;
-          return userOutward === allowed || userClean === allowed;
-        });
-        
-        if (!isAllowed) {
-          setError("Sorry, we are not currently accepting registrations in your area. Please check back later.");
+      // 2. Phone Number Validation (Basic UK format check)
+      if (!/^(\+44|0)7\d{9}$/.test(cleanPhone)) {
+        setError("Please enter a valid UK mobile number (e.g., 07123 456789).");
+        return;
+      }
+
+      // 3. Duplicate Profile Detection (Name + Postcode)
+      try {
+        setLoading(true);
+        const duplicateQuery = query(
+          collection(db, "users"),
+          where("name", "==", name),
+          where("postcode", "==", postcode.toUpperCase().replace(/\s/g, ""))
+        );
+        const duplicateSnap = await getDocs(duplicateQuery);
+        if (!duplicateSnap.empty && duplicateSnap.docs[0].id !== user.uid) {
+          setError("An account with this name and postcode already exists. If you've lost access, please contact support.");
+          setLoading(false);
           return;
         }
+
+        // 4. Restriction check
+        if (platformConfig?.onboardingRestrictionsEnabled) {
+          const allowedPostcodes = platformConfig.allowedPostcodes || [];
+          const userClean = postcode.toUpperCase().replace(/\s/g, "");
+          
+          const isAllowed = allowedPostcodes.some((p: string) => {
+            const allowed = p.toUpperCase().replace(/\s/g, "");
+            
+            // Area Level: If allowed is just letters (e.g. "B", "HD"), match any postcode starting with it
+            if (/^[A-Z]+$/.test(allowed)) {
+              return userClean.startsWith(allowed);
+            }
+            
+            // District Level: Match the outward code exactly (e.g. "B1" matches "B1 1AA" but not "B10 1AA")
+            // In UK postcodes, the outward code is everything except the last 3 characters
+            const userOutward = userClean.length > 3 ? userClean.slice(0, -3) : userClean;
+            return userOutward === allowed || userClean === allowed;
+          });
+          
+          if (!isAllowed) {
+            setError("Sorry, we are not currently accepting registrations in your area. Please check back later.");
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Error checking duplicates:", e);
       }
+    }
 
     setLoading(true);
     setError(null);
@@ -233,7 +242,11 @@ export default function Onboarding() {
       }
     }
 
+    try {
       const finalRole = isTestAdmin ? "admin" : role;
+      const finalName = finalRole === "admin" && !name ? "System Admin" : name;
+      const finalPhone = finalRole === "admin" && !phone ? "N/A" : cleanPhone;
+      
       const finalPermissions = isTestAdmin ? ["manage_users", "manage_jobs", "manage_disputes", "view_logs", "manage_team"] : permissions;
 
       // Check for referral
@@ -288,8 +301,8 @@ export default function Onboarding() {
         uid: user.uid,
         email: user.email,
         isAnonymous: user.isAnonymous,
-        name,
-        phone: cleanPhone,
+        name: finalName,
+        phone: finalPhone,
         role: finalRole,
         tierId: selectedTier || (
           role === "homeowner" 
@@ -306,7 +319,7 @@ export default function Onboarding() {
         memberSequence,
         joinedDuringBeta: true,
         phantomFeesSaved: 0,
-        postcode: postcode.toUpperCase().replace(/\s/g, ""),
+        postcode: finalRole === "admin" && !postcode ? "N/A" : postcode.toUpperCase().replace(/\s/g, ""),
         city,
         county,
         trades: selectedTrades,
@@ -530,6 +543,38 @@ export default function Onboarding() {
                       {role === "fleet_driver" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                     </div>
                   </button>
+
+                  <button
+                    onClick={() => {
+                      setRole("admin");
+                      setHomeownerType(null);
+                      setBusinessCategory(null);
+                      setSelectedTier(null);
+                    }}
+                    className={cn(
+                      "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group hover:border-red-500/50",
+                      role === "admin" 
+                        ? "border-red-500 bg-red-50/30 ring-4 ring-red-500/10" 
+                        : "border-slate-100 bg-white hover:border-slate-200 border-dashed"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
+                      role === "admin" ? "bg-red-500 text-white" : "bg-red-50/50 text-red-400 group-hover:bg-red-100"
+                    )}>
+                      <Shield className="w-7 h-7" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-black text-lg text-slate-900 block tracking-tight">Master Admin</span>
+                      <span className="text-sm text-slate-500 block leading-tight">Manage users, reviews, rides, and platform settings</span>
+                    </div>
+                    <div className={cn(
+                      "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                      role === "admin" ? "border-red-500" : "border-slate-200"
+                    )}>
+                      {role === "admin" && <div className="w-3 h-3 rounded-full bg-red-500" />}
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -682,11 +727,9 @@ export default function Onboarding() {
                 }}
                 disabled={
                   !role || 
-                  !name || 
-                  !postcode || 
-                  !phone || 
                   loading ||
-                  (role === "homeowner" && !homeownerType)
+                  (role === "homeowner" && !homeownerType) ||
+                  (role !== "admin" && (!name || !postcode || !phone))
                 }
                 className="w-full flex items-center justify-center gap-3 bg-orange-500 text-white p-5 rounded-[2rem] font-black text-xl hover:bg-orange-600 transition-all shadow-2xl shadow-orange-500/30 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none active:scale-95 group"
               >

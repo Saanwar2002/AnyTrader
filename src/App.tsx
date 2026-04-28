@@ -52,6 +52,14 @@ import CorporatePortal from "./components/anyride/CorporatePortal";
 function IndexRoute() {
   const { activePortal, activeRole } = usePortal();
 
+  if (activeRole === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (activeRole === "ecosystem_manager") {
+    return <Navigate to="/ecosystem" replace />;
+  }
+
   if (activePortal === "anyride") {
     return activeRole === "driver" ? <DriverTerminal /> : <RideDashboardLayout />;
   }
