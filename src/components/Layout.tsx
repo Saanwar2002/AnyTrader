@@ -960,8 +960,9 @@ export default function Layout() {
       {/* Bottom Navigation (Mobile) */}
       {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && !location.pathname.startsWith('/profile') && (
         <nav className={cn(
-          "sm:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t px-2 pb-[env(safe-area-inset-bottom)] h-[calc(4.5rem+env(safe-area-inset-bottom))] flex items-center justify-between z-[100] transition-colors",
-          isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : "bg-white border-slate-200"
+          "sm:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t pb-[env(safe-area-inset-bottom)] h-[calc(4.5rem+env(safe-area-inset-bottom))] flex items-center justify-between z-[100] transition-colors",
+          isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : "bg-white border-slate-200",
+          activePortal !== "anytrader" ? "pl-[3.5rem] pr-2" : "px-2"
         )}>
           {navItems.map((item, idx) => {
             const Icon = item.icon;

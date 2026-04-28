@@ -39,7 +39,7 @@ import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
 import { useCategories } from "../lib/CategoryProvider";
 import { lookupPostcode, reverseLookupPostcode } from "@/src/services/postcodeService";
-import { getJobEstimate, analyzeJobPhoto, getClarifyingQuestions, improveJobDescription, checkSafetyAndPII, processVoiceTranscript, type AIEstimate } from "@/src/services/gemini";
+import { getJobEstimate, analyzeJobPhoto, getClarifyingQuestions, improveJobDescription, checkSafetyAndPII, processVoiceTranscript, transcribeVoiceAudio, processVoiceAudio, type AIEstimate } from "@/src/services/gemini";
 import { db, doc, setDoc, updateDoc, collection, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, addDoc, sendNotification, getDoc, getDocs, query, where } from "@/src/firebase";
 import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
@@ -191,52 +191,96 @@ export default function PostJobWizard() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
+  
+  const audioRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-GB';
+  const isIntentionallyStoppedRef = useRef(false);
+  const voiceAccumulatorRef = useRef("");
+  const currentSessionTextRef = useRef("");
 
-      recognitionRef.current.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-        setVoiceText(finalTranscript || interimTranscript);
-      };
-
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-    }
-  }, []);
-
-  const handleToggleListening = () => {
+  const handleToggleListening = async () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+        audioRecorderRef.current.stop();
+      }
+      setIsListening(false);
     } else {
       setVoiceText("");
-      recognitionRef.current?.start();
-      setIsListening(true);
+      audioChunksRef.current = [];
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioStreamRef.current = stream;
+        
+        let mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+             mimeType = ''; // Default
+          }
+        }
+        
+        const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        audioRecorderRef.current = mediaRecorder;
+        
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          if (audioChunksRef.current.length === 0) return;
+          
+          setIsProcessingVoice(true);
+          setVoiceText("Transcribing audio...");
+          
+          try {
+            const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+            
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve, reject) => {
+              reader.onloadend = () => {
+                const base64data = reader.result?.toString().split(',')[1];
+                if (base64data) resolve(base64data);
+                else reject(new Error("Failed to convert audio to base64"));
+              };
+              reader.onerror = reject;
+            });
+            reader.readAsDataURL(audioBlob);
+            const base64Audio = await base64Promise;
+
+            const transcribedText = await transcribeVoiceAudio(base64Audio, audioBlob.type);
+            setVoiceText(transcribedText || "");
+          } catch (err) {
+            console.error("Transcription error:", err);
+            setVoiceText("Failed to transcribe audio. Please type your job details manually.");
+            toast.error("Failed to transcribe audio.");
+          } finally {
+            setIsProcessingVoice(false);
+            if (audioStreamRef.current) {
+              audioStreamRef.current.getTracks().forEach(track => track.stop());
+              audioStreamRef.current = null;
+            }
+          }
+        };
+
+        mediaRecorder.start(200); // 200ms chunks
+        setIsListening(true);
+        setVoiceText("Listening...");
+      } catch (err) {
+        console.error("Microphone permission denied or error:", err);
+        setVoiceText("Microphone access denied. Please allow microphone access.");
+        setIsListening(false);
+      }
     }
   };
 
   const handleProcessVoice = async () => {
-    if (!voiceText) return;
+    if (!voiceText || isListening) return;
+
     setIsProcessingVoice(true);
     try {
       const parsedResult = await processVoiceTranscript(voiceText, categories.map(c => c.name));
@@ -254,7 +298,7 @@ export default function PostJobWizard() {
       setStep(3); // Go to job details step
     } catch (err) {
       console.error("Error processing voice:", err);
-      toast.error("AI could not understand the job details. Please try manual posting.");
+      toast.error("AI could not extract the job details. Please try again or type manually.");
     } finally {
       setIsProcessingVoice(false);
     }
@@ -826,14 +870,18 @@ export default function PostJobWizard() {
   };
 
   const handleGetRefinement = async () => {
+    setStep(3.5); // Move to 3.5 immediately so user sees loader
     setIsRefiningScope(true);
     try {
       const questions = await getClarifyingQuestions(formData.category, formData.title, formData.description);
-      setClarifyingQuestions(questions);
-      setStep(3.5); // Special sub-step
+      if (!questions || questions.length === 0) {
+        setStep(4);
+      } else {
+        setClarifyingQuestions(questions);
+      }
     } catch (err) {
       console.error(err);
-      nextStep(); // Skip if fails
+      setStep(4); // Skip if fails
     } finally {
       setIsRefiningScope(false);
     }
@@ -858,8 +906,19 @@ export default function PostJobWizard() {
         }
       }
 
-      // Phase 3: PII & Safety Filter
-      const safetyResult = await checkSafetyAndPII(formData.description);
+      // Phase 3: PII & Safety Filter + Rate Limit check in parallel
+      const safetyPromise = checkSafetyAndPII(formData.description);
+      const limitPromise = editJob ? Promise.resolve(null) : fetch("/api/check-job-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          userId: user.uid,
+          isEmergency: formData.urgency === "emergency",
+          requestedCount: formData.selectedAssets.length > 0 ? formData.selectedAssets.length : 1
+        })
+      });
+
+      const [safetyResult, limitResponse] = await Promise.all([safetyPromise, limitPromise]);
       
       if (!safetyResult.isSafe) {
         setError(`Safety Issue: ${safetyResult.issues.join(", ")}. Please revise your description.`);
@@ -874,16 +933,7 @@ export default function PostJobWizard() {
       let securityAlert = null;
       let suggestedStatus = "posted";
 
-      if (!editJob) {
-        const limitResponse = await fetch("/api/check-job-limit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            userId: user.uid,
-            isEmergency: formData.urgency === "emergency",
-            requestedCount: formData.selectedAssets.length > 0 ? formData.selectedAssets.length : 1
-          })
-        });
+      if (!editJob && limitResponse) {
         
         let limitData;
         try {
@@ -1148,8 +1198,14 @@ export default function PostJobWizard() {
                 
                 {isListening || voiceText ? (
                   <div className="space-y-4">
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 min-h-[100px]">
-                      <p className="text-slate-700 italic">{voiceText || "Listening..."}</p>
+                    <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                      <textarea 
+                        className="w-full min-h-[120px] p-4 bg-transparent border-none focus:ring-0 resize-y text-slate-700 placeholder:text-slate-400"
+                        placeholder="Listening..."
+                        value={voiceText}
+                        onChange={(e) => setVoiceText(e.target.value)}
+                        disabled={isListening || isProcessingVoice}
+                      />
                     </div>
                     <div className="flex gap-3">
                       {isListening ? (
@@ -1161,7 +1217,15 @@ export default function PostJobWizard() {
                         </button>
                       ) : (
                         <button 
-                          onClick={() => { setVoiceText(""); setIsListening(false); }}
+                          onClick={() => { 
+                            setVoiceText("");
+                            audioChunksRef.current = [];
+                            if (audioStreamRef.current) {
+                              audioStreamRef.current.getTracks().forEach(track => track.stop());
+                              audioStreamRef.current = null;
+                            }
+                            setIsListening(false); 
+                          }}
                           className="flex-1 p-3 rounded-xl bg-slate-200 text-slate-700 font-bold flex items-center justify-center gap-2 hover:bg-slate-300 transition-colors"
                         >
                           <X className="w-5 h-5" /> Clear
@@ -1571,18 +1635,35 @@ export default function PostJobWizard() {
               </div>
 
               <div className="space-y-6">
-                {clarifyingQuestions.map((question, idx) => (
-                  <div key={idx} className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">{question}</label>
-                    <textarea 
-                      rows={2}
-                      placeholder="Your answer..."
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white"
-                      value={clarifyingAnswers[question] || ""}
-                      onChange={(e) => setClarifyingAnswers(prev => ({ ...prev, [question]: e.target.value }))}
-                    />
+                {isRefiningScope ? (
+                  <div className="bg-white rounded-3xl p-12 py-16 border border-slate-100 shadow-sm flex flex-col items-center justify-center space-y-6 text-center">
+                    <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-2">
+                      <Sparkles className="w-8 h-8 text-blue-600 animate-pulse" />
+                    </div>
+                    <div className="space-y-2 max-w-[250px]">
+                      <h3 className="text-xl font-bold text-slate-900">AI is reviewing your job details</h3>
+                      <p className="text-slate-500 text-sm">Generating follow-up questions to help you get the most accurate quotes...</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
                   </div>
-                ))}
+                ) : (
+                  clarifyingQuestions.map((question, idx) => (
+                    <div key={idx} className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700">{question}</label>
+                      <textarea 
+                        rows={2}
+                        placeholder="Your answer..."
+                        className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white"
+                        value={clarifyingAnswers[question] || ""}
+                        onChange={(e) => setClarifyingAnswers(prev => ({ ...prev, [question]: e.target.value }))}
+                      />
+                    </div>
+                  ))
+                )}
               </div>
 
             </motion.div>
@@ -2427,18 +2508,20 @@ export default function PostJobWizard() {
           ) : step === 3.5 ? (
             <div className="flex-[3] flex gap-3">
               <button 
+                disabled={isRefiningScope}
                 onClick={() => {
                   setClarifyingAnswers({});
                   setStep(4);
                 }}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 Skip 
               </button>
               <button 
+                disabled={isRefiningScope}
                 onClick={() => setStep(4)}
                 id="wizard-next-step-3-5"
-                className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all"
+                className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all disabled:opacity-50"
               >
                 Continue <ChevronRight className="w-6 h-6" />
               </button>
@@ -2472,12 +2555,12 @@ export default function PostJobWizard() {
           ) : step === 6 ? (
             <div className="flex-[3] flex gap-3">
               <button 
-                onClick={nextStep} 
-                disabled={isUploading}
+                onClick={handleEstimate} 
+                disabled={isUploading || isEstimating}
                 id="wizard-next-step-6"
                 className="flex-[2] p-4 rounded-2xl bg-[#0084a5] text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-cyan-500/20 active:scale-95 transition-all"
               >
-                {isUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue to Estimate <ChevronRight className="w-6 h-6" /></>}
+                {isUploading || isEstimating ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue to Estimate <ChevronRight className="w-6 h-6" /></>}
               </button>
             </div>
           ) : step === 7 ? (
@@ -2602,6 +2685,50 @@ export default function PostJobWizard() {
 
               <div className="w-14" /> {/* Spacer for balance */}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Processing Notifications Overlay */}
+      <AnimatePresence>
+        {(isRefiningScope || isEstimating || isSubmitting) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-white rounded-[2rem] p-8 max-w-[320px] w-full shadow-2xl flex flex-col items-center text-center space-y-6 relative overflow-hidden"
+            >
+              {/* Decorative top gradient */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#0084a5] via-orange-500 to-[#0084a5]" />
+              
+              <div className="relative">
+                <div className="w-20 h-20 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-inner">
+                  <div className="absolute inset-0 border-4 border-[#0084a5]/20 rounded-2xl animate-[spin_3s_linear_infinite]" />
+                  <Loader2 className="w-10 h-10 text-[#0084a5] animate-spin" />
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <h3 className="text-xl font-black text-slate-900">
+                  {isSubmitting ? "Posting Job..." : 
+                   isEstimating ? "Calculating Estimate" : 
+                   "Processing Request"}
+                </h3>
+                <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                  {isSubmitting 
+                    ? "We're securely saving your job details and matching you with local professionals..." 
+                    : isEstimating
+                    ? "Our AI is analyzing your job details to generate an accurate price guide..."
+                    : "Please wait a moment while our system processes your information..."}
+                </p>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

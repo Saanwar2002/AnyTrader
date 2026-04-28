@@ -33,7 +33,7 @@ export default function DriverTerminal() {
     { lat: 53.6458, lng: -1.7850, radius: 500, intensity: "high", label: "£5.00 Surge" },
     { lat: 53.6558, lng: -1.7750, radius: 800, intensity: "medium", label: "£2.50 Surge" },
   ]);
-  const [showPredictiveSurge, setShowPredictiveSurge] = useState(true);
+  const [showPredictiveSurge, setShowPredictiveSurge] = useState(false);
   
   // Storage for directions
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -1068,6 +1068,7 @@ export default function DriverTerminal() {
           <Target className="w-4 h-4 text-[#E4E4E7]" />
         </button>
         
+        {/*
         {isOnline && !activeRide && (
           <button 
             onClick={() => setShowPredictiveSurge(!showPredictiveSurge)}
@@ -1082,6 +1083,7 @@ export default function DriverTerminal() {
             <TrendingUp className={cn("w-4 h-4 relative z-10", showPredictiveSurge ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
           </button>
         )}
+        */}
       </div>
 
       {/* Floating Map Navigation (Left Side) - Decreased size and moved to left side corner */}

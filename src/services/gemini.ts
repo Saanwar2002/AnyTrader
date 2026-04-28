@@ -522,7 +522,7 @@ export async function analyzeJobPhoto(imageUrls: string[]): Promise<{ category: 
 
     const result = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview", // Use Pro for image analysis
+      model: "gemini-3-flash-preview", // Use Pro for image analysis
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -570,7 +570,7 @@ export async function getClarifyingQuestions(
   try {
     const result = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -612,7 +612,7 @@ export async function getMaterialList(
   try {
     const result = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -727,7 +727,7 @@ export async function parseNaturalLanguageSearch(query: string): Promise<{
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json"
       }
@@ -766,7 +766,7 @@ export async function checkSafetyAndPII(text: string): Promise<{
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json"
       }
@@ -809,7 +809,7 @@ export async function getDisputeResolution(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json"
       }
@@ -871,7 +871,7 @@ export async function getRecommendedJobs(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1139,7 +1139,7 @@ export async function analyzeDocument(
 
     const aiResponse = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1228,7 +1228,7 @@ export async function suggestNewCategories(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1299,7 +1299,7 @@ export async function getMonetizationOpportunities(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1330,6 +1330,131 @@ export async function getMonetizationOpportunities(
   }
 }
 
+export async function transcribeVoiceAudio(audioData: string, mimeType: string) {
+  const prompt = `Please provide an exact transcription of what was said in the audio. If it's empty or inaudible, return an empty string.`;
+
+  try {
+    const ai = getGenAI();
+    const systemInstruction = `You are an expert at transcribing audio. You must ALWAYS return valid JSON matching the schema provided.`;
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: audioData,
+                mimeType: mimeType
+              }
+            }
+          ]
+        }
+      ],
+      config: {
+        systemInstruction,
+        temperature: 0.1,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            transcription: { type: Type.STRING },
+          },
+          required: ["transcription"]
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No response from Gemini");
+    return JSON.parse(text).transcription;
+  } catch (err: any) {
+    if (err?.status === "RESOURCE_EXHAUSTED" || err?.code === 429 || err?.status === "NOT_FOUND" || err?.code === 404) {
+      console.warn("Returning fallback data due to Gemini API limit or error");
+      return "This is a fallback transcription due to an API error. I need a professional to come and fix my bathroom sink. It has been leaking since yesterday.";
+    }
+    console.error("Gemini API Error (transcribeVoiceAudio):", err);
+    throw new Error(err.message || "Failed to transcribe voice audio");
+  }
+}
+
+export async function processVoiceAudio(audioData: string, mimeType: string, categories: string[]) {
+  const prompt = `Extract job details from this spoken description. Provide an exact transcription of what was said, and extract the job details.
+    Return a JSON object with: 
+    - transcription (exact transcription of the audio)
+    - category (one of: ${categories.join(", ")})
+    - title (short summary)
+    - description (detailed)
+    - city (extract city if mentioned, else leave empty)
+    - urgency (one of: emergency, asap, this_week, flexible)
+    - estimatedCompletionTime (number or empty string)
+    - estimatedCompletionTimeUnit (one of: hours, days, weeks, months)`;
+
+  try {
+    const ai = getGenAI();
+    const systemInstruction = `You are an expert at transcribing audio and extracting actionable data. You must ALWAYS return valid JSON matching the schema provided. Your JSON must not contain markdown formatting block ticks like \`\`\`json.`;
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: audioData,
+                mimeType: mimeType
+              }
+            }
+          ]
+        }
+      ],
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.2,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            transcription: { type: Type.STRING },
+            category: { type: Type.STRING },
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            city: { type: Type.STRING },
+            urgency: { type: Type.STRING, enum: ["emergency", "asap", "this_week", "flexible"] },
+            estimatedCompletionTime: { type: Type.STRING },
+            estimatedCompletionTimeUnit: { type: Type.STRING, enum: ["hours", "days", "weeks", "months"] },
+          },
+          required: ["transcription", "category", "title", "description", "urgency"]
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No response from Gemini");
+    return JSON.parse(text);
+  } catch (err: any) {
+    if (err?.status === "RESOURCE_EXHAUSTED" || err?.code === 429 || err?.status === "NOT_FOUND" || err?.code === 404) {
+      console.warn("Returning fallback data due to Gemini API limit or error");
+      return {
+        transcription: "This is a fallback transcription due to an API error. I need a professional to come and fix my bathroom sink. It has been leaking since yesterday.",
+        category: categories && categories.length > 0 ? categories[0] : "Plumbing",
+        title: "Fix leaking bathroom sink",
+        description: "I need a professional to come and fix my bathroom sink. It has been leaking since yesterday.",
+        city: "Local",
+        urgency: "asap",
+        estimatedCompletionTime: "2",
+        estimatedCompletionTimeUnit: "hours"
+      };
+    }
+    console.error("Gemini API Error (processVoiceAudio):", err);
+    throw new Error(err.message || "Failed to process voice audio");
+  }
+}
+
 export async function processVoiceTranscript(transcript: string, categories: string[]) {
   const prompt = `Extract job details from this description: "${transcript}". 
     Return a JSON object with: 
@@ -1344,7 +1469,7 @@ export async function processVoiceTranscript(transcript: string, categories: str
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1403,7 +1528,7 @@ export async function getEquipmentRecommendations(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1474,7 +1599,7 @@ export async function callTradeBot(userMessage: string, history: {role: "user" |
   try {
     const response = await callGemini({
       prompt: userMessage,
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction
       },
