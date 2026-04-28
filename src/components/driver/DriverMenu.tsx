@@ -17,17 +17,18 @@ export default function DriverMenu({
   onToggleOnline?: () => void,
   onClose?: () => void
 }) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
 
   const [confirmLastJob, setConfirmLastJob] = React.useState(false);
 
   const handleLastJobToggle = () => {
+    if (!user?.uid) return;
     if (profile?.isLastJob) {
-      updateDoc(doc(db, "users", profile?.userId || ''), { isLastJob: false });
+      updateDoc(doc(db, "users", user.uid), { isLastJob: false });
       setConfirmLastJob(false);
     } else {
       if (confirmLastJob) {
-        updateDoc(doc(db, "users", profile?.userId || ''), { isLastJob: true });
+        updateDoc(doc(db, "users", user.uid), { isLastJob: true });
         setConfirmLastJob(false);
       } else {
         setConfirmLastJob(true);
@@ -196,14 +197,15 @@ export default function DriverMenu({
                     key={idxi}
                     onClick={() => {
                       if (item.type === 'toggle') {
+                        if (!user?.uid) return;
                         if (item.action === 'toggle-stacking') {
-                          updateDoc(doc(db, "users", profile?.userId || ''), { isStackingEnabled: !item.active });
+                          updateDoc(doc(db, "users", user.uid), { isStackingEnabled: !item.active });
                         }
                         if (item.action === 'toggle-destination-mode') {
-                          updateDoc(doc(db, "users", profile?.userId || ''), { destinationModeActive: !item.active });
+                          updateDoc(doc(db, "users", user.uid), { destinationModeActive: !item.active });
                         }
                         if (item.action === 'toggle-last-job') {
-                          updateDoc(doc(db, "users", profile?.userId || ''), { isLastJob: !item.active });
+                          updateDoc(doc(db, "users", user.uid), { isLastJob: !item.active });
                         }
                       } else {
                         item.id && onNavigate(item.id);

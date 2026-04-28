@@ -626,7 +626,7 @@ export default function DriverTerminal() {
         completedAt: serverTimestamp()
       });
 
-      if (activeRide.riderId) {
+      if (activeRide.riderId && typeof activeRide.riderId === 'string' && activeRide.riderId.length > 0) {
         // Apply strike
         await updateDoc(doc(db, "users", activeRide.riderId), {
           pendingCharges: increment(finalFare),
@@ -750,7 +750,7 @@ export default function DriverTerminal() {
           completedAt: serverTimestamp()
         });
         
-        if (activeRide.riderId) {
+        if (activeRide.riderId && typeof activeRide.riderId === 'string' && activeRide.riderId.length > 0) {
           await updateDoc(doc(db, "users", activeRide.riderId), {
             pendingCharges: 0,
             cancellationCount: 0
@@ -791,7 +791,7 @@ export default function DriverTerminal() {
           completedAt: serverTimestamp()
         });
 
-        if (activeRide.riderId) {
+        if (activeRide.riderId && typeof activeRide.riderId === 'string' && activeRide.riderId.length > 0) {
           await updateDoc(doc(db, "users", activeRide.riderId), {
             pendingCharges: 0,
             cancellationCount: 0
@@ -806,7 +806,7 @@ export default function DriverTerminal() {
         const today = new Date().toISOString().split('T')[0];
         await setDoc(doc(db, "driver_metrics", user.uid), {
           date: today,
-          dailyEarnings: increment(fare),
+          dailyEarnings: increment(totalFare),
           jobsDoneToday: increment(1),
           updatedAt: serverTimestamp()
         }, { merge: true });
@@ -834,22 +834,6 @@ export default function DriverTerminal() {
       
       {activeTab === 'home' && (
       <>
-      {/* Platform Switcher Button in Driver Terminal */}
-      <button 
-        onClick={() => {
-          triggerHaptic();
-          switchPortal("anytrader");
-          navigate("/");
-        }}
-        className="absolute top-[60px] left-4 z-[150] flex items-center gap-3 group text-left pt-2 pl-2"
-        title="Switch to AnyTrader"
-      >
-        <div className="w-12 h-12 bg-blue-600 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 active:scale-95 transition-transform duration-300 shrink-0">
-          <Hammer className="w-5 h-5 text-white" />
-          <span className="text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
-        </div>
-      </button>
-
       {/* Simulation Trigger (Dev Only) */}
       <button 
         onClick={simulateIncomingRide}

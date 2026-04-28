@@ -913,7 +913,7 @@ export default function PostJobWizard() {
         }
         
         securityAlert = limitData.securityAlert;
-        suggestedStatus = limitData.suggestedStatus;
+        suggestedStatus = limitData.suggestedStatus || "posted";
       }
       
       // Merge clarifying answers into description
@@ -946,7 +946,7 @@ export default function PostJobWizard() {
           postcode: (asset?.postcode || finalPostcode).toUpperCase(),
           description: finalDescription,
           status: editJob ? (editJob.status || "posted") : suggestedStatus,
-          securityAlert: securityAlert || formData.securityAlert,
+          securityAlert: securityAlert || formData.securityAlert || null,
           hasReview: editJob?.hasReview || false,
           estimateMin: estimate?.min || Math.floor(Number(formData.selectedBudget || 0) * 0.9),
           estimateMax: estimate?.max || Math.floor(Number(formData.selectedBudget || 0) * 1.1),

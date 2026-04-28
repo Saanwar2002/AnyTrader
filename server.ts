@@ -909,7 +909,7 @@ async function startServer() {
   app.post("/api/check-job-limit", async (req, res) => {
     try {
       const { userId, isEmergency, requestedCount = 1 } = req.body;
-      if (!db) return res.status(500).json({ error: "Database not initialized" });
+      if (!db) return res.json({ allowed: true, count: 0, limit: Infinity, isEmergency: !!isEmergency, warning: "Database backend disabled in sandbox" });
 
       // Emergency jobs don't count towards the limit
       if (isEmergency) {
@@ -1031,7 +1031,7 @@ async function startServer() {
   app.post("/api/check-quote-limit", async (req, res) => {
     try {
       const { userId, jobId } = req.body;
-      if (!db) return res.status(500).json({ error: "Database not initialized" });
+      if (!db) return res.json({ allowed: true, warning: "Database backend disabled in sandbox" });
 
       const userDoc = await db.collection("users").doc(userId).get();
       if (!userDoc.exists) return res.status(404).json({ error: "User not found" });

@@ -212,7 +212,7 @@ export default function EmergencyJobWizard() {
         area: finalArea,
         county: finalCounty,
         status: jobStatus,
-        securityAlert: securityAlert,
+        securityAlert: securityAlert || null,
         urgency: "emergency",
         hasReview: false,
         photos: formData.photos,
@@ -236,16 +236,20 @@ export default function EmergencyJobWizard() {
         paidBoost
       );
       
-      // Send urgent SMS via Backend Extension Queue
-      const smsRef = doc(collection(db, "sms_queue"));
-      await setDoc(smsRef, {
-        toRole: "tradesperson",
-        category: formData.category,
-        jobId: jobRef.id,
-        message: `EMERGENCY ALERT: New ${formData.category} job near you. Accept within 5 mins to claim.`,
-        status: "pending",
-        createdAt: serverTimestamp()
-      });
+      try {
+        // Send urgent SMS via Backend Extension Queue
+        const smsRef = doc(collection(db, "sms_queue"));
+        await setDoc(smsRef, {
+          toRole: "tradesperson",
+          category: formData.category,
+          jobId: jobRef.id,
+          message: `EMERGENCY ALERT: New ${formData.category} job near you. Accept within 5 mins to claim.`,
+          status: "pending",
+          createdAt: serverTimestamp()
+        });
+      } catch (smsErr) {
+        console.error("Failed to send urgent SMS:", smsErr);
+      }
       
       if (!paidBoost) {
         navigate("/my-jobs");

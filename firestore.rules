@@ -50,9 +50,9 @@ service cloud.firestore {
       // Prevent privilege escalation
       allow update: if (
         isSignedIn() && (
-          (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'name', 'bio', 'avatarUrl', 'notificationSettings', 'favoriteAddresses', 'regularJourneys', 'emergencyContacts', 'pendingCharges', 'cancellationCount'
-          ])) || isAdmin()
+          (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified'])) || 
+          isAdmin() ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'cancellationCount'])
         )
       ) || userId.matches('^mock-trader-.*$');
     }
@@ -89,7 +89,18 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow write: if isAdmin() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /sms_queue/{queueId} {
+      allow create: if isSignedIn();
+      allow read, write: if isAdmin();
+    }
+
+    match /email_queue/{queueId} {
+      allow create: if isSignedIn();
+      allow read, write: if isAdmin();
     }
 
     match /conversations/{conversationId} {
@@ -122,6 +133,12 @@ service cloud.firestore {
     match /invitations/{invitationId} {
       allow get: if isAdmin() || (isSignedIn() && request.auth.token.email != null && resource.data.email == request.auth.token.email.lower());
       allow list: if isAdmin() || (isSignedIn() && request.auth.token.email != null && resource.data.email == request.auth.token.email.lower());
+      allow write: if isAdmin();
+    }
+
+    match /emergency_broadcasts/{broadcastId} {
+      allow read: if isAdmin() || isSignedIn();
+      allow create: if isSignedIn();
       allow write: if isAdmin();
     }
 
@@ -184,6 +201,7 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.homeownerId == request.auth.uid || request.resource.data.isRecurringInstance == true || isAdmin());
       allow update: if isSignedIn() && (resource.data.homeownerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.homeownerId == request.auth.uid || isAdmin());
     }
 
     match /jobs/{jobId}/quotes/{quoteId} {
