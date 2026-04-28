@@ -424,7 +424,9 @@ export default function DriverTerminal() {
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
       comments: "Please ring the bell, the baby is sleeping. Thanks!",
-      isPriority: Math.random() > 0.5,
+      isPriority: true,
+      isRiderPlus: true,
+      distanceToPickupMiles: 1.2,
       isReal: false
     });
 
@@ -1282,20 +1284,12 @@ export default function DriverTerminal() {
                   <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
                   New Ride Request
                 </h2>
-                <div className="flex gap-2">
-                  {/* Mock rider plus member displaying here */}
-                  <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Star className="w-3 h-3 fill-amber-950" /> Rider Plus</div>
-
-                  {activeRide?.isPriority && (
-                    <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-3 h-3 fill-amber-950" /> Priority</div>
-                  )}
-                </div>
               </div>
 
               <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-2">
                 {/* Map Section (Moved to top) */}
                 {isLoaded && activeRide?.pickupLat && activeRide?.dropoffLat && (
-                  <div className="w-full h-[120px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-3">
+                  <div className="w-full h-[180px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-3">
                     <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
                     <GoogleMap
                       mapContainerStyle={{ width: '100%', height: '100%' }}
@@ -1339,47 +1333,33 @@ export default function DriverTerminal() {
                     <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-base border border-white shrink-0">
                       {(activeRide?.name || "S")[0]}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-bold text-white leading-tight truncate">{activeRide?.name || "Sarah T."}</h3>
-                      <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
+                    <div className="flex-1 min-w-0 flex justify-between items-start">
+                      <div>
+                        <h3 className="text-sm font-bold text-white leading-tight truncate">{activeRide?.name || "Sarah T."}</h3>
+                        <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
+                      </div>
+                      {activeRide?.isRiderPlus !== false && (
+                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-3">
                     {/* Fare Section (Moved below rider profile) */}
-                    <div className="bg-[#252529] rounded-xl p-3 relative overflow-hidden group/fare cursor-pointer shrink-0" onClick={() => setShowFareBreakdown(!showFareBreakdown)}>
+                    <div className="bg-[#252529] rounded-xl p-3 relative overflow-hidden shrink-0">
                       <div className="flex justify-between items-end mb-1">
                         <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
                           £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
+                          <span className="text-[15px] font-bold text-white/80 tracking-normal mb-1">({((activeRide?.distanceToPickupMiles || 1.2) + (activeRide?.distanceMiles || 22)).toFixed(1)} mi)</span>
                         </h1>
-                        <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
+                        <div className="flex gap-1.5 items-center">
+                          {activeRide?.isPriority && (
+                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
+                          )}
+                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
+                        </div>
                       </div>
                       <p className="text-[#00D26A] text-[12px] font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
-
-                      {/* Collapsible Breakdown */}
-                      <AnimatePresence>
-                        {showFareBreakdown && (
-                          <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="border-t border-[#333338] mt-3 pt-3 flex flex-col gap-1.5"
-                          >
-                            <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Base:</span><span>£{fareConfig.baseFare.toFixed(2)}</span></div>
-                            <div className="flex justify-between text-xs text-[#E4E4E7]"><span>Estimated Distance:</span><span>£{((activeRide?.distanceMiles || 22) * fareConfig.distanceRate).toFixed(2)}</span></div>
-                            <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge:</span><span>+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
-                            <div className="flex justify-between text-[11px] font-bold text-[#FF3B30] mt-1 p-1 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20">
-                              <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.fareEstimate || 38.50) * fareConfig.commissionRate).toFixed(2)}</span>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      
-                      {!showFareBreakdown && (
-                        <div className="w-full text-center mt-1.5 group-hover/fare:bg-white/5 py-0.5 rounded transition-colors">
-                          <ChevronDown className="w-4 h-4 text-[#A1A1AA] mx-auto" />
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex items-center justify-between mt-2 mb-1">
@@ -1391,6 +1371,7 @@ export default function DriverTerminal() {
                           <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
                           <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
                         </div>
 
                         {(activeRide?.stops || []).map((stop: any, idx: number) => (
@@ -1405,6 +1386,7 @@ export default function DriverTerminal() {
                           <div className="absolute w-3.5 h-3.5 bg-[#FF3B30] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
                           <p className="text-[10px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
                           <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{activeRide?.distanceMiles || "22"} mi from pickup</p>
                         </div>
                       </div>
 
