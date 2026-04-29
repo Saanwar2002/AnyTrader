@@ -368,7 +368,10 @@ export default function DriverTerminal() {
             dropoffLat: activeRide?.dropoffLat || null,
             dropoffLng: activeRide?.dropoffLng || null,
             isStackingEnabled: profile?.isStackingEnabled !== false,
-            isLastJob: profile?.isLastJob === true
+            isLastJob: profile?.isLastJob === true,
+            vehicleCategory: profile?.vehicleCategory || 'standard',
+            vehicleCategories: profile?.vehicleCategories || [profile?.vehicleCategory || 'standard'],
+            isPetFriendly: profile?.isPetFriendly === true
           }, { merge: true });
           
           await setDoc(doc(db, "driver_status", user.uid), {

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
-import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where } from "@/src/firebase";
+import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where, getDocs, orderBy, limit } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
@@ -324,6 +324,7 @@ export default function PassengerBooking() {
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
   const [nearbyDriversCount, setNearbyDriversCount] = useState<number>(0);
   const [driversAvailableSoonCount, setDriversAvailableSoonCount] = useState<number>(0);
+  const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -468,8 +469,17 @@ export default function PassengerBooking() {
     const unsub = onSnapshot(q, (snapshot) => {
       let countNow = 0;
       let countSoon = 0;
+      const cats = new Set<string>();
+
       snapshot.docs.forEach(docSnap => {
         const data = docSnap.data();
+        
+        // Match user's pet preference
+        if (isPetFriendly && data.isPetFriendly !== true) {
+          return;
+        }
+
+        let driverCategories = data.vehicleCategories || [data.vehicleCategory || 'standard'];
         
         const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
           const R = 3958.8; // Radius of Earth in miles
@@ -486,20 +496,36 @@ export default function PassengerBooking() {
         if (data.status === 'on_ride' && data.dropoffLat && data.dropoffLng) {
           if (data.isStackingEnabled !== false && data.isLastJob !== true) {
             const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.dropoffLat, data.dropoffLng);
-            if (distToPickup <= 3) countSoon++;
+            if (distToPickup <= 3) {
+               countSoon++;
+               driverCategories.forEach((cat: string) => cats.add(cat));
+            }
           }
         } else if (data.lat && data.lng && data.status !== 'on_ride') {
           if (data.isLastJob !== true) {
             const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.lat, data.lng);
-            if (distToPickup <= 3) countNow++;
+            if (distToPickup <= 3) {
+               countNow++;
+               driverCategories.forEach((cat: string) => cats.add(cat));
+            }
           }
         }
       });
       setNearbyDriversCount(countNow);
       setDriversAvailableSoonCount(countSoon);
+      setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
     });
     return () => unsub();
-  }, [pickupCoords]);
+  }, [pickupCoords, isPetFriendly]);
+
+  useEffect(() => {
+    if (!availableCategories.has(selectedCategory)) {
+      if (availableCategories.size > 0) {
+        const firstAvail = CAR_CATEGORIES.find(c => availableCategories.has(c.id));
+        if (firstAvail) setSelectedCategory(firstAvail.id);
+      }
+    }
+  }, [availableCategories, selectedCategory]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "platform_config", "rides"), (doc) => {
@@ -637,9 +663,41 @@ export default function PassengerBooking() {
     }
   };
 
-  const [suggestions, setSuggestions] = useState<{label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any}[]>([]);
+  const [suggestions, setSuggestions] = useState<{label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any, isHistory?: boolean}[]>([]);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const [pastRides, setPastRides] = useState<any[]>([]);
+  const [pastAddresses, setPastAddresses] = useState<{label: string, lat?: number, lon?: number}[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchHistory = async () => {
+      try {
+        const q = query(collection(db, "ride_requests"), where("riderId", "==", user.uid), orderBy("createdAt", "desc"), limit(40));
+        const res = await getDocs(q);
+        const rides = res.docs.map(doc => doc.data());
+        setPastRides(rides);
+        
+        const map = new Map<string, {label: string, lat: number, lon: number}>();
+        rides.forEach(d => {
+          if (d.pickup && d.pickupLat && d.pickupLng) map.set(d.pickup, {label: d.pickup, lat: d.pickupLat, lon: d.pickupLng});
+          if (d.dropoff && d.dropoffLat && d.dropoffLng) map.set(d.dropoff, {label: d.dropoff, lat: d.dropoffLat, lon: d.dropoffLng});
+          if (d.stops) {
+            d.stops.forEach((s: any) => {
+              if (s.address && s.coords?.lat && s.coords?.lng) {
+                 map.set(s.address, {label: s.address, lat: s.coords.lat, lon: s.coords.lng});
+              }
+            });
+          }
+        });
+        
+        setPastAddresses(Array.from(map.values()));
+      } catch (e) {
+        console.error("Error fetching history", e);
+      }
+    };
+    fetchHistory();
+  }, [user]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -650,11 +708,91 @@ export default function PassengerBooking() {
       const idx = parseInt(activeField.split('-')[1]);
       val = stops[idx]?.address || "";
     }
-    if (!val || val.length < 3) { setSuggestions([]); return; }
+    
+    if (!val || val.length < 3) { 
+      const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+          const R = 3958.8; // Radius of Earth in miles
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLon = (lon2 - lon1) * Math.PI / 180;
+          const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          return R * c;
+      };
+
+      let smartMatches: any[] = [];
+      const userLat = passengerPos?.lat || mapCenter?.lat || 53.6458;
+      const userLng = passengerPos?.lng || mapCenter?.lng || -1.7850;
+
+      if (activeField === "pickup") {
+        // Suggest past pickup addresses near current location (within 5 miles)
+        const nearbyPickups = new Map<string, any>();
+        pastRides.forEach(r => {
+          if (r.pickup && r.pickupLat && r.pickupLng) {
+            const dist = calculateDistance(userLat, userLng, r.pickupLat, r.pickupLng);
+            if (dist <= 5) {
+              if (!nearbyPickups.has(r.pickup)) {
+                nearbyPickups.set(r.pickup, { label: r.pickup, lat: r.pickupLat, lon: r.pickupLng, dist, count: 1 });
+              } else {
+                nearbyPickups.get(r.pickup)!.count++;
+              }
+            }
+          }
+        });
+        smartMatches = Array.from(nearbyPickups.values()).sort((a, b) => b.count - a.count || a.dist - b.dist).slice(0, 2);
+      } else if (activeField === "dropoff") {
+        // Suggest dropoffs associated with the current pickup location, or nearby
+        const pLat = pickupCoords?.lat || userLat;
+        const pLng = pickupCoords?.lng || userLng;
+        const commonDropoffs = new Map<string, any>();
+        
+        pastRides.forEach(r => {
+          if (r.pickupLat && r.pickupLng && r.dropoff && r.dropoffLat && r.dropoffLng) {
+            const pDist = calculateDistance(pLat, pLng, r.pickupLat, r.pickupLng);
+            if (pDist <= 5) {
+               const dDist = calculateDistance(pLat, pLng, r.dropoffLat, r.dropoffLng); 
+               if (dDist > 0.5) { // not same as pickup
+                  if (!commonDropoffs.has(r.dropoff)) {
+                     commonDropoffs.set(r.dropoff, { label: r.dropoff, lat: r.dropoffLat, lon: r.dropoffLng, count: 1 });
+                  } else {
+                     commonDropoffs.get(r.dropoff)!.count++;
+                  }
+               }
+            }
+          }
+        });
+        
+        smartMatches = Array.from(commonDropoffs.values()).sort((a, b) => b.count - a.count).slice(0, 2);
+        
+        // Fallback to recent dropoffs if none matched
+        if (smartMatches.length === 0) {
+           const allDropoffs = new Map<string, any>();
+           pastRides.forEach(r => {
+             if (r.dropoff && r.dropoffLat && r.dropoffLng) {
+               if (!allDropoffs.has(r.dropoff)) {
+                 allDropoffs.set(r.dropoff, { label: r.dropoff, lat: r.dropoffLat, lon: r.dropoffLng, order: pastRides.indexOf(r) });
+               }
+             }
+           });
+           smartMatches = Array.from(allDropoffs.values()).sort((a, b) => a.order - b.order).slice(0, 2);
+        }
+      }
+
+      if (smartMatches.length === 0 && pastAddresses.length > 0) {
+         smartMatches = pastAddresses.filter(p => !val || p.label.toLowerCase().includes(val.toLowerCase())).slice(0, 2);
+      }
+
+      setSuggestions(smartMatches.map(p => ({ label: p.label, lat: p.lat, lon: p.lon, isHistory: true })));
+      return; 
+    }
 
     const fetchSuggestions = async () => {
       setIsLoadingAddress(true);
       
+      const historyMatches = pastAddresses.filter(p => p.label.toLowerCase().includes(val.toLowerCase())).slice(0, 3).map(p => ({...p, isHistory: true}));
+
       try {
         if (!window.google || !window.google.maps) {
           throw new Error("Google Maps not loaded. Check API Key or libraries.");
@@ -677,14 +815,18 @@ export default function PassengerBooking() {
             placeId: p.placePrediction.placeId,
             placePrediction: p.placePrediction // Save the raw prediction object to use toPlace() later
           }));
-          setSuggestions(cleaned);
+          
+          // Deduplicate based on label
+          const uniqueCleaned = cleaned.filter((c: any) => !historyMatches.some(h => h.label.toLowerCase() === c.label.toLowerCase()));
+          
+          setSuggestions([...historyMatches, ...uniqueCleaned]);
         } else {
-          setSuggestions([]);
+          setSuggestions(historyMatches);
         }
       } catch (err: any) {
         console.error("Google Places Exception:", err);
         import("sonner").then(({ toast }) => toast.error(`Map Error: ${err.message}`));
-        setSuggestions([]);
+        setSuggestions(historyMatches);
         setIsLoadingAddress(false);
       }
     };
@@ -823,12 +965,10 @@ export default function PassengerBooking() {
          fareEstimate: increment(newPriority ? 3 : -3)
       });
       setShowPriorityPrompt(false);
-      if (newPriority) {
-        setPriorityInlineToast({ message: "Priority Boost Activated! (+£3)", type: "success" });
-      } else {
-        setPriorityInlineToast({ message: "Priority Boost Removed. Normal fare applies.", type: "info" });
+      if (!newPriority) {
+        setPriorityInlineToast({ message: "Priority Boost removed.", type: "info" });
+        setTimeout(() => setPriorityInlineToast(null), 3000);
       }
-      setTimeout(() => setPriorityInlineToast(null), 4000);
     } catch (e) {
       console.error(e);
       setIsPriority(!newPriority);
@@ -1320,7 +1460,11 @@ export default function PassengerBooking() {
                           />
                           <div className="pl-1.5 pr-0.5 py-1.5 border-l border-emerald-200/60 flex items-center justify-center shrink-0 h-full">
                             <button onClick={handleDetectLocation} className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg tooltip-trigger shrink-0 transition-colors">
-                              <Target className={`w-5 h-5 ${isDetecting ? 'animate-spin' : ''}`} />
+                              {isDetecting ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <Target className="w-5 h-5" />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -1331,7 +1475,10 @@ export default function PassengerBooking() {
                           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
                             {suggestions.map((s, idx) => (
                               <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
-                                <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
+                                {s.isHistory ? 
+                                  <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
+                                  <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
+                                }
                                 <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
                               </button>
                             ))}
@@ -1369,12 +1516,15 @@ export default function PassengerBooking() {
                         <AnimatePresence>
                           {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
-                              {suggestions.map((s, idx) => (
-                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
-                                  <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
-                                  <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
-                                </button>
-                              ))}
+                                {suggestions.map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
+                                    {s.isHistory ? 
+                                      <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                      <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
+                                    }
+                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                  </button>
+                                ))}
                               {suggestions.length === 0 && isLoadingAddress && (
                                 <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
@@ -1415,12 +1565,15 @@ export default function PassengerBooking() {
                       <AnimatePresence>
                         {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
                           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
-                            {suggestions.map((s, idx) => (
-                              <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
-                                <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
-                                <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
-                              </button>
-                            ))}
+                              {suggestions.map((s, idx) => (
+                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
+                                  {s.isHistory ? 
+                                    <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                    <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
+                                  }
+                                  <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                </button>
+                              ))}
                             {suggestions.length === 0 && isLoadingAddress && (
                               <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
                                 <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
@@ -1631,13 +1784,24 @@ export default function PassengerBooking() {
                     <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x px-1">
                       {CAR_CATEGORIES.map((cat) => {
                         const active = selectedCategory === cat.id;
+                        const isAvailable = availableCategories.has(cat.id);
                         return (
-                          <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={cn("flex-none min-w-[110px] snap-center p-2 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-center", active ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-surface border-slate-300 text-text-main hover:border-primary/50")}>
+                          <button 
+                            key={cat.id} 
+                            onClick={() => { if(isAvailable) setSelectedCategory(cat.id); }} 
+                            disabled={!isAvailable}
+                            className={cn(
+                              "flex-none min-w-[110px] snap-center p-2 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-center", 
+                              active ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : 
+                              isAvailable ? "bg-surface border-slate-300 text-text-main hover:border-primary/50" : "bg-slate-50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed"
+                            )}
+                          >
                             <div className="flex items-center gap-1.5 w-full">
-                              <cat.icon className={cn("w-4 h-4 shrink-0", active ? "text-white" : "text-primary")} />
+                              <cat.icon className={cn("w-4 h-4 shrink-0", active ? "text-white" : isAvailable ? "text-primary" : "text-slate-400")} />
                               <span className="text-[10px] font-black uppercase tracking-tight truncate flex-1 text-left">{cat.name}</span>
                             </div>
                             <span className="text-xl font-black tracking-tighter mt-1 text-left w-full">£{getComputedFare(cat.id).toFixed(2)}</span>
+                            {!isAvailable && <span className="text-[8px] font-bold mt-1 text-slate-500 uppercase tracking-widest text-left">Unavailable</span>}
                           </button>
                         );
                       })}
@@ -1771,9 +1935,15 @@ export default function PassengerBooking() {
                 
                 <div className="w-full max-w-xs mt-4 relative">
                   <AnimatePresence>
-                    {priorityInlineToast && !showPriorityPrompt && (
-                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className={cn("absolute -top-12 left-0 right-0 p-2 rounded-xl text-center text-xs font-bold shadow-lg z-20 flex items-center justify-center gap-2", priorityInlineToast.type === 'success' ? "bg-emerald-500 text-white" : "bg-warning text-warning-content")}>
-                        {priorityInlineToast.type === 'success' ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                    {isPriority && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-2 p-2.5 bg-emerald-500 rounded-xl text-center text-xs font-bold shadow-lg flex items-center justify-center gap-1.5 text-white">
+                        <Check className="w-4 h-4 shrink-0" />
+                        Priority activated! £3 added to base fare.
+                      </motion.div>
+                    )}
+                    {!isPriority && priorityInlineToast && priorityInlineToast.type === 'info' && (!showPriorityPrompt) && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-2 p-2 bg-slate-800 rounded-xl text-center text-xs font-bold shadow-lg flex items-center justify-center gap-2 text-white">
+                        <AlertCircle className="w-4 h-4" />
                         {priorityInlineToast.message}
                       </motion.div>
                     )}

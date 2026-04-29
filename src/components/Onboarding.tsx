@@ -22,6 +22,8 @@ export default function Onboarding() {
   const [homeownerType, setHomeownerType] = useState<"homeowner" | "business" | null>(null);
   const [businessCategory, setBusinessCategory] = useState<string | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
+  const [vehicleCategories, setVehicleCategories] = useState<string[]>(['standard']);
+  const [isPetFriendly, setIsPetFriendly] = useState<boolean>(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [invitationId, setInvitationId] = useState<string | null>(null);
   const [name, setName] = useState(user?.displayName || "");
@@ -324,6 +326,8 @@ export default function Onboarding() {
         county,
         trades: selectedTrades,
         subcategories: selectedSubcategories,
+        vehicleCategories: finalRole === "fleet_driver" ? vehicleCategories : null,
+        isPetFriendly: finalRole === "fleet_driver" ? isPetFriendly : false,
         referralCode: user.uid.slice(0, 8).toUpperCase(), // Generate a simple referral code
         referredBy: referrerUid,
         verificationStatus: uniqueRequiredCerts.length > 0 ? "pending" : "unverified",
@@ -676,6 +680,57 @@ export default function Onboarding() {
                 </motion.div>
               )}
 
+              {/* Fleet Driver Setup */}
+              {role === "fleet_driver" && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-4 pt-4 border-t border-slate-100"
+                >
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vehicle Setup</p>
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700">Which categories do you want to drive for?</label>
+                    <p className="text-[10px] text-slate-500 mb-2">You can select multiple categories. For example, an Executive car can also take Standard rides.</p>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'standard', name: 'Standard Car' },
+                        { id: 'executive', name: 'Executive' },
+                        { id: 'luxury', name: 'Luxury' },
+                        { id: '6seater', name: '6-Seater XL' },
+                        { id: '8seater', name: '8-Seater Max' },
+                        { id: 'wav', name: 'Wheelchair' }
+                      ].map(cat => (
+                        <label key={cat.id} className={cn("p-3 rounded-xl border-2 flex items-center gap-3 transition-colors cursor-pointer", vehicleCategories.includes(cat.id) ? "border-primary bg-primary/5 text-primary" : "border-slate-100 hover:border-primary/30 text-slate-600")}>
+                          <input type="checkbox" className="hidden" checked={vehicleCategories.includes(cat.id)} onChange={(e) => {
+                            if (e.target.checked) setVehicleCategories(prev => [...prev, cat.id]);
+                            else setVehicleCategories(prev => prev.filter(c => c !== cat.id));
+                          }} />
+                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", vehicleCategories.includes(cat.id) ? "bg-primary border-primary" : "border-slate-300")}>
+                            {vehicleCategories.includes(cat.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          </div>
+                          <span className="text-xs font-black">{cat.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <label className={cn("p-4 rounded-xl border-2 flex items-center justify-between transition-colors cursor-pointer", isPetFriendly ? "border-primary bg-primary/5" : "border-slate-100 hover:border-slate-200")}>
+                      <div>
+                        <p className="text-sm font-black text-slate-900">Pet Friendly Vehicle</p>
+                        <p className="text-xs text-slate-500">Allow passengers to travel with pets (+£3 fare bonus)</p>
+                      </div>
+                      <input type="checkbox" className="hidden" checked={isPetFriendly} onChange={(e) => setIsPetFriendly(e.target.checked)} />
+                      <div className={`w-10 h-6 outline-none rounded-full transition-colors relative shadow-inner shrink-0 ${isPetFriendly ? 'bg-primary' : 'bg-slate-200'}`}>
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPetFriendly ? 'translate-x-5' : 'translate-x-1'}`} />
+                      </div>
+                    </label>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Trust Bar */}
               <div className="grid grid-cols-3 gap-2 py-4 border-y border-slate-50">
                 <div className="flex flex-col items-center text-center gap-1">
@@ -729,7 +784,8 @@ export default function Onboarding() {
                   !role || 
                   loading ||
                   (role === "homeowner" && !homeownerType) ||
-                  (role !== "admin" && (!name || !postcode || !phone))
+                  (role !== "admin" && (!name || !postcode || !phone)) ||
+                  (role === "fleet_driver" && vehicleCategories.length === 0)
                 }
                 className="w-full flex items-center justify-center gap-3 bg-orange-500 text-white p-5 rounded-[2rem] font-black text-xl hover:bg-orange-600 transition-all shadow-2xl shadow-orange-500/30 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none active:scale-95 group"
               >
