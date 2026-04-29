@@ -29,6 +29,7 @@ import Analytics from "./components/Analytics";
 import Availability from "./components/Availability";
 import FindTrades from "./components/FindTrades";
 import Portfolio from "./components/Portfolio";
+import TradesBannerAdStudio from "./components/TradesBannerAdStudio";
 import BusinessTeamManagement from "./components/BusinessTeamManagement";
 import BillingManager from "./components/BillingManager";
 import MasterAdminLayout from "./components/MasterAdminLayout";
@@ -49,6 +50,7 @@ import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
 import CorporatePortal from "./components/anyride/CorporatePortal";
 import AdReport from "./components/AdReport";
+import TraderAdStudio from "./components/TraderAdStudio";
 
 function IndexRoute() {
   const { activePortal, activeRole } = usePortal();
@@ -161,6 +163,7 @@ export default function App() {
           <ReviewReminder />
           <Routes>
             <Route path="/ad-report/:id" element={<AdReport />} />
+            <Route path="/ad-studio" element={<TraderAdStudio />} />
           {!user ? (
             <>
               <Route path="/profile/:id" element={<PublicProfile />} />
@@ -177,6 +180,7 @@ export default function App() {
                 <Route path="job-feed" element={<JobFeed />} />
                 <Route path="my-jobs" element={<MyJobs />} />
                 <Route path="portfolio" element={<Portfolio />} />
+                <Route path="trader/banner-ads" element={<TradesBannerAdStudio />} />
                 <Route path="post-job" element={<PostJobWizard />} />
                 <Route path="post-emergency-job" element={<EmergencyJobWizard />} />
                 <Route path="my-quotes" element={<MyQuotes />} />

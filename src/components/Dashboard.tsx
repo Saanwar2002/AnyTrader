@@ -204,17 +204,17 @@ export default function Dashboard() {
       {/* TradeBot Banner */}
       <button 
         onClick={() => setIsTradeBotOpen(true)}
-        className="w-full bg-primary/5 border border-primary/10 p-6 rounded-[32px] flex items-center gap-5 text-left group hover:bg-primary/10 transition-all shadow-sm"
+        className="w-full bg-primary/5 border border-primary/10 p-4 rounded-[24px] flex items-center gap-4 text-left group hover:bg-primary/10 transition-all shadow-sm"
       >
-        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/10 border border-primary/10">
-          <Bot className="w-7 h-7 text-primary" />
+        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm shadow-primary/10 border border-primary/10 shrink-0">
+          <Bot className="w-5 h-5 text-primary" />
         </div>
-        <div className="flex-1">
-          <h3 className="font-display font-bold text-slate-900 text-xl">Ask AnyTrader AI</h3>
-          <p className="text-sm text-slate-600 font-medium">Get instant UK pricing advice and project planning tips</p>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-display font-bold text-slate-900 text-base leading-tight">Ask AnyTrader AI</h3>
+          <p className="text-xs text-slate-600 font-medium mt-0.5 truncate">Get instant UK pricing advice and project planning tips</p>
         </div>
-        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:translate-x-1 transition-transform">
-          <ChevronRight className="w-5 h-5 text-primary" />
+        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:translate-x-1 transition-transform shrink-0">
+          <ChevronRight className="w-4 h-4 text-primary" />
         </div>
       </button>
 

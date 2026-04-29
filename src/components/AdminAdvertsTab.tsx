@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Loader2, Save, Trash2, Zap, LayoutGrid, Calendar, Eye, Briefcase, ShieldCheck, Star, Gift, ShieldAlert, Award, FileText } from "lucide-react";
-import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { cn } from "../lib/utils";
 import { useCategories } from "../lib/CategoryProvider";
@@ -37,6 +38,11 @@ export default function AdminAdvertsTab() {
   const [recurringPrice, setRecurringPrice] = useState("0");
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // Search and Filter
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all, active, inactive
+  const [targetFilter, setTargetFilter] = useState("all"); // all, tradesperson, homeowner
 
   useEffect(() => {
     const q = query(collection(db, "advertisements"), orderBy("createdAt", "desc"));
@@ -131,20 +137,77 @@ export default function AdminAdvertsTab() {
 
   if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
 
+  const filteredAdverts = adverts.filter((ad) => {
+    const matchesSearch = 
+      (ad.advertiserName || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (ad.title || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (ad.billingCycle || "").toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" 
+      ? true 
+      : statusFilter === "active" 
+        ? ad.isActive 
+        : statusFilter === "pending" 
+          ? ad.approvalStatus === "pending" 
+          : !ad.isActive && ad.approvalStatus !== "pending";
+    const matchesTarget = targetFilter === "all" ? true : ad.targetRole === targetFilter;
+
+    return matchesSearch && matchesStatus && matchesTarget;
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Partner Advertisements</h2>
-          <p className="text-sm text-slate-500">Manage banner ads shown on Homeowner and Trader dashboards</p>
+          <h2 className="text-xl font-bold text-slate-900">Traders Banner Ad Studio</h2>
+          <p className="text-sm text-slate-500">Manage banner ads submitted by traders or create internal partner campaigns.</p>
         </div>
-        <button onClick={openNewModal} className="bg-blue-600 text-white px-4 h-10 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2">
+        <button onClick={openNewModal} className="bg-blue-600 text-white px-4 h-10 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shrink-0">
           <Plus className="w-4 h-4" /> New Advert
         </button>
       </div>
 
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">
+        <div className="flex-1">
+          <input 
+            type="text" 
+            placeholder="Search by advertiser name, title, or tier..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-10 outline-none text-sm placeholder:text-slate-400"
+          />
+        </div>
+        <div className="flex gap-4">
+          <select 
+            value={statusFilter} 
+            onChange={e => setStatusFilter(e.target.value)} 
+            className="bg-slate-50 border border-slate-200 rounded-xl px-4 h-10 outline-none text-sm font-bold text-slate-700"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="pending">Pending Approval</option>
+            <option value="inactive">Paused / Inactive</option>
+          </select>
+          <select 
+            value={targetFilter} 
+            onChange={e => setTargetFilter(e.target.value)} 
+            className="bg-slate-50 border border-slate-200 rounded-xl px-4 h-10 outline-none text-sm font-bold text-slate-700"
+          >
+            <option value="all">All Targets</option>
+            <option value="tradesperson">Tradespeople</option>
+            <option value="homeowner">Homeowners</option>
+          </select>
+        </div>
+      </div>
+
+      {filteredAdverts.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-3xl border border-slate-200">
+          <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+          <p className="text-slate-500 font-bold">No campaigns found matching criteria.</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {adverts.map((ad) => {
+        {filteredAdverts.map((ad) => {
           const AdIcon = iconMap[ad.iconName] || Zap;
           return (
           <div key={ad.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm relative group overflow-hidden">
@@ -169,7 +232,15 @@ export default function AdminAdvertsTab() {
                <div>
                   <p className="text-xs text-slate-500 mb-1">Target: <span className="font-bold text-slate-900 uppercase">{ad.targetRole} {ad.targetCategories?.length ? `(${ad.targetCategories.length} cats)` : ""}</span></p>
                   <p className="text-xs text-slate-500 mb-1">
-                    Advertiser: <span className="font-bold text-slate-900">{ad.advertiserName || "N/A"}</span> ({ad.billingCycle || "N/A"})
+                    Advertiser: 
+                    {ad.isTraderAd && ad.advertiserId ? (
+                      <Link to={`/profile/${ad.advertiserId}`} target="_blank" className="font-bold text-blue-600 hover:text-blue-800 ml-1">
+                        {ad.advertiserName || "Trader Profile"}
+                      </Link>
+                    ) : (
+                      <span className="font-bold text-slate-900 ml-1">{ad.advertiserName || "N/A"}</span>
+                    )}
+                    <span className="ml-1">({ad.billingCycle || "N/A"})</span>
                   </p>
                   <p className="text-xs text-slate-500">
                     Clicks: <span className="font-bold text-blue-600">{ad.clicks || 0}</span> • 
@@ -177,6 +248,20 @@ export default function AdminAdvertsTab() {
                   </p>
                </div>
                <div className="flex gap-2">
+                 {ad.approvalStatus === "pending" && (
+                   <>
+                     <button onClick={async () => {
+                       await updateDoc(doc(db, "advertisements", ad.id), { approvalStatus: "approved", isActive: true });
+                     }} className="px-3 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold rounded-lg text-xs" title="Approve">
+                       Approve
+                     </button>
+                     <button onClick={async () => {
+                       await updateDoc(doc(db, "advertisements", ad.id), { approvalStatus: "rejected" });
+                     }} className="px-3 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-lg text-xs" title="Reject">
+                       Reject
+                     </button>
+                   </>
+                 )}
                  <button onClick={() => {
                    navigator.clipboard.writeText(`${window.location.origin}/ad-report/${ad.id}`);
                    alert("Tracking link copied to clipboard");
@@ -192,13 +277,20 @@ export default function AdminAdvertsTab() {
                </div>
              </div>
              
-             {!ad.isActive && (
+             {ad.approvalStatus === "pending" ? (
+               <div className="absolute top-2 right-2 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-1 rounded">PENDING</div>
+             ) : ad.approvalStatus === "rejected" ? (
+               <div className="absolute top-2 right-2 bg-red-900 text-white text-[10px] font-bold px-2 py-1 rounded">REJECTED</div>
+             ) : !ad.isActive ? (
                <div className="absolute top-2 right-2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded">INACTIVE</div>
+             ) : (
+               <div className="absolute top-2 right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded">ACTIVE</div>
              )}
           </div>
           );
         })}
       </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">

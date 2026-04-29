@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { ChevronRight, Zap, Briefcase, ShieldCheck, Star, Gift, ShieldAlert, Award, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { collection, query, onSnapshot, doc, updateDoc, increment } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { cn } from "../../lib/utils";
+import { useAuth } from "../AuthProvider";
+import { Link } from "react-router-dom";
 
 const iconMap: Record<string, any> = {
   Zap, Briefcase, ShieldCheck, Star, Gift, ShieldAlert, Award, FileText
@@ -40,6 +42,7 @@ const DEFAULT_PARTNER_ADVERTS = [
 ];
 
 export default function PartnerAdvertisement({ role = "tradesperson", category }: { role?: string, category?: string }) {
+  const { profile } = useAuth();
   const [adverts, setAdverts] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rotationSpeed, setRotationSpeed] = useState(5000);
@@ -97,9 +100,45 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
     // Only track clicks for database-driven ads
     if (clickedAd.id && clickedAd.id !== "default-1" && clickedAd.id !== "default-2") {
       try {
-        await updateDoc(doc(db, "advertisements", clickedAd.id), {
-          clicks: increment(1)
-        });
+        const updateData: any = { clicks: increment(1) };
+        const cost = clickedAd.costPerDisplay || 0;
+        
+        if (clickedAd.billingCycle === "prepaid" && typeof clickedAd.prepaidBalance === "number") {
+          const newBalance = clickedAd.prepaidBalance - cost;
+          updateData.prepaidBalance = increment(-cost);
+          
+          if (newBalance <= 0) {
+            updateData.isActive = false; // Stop promotion
+          }
+          
+          // Notification logic
+          if (clickedAd.advertiserUid && clickedAd.totalBudget) {
+            const pct = newBalance / clickedAd.totalBudget;
+            const oldPct = clickedAd.prepaidBalance / clickedAd.totalBudget;
+            
+            let noticeMsg = null;
+            if (oldPct > 0.9 && pct <= 0.9) {
+              noticeMsg = `Your ad campaign "${clickedAd.title}" has reached 90% of its budget capacity.`;
+            } else if (oldPct > 0.1 && pct <= 0.1) {
+              noticeMsg = `CRITICAL: Your ad campaign "${clickedAd.title}" has reached 10% of its budget capacity! Top up soon to avoid stoppage.`;
+            } else if (oldPct > 0 && pct <= 0) {
+              noticeMsg = `Your ad campaign "${clickedAd.title}" has run out of budget and has been paused. Top up to resume.`;
+            }
+            
+            if (noticeMsg) {
+              await addDoc(collection(db, "notifications"), {
+                userId: clickedAd.advertiserUid,
+                title: "Ad Budget Alert",
+                body: noticeMsg,
+                type: "alert",
+                read: false,
+                createdAt: serverTimestamp()
+              });
+            }
+          }
+        }
+        
+        await updateDoc(doc(db, "advertisements", clickedAd.id), updateData);
       } catch (e) {
         console.error("Failed to track ad click", e);
       }
@@ -107,41 +146,55 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
   };
 
   return (
-    <div className="mt-4 relative overflow-hidden rounded-2xl h-20 sm:h-24">
-      <AnimatePresence mode="wait">
-        <motion.a
-          key={ad.id}
-          href={ad.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => handleAdClick(ad)}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.3 }}
-          className={cn(
-            "absolute inset-0 group transition-all text-white shadow-sm disabled cursor-pointer overflow-hidden",
-            ad.imageUrl ? "bg-slate-100 block" : "flex items-center gap-4 p-4 sm:p-5",
-            !ad.imageUrl && ad.bgColor?.startsWith("bg-") ? ad.bgColor : undefined
-          )}
-          style={{ backgroundColor: !ad.imageUrl && ad.bgColor && !ad.bgColor.startsWith("bg-") ? ad.bgColor : undefined }}
-        >
-          {ad.imageUrl ? (
-            <img src={ad.imageUrl} alt={ad.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-          ) : (
-            <>
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-                <AdIcon className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1 min-w-0 pr-2 sm:pr-4 flex flex-col justify-center">
-                <p className="text-sm sm:text-base font-black truncate leading-tight">{ad.title}</p>
-                <p className="text-xs sm:text-sm text-white/90 truncate leading-relaxed mt-1">{ad.description}</p>
-              </div>
-              <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-white/50 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0" />
-            </>
-          )}
-        </motion.a>
-      </AnimatePresence>
+    <div className="mt-4 mb-2 relative">
+      <div className="relative overflow-hidden rounded-2xl w-full h-20 sm:h-24 group/container shadow-sm z-10">
+        <AnimatePresence mode="wait">
+          <motion.a
+            key={ad.id}
+            href={ad.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => handleAdClick(ad)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className={cn(
+              "absolute inset-0 group transition-all text-white disabled cursor-pointer overflow-hidden flex items-stretch",
+              ad.imageUrl ? "bg-slate-100" : "flex items-center gap-4 p-4 sm:p-5",
+              !ad.imageUrl && ad.bgColor?.startsWith("bg-") ? ad.bgColor : undefined
+            )}
+            style={{ backgroundColor: !ad.imageUrl && ad.bgColor && !ad.bgColor.startsWith("bg-") ? ad.bgColor : undefined }}
+          >
+            {ad.imageUrl ? (
+              <img src={ad.imageUrl} alt={ad.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            ) : (
+              <>
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                  <AdIcon className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0 pr-2 sm:pr-4 flex flex-col justify-center">
+                  <p className="text-sm sm:text-base font-black truncate leading-tight">{ad.title}</p>
+                  <p className="text-xs sm:text-sm text-white/90 truncate leading-relaxed mt-1">{ad.description}</p>
+                </div>
+                <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-white/50 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0 self-center" />
+              </>
+            )}
+          </motion.a>
+        </AnimatePresence>
+      </div>
+
+      {profile?.role === "tradesperson" && (
+        <div className="flex justify-center -mt-2">
+          <Link 
+            to="/trader/banner-ads" 
+            className="bg-amber-400 hover:bg-amber-500 text-slate-900 px-5 max-w-max py-1 rounded-b-xl text-[10px] font-black z-0 transition-all pt-3 shadow-sm flex items-center justify-center cursor-pointer uppercase tracking-widest border border-t-0 border-amber-500/20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Click here to advertise
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

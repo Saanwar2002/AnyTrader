@@ -924,6 +924,7 @@ export default function Profile() {
         { icon: CreditCard, label: "My Completed Quotes/Jobs", path: "/my-quotes?mode=completed" },
         { icon: BarChart3, label: "Job Analytics", path: "/analytics" },
         { icon: Calendar, label: "Availability Calendar", path: "/availability" },
+        { icon: Zap, label: "Traders Banner Ad Studio", path: "/trader/banner-ads" },
       ]
     },
     {
@@ -1412,6 +1413,29 @@ export default function Profile() {
                   <p className="text-xs text-slate-400 font-medium italic">Complete more jobs to earn badges!</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {profile.role === "tradesperson" && (
+          <div className="mt-8 border-t border-slate-100 pt-8">
+            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Zap className="w-4 h-4" />
+              Promotion & Advertising
+            </h3>
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="relative z-10">
+                <h4 className="text-xl font-bold mb-1">Traders Banner Ad Studio</h4>
+                <p className="text-blue-100 text-sm max-w-sm">Promote your profile natively across the platform. Set a budget, reach more homeowners, and track your ad performance down to the penny.</p>
+              </div>
+              <div className="relative z-10 shrink-0 w-full md:w-auto">
+                <Link to="/ad-studio" className="w-full md:w-auto bg-white text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-colors inline-block text-center shadow-lg">
+                  Open Ad Studio
+                </Link>
+              </div>
+              <div className="absolute top-0 right-0 opacity-10 pointer-events-none transform translate-x-1/3 -translate-y-1/4">
+                <Zap className="w-64 h-64" />
+              </div>
             </div>
           </div>
         )}
