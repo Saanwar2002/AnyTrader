@@ -147,8 +147,8 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
 
   return (
     <div className="mt-4 mb-2 relative">
-      <div className="relative overflow-hidden rounded-2xl w-full h-20 sm:h-24 group/container shadow-sm z-10">
-        <AnimatePresence mode="wait">
+      <div className="relative overflow-hidden rounded-2xl w-full h-20 sm:h-24 group/container shadow-sm z-10 bg-slate-100">
+        <AnimatePresence>
           <motion.a
             key={ad.id}
             href={ad.url}
@@ -160,8 +160,8 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
             className={cn(
-              "absolute inset-0 group transition-all text-white disabled cursor-pointer overflow-hidden flex items-stretch",
-              ad.imageUrl ? "bg-slate-100" : "flex items-center gap-4 p-4 sm:p-5",
+              "absolute inset-0 group text-white disabled cursor-pointer overflow-hidden flex items-stretch",
+              ad.imageUrl ? "" : "flex items-center gap-4 p-4 sm:p-5",
               !ad.imageUrl && ad.bgColor?.startsWith("bg-") ? ad.bgColor : undefined
             )}
             style={{ backgroundColor: !ad.imageUrl && ad.bgColor && !ad.bgColor.startsWith("bg-") ? ad.bgColor : undefined }}

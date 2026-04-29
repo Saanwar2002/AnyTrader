@@ -367,8 +367,8 @@ export default function Layout() {
 
       {/* Header */}
       {!isDriverTerminal && activePortal !== 'anyride' && (
-      <header className="glass sticky top-0 z-50">
-          <div className="max-w-7xl auto px-4 h-16 flex items-center justify-between">
+      <header className="bg-slate-50/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4 sm:gap-8">
               {activePortal === "anyride" && (
                 <button 
@@ -400,10 +400,10 @@ export default function Layout() {
               >
                 {activePortal === "anytrader" ? (
                   <>
-                    <div className="w-12 h-12 bg-[#FEED2C] border-2 border-slate-900 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-[#FEED2C]/20 group-hover:scale-110 transition-transform duration-500 relative overflow-hidden shrink-0">
-                      <Car className="w-5 h-5 text-slate-900 relative z-10" />
-                      <span className="text-[10px] font-black text-slate-900 leading-none mt-0.5 relative z-10">TAXI</span>
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent"></div>
+                    <div className="w-14 h-14 bg-[#EAB308] border-[3px] border-slate-900 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-[#EAB308]/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
+                      <Car className="w-5 h-5 text-slate-900 relative z-10 mb-0.5" />
+                      <span className="text-[8px] font-black text-slate-900 leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
                     </div>
                     <div className="hidden sm:block">
                       <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRide</span>

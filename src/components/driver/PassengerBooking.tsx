@@ -664,7 +664,7 @@ export default function PassengerBooking() {
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       
-      if (accuracy > 10) {
+      if (accuracy > 20) {
         toast.warning(`GPS accuracy too low (${Math.round(accuracy)}m). Please enter manually for better precision.`);
         setIsDetecting(false);
         setActiveField("pickup");
