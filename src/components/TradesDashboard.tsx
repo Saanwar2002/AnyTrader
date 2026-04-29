@@ -19,6 +19,7 @@ import MediaGalleryModal from "./MediaGalleryModal";
 import { SEO } from "./SEO";
 
 import PartnerPerks from "./PartnerPerks";
+import PartnerAdvertisement from "./shared/PartnerAdvertisement";
 import { getRegionalDemandData, RegionalDemand } from "@/src/services/demandHeatmapService";
 
 const iconMap: Record<string, any> = {
@@ -834,48 +835,51 @@ export default function TradesDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 mb-2">
-            <PoundSterling className="w-4 h-4" />
+      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+          <div className="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 mb-1">
+            <PoundSterling className="w-3 h-3" />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Quotes</p>
-          <p className="text-2xl font-bold text-slate-900">{stats.activeQuotes}</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Quotes</p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats.activeQuotes}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center text-green-600 mb-2">
-            <Briefcase className="w-4 h-4" />
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+          <div className="w-6 h-6 bg-green-50 rounded-lg flex items-center justify-center text-green-600 mb-1">
+            <Briefcase className="w-3 h-3" />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Jobs</p>
-          <p className="text-2xl font-bold text-slate-900">{stats.activeJobs}</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Active Jobs</p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats.activeJobs}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 mb-2">
-            <Calendar className="w-4 h-4" />
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+          <div className="w-6 h-6 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 mb-1">
+            <Calendar className="w-3 h-3" />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Upcoming Jobs</p>
-          <p className="text-2xl font-bold text-slate-900">{stats.upcomingJobs}</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Upcoming</p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats.upcomingJobs}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 mb-2">
-            <Star className="w-4 h-4 fill-current" />
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+          <div className="w-6 h-6 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 mb-1">
+            <Star className="w-3 h-3 fill-current" />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rating</p>
-          <p className="text-2xl font-bold text-slate-900">{profile?.rating ? profile.rating.toFixed(1) : "N/A"}</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Rating</p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-900">{profile?.rating ? profile.rating.toFixed(1) : "N/A"}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 mb-2">
-            <ShieldCheck className="w-4 h-4" />
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+          <div className="w-6 h-6 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 mb-1">
+            <ShieldCheck className="w-3 h-3" />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Status</p>
           <p className={cn(
-            "text-sm font-bold",
+            "text-xs sm:text-sm font-bold truncate",
             profile?.verificationStatus === "verified" ? "text-green-600" : "text-amber-600"
           )}>
-            {profile?.verificationStatus === "verified" ? "Verified Pro" : "Unverified"}
+            {profile?.verificationStatus === "verified" ? "Verified" : "Unverified"}
           </p>
         </div>
       </div>
+      
+      {/* Auto-scrolling Advertisement Banner */}
+      <PartnerAdvertisement />
 
       {/* AI Recommendations */}
       {profile?.role === "tradesperson" && (

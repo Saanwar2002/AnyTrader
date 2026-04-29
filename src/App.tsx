@@ -48,6 +48,7 @@ import MyRides from "./components/MyRides";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
 import CorporatePortal from "./components/anyride/CorporatePortal";
+import AdReport from "./components/AdReport";
 
 function IndexRoute() {
   const { activePortal, activeRole } = usePortal();
@@ -159,6 +160,7 @@ export default function App() {
           <RecurringJobManager />
           <ReviewReminder />
           <Routes>
+            <Route path="/ad-report/:id" element={<AdReport />} />
           {!user ? (
             <>
               <Route path="/profile/:id" element={<PublicProfile />} />

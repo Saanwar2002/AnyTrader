@@ -21,6 +21,7 @@ import { EmergencyTimer } from "./EmergencyTimer";
 import { SEO } from "./SEO";
 import { getMaintenancePredictions } from "@/src/services/gemini";
 import HomeownerPerks from "./HomeownerPerks";
+import PartnerAdvertisement from "./shared/PartnerAdvertisement";
 
 const iconMap: Record<string, any> = {
   Search, BarChart3, Briefcase, Plus, ChevronRight, Clock, ImageIcon, VideoIcon
@@ -196,6 +197,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      
+      {/* Auto-scrolling Advertisement Banner */}
+      <PartnerAdvertisement role="homeowner" />
 
       {/* TradeBot Banner */}
       <button 

@@ -43,6 +43,11 @@ service cloud.firestore {
     }
 
     // --- User Profiles (Public/Private Split) ---
+    match /advertisements/{adId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /users/{userId} {
       allow read: if true; // Public read for profile discovery, both search list & get profile
       allow create: if isOwner(userId) || isAdmin() || userId.matches('^mock-trader-.*$');

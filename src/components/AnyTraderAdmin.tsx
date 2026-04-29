@@ -15,11 +15,12 @@ import {
   Settings, Settings2, BarChart3, PieChart, DollarSign, Percent, Clock, MapPin, CreditCard,
   AlertCircle, Zap, Sparkles, ShieldAlert, ShieldCheck, RefreshCw, Medal,
   Plus, Edit2, Calendar, Award, Info, Key, Building2, Globe, Database, Download,
-  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag, Car
+  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag, Car, Cpu
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import AdminTierManager from "./AdminTierManager";
 import GuestJobs from "./GuestJobs";
+import AdminAdvertsTab from "./AdminAdvertsTab";
 import {  
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
@@ -35,12 +36,12 @@ export default function AnyTraderAdmin() {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const tabFromUrl = searchParams.get("tab") as any;
-  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization"].includes(tabFromUrl) ? tabFromUrl : "users";
+  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "advertising"].includes(tabFromUrl) ? tabFromUrl : "users";
   
-  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization">(initialTab as any);
+  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "advertising">(initialTab as any);
   
   useEffect(() => {
-    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization"].includes(tabFromUrl) ? tabFromUrl : "users";
+    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "advertising"].includes(tabFromUrl) ? tabFromUrl : "users";
     if (validTab !== activeTab) {
       setActiveTab(validTab);
       setFilter(validTab === "jobs" ? "emergency" : "all");
@@ -1318,7 +1319,7 @@ export default function AnyTraderAdmin() {
       setAiRecommendations(recs);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to generate AI recommendations");
+      alert("Failed to generate AI recommendations");
     } finally {
       setIsGeneratingAiRecs(false);
     }
@@ -1327,7 +1328,7 @@ export default function AnyTraderAdmin() {
   const applyAiModel = async (modelId: string) => {
     setTempConfig({...tempConfig, aiModel: modelId});
     setShowAiRecsModal(false);
-    toast.success("AI Model Selected. Don't forget to save platform configuration!");
+    alert("AI Model Selected. Don't forget to save platform configuration!");
   };
 
   const syncWithUnifiedPricing = () => {
@@ -1695,6 +1696,7 @@ export default function AnyTraderAdmin() {
               <TabButton active={activeTab === "team"} onClick={() => handleTabChange("team")} icon={<Shield className="w-4 h-4" />} label="Staff" />
               <TabButton active={activeTab === "verifications"} onClick={() => handleTabChange("verifications")} icon={<CheckCircle2 className="w-4 h-4" />} label="KYC" />
               <TabButton active={activeTab === "broadcast"} onClick={() => handleTabChange("broadcast")} icon={<Megaphone className="w-4 h-4" />} label="Broadcast" />
+              <TabButton active={activeTab === "advertising"} onClick={() => handleTabChange("advertising")} icon={<Tag className="w-4 h-4" />} label="Ads" />
               <TabButton active={activeTab === "settings"} onClick={() => handleTabChange("settings")} icon={<Settings className="w-4 h-4" />} label="Configs" />
               <TabButton active={activeTab === "categories"} onClick={() => handleTabChange("categories")} icon={<Tags className="w-4 h-4" />} label="Categories" />
               <TabButton active={activeTab === "logs"} onClick={() => handleTabChange("logs")} icon={<FileText className="w-4 h-4" />} label="Audit" />
@@ -3309,6 +3311,12 @@ export default function AnyTraderAdmin() {
           </div>
         )}
         
+        {activeTab === "advertising" && (
+          <div className="p-6">
+            <AdminAdvertsTab />
+          </div>
+        )}
+
         {activeTab === "monetization" && tempConfig && (
           <div className="p-6 space-y-12">
             <div className="flex items-center justify-between">
@@ -4274,6 +4282,29 @@ export default function AnyTraderAdmin() {
                         </p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Advertising Configuration */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                      <Tag className="w-4 h-4" /> Advertising Settings
+                    </h4>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Banner Rotation Speed</label>
+                        <select 
+                          value={tempConfig.adRotationSpeedSeconds || 5}
+                          onChange={(e) => setTempConfig({ ...tempConfig, adRotationSpeedSeconds: parseInt(e.target.value) })}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white transition-all font-bold text-slate-900 outline-none"
+                        >
+                          <option value={3}>Every 3 seconds (Fast)</option>
+                          <option value={5}>Every 5 seconds (Standard)</option>
+                          <option value={10}>Every 10 seconds (Slow)</option>
+                          <option value={15}>Every 15 seconds (Very Slow)</option>
+                        </select>
+                        <p className="text-[10px] text-slate-500">How frequently the partner banners change on user dashboards.</p>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Trust & Fairness Engine */}
