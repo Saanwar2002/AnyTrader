@@ -887,6 +887,50 @@ export default function PostJobWizard() {
     }
   };
 
+  const handleAutoDetectLocation = () => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+          const { latitude: lat, longitude: lng } = position.coords;
+          if (!window.google) return;
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === "OK" && results?.[0]) {
+              const foundAddress = results[0].formatted_address;
+              setAddressInput(foundAddress);
+              setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
+              setUseRegisteredAddress(false);
+              
+              let newCity = "";
+              let newArea = "";
+              let newPostcode = "";
+
+              results[0].address_components.forEach((comp: any) => {
+                if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
+                if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
+                if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
+              });
+
+              if (!newPostcode) {
+                const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                newPostcode = pcMatch ? pcMatch[0] : "";
+              }
+
+              setFormData(prev => ({
+                ...prev,
+                city: newCity,
+                area: newArea,
+                postcode: newPostcode
+              }));
+            }
+          });
+        } catch (err) {
+          console.error("Geocoding failed:", err);
+        }
+      });
+    }
+  };
+
   const handleSubmit = async () => {
     if (!user) return;
     setIsSubmitting(true);
@@ -1683,6 +1727,15 @@ export default function PostJobWizard() {
                 <p className="text-slate-500 text-sm">Help tradespeople find your location.</p>
               </div>
               <div className="space-y-4">
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleAutoDetectLocation}
+                    className="w-full p-4 rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all shadow-[0_4px_12px_rgba(37,99,235,0.1)] active:scale-95"
+                  >
+                    <Locate className="w-5 h-5 flex-shrink-0" /> Auto-detect my location
+                  </button>
+                </div>
                 <div className="space-y-4">
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -1753,47 +1806,7 @@ export default function PostJobWizard() {
                       type="button"
                       className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
                       title="Auto-detect location"
-                      onClick={() => {
-                        if ("geolocation" in navigator) {
-                          navigator.geolocation.getCurrentPosition(async (position) => {
-                            try {
-                              const { latitude: lat, longitude: lng } = position.coords;
-                              const geocoder = new google.maps.Geocoder();
-                              geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-                                if (status === "OK" && results?.[0]) {
-                                  const foundAddress = results[0].formatted_address;
-                                  setAddressInput(foundAddress);
-                                  setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
-                                  
-                                  let newCity = "";
-                                  let newArea = "";
-                                  let newPostcode = "";
-
-                                  results[0].address_components.forEach((comp) => {
-                                    if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
-                                    if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
-                                    if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
-                                  });
-
-                                  if (!newPostcode) {
-                                    const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
-                                    newPostcode = pcMatch ? pcMatch[0] : "";
-                                  }
-
-                                  setFormData(prev => ({
-                                    ...prev,
-                                    city: newCity,
-                                    area: newArea,
-                                    postcode: newPostcode
-                                  }));
-                                }
-                              });
-                            } catch (err) {
-                              console.error("Geocoding failed:", err);
-                            }
-                          });
-                        }
-                      }}
+                      onClick={handleAutoDetectLocation}
                     >
                       <Locate className="w-5 h-5" />
                     </button>
@@ -1927,48 +1940,6 @@ export default function PostJobWizard() {
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   />
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                          async (position) => {
-                            try {
-                              const { latitude, longitude } = position.coords;
-                              const data = await reverseLookupPostcode(latitude, longitude);
-                              if (data) {
-                                setFormData(prev => ({ 
-                                  ...prev, 
-                                  city: data.city,
-                                  area: data.area,
-                                  postcode: data.postcode
-                                }));
-                                
-                                if (window.google) {
-                                  const geocoder = new window.google.maps.Geocoder();
-                                  geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-                                    if (status === "OK" && results?.[0]) {
-                                      setAddressInput(results[0].formatted_address);
-                                      setFormData(prev => ({ ...prev, fullAddress: results[0].formatted_address }));
-                                    }
-                                  });
-                                }
-                              }
-                            } catch (err) {
-                              console.error("Error reverse geocoding:", err);
-                              setFormData(prev => ({ ...prev, city: "Detected Location" }));
-                            }
-                          },
-                          (error) => console.error(error)
-                        );
-                      }
-                    }}
-                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white text-slate-700 font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
-                  >
-                    <MapPin className="w-5 h-5" /> Use Current Location
-                  </button>
                 </div>
               </div>
             </motion.div>

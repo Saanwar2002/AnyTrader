@@ -463,13 +463,7 @@ export default function Layout() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-4">
-            {profile?.role && (
-              <span className="text-[9px] font-black uppercase text-primary bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10 tracking-wider">
-                {profile.role}
-              </span>
-            )}
-            
+            <div className="flex items-center gap-1 sm:gap-4 pr-1">
             {/* AI Smart Shop Button & Popover */}
             {(profile?.role === "tradesperson" || profile?.subscriptionType === "business") && (
               <div className="relative" ref={popoverRef}>
@@ -487,67 +481,95 @@ export default function Layout() {
 
                 <AnimatePresence>
                   {showShopPopover && (
-                    <motion.div
-                      key="shop-popover"
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute top-full right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 origin-top-right"
-                    >
-                      <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                        <div>
-                          <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                            <ShoppingCart className="w-4 h-4 text-blue-500" />
-                            AI Smart Shop
-                          </h3>
-                          <p className="text-[10px] uppercase font-bold text-slate-400 mt-0.5 tracking-wider">Curated for your trade</p>
-                        </div>
-                        <button onClick={() => setShowShopPopover(false)} className="text-slate-400 hover:text-slate-900">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="p-2 space-y-1">
-                        {isLoadingShop ? (
-                          <div className="py-8 flex flex-col items-center justify-center text-slate-400">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-3 ml-2" />
-                            <p className="text-xs font-bold uppercase tracking-wider">Analyzing your profile...</p>
-                            <p className="text-[10px] mt-1 text-slate-400">Scanning deals for {profile?.category || "your trade"}</p>
+                    <>
+                      <motion.div
+                        key="shop-backdrop"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowShopPopover(false)}
+                        className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm"
+                      />
+                      <motion.div
+                        key="shop-popover"
+                        initial={{ opacity: 0, y: "-100%" }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: "-100%" }}
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        className="fixed top-0 left-0 right-0 max-h-[75vh] bg-white z-[70] shadow-2xl rounded-b-[32px] flex flex-col overflow-hidden sm:max-w-2xl sm:mx-auto sm:top-2 sm:rounded-[32px] border border-slate-100"
+                      >
+                        <div className="p-4 sm:p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between sticky top-0 z-10 shrink-0">
+                          <div>
+                            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                                <ShoppingCart className="w-5 h-5 text-blue-600" />
+                              </div>
+                              AI Smart Shop
+                            </h3>
+                            <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 mt-1 tracking-wider">Curated for your trade</p>
                           </div>
-                        ) : (
-                          <>
-                            {shopRecommendations.map((rec, idx) => {
-                              const RecommendationIcon = getIconComponent(rec.icon);
-                              return (
-                                <button 
-                                  key={`rec-${idx}-${rec.name}`}
-                                  onClick={() => enterShop(rec.name)}
-                                  className="flex items-start gap-3 p-3 rounded-xl hover:bg-blue-50 transition-colors group cursor-pointer w-full"
-                                >
-                                  <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform group-hover:border-blue-200 group-hover:shadow-blue-100">
-                                    <RecommendationIcon className="w-5 h-5 text-slate-600 group-hover:text-blue-600" />
-                                  </div>
-                                  <div className="flex-1 min-w-0 text-left">
-                                    <p className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-700">{rec.name}</p>
-                                    <p className="text-xs text-slate-500 mt-0.5 leading-tight">{rec.reason}</p>
-                                  </div>
-                                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all mt-3 shrink-0" />
-                                </button>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
+                          <button onClick={() => setShowShopPopover(false)} className="w-10 h-10 bg-slate-200 hover:bg-slate-300 rounded-full flex items-center justify-center transition-colors text-slate-500 hover:text-slate-900">
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
 
-                      <div className="p-3 bg-slate-50 border-t border-slate-100">
-                        <button 
-                          onClick={() => enterShop()}
-                          className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
-                        >
-                          Browse Full Store <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </motion.div>
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 relative">
+                          {isLoadingShop ? (
+                            <div className="py-12 flex flex-col items-center justify-center text-slate-400">
+                              <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-900">Analyzing your profile...</p>
+                              <p className="text-xs mt-1 text-slate-500">Scanning deals for {profile?.category || "your trade"}</p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-8">
+                              {shopRecommendations.map((rec, idx) => {
+                                const RecommendationIcon = getIconComponent(rec.icon);
+                                return (
+                                  <button 
+                                    key={`rec-${idx}-${rec.name}`}
+                                    onClick={() => {
+                                      setShowShopPopover(false);
+                                      enterShop(rec.name);
+                                    }}
+                                    className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl hover:bg-blue-50 transition-colors group cursor-pointer w-full text-left border border-slate-100 shadow-sm"
+                                  >
+                                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform group-hover:border-blue-300 group-hover:shadow-blue-200">
+                                      <RecommendationIcon className="w-6 h-6 text-slate-600 group-hover:text-blue-600" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-700">{rec.name}</p>
+                                      <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">{rec.reason}</p>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-4 bg-white border-t border-slate-100 shrink-0 relative">
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors z-20"
+                               onClick={(e) => {
+                                 const scroller = e.currentTarget.parentElement?.previousElementSibling;
+                                 if (scroller) {
+                                   scroller.scrollBy({ top: 150, behavior: 'smooth' });
+                                 }
+                               }}>
+                            <ChevronDown className="w-5 h-5 text-slate-400 animate-bounce" />
+                          </div>
+                          
+                          <button 
+                            onClick={() => {
+                              setShowShopPopover(false);
+                              enterShop();
+                            }}
+                            className="w-full py-4 mt-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold uppercase tracking-wide rounded-2xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2"
+                          >
+                            Browse Full Store <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
                   )}
                 </AnimatePresence>
               </div>
@@ -572,16 +594,23 @@ export default function Layout() {
                 </span>
               )}
             </Link>
-            <Link to="/profile" className="w-8 h-8 bg-slate-200 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center text-slate-400">
-              {user?.photoURL ? (
-                <img 
-                  src={user.photoURL} 
-                  alt="User" 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <UserIcon className="w-5 h-5" />
+            <Link to="/profile" className="w-10 h-10 relative group flex items-center justify-center -ml-1 sm:ml-0 z-20">
+              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-blue-500 flex items-center justify-center text-slate-400 relative z-10 bg-slate-200 shadow-md">
+                {user?.photoURL ? (
+                  <img 
+                    src={user.photoURL} 
+                    alt="User" 
+                    className="w-full h-full object-cover relative z-10"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <UserIcon className="w-6 h-6 relative z-10" />
+                )}
+              </div>
+              {profile?.role && (
+                <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase text-white bg-blue-600 px-2 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-sm z-20">
+                  {profile.role === 'tradesperson' ? 'Trader' : profile.role}
+                </span>
               )}
             </Link>
             <button 

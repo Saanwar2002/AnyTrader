@@ -21,7 +21,11 @@ interface EditingState {
   data: Tier;
 }
 
-export default function AdminTierManager() {
+interface AdminTierManagerProps {
+  modelsToShow?: string[];
+}
+
+export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps) {
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -146,6 +150,12 @@ export default function AdminTierManager() {
                   tiers: {
                     standard: { price: 0, maxQuotes: 9999, maxAcceptedQuotes: 9999, commission: 0.12, leadFee: 0, description: "Standard Taxi", features: ["Unlimited work"], color: "bg-green-50 border-green-200" }
                   }
+                },
+                homeowners: {
+                  tiers: {
+                    rider_plus: { price: 9.99, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "Premium privileges for AnyRide passengers.", features: ["Priority Matching during peak hours", "10% discount on every journey", "Exclusive Rider Plus badge"], color: "bg-amber-50 border-amber-200" },
+                    business: { price: 49.99, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "B2B Corporate Billing and Multi-Account", features: ["Monthly Invoicing", "Team Access", "Dedicated Support"], color: "bg-blue-50 border-blue-200" }
+                  }
                 }
               }
             };
@@ -162,12 +172,14 @@ export default function AdminTierManager() {
 
   return (
     <div className="space-y-8">
-      {Object.entries(config.providerModels || {}).map(([model, modelData]: [string, any]) => (
+      {Object.entries(config.providerModels || {})
+        .filter(([model]) => !modelsToShow || modelsToShow.includes(model))
+        .map(([model, modelData]: [string, any]) => (
         <div key={model} className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">{model.replace(/_/g, " ")}</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Object.entries(modelData.tiers || {}).map(([tierKey, tier]: [string, any]) => {
               const isEditing = editing?.model === model && editing?.tierKey === tierKey;
               
@@ -245,46 +257,79 @@ export default function AdminTierManager() {
               }
 
               return (
-                <div key={tierKey} className={cn("group p-6 rounded-2xl border shadow-sm transition-all hover:shadow-md relative", tier.color || "bg-white border-slate-200")}>
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="font-bold text-lg">{tierKey.toUpperCase()}</h4>
-                    <div className="flex gap-3 transition-opacity">
+                <div key={tierKey} className={cn("group flex flex-col p-6 rounded-[24px] border shadow-sm transition-all hover:shadow-lg relative overflow-hidden bg-white/50 backdrop-blur-sm", tier.color || "bg-white border-slate-200")}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="font-extrabold text-xl text-slate-900 uppercase tracking-tight">{tierKey}</h4>
+                    </div>
+                    <div className="flex gap-2 transition-opacity">
                       <button 
                         onClick={() => setEditing({ model, tierKey, data: { ...tier } })}
-                        className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors border border-blue-100"
+                        className="p-1.5 bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 shadow-sm"
                         title="Edit Tier"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDeleteTier(model, tierKey)}
-                        className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors border border-red-100"
+                        className="p-1.5 bg-white text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200 shadow-sm"
                         title="Delete Tier"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
-                  <div className="space-y-2 text-sm">
-                    <p className="text-slate-600 italic mb-2">{tier.description}</p>
-                    <p className="font-bold">£{tier.price} / month</p>
-                    <p>Commission: {tier.commission * 100}%</p>
-                    <p>Quotes: {tier.maxQuotes}</p>
-                    <div className="mt-4 pt-4 border-t border-slate-200/50">
-                      <p className="font-semibold mb-1">Features:</p>
-                      <ul className="list-disc list-inside text-xs space-y-1">
-                        {tier.features?.map((f: string) => <li key={f}>{f}</li>)}
-                      </ul>
+                  
+                  <p className="text-slate-500 text-sm font-medium mb-4 min-h-[40px]">{tier.description}</p>
+                  
+                  <div className="mb-6">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-black text-slate-900">£{tier.price}</span>
+                      <span className="text-sm font-bold text-slate-400">/ mo</span>
                     </div>
+                  </div>
+
+                  <div className="space-y-1 mb-6 flex-1">
+                    <div className="flex justify-between items-center py-2.5 border-b border-slate-100/50">
+                      <span className="text-sm font-medium text-slate-500">Commission</span>
+                      <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.commission * 100}%</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2.5 border-b border-slate-100/50">
+                      <span className="text-sm font-medium text-slate-500">Job Quotes</span>
+                      <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.maxQuotes >= 9999 ? 'Unlimited' : tier.maxQuotes}</span>
+                    </div>
+                    {tier.leadFee !== undefined && tier.leadFee > 0 && (
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100/50">
+                        <span className="text-sm font-medium text-slate-500">Lead Fee</span>
+                        <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">£{tier.leadFee}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-auto bg-slate-50/80 p-4 rounded-xl border border-slate-100/50">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Included Features</p>
+                    <ul className="space-y-2.5">
+                      {tier.features?.map((f: string) => (
+                        <li key={f} className="flex items-start gap-2.5 text-sm text-slate-700 font-medium">
+                          <div className="p-0.5 bg-emerald-100 rounded-full mt-0.5 shrink-0">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          </div>
+                          <span className="leading-tight">{f}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               );
             })}
             <button 
               onClick={() => handleAddTier(model)}
-              className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded-2xl hover:bg-slate-50 text-slate-500 py-6 min-h-[280px] transition-colors"
+              className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 bg-slate-50/50 rounded-[24px] hover:bg-slate-50 hover:border-slate-300 hover:shadow-inner text-slate-400 hover:text-slate-600 p-6 min-h-[420px] transition-all group"
             >
-              <Plus className="w-6 h-6 mr-2" /> Add Tier
+              <div className="w-12 h-12 bg-white rounded-full shadow-sm border border-slate-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <Plus className="w-5 h-5" />
+              </div>
+              <span className="font-bold uppercase tracking-widest text-xs">Add Tier</span>
             </button>
           </div>
         </div>

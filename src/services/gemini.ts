@@ -1,4 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 // Initialize the Gemini client lazily to avoid crashes if API key is missing on startup
 let genAI: GoogleGenAI | null = null;
@@ -10,6 +12,24 @@ function getGenAI() {
   return genAI;
 }
 
+let cachedAiModel: string | null = null;
+let lastCacheTime = 0;
+
+async function getGlobalAiModel(): Promise<string> {
+   if (cachedAiModel && Date.now() - lastCacheTime < 60000) {
+      return cachedAiModel;
+   }
+   try {
+      const snap = await getDoc(doc(db, "platform_config", "global"));
+      if (snap.exists()) {
+         cachedAiModel = snap.data().aiModel || "gemini-2.5-flash";
+         lastCacheTime = Date.now();
+         return cachedAiModel as string;
+      }
+   } catch(e) { }
+   return "gemini-2.5-flash"; // Default modern fast model
+}
+
 // Helper to call Gemini directly from the frontend
 async function callGemini(params: {
   prompt: string;
@@ -19,7 +39,13 @@ async function callGemini(params: {
 }) {
   try {
     const ai = getGenAI();
-    const model = params.model || "gemini-3-flash-preview";
+    let model = params.model || "gemini-2.5-flash";
+    
+    // Override with global model setting
+    const globalModel = await getGlobalAiModel();
+    if (!params.model || params.model.includes("flash")) {
+      model = globalModel;
+    }
 
     if (params.history) {
       const chat = ai.chats.create({
@@ -1648,5 +1674,58 @@ export async function processTaxiVoiceCommand(text: string) {
   } catch (error) {
     console.error("Gemini Taxi Voice Process Error:", error);
     throw error;
+  }
+}
+
+export interface AiModelRecommendation {
+  id: string;
+  name: string;
+  capabilities: string;
+  costEstimate: string;
+  reason: string;
+  isRecommended: boolean;
+}
+
+export async function getAiModelRecommendations(): Promise<AiModelRecommendation[]> {
+  const response = await callGemini({
+    prompt: `As an AI Architect for a production SaaS application (a UK tradesperson marketplace), analyze our current usage and suggest 3 Gemini AI models. 
+Our platform uses AI for drafting quotes, analyzing reviews, parsing complex job descriptions from voice/text, automated moderation, risk analysis, and smart categorization.
+
+Return exactly 3 options that the admin could switch to. Suggest real Gemini models (e.g. "gemini-1.5-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview").
+Compare their performance, capabilities, and cost. Set one as the recommended option.
+
+Return a JSON array where each object has these fields:
+- id: The exact model string to be used in the API (e.g. "gemini-2.5-flash")
+- name: The friendly name
+- capabilities: A brief summary of capabilities
+- costEstimate: A brief statement on the pricing/cost
+- reason: Why we might choose this model
+- isRecommended: boolean`,
+    model: "gemini-2.5-flash",
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING },
+            name: { type: Type.STRING },
+            capabilities: { type: Type.STRING },
+            costEstimate: { type: Type.STRING },
+            reason: { type: Type.STRING },
+            isRecommended: { type: Type.BOOLEAN }
+          },
+          required: ["id", "name", "capabilities", "costEstimate", "reason", "isRecommended"]
+        }
+      }
+    }
+  });
+  
+  try {
+    return JSON.parse(response.text || "[]");
+  } catch (err) {
+    console.error("Failed to parse AI recommendations:", err);
+    return [];
   }
 }

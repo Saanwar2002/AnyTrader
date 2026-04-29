@@ -27,7 +27,7 @@ import {
 } from "recharts";
 
 import { performInitialPublicRecordCheck } from "../services/verificationService";
-import { getPlatformHealthInsights, PlatformHealthInsights, generateBroadcastDraft, summarizeDisputeChat, analyzeFraudRisk, RiskAlert, analyzeDocument, suggestNewCategories, CategorySuggestion } from "../services/gemini";
+import { getPlatformHealthInsights, PlatformHealthInsights, generateBroadcastDraft, summarizeDisputeChat, analyzeFraudRisk, RiskAlert, analyzeDocument, suggestNewCategories, CategorySuggestion, getAiModelRecommendations, AiModelRecommendation } from "../services/gemini";
 
 export default function AnyTraderAdmin() {
   const { user, profile } = useAuth();
@@ -65,6 +65,9 @@ export default function AnyTraderAdmin() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [searchLogs, setSearchLogs] = useState<any[]>([]);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [aiRecommendations, setAiRecommendations] = useState<AiModelRecommendation[]>([]);
+  const [isGeneratingAiRecs, setIsGeneratingAiRecs] = useState(false);
+  const [showAiRecsModal, setShowAiRecsModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState(initialTab === "jobs" ? "emergency" : "all");
   const [isUsersExpanded, setIsUsersExpanded] = useState(false);
@@ -1296,6 +1299,37 @@ export default function AnyTraderAdmin() {
     }
   };
 
+  const dismissAiBudgetAlert = async () => {
+    if (!platformConfig) return;
+    try {
+      await updateDoc(doc(db, "platform_config", "global"), {
+        aiBudgetAlertDismissedAt: serverTimestamp()
+      });
+    } catch(err) {
+      console.error("Error dismissing AI budget alert:", err);
+    }
+  };
+
+  const handleGenerateAiRecommendations = async () => {
+    setIsGeneratingAiRecs(true);
+    setShowAiRecsModal(true);
+    try {
+      const recs = await getAiModelRecommendations();
+      setAiRecommendations(recs);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate AI recommendations");
+    } finally {
+      setIsGeneratingAiRecs(false);
+    }
+  };
+
+  const applyAiModel = async (modelId: string) => {
+    setTempConfig({...tempConfig, aiModel: modelId});
+    setShowAiRecsModal(false);
+    toast.success("AI Model Selected. Don't forget to save platform configuration!");
+  };
+
   const syncWithUnifiedPricing = () => {
     if (!tempConfig) return;
     const unifiedConfig = {
@@ -1449,6 +1483,47 @@ export default function AnyTraderAdmin() {
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20 sm:pb-8">
       <div className="max-w-7xl mx-auto p-3 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+        
+        {/* AI Budget Alert Banner */}
+        {platformConfig?.aiBudgetEnabled && platformConfig?.aiCurrentSpend >= platformConfig?.aiBudgetLimit * 0.9 && !platformConfig?.aiBudgetAlertDismissedAt && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-red-600 text-white p-4 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl shadow-red-200 border-2 border-red-500/50"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6 animate-pulse" />
+              </div>
+              <div className="text-center sm:text-left">
+                <p className="font-black text-lg">AI Budget Limit Warning</p>
+                <p className="text-xs opacity-90 font-medium">
+                  We have reached {((platformConfig?.aiCurrentSpend / platformConfig?.aiBudgetLimit) * 100).toFixed(1)}% of the AI platform monthly budget (£{platformConfig?.aiBudgetLimit}). Service may be degraded if limit is exceeded.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <button 
+                onClick={() => {
+                  setActiveTab("settings");
+                  setTimeout(() => {
+                    document.getElementById('ai-model-control')?.scrollIntoView({ behavior: 'smooth' });
+                  }, 100);
+                }}
+                className="bg-white text-red-600 px-6 py-3 rounded-2xl font-black text-xs hover:bg-red-50 transition-all shadow-md active:scale-95 text-center"
+              >
+                Manage AI Settings
+              </button>
+              <button 
+                onClick={dismissAiBudgetAlert}
+                className="bg-red-700 text-white px-6 py-3 rounded-2xl font-black text-xs hover:bg-red-800 transition-all shadow-md active:scale-95 text-center"
+              >
+                Dismiss Notice
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Marketplace Beta Mode Banner (Paywall Off) */}
         {platformConfig?.paywallEnabled === false && (
           <motion.div 
@@ -3310,8 +3385,8 @@ export default function AnyTraderAdmin() {
                 <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Tier Perks & Privilege Matrix</h4>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <AdminTierManager />
+              <div className="w-full">
+                <AdminTierManager modelsToShow={["one_off_trades"]} />
               </div>
             </section>
 
@@ -4406,8 +4481,99 @@ export default function AnyTraderAdmin() {
                     </div>
                   </div>
 
-              </div>
+                  {/* AI Global Settings */}
+                  <div id="ai-model-control" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 scroll-mt-20">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 px-1">
+                        <Cpu className="w-4 h-4" /> AI Platform Configuration
+                      </h4>
+                      <button
+                        onClick={handleGenerateAiRecommendations}
+                        disabled={isGeneratingAiRecs}
+                        className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {isGeneratingAiRecs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        Ask AI for Model Suggestions
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/50 space-y-4">
+                        <div>
+                          <label className="text-sm font-bold text-slate-900 block mb-2">Default Gemini Model</label>
+                          <select 
+                            value={tempConfig.aiModel || "gemini-2.5-flash"}
+                            onChange={(e) => setTempConfig({...tempConfig, aiModel: e.target.value})}
+                            className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
+                          >
+                            <option value="gemini-1.5-flash">Gemini 1.5 Flash (Legacy Fast)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Current Fast)</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced)</option>
+                            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (Beta)</option>
+                          </select>
+                          <p className="text-[10px] text-slate-500 mt-2">
+                            Controls the master language model for quoting, parsing, and moderation.
+                          </p>
+                        </div>
+                      </div>
 
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/50 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">AI Budget Tracker</p>
+                            <p className="text-[10px] text-slate-500">Alert admins when approaching cost limits</p>
+                          </div>
+                          <button 
+                            onClick={() => setTempConfig({...tempConfig, aiBudgetEnabled: !tempConfig.aiBudgetEnabled})}
+                            className={cn(
+                              "w-10 h-5 rounded-full relative transition-all",
+                              tempConfig.aiBudgetEnabled ? "bg-blue-600" : "bg-slate-200"
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all",
+                              tempConfig.aiBudgetEnabled ? "right-0.5" : "left-0.5"
+                            )} />
+                          </button>
+                        </div>
+
+                        {tempConfig.aiBudgetEnabled && (
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/50">
+                            <div>
+                              <label className="text-xs font-bold text-slate-700 block mb-1">Monthly Limit (£)</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">£</span>
+                                <input 
+                                  type="number"
+                                  placeholder="200"
+                                  value={tempConfig.aiBudgetLimit || ""}
+                                  onChange={(e) => setTempConfig({...tempConfig, aiBudgetLimit: Number(e.target.value)})}
+                                  className="w-full bg-white border-2 border-slate-200 rounded-xl py-2 pl-7 pr-3 text-sm focus:border-blue-500 outline-none transition-colors"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-700 block mb-1">Current Spend (£)</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">£</span>
+                                <input 
+                                  type="number"
+                                  placeholder="0"
+                                  value={tempConfig.aiCurrentSpend || ""}
+                                  onChange={(e) => setTempConfig({...tempConfig, aiCurrentSpend: Number(e.target.value)})}
+                                  className="w-full bg-white border-2 border-slate-200 rounded-xl py-2 pl-7 pr-3 text-sm focus:border-blue-500 outline-none transition-colors"
+                                />
+                              </div>
+                              <p className="text-[9px] text-slate-400 mt-1 pl-1">For demo: Sync manual API billing here.</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+              </div>
+              
               {/* Global Master Command Center */}
                   <div id="quick-actions" className="bg-white/95 backdrop-blur-2xl p-8 sm:p-10 rounded-[48px] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.1)] space-y-10 scroll-mt-20 border border-slate-200/60 overflow-hidden relative group">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
@@ -4782,6 +4948,98 @@ export default function AnyTraderAdmin() {
                 <X className="w-4 h-4" />
               </button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Recommendations Modal */}
+      <AnimatePresence>
+        {showAiRecsModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-xl border border-slate-100 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">AI Model Recommendations</h3>
+                    <p className="text-sm text-slate-500">Suggested configuration based on platform usage</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowAiRecsModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+              
+              {isGeneratingAiRecs ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-4">
+                  <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                  <p className="text-slate-500 text-sm font-bold animate-pulse">Analyzing platform workflows and AI usage patterns...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  {aiRecommendations.map((rec) => (
+                    <div key={rec.id} className={cn(
+                      "p-5 rounded-2xl border-2 flex flex-col h-full",
+                      rec.isRecommended ? "border-blue-500 bg-blue-50/30" : "border-slate-100 bg-white"
+                    )}>
+                      {rec.isRecommended && (
+                        <div className="bg-blue-500 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full self-start mb-3 inline-block">
+                          Recommended
+                        </div>
+                      )}
+                      <h4 className="text-lg font-bold text-slate-900 mb-1">{rec.name}</h4>
+                      <p className="text-xs text-slate-500 font-mono mb-4">{rec.id}</p>
+                      
+                      <div className="space-y-4 flex-1">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Capabilities</p>
+                          <p className="text-sm text-slate-700">{rec.capabilities}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cost Profile</p>
+                          <p className="text-sm text-slate-700">{rec.costEstimate}</p>
+                        </div>
+                        <div className="pt-4 border-t border-slate-100/50">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Why this model</p>
+                          <p className="text-sm text-slate-600 italic">"{rec.reason}"</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-6 pt-4 border-t border-slate-100 flex items-end">
+                        <button 
+                          onClick={() => applyAiModel(rec.id)}
+                          className={cn(
+                            "w-full py-3 rounded-xl font-bold transition-all",
+                            rec.id === tempConfig.aiModel 
+                              ? "bg-emerald-100 text-emerald-700 pointer-events-none" 
+                              : rec.isRecommended 
+                                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200" 
+                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          )}
+                        >
+                          {rec.id === tempConfig.aiModel ? "Currently Active" : "Select this model"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

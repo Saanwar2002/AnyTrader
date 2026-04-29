@@ -3,7 +3,7 @@ import {
   BarChart3, Map, Car, ClipboardList, DollarSign, Star, 
   Tag, Users, UserCircle, Settings, ShieldCheck, MapPin, 
   Activity, Calendar, ShieldAlert, Ticket, StarHalf, 
-  Megaphone, Gift, Link, Database, Lock, Search, Bell
+  Megaphone, Gift, Link, Database, Lock, Search, Bell, Award
 } from "lucide-react";
 import RidesCommandCenter from "./RidesCommandCenter";
 import AnyRideDashboard from "./anyride/AnyRideDashboard";
@@ -34,6 +34,7 @@ import AnyTraderIntegration from "./anyride/AnyTraderIntegration";
 import AdminUsers from "./anyride/AdminUsers";
 import AuditLog from "./anyride/AuditLog";
 import GlobalSettings from "./anyride/GlobalSettings";
+import AdminTierManager from "./AdminTierManager";
 
 const SIDEBAR_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, category: "Core" },
@@ -45,6 +46,7 @@ const SIDEBAR_ITEMS = [
   { id: "priority", label: "Priority Settings", icon: Star, category: "Financials" },
   { id: "pricing", label: "Pricing & Fares", icon: Tag, category: "Financials" },
   { id: "subscriptions", label: "Subscriptions & B2B", icon: StarHalf, category: "Financials" },
+  { id: "tiers", label: "Tiers, Perks & Privileges", icon: Star, category: "Financials" },
 
   { id: "drivers", label: "Drivers", icon: Users, category: "Users" },
   { id: "riders", label: "Riders", icon: UserCircle, category: "Users" },
@@ -153,6 +155,14 @@ export default function AnyRideAdmin() {
              <PrioritySettings />
            ) : activeScreen === "subscriptions" ? (
              <SubscriptionManager />
+           ) : activeScreen === "tiers" ? (
+             <div className="p-8 h-full overflow-y-auto">
+               <div className="mb-6 space-y-1">
+                 <h2 className="text-xl font-bold text-slate-900">Perks & Privileges Matrix</h2>
+                 <p className="text-slate-500">Manage global limits, pricing, and capabilities for taxi drivers.</p>
+               </div>
+               <AdminTierManager modelsToShow={["on_demand_transport"]} />
+             </div>
            ) : activeScreen === "pricing" ? (
              <PricingFares />
            ) : activeScreen === "vehicles" ? (

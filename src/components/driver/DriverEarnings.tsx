@@ -57,20 +57,37 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     if (!user) return;
 
-    // Listen to Taxi Command Settings (platform_config/rides)
+    // Listen to Global Tiers for Commission
+    const unsubGlobalTiers = onSnapshot(
+      doc(db, "platform_config", "global_tiers"),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const taxiTier = data?.providerModels?.on_demand_transport?.tiers?.STANDARD;
+          if (taxiTier?.commission !== undefined) {
+             setFareConfig(prev => ({
+               ...prev,
+               commissionRate: taxiTier.commission
+             }));
+          }
+        }
+      }
+    );
+
+    // Listen to Taxi Command Settings for fares
     const unsubConfig = onSnapshot(
       doc(db, "platform_config", "rides"),
       (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setFareConfig({
+          setFareConfig(prev => ({
+            ...prev,
             baseFare: Number(data.baseFare) || 3.5,
             distanceRate: Number(data.distanceRate) || 1.3,
             minFare: Number(data.minFare) || 5.0,
-            commissionRate: data.commission
-              ? Number(data.commission) / 100
-              : 0.12,
-          });
+            // Keep commission from global_tiers if loaded, or fallback
+            commissionRate: prev.commissionRate || (data.commission ? Number(data.commission) / 100 : 0.12)
+          }));
         }
       },
     );
@@ -188,6 +205,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
     fetchBalance();
 
     return () => {
+      unsubGlobalTiers();
       unsubConfig();
       unsubMetrics();
       unsubTrips();

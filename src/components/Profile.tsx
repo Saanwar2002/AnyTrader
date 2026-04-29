@@ -261,6 +261,7 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [globalTiers, setGlobalTiers] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
@@ -289,6 +290,56 @@ export default function Profile() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  const activeTiers = React.useMemo(() => {
+    if (!platformConfig) return [];
+    if (profile?.role === "homeowner") {
+      if (globalTiers?.providerModels?.homeowners?.tiers) {
+        return Object.entries(globalTiers.providerModels.homeowners.tiers).map(([k, v]: [string, any]) => ({
+          name: k,
+          price: v.price || 0,
+          description: v.description,
+          maxQuotes: v.maxQuotes || 0,
+          maxAcceptedQuotes: v.maxAcceptedQuotes || 0,
+          commission: (v.commission || 0) * 100,
+          limitPeriod: "monthly",
+          leadFee: v.leadFee || 0,
+          includesRecommendation: k.toLowerCase() === "business"
+        })).sort((a,b) => a.price - b.price);
+      }
+      return platformConfig.businessTiers || [];
+    } else if (profile?.role === "driver") {
+      if (globalTiers?.providerModels?.on_demand_transport?.tiers) {
+        return Object.entries(globalTiers.providerModels.on_demand_transport.tiers).map(([k, v]: [string, any]) => ({
+          name: k,
+          price: v.price || 0,
+          description: v.description,
+          maxQuotes: v.maxQuotes || 9999,
+          maxAcceptedQuotes: v.maxAcceptedQuotes || 9999,
+          commission: (v.commission || 0) * 100,
+          limitPeriod: "monthly",
+          leadFee: v.leadFee || 0,
+          includesRecommendation: false
+        })).sort((a,b) => a.price - b.price);
+      }
+      return [];
+    } else {
+      if (globalTiers?.providerModels?.one_off_trades?.tiers) {
+        return Object.entries(globalTiers.providerModels.one_off_trades.tiers).map(([k, v]: [string, any]) => ({
+          name: k,
+          price: v.price || 0,
+          description: v.description,
+          maxQuotes: v.maxQuotes || 10,
+          maxAcceptedQuotes: v.maxAcceptedQuotes || 2,
+          commission: (v.commission || 0) * 100, // ui expects whole numbers
+          limitPeriod: "monthly",
+          leadFee: v.leadFee || 0,
+          includesRecommendation: k.toLowerCase() === "pro"
+        })).sort((a,b) => a.price - b.price);
+      }
+      return platformConfig.feeTiers || [];
+    }
+  }, [profile?.role, platformConfig, globalTiers]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -448,7 +499,15 @@ export default function Profile() {
         setPlatformConfig(doc.data());
       }
     });
-    return () => unsubConfig();
+    const unsubTiers = onSnapshot(doc(db, "platform_config", "global_tiers"), (doc) => {
+      if (doc.exists()) {
+        setGlobalTiers(doc.data());
+      }
+    });
+    return () => {
+      unsubConfig();
+      unsubTiers();
+    };
   }, []);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -921,19 +980,24 @@ export default function Profile() {
         const nextBillingDate = new Date();
         nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
 
+        const tierField = profile.role === "homeowner" ? "homeownerTierId" : "tierId";
+        const statusField = profile.role === "homeowner" ? "homeownerSubscriptionStatus" : "subscriptionStatus";
+        const periodEndField = profile.role === "homeowner" ? "homeownerCurrentPeriodEnd" : "currentPeriodEnd";
+        const cancelField = profile.role === "homeowner" ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
+
         await updateDoc(doc(db, "users", user.uid), { 
-          tierId: showCheckoutForTier.name,
-          subscriptionStatus: 'trialing',
-          currentPeriodEnd: nextBillingDate.toISOString(),
-          cancelAtPeriodEnd: false
+          [tierField]: showCheckoutForTier.name,
+          [statusField]: 'trialing',
+          [periodEndField]: nextBillingDate.toISOString(),
+          [cancelField]: false
         });
         
         setProfile((prev: any) => ({ 
           ...prev, 
-          tierId: showCheckoutForTier.name,
-          subscriptionStatus: 'trialing',
-          currentPeriodEnd: nextBillingDate.toISOString(),
-          cancelAtPeriodEnd: false
+          [tierField]: showCheckoutForTier.name,
+          [statusField]: 'trialing',
+          [periodEndField]: nextBillingDate.toISOString(),
+          [cancelField]: false
         }));
         
         setShowCheckoutForTier(null);
@@ -949,15 +1013,22 @@ export default function Profile() {
   const handleCancelSubscription = async () => {
     if (!user || !confirm("Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing cycle.")) return;
     
+    const cancelField = profile.role === "homeowner" ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
+
     try {
       await updateDoc(doc(db, "users", user.uid), { 
-        cancelAtPeriodEnd: true
+        [cancelField]: true
       });
-      setProfile((prev: any) => ({ ...prev, cancelAtPeriodEnd: true }));
+      setProfile((prev: any) => ({ ...prev, [cancelField]: true }));
     } catch (err) {
       console.error("Error canceling subscription:", err);
     }
   };
+
+  const currentRoleTierId = profile.role === "homeowner" ? (profile.homeownerTierId || "Standard Homeowner") : (profile.tierId || "Free Explorer");
+  const currentRoleSubscriptionStatus = profile.role === "homeowner" ? profile.homeownerSubscriptionStatus : profile.subscriptionStatus;
+  const currentRoleCancelAtPeriodEnd = profile.role === "homeowner" ? profile.homeownerCancelAtPeriodEnd : profile.cancelAtPeriodEnd;
+  const currentRoleCurrentPeriodEnd = profile.role === "homeowner" ? profile.homeownerCurrentPeriodEnd : profile.currentPeriodEnd;
 
   return (
     <div id="account" className="max-w-2xl mx-auto pb-24 px-4">
@@ -1078,23 +1149,23 @@ export default function Profile() {
               </div>
             </div>
             <div id="tier-badge" className="px-3 py-1 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-              {profile.tierId || (profile.role === "homeowner" ? "Standard Homeowner" : "Free Explorer")}
-              {profile.subscriptionStatus === 'active' && !profile.cancelAtPeriodEnd && (
+              {currentRoleTierId}
+              {currentRoleSubscriptionStatus === 'active' && !currentRoleCancelAtPeriodEnd && (
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="Active Subscription" />
               )}
             </div>
           </div>
 
-          {profile.subscriptionStatus === 'active' && profile.currentPeriodEnd && (
+          {currentRoleSubscriptionStatus === 'active' && currentRoleCurrentPeriodEnd && (
             <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-blue-900">Next Billing Date</p>
                 <p className="text-[10px] text-blue-700">
-                  {new Date(profile.currentPeriodEnd).toLocaleDateString()}
-                  {profile.cancelAtPeriodEnd && " (Cancels at end of period)"}
+                  {new Date(currentRoleCurrentPeriodEnd).toLocaleDateString()}
+                  {currentRoleCancelAtPeriodEnd && " (Cancels at end of period)"}
                 </p>
               </div>
-              {!profile.cancelAtPeriodEnd && (
+              {!currentRoleCancelAtPeriodEnd && (
                 <button 
                   onClick={handleCancelSubscription}
                   className="text-[10px] font-bold text-red-600 hover:text-red-700 underline"
@@ -1106,11 +1177,11 @@ export default function Profile() {
           )}
 
           <div className="grid grid-cols-1 gap-3">
-            {(profile.role === "homeowner" ? (platformConfig.businessTiers || []) : (platformConfig.feeTiers || [])).map((tier: any) => (
+            {activeTiers.map((tier: any) => (
               <button
                 key={tier.name}
                 onClick={() => {
-                  if (profile.tierId === tier.name) return;
+                  if (currentRoleTierId === tier.name) return;
                   if (tier.price > 0) {
                     setShowCheckoutForTier(tier);
                   } else {
@@ -1123,7 +1194,7 @@ export default function Profile() {
                 }}
                 className={cn(
                   "w-full p-4 rounded-2xl border text-left transition-all relative group",
-                  profile.tierId === tier.name ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/10" : "border-slate-100 hover:border-slate-200 bg-white"
+                  currentRoleTierId === tier.name ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/10" : "border-slate-100 hover:border-slate-200 bg-white"
                 )}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -1174,7 +1245,7 @@ export default function Profile() {
                   )}
                 </div>
                 
-                {profile.role === "tradesperson" && profile.tierId === tier.name && (
+                {profile.role === "tradesperson" && currentRoleTierId === tier.name && (
                   <div className="space-y-3 pt-4 border-t border-slate-100">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-bold">
@@ -1207,7 +1278,7 @@ export default function Profile() {
                   </div>
                 )}
 
-                {profile.tierId === tier.name && (
+                {currentRoleTierId === tier.name && (
                   <div className="absolute top-2 right-2">
                     <CheckCircle2 className="w-4 h-4 text-blue-600" />
                   </div>

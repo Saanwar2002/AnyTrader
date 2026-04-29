@@ -25,6 +25,7 @@ export default function BillingManager() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [globalTiers, setGlobalTiers] = useState<any>(null);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [savedCards, setSavedCards] = useState([
@@ -32,13 +33,21 @@ export default function BillingManager() {
   ]);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
+    const unsubGlobal = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
       if (doc.exists()) {
         setPlatformConfig(doc.data());
       }
+    });
+    const unsubTiers = onSnapshot(doc(db, "platform_config", "global_tiers"), (doc) => {
+      if (doc.exists()) {
+        setGlobalTiers(doc.data());
+      }
       setLoading(false);
     });
-    return () => unsub();
+    return () => {
+      unsubGlobal();
+      unsubTiers();
+    };
   }, []);
 
   const handleSelectPlan = async (tier: SubscriptionTier) => {
@@ -164,37 +173,53 @@ export default function BillingManager() {
 
   const isFounding = profile?.isFoundingMember;
 
-  // Phase 2 Tiers
-  const standardTiers: SubscriptionTier[] = [
-    {
-      id: "price_payg",
-      name: "Standard PAYG",
-      price: 0,
-      commission: 15,
-      description: "Pay only when you win. Zero risk.",
-      features: [
-        "Unlimited Lead Browsing",
-        "Up to 5 Open Quotes",
-        "15% Platform Success Fee",
-        "Standard Profile Visibility"
-      ]
-    },
-    {
-      id: "price_pro",
-      name: "PRO Trader",
-      price: 19.99,
-      commission: 10,
-      description: "Built for active professionals.",
-      isPopular: true,
-      features: [
-        "Priority Lead Alerts",
-        "Unlimited Open Quotes",
-        "Reduced 10% Success Fee",
-        "Enhanced Verification Badge",
-        "AI Material List Assistant"
-      ]
-    }
-  ];
+  // Phase 2 Tiers directly mapped from Firestore
+  let standardTiers: SubscriptionTier[] = [];
+  
+  if (globalTiers?.providerModels?.one_off_trades?.tiers) {
+    const rawTiers = globalTiers.providerModels.one_off_trades.tiers;
+    standardTiers = Object.entries(rawTiers).map(([tierKey, tier]: [string, any]) => ({
+      id: `price_${tierKey.toLowerCase()}`,
+      name: tierKey,
+      price: tier.price || 0,
+      commission: (tier.commission || 0) * 100, // DB stores as 0.1, UI expects 10 
+      description: tier.description || "",
+      features: tier.features || [],
+      isPopular: tierKey.toLowerCase() === "pro"
+    })).sort((a, b) => a.price - b.price);
+  } else {
+    // Fallback if not configured in DB yet
+    standardTiers = [
+      {
+        id: "price_payg",
+        name: "Standard PAYG",
+        price: 0,
+        commission: 15,
+        description: "Pay only when you win. Zero risk.",
+        features: [
+          "Unlimited Lead Browsing",
+          "Up to 5 Open Quotes",
+          "15% Platform Success Fee",
+          "Standard Profile Visibility"
+        ]
+      },
+      {
+        id: "price_pro",
+        name: "PRO Trader",
+        price: 19.99,
+        commission: 10,
+        description: "Built for active professionals.",
+        isPopular: true,
+        features: [
+          "Priority Lead Alerts",
+          "Unlimited Open Quotes",
+          "Reduced 10% Success Fee",
+          "Enhanced Verification Badge",
+          "AI Material List Assistant"
+        ]
+      }
+    ];
+  }
 
   // Modified Tiers for Founding Members
   const foundingTiers = standardTiers.map(t => {
