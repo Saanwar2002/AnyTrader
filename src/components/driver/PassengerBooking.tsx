@@ -29,6 +29,41 @@ const defaultCenter = {
   lng: -0.1554
 };
 
+const formatAddressLines = (address: string) => {
+  if (!address) return <span className="block truncate">{address}</span>;
+  
+  const ukPostcodeRegex = /([A-Z]{1,2}[0-9R][0-9A-Z]?\s?[0-9][A-Z]{2})/i;
+  let cleanAddress = address.replace(/,?\s*(UK|United Kingdom)$/i, '');
+  
+  let postcode = "";
+  const match = cleanAddress.match(ukPostcodeRegex);
+  if (match) {
+    postcode = match[1];
+    cleanAddress = cleanAddress.replace(match[1], '').trim();
+  }
+  
+  cleanAddress = cleanAddress.replace(/,\s*$/, '').trim();
+  const cparts = cleanAddress.split(',').map(p => p.trim()).filter(Boolean);
+  
+  let cityStr = "";
+  let streetStr = "";
+  
+  if (cparts.length >= 2) {
+     cityStr = cparts[cparts.length - 1];
+     streetStr = cparts.slice(0, cparts.length - 1).join(', ');
+  } else {
+     streetStr = cparts[0] || '';
+  }
+  
+  return (
+    <>
+      {streetStr && <span className="block truncate">{streetStr}</span>}
+      {cityStr && <span className="block truncate">{cityStr}</span>}
+      {postcode && <span className="block truncate uppercase">{postcode}</span>}
+    </>
+  );
+};
+
 const mapOptions: google.maps.MapOptions = {
   disableDefaultUI: false,
   zoomControl: true,
@@ -1138,9 +1173,11 @@ export default function PassengerBooking() {
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                   getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
                 >
-                  <div className="bg-emerald-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-emerald-200 min-w-[80px] max-w-[180px] pointer-events-auto">
-                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.1em] mb-0.5">Pickup</p>
-                    <p className="text-[10px] font-bold text-emerald-950 leading-tight line-clamp-3">{pickup}</p>
+                  <div className="bg-emerald-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-emerald-200 min-w-[120px] max-w-[200px] pointer-events-auto">
+                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.1em] mb-1">Pickup</p>
+                    <div className="text-[10px] font-bold text-emerald-950 leading-tight space-y-0.5">
+                      {formatAddressLines(pickup)}
+                    </div>
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-50 border-r border-b border-emerald-200 rotate-45 -mt-1" />
                   </div>
                 </OverlayViewF>
@@ -1154,9 +1191,11 @@ export default function PassengerBooking() {
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                   getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
                 >
-                  <div className="bg-rose-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-rose-200 min-w-[80px] max-w-[180px] pointer-events-auto">
-                    <p className="text-[8px] font-black text-rose-600 uppercase tracking-[0.1em] mb-0.5">Dropoff</p>
-                    <p className="text-[10px] font-bold text-rose-950 leading-tight line-clamp-3">{dropoff}</p>
+                  <div className="bg-rose-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-rose-200 min-w-[120px] max-w-[200px] pointer-events-auto">
+                    <p className="text-[8px] font-black text-rose-600 uppercase tracking-[0.1em] mb-1">Dropoff</p>
+                    <div className="text-[10px] font-bold text-rose-950 leading-tight space-y-0.5">
+                      {formatAddressLines(dropoff)}
+                    </div>
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-rose-50 border-r border-b border-rose-200 rotate-45 -mt-1" />
                   </div>
                 </OverlayViewF>
@@ -1170,9 +1209,11 @@ export default function PassengerBooking() {
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                   getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
                 >
-                  <div className="bg-amber-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-amber-200 min-w-[80px] max-w-[180px] pointer-events-auto">
-                    <p className="text-[8px] font-black text-amber-600 uppercase tracking-[0.1em] mb-0.5">Stop {i+1}</p>
-                    <p className="text-[10px] font-bold text-amber-950 leading-tight line-clamp-3">{s.address}</p>
+                  <div className="bg-amber-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-amber-200 min-w-[120px] max-w-[200px] pointer-events-auto">
+                    <p className="text-[8px] font-black text-amber-600 uppercase tracking-[0.1em] mb-1">Stop {i+1}</p>
+                    <div className="text-[10px] font-bold text-amber-950 leading-tight space-y-0.5">
+                      {formatAddressLines(s.address)}
+                    </div>
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-50 border-r border-b border-amber-200 rotate-45 -mt-1" />
                   </div>
                 </OverlayViewF>
