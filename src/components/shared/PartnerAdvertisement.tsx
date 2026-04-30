@@ -13,13 +13,24 @@ const iconMap: Record<string, any> = {
 
 const DEFAULT_PARTNER_ADVERTS = [
   {
+    id: "default-trader-1",
+    title: "Elite Pro Plumbing 24/7",
+    description: "Top-rated emergency plumber in your area. Book now!",
+    url: "#",
+    bgColor: "bg-slate-900",
+    iconName: "Zap",
+    targetRole: "all",
+    type: "trader_promo"
+  },
+  {
     id: "default-1",
     title: "Toolstation Next Day Delivery",
     description: "Get 10% off your first Trade Account order",
     url: "https://www.toolstation.com",
     bgColor: "bg-blue-600",
     iconName: "Briefcase",
-    targetRole: "all"
+    targetRole: "all",
+    type: "partner"
   },
   {
     id: "default-2",
@@ -28,7 +39,8 @@ const DEFAULT_PARTNER_ADVERTS = [
     url: "https://www.screwfix.com",
     bgColor: "bg-red-600",
     iconName: "Zap",
-    targetRole: "all"
+    targetRole: "all",
+    type: "partner"
   },
   {
     id: "default-3",
@@ -37,7 +49,8 @@ const DEFAULT_PARTNER_ADVERTS = [
     url: "https://www.selcobw.com",
     bgColor: "bg-emerald-600",
     iconName: "ShieldCheck",
-    targetRole: "all"
+    targetRole: "all",
+    type: "partner"
   }
 ];
 
