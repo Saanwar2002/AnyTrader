@@ -18,6 +18,7 @@ import Conversations from "./components/Conversations";
 import Notifications from "./components/Notifications";
 import Dashboard from "./components/Dashboard";
 import TradesDashboard from "./components/TradesDashboard";
+import ReferralTracker, { RefRedirect } from "./components/shared/ReferralTracker";
 import BusinessDashboard from "./components/BusinessDashboard";
 import JobFeed from "./components/JobFeed";
 import JobDetails from "./components/JobDetails";
@@ -42,6 +43,7 @@ import { PlusCircle, Briefcase, MessageSquare, User as UserIcon, Bell, ChevronRi
 import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "@/src/firebase";
 
 import DriverTerminal from "./components/driver/DriverTerminal";
+import PassengerBooking from "./components/driver/PassengerBooking";
 import RideDashboardLayout from "./components/driver/RideDashboardLayout";
 import DriverEarnings from "./components/driver/DriverEarnings";
 import DriverInbox from "./components/driver/DriverInbox";
@@ -157,11 +159,13 @@ export default function App() {
     <CategoryProvider>
       <Toaster position="top-center" richColors />
       <BrowserRouter>
+        <ReferralTracker />
         <PortalProvider>
           <PlatformSwitcher />
           <RecurringJobManager />
           <ReviewReminder />
           <Routes>
+            <Route path="/ref/:code" element={<RefRedirect />} />
             <Route path="/ad-report/:id" element={<AdReport />} />
             <Route path="/ad-studio" element={<TraderAdStudio />} />
           {!user ? (
@@ -202,7 +206,7 @@ export default function App() {
                 
                 {/* AnyRide specific routes inside Layout */}
                 <Route path="driver-terminal" element={<DriverTerminal />} />
-                <Route path="book-ride" element={<RideDashboardLayout />} />
+                <Route path="book-ride" element={<PassengerBooking />} />
                 <Route path="my-rides" element={<MyRides />} />
                 <Route path="saved-journeys" element={<SavedJourneys />} />
 

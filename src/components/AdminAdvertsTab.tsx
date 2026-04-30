@@ -44,14 +44,35 @@ export default function AdminAdvertsTab() {
   const [statusFilter, setStatusFilter] = useState("all"); // all, active, inactive
   const [targetFilter, setTargetFilter] = useState("all"); // all, tradesperson, homeowner
 
+  // Master Control
+  const [isBannerAdsEnabled, setIsBannerAdsEnabled] = useState(true);
+
   useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, "platform_config", "advertising"), (doc) => {
+      if (doc.exists()) {
+        setIsBannerAdsEnabled(doc.data().isBannerAdsEnabled !== false);
+      }
+    });
+
     const q = query(collection(db, "advertisements"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsubAds = onSnapshot(q, (snapshot) => {
       setAdverts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setIsLoading(false);
     });
-    return unsub;
+
+    return () => {
+      unsubConfig();
+      unsubAds();
+    };
   }, []);
+
+  const toggleMasterAdSwitch = async (enabled: boolean) => {
+    try {
+      await setDoc(doc(db, "platform_config", "advertising"), { isBannerAdsEnabled: enabled }, { merge: true });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const openNewModal = () => {
     setTitle("");
@@ -162,9 +183,24 @@ export default function AdminAdvertsTab() {
           <h2 className="text-xl font-bold text-slate-900">Traders Banner Ad Studio</h2>
           <p className="text-sm text-slate-500">Manage banner ads submitted by traders or create internal partner campaigns.</p>
         </div>
-        <button onClick={openNewModal} className="bg-blue-600 text-white px-4 h-10 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shrink-0">
-          <Plus className="w-4 h-4" /> New Advert
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors">
+            <div className="relative">
+              <input 
+                type="checkbox" 
+                className="sr-only" 
+                checked={isBannerAdsEnabled} 
+                onChange={(e) => toggleMasterAdSwitch(e.target.checked)} 
+              />
+              <div className={cn("w-10 h-6   rounded-full transition", isBannerAdsEnabled ? "bg-amber-500" : "bg-slate-300")}></div>
+              <div className={cn("w-4 h-4 rounded-full bg-white absolute top-1 left-1 transition-transform", isBannerAdsEnabled ? "translate-x-4" : "")}></div>
+            </div>
+            <span className="text-sm font-bold text-slate-700">Master Banner Toggle</span>
+          </label>
+          <button onClick={openNewModal} className="bg-blue-600 text-white px-4 h-10 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shrink-0">
+            <Plus className="w-4 h-4" /> New Advert
+          </button>
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">

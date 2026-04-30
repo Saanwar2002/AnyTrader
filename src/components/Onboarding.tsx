@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { useSearchParams } from "react-router-dom";
-import { db, doc, setDoc, serverTimestamp, handleFirestoreError, OperationType, collection, query, where, getDocs, updateDoc, onSnapshot, auth, logout } from "@/src/firebase";
+import { db, doc, setDoc, serverTimestamp, handleFirestoreError, OperationType, collection, query, where, getDocs, updateDoc, onSnapshot, auth, logout, increment } from "@/src/firebase";
 import { RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
 import { motion } from "motion/react";
 import { User, Briefcase, Loader2, MapPin, Shield, CheckCircle2, ChevronRight, ChevronLeft, Upload, AlertCircle, Info, PoundSterling, Award, Gift, Home, Building2, Star } from "lucide-react";
@@ -253,12 +253,48 @@ export default function Onboarding() {
 
       // Check for referral
       let referrerUid = null;
+      let appliedAffiliateCode = null;
       const refCode = searchParams.get("ref");
-      if (refCode) {
-        const q = query(collection(db, "users"), where("referralCode", "==", refCode));
+      
+      const checkReferral = async (codeToTest: string) => {
+        if (!codeToTest) return false;
+        
+        // 1. Check Affiliates / Influencers first
+        const affiliateQ = query(collection(db, "affiliates"), where("code", "==", codeToTest.toLowerCase()));
+        const affiliateSnap = await getDocs(affiliateQ);
+        if (!affiliateSnap.empty) {
+          appliedAffiliateCode = affiliateSnap.docs[0].id;
+          return true;
+        }
+
+        // 2. Check traditional user-to-user referrals
+        const q = query(collection(db, "users"), where("referralCode", "==", codeToTest));
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
           referrerUid = snapshot.docs[0].id;
+          return true;
+        }
+        return false;
+      };
+
+      let foundRef = false;
+      if (refCode) {
+        foundRef = await checkReferral(refCode);
+      }
+      
+      if (!foundRef) {
+        const storedRef = localStorage.getItem("anytrader_referral");
+        if (storedRef) {
+          try {
+            const parsed = JSON.parse(storedRef);
+            if (parsed.expiresAt > Date.now()) {
+              foundRef = await checkReferral(parsed.code);
+            } else {
+              localStorage.removeItem("anytrader_referral");
+            }
+          } catch (e) {
+            console.error(e);
+          }
         }
       }
 
@@ -330,6 +366,7 @@ export default function Onboarding() {
         isPetFriendly: finalRole === "fleet_driver" ? isPetFriendly : false,
         referralCode: user.uid.slice(0, 8).toUpperCase(), // Generate a simple referral code
         referredBy: referrerUid,
+        affiliateId: appliedAffiliateCode,
         verificationStatus: uniqueRequiredCerts.length > 0 ? "pending" : "unverified",
         verificationDocs: verificationDocs.map(d => ({
           type: d.type,
@@ -357,6 +394,16 @@ export default function Onboarding() {
           acceptedAt: serverTimestamp()
         });
         console.log("Invitation updated");
+      }
+
+      if (appliedAffiliateCode) {
+        try {
+          await updateDoc(doc(db, "affiliates", appliedAffiliateCode), {
+            uses: increment(1)
+          });
+        } catch (e) {
+          console.error("Failed to increment affiliate uses:", e);
+        }
       }
 
       console.log("Profile saved successfully.");

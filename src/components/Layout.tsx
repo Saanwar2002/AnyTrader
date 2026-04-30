@@ -717,7 +717,7 @@ export default function Layout() {
       {/* Main Content */}
       <main className={cn(
         "flex-1 w-full relative min-h-0",
-        isDriverTerminal ? "pb-60 p-0 h-[100dvh] flex flex-col overflow-hidden" : (activePortal === 'anyride' ? "pb-60 sm:pb-6 p-0 h-[100dvh] flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 pt-4 pb-60 sm:pb-6")
+        isDriverTerminal ? "p-0 flex flex-col overflow-hidden" : (activePortal === 'anyride' ? "p-0 flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
       )}>
         <Outlet />
       </main>

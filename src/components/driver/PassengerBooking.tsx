@@ -1352,7 +1352,7 @@ export default function PassengerBooking() {
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                className="bg-card rounded-t-[32px] shadow-2xl pointer-events-auto flex flex-col max-h-[55vh] w-full border-t border-border-main pb-[calc(4rem+env(safe-area-inset-bottom))] overflow-hidden"
+                className="bg-card rounded-t-[32px] shadow-2xl pointer-events-auto flex flex-col max-h-[75vh] w-full border-t border-border-main overflow-hidden pb-4"
               >
                 {detailsView === "address" && (
                     <button onClick={toggleListening} disabled={isAiProcessing} className="w-full bg-slate-900 border-b border-white/10 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-1 px-4 flex items-center justify-center gap-1.5 font-bold shadow-sm active:scale-95 transition-all text-[11px] uppercase tracking-wider shrink-0 z-10 relative rounded-none h-8">
@@ -1376,7 +1376,7 @@ export default function PassengerBooking() {
                     </button>
                 )}
                 
-                <div ref={bottomSheetRef} className={cn("p-4 overflow-x-hidden overflow-y-auto space-y-4 no-scrollbar flex-1", detailsView === "address" ? "pt-2" : "pt-4")}>
+                <div ref={bottomSheetRef} className={cn("p-4 overflow-x-hidden overflow-y-auto space-y-4 no-scrollbar pb-[calc(5rem+env(safe-area-inset-bottom))]", detailsView === "address" ? "pt-2" : "pt-4")}>
                   {detailsView === "address" ? (
                     <>
                       <div className="bg-surface rounded-3xl p-2 pb-3 border border-border-main shadow-sm mb-4 shrink-0">
@@ -1416,28 +1416,30 @@ export default function PassengerBooking() {
                             </button>
                           </div>
                         </div>
-                      </div>
-                      
-                      <AnimatePresence>
-                        {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
-                            {suggestions.map((s, idx) => (
-                              <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
-                                {s.isHistory ? 
-                                  <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
-                                  <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
-                                }
-                                <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
-                              </button>
-                            ))}
-                            {suggestions.length === 0 && isLoadingAddress && (
-                              <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+
+                        <AnimatePresence>
+                          {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 top-full mt-1 overflow-hidden rounded-2xl shadow-xl border border-slate-200 bg-white">
+                              <div className="text-sm max-h-48 overflow-y-auto">
+                              {suggestions.map((s, idx) => (
+                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 last:border-b-0">
+                                  {s.isHistory ? 
+                                    <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
+                                    <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
+                                  }
+                                  <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                </button>
+                              ))}
+                              {suggestions.length === 0 && isLoadingAddress && (
+                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-b border-slate-200 bg-white">
+                                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                </div>
+                              )}
                               </div>
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
 
                       {/* Stops */}
                       {stops.map((stop, i) => (
@@ -1508,28 +1510,30 @@ export default function PassengerBooking() {
                             </div>
                           )}
                         </div>
-                      </div>
 
-                      <AnimatePresence>
-                        {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
-                              {suggestions.map((s, idx) => (
-                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
-                                  {s.isHistory ? 
-                                    <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
-                                    <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
-                                  }
-                                  <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
-                                </button>
-                              ))}
-                            {suggestions.length === 0 && isLoadingAddress && (
-                              <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                        <AnimatePresence>
+                          {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 top-full mt-1 overflow-hidden rounded-2xl shadow-xl border border-slate-200 bg-white">
+                              <div className="text-sm max-h-48 overflow-y-auto">
+                                {suggestions.map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 last:border-b-0">
+                                    {s.isHistory ? 
+                                      <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                      <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
+                                    }
+                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                  </button>
+                                ))}
+                                {suggestions.length === 0 && isLoadingAddress && (
+                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-b border-slate-200 bg-white">
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       
                       <div className="flex justify-between gap-1 py-2 mt-1 mx-2 sm:ml-6 sm:mx-0 pr-1 items-center">
                         <button 

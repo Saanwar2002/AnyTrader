@@ -15,12 +15,13 @@ import {
   Settings, Settings2, BarChart3, PieChart, DollarSign, Percent, Clock, MapPin, CreditCard,
   AlertCircle, Zap, Sparkles, ShieldAlert, ShieldCheck, RefreshCw, Medal,
   Plus, Edit2, Calendar, Award, Info, Key, Building2, Globe, Database, Download,
-  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag, Car, Cpu
+  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag, Car, Cpu, Link as LinkIcon
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import AdminTierManager from "./AdminTierManager";
 import GuestJobs from "./GuestJobs";
 import AdminAdvertsTab from "./AdminAdvertsTab";
+import AffiliatesManager from "./AffiliatesManager";
 import {  
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
@@ -1697,6 +1698,7 @@ export default function AnyTraderAdmin() {
               <TabButton active={activeTab === "verifications"} onClick={() => handleTabChange("verifications")} icon={<CheckCircle2 className="w-4 h-4" />} label="KYC" />
               <TabButton active={activeTab === "broadcast"} onClick={() => handleTabChange("broadcast")} icon={<Megaphone className="w-4 h-4" />} label="Broadcast" />
               <TabButton active={activeTab === "advertising"} onClick={() => handleTabChange("advertising")} icon={<Tag className="w-4 h-4" />} label="Banner Ads" />
+              <TabButton active={activeTab === "affiliates"} onClick={() => handleTabChange("affiliates")} icon={<LinkIcon className="w-4 h-4" />} label="Affiliates" />
               <TabButton active={activeTab === "settings"} onClick={() => handleTabChange("settings")} icon={<Settings className="w-4 h-4" />} label="Configs" />
               <TabButton active={activeTab === "categories"} onClick={() => handleTabChange("categories")} icon={<Tags className="w-4 h-4" />} label="Categories" />
               <TabButton active={activeTab === "logs"} onClick={() => handleTabChange("logs")} icon={<FileText className="w-4 h-4" />} label="Audit" />
@@ -3314,6 +3316,12 @@ export default function AnyTraderAdmin() {
         {activeTab === "advertising" && (
           <div className="p-6">
             <AdminAdvertsTab />
+          </div>
+        )}
+
+        {activeTab === "affiliates" && (
+          <div className="p-6">
+            <AffiliatesManager />
           </div>
         )}
 

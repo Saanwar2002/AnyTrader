@@ -59,6 +59,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
   const [adverts, setAdverts] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rotationSpeed, setRotationSpeed] = useState(5000);
+  const [isBannerAdsEnabled, setIsBannerAdsEnabled] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,6 +70,13 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
         if (config.adRotationSpeedSeconds) {
           setRotationSpeed(config.adRotationSpeedSeconds * 1000);
         }
+      }
+    });
+
+    const unsubAdConfig = onSnapshot(doc(db, "platform_config", "advertising"), (docSnapshot) => {
+      if (!isMounted) return;
+      if (docSnapshot.exists()) {
+        setIsBannerAdsEnabled(docSnapshot.data().isBannerAdsEnabled !== false);
       }
     });
 
@@ -97,6 +105,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
     return () => {
       isMounted = false;
       unsubConfig();
+      unsubAdConfig();
       unsubs();
     };
   }, [role, category]);
@@ -165,10 +174,15 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
     }
   };
 
+  if (!isBannerAdsEnabled) return null;
+
   return (
     <div className="mt-4 mb-6 relative group/banner">
-      <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-amber-500 rounded-[20px] blur opacity-20 group-hover/banner:opacity-40 transition duration-1000 group-hover/banner:duration-200"></div>
-      <div className="relative overflow-hidden rounded-2xl w-full h-20 sm:h-24 shadow-sm z-10 bg-slate-100 border border-white/40 ring-1 ring-slate-900/5">
+      {/* Animated Gradient Border Layer */}
+      <div className="absolute -inset-[2px] rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-amber-500 opacity-60 group-hover/banner:opacity-100 transition duration-500 shadow-[0_0_15px_rgba(168,85,247,0.4)] animate-pulse"></div>
+      
+      {/* Main Banner Container */}
+      <div className="relative overflow-hidden rounded-[14px] w-full h-20 sm:h-24 shadow-sm z-10 bg-slate-100 border border-white/40">
         <AnimatePresence>
           <motion.a
             key={ad.id}

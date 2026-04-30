@@ -232,6 +232,7 @@ export default function Profile() {
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isVerificationExpanded, setIsVerificationExpanded] = useState(false);
   const [isNotificationsExpanded, setIsNotificationsExpanded] = useState(false);
+  const [isBannerAdsEnabled, setIsBannerAdsEnabled] = useState(true);
   const [isEditingServices, setIsEditingServices] = useState(false);
   const [tempServices, setTempServices] = useState<string[]>([]);
   const [newService, setNewService] = useState("");
@@ -377,6 +378,15 @@ export default function Profile() {
       });
     }
   }, [isEditing, profile]);
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, "platform_config", "advertising"), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        setIsBannerAdsEnabled(docSnapshot.data().isBannerAdsEnabled !== false);
+      }
+    });
+    return () => unsubConfig();
+  }, []);
 
   useEffect(() => {
     if (profile?.role === "tradesperson" && user?.uid) {
@@ -925,7 +935,7 @@ export default function Profile() {
         { icon: CreditCard, label: "My Completed Quotes/Jobs", path: "/my-quotes?mode=completed" },
         { icon: BarChart3, label: "Job Analytics", path: "/analytics" },
         { icon: Calendar, label: "Availability Calendar", path: "/availability" },
-        { icon: Zap, label: "Traders Banner Ad Studio", path: "/trader/banner-ads" },
+        ...(isBannerAdsEnabled ? [{ icon: Zap, label: "Traders Banner Ad Studio", path: "/trader/banner-ads" }] : []),
       ]
     },
     {
@@ -1418,7 +1428,7 @@ export default function Profile() {
           </div>
         )}
 
-        {profile.role === "tradesperson" && (
+        {profile.role === "tradesperson" && isBannerAdsEnabled && (
           <div className="mt-8 border-t border-slate-100 pt-8">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Zap className="w-4 h-4" />
@@ -1430,7 +1440,7 @@ export default function Profile() {
                 <p className="text-blue-100 text-sm max-w-sm">Promote your profile natively across the platform. Set a budget, reach more homeowners, and track your ad performance down to the penny.</p>
               </div>
               <div className="relative z-10 shrink-0 w-full md:w-auto">
-                <Link to="/ad-studio" className="w-full md:w-auto bg-white text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-colors inline-block text-center shadow-lg">
+                <Link to="/trader/banner-ads" className="w-full md:w-auto bg-white text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-colors inline-block text-center shadow-lg">
                   Open Ad Studio
                 </Link>
               </div>
