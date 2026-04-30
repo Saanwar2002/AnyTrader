@@ -166,8 +166,9 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
   };
 
   return (
-    <div className="mt-4 mb-2 relative">
-      <div className="relative overflow-hidden rounded-2xl w-full h-20 sm:h-24 group/container shadow-sm z-10 bg-slate-100">
+    <div className="mt-4 mb-6 relative group/banner">
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-amber-500 rounded-[20px] blur opacity-20 group-hover/banner:opacity-40 transition duration-1000 group-hover/banner:duration-200"></div>
+      <div className="relative overflow-hidden rounded-2xl w-full h-20 sm:h-24 shadow-sm z-10 bg-slate-100 border border-white/40 ring-1 ring-slate-900/5">
         <AnimatePresence>
           <motion.a
             key={ad.id}
@@ -182,20 +183,26 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
             className={cn(
               "absolute inset-0 group text-white disabled cursor-pointer overflow-hidden flex items-stretch",
               ad.imageUrl ? "" : "flex items-center gap-4 p-4 sm:p-5",
-              !ad.imageUrl && ad.bgColor?.startsWith("bg-") ? ad.bgColor : undefined
+              !ad.imageUrl && ad.bgColor?.startsWith("bg-") ? ad.bgColor : undefined,
+              ad.type === "trader_promo" ? "bg-gradient-to-br from-slate-900 to-slate-800" : ""
             )}
-            style={{ backgroundColor: !ad.imageUrl && ad.bgColor && !ad.bgColor.startsWith("bg-") ? ad.bgColor : undefined }}
+            style={{ backgroundColor: !ad.imageUrl && ad.bgColor && !ad.bgColor.startsWith("bg-") && ad.type !== "trader_promo" ? ad.bgColor : undefined }}
           >
+            {/* Ad Badge */}
+            <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-black text-white/90 uppercase tracking-widest z-20 border border-white/20">
+              Ad
+            </div>
+
             {ad.imageUrl ? (
               <img src={ad.imageUrl} alt={ad.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
             ) : (
               <>
-                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", ad.type === "trader_promo" ? "bg-amber-500/20" : "bg-white/20")}>
-                  <AdIcon className={cn("w-6 h-6", ad.type === "trader_promo" ? "text-amber-400" : "text-white")} />
+                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", ad.type === "trader_promo" ? "bg-amber-500/20 shadow-inner shadow-white/10" : "bg-white/20")}>
+                  <AdIcon className={cn("w-6 h-6", ad.type === "trader_promo" ? "text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" : "text-white")} />
                 </div>
                 <div className="flex-1 min-w-0 pr-2 sm:pr-4 flex flex-col justify-center">
                   <p className={cn("text-sm sm:text-base font-black truncate leading-tight", ad.type === "trader_promo" ? "text-amber-400" : "text-white")}>{ad.title}</p>
-                  <p className={cn("text-xs sm:text-sm truncate leading-relaxed mt-1", ad.type === "trader_promo" ? "text-amber-200/90" : "text-white/90")}>{ad.description}</p>
+                  <p className={cn("text-xs sm:text-sm truncate leading-relaxed mt-1", ad.type === "trader_promo" ? "text-amber-100/90" : "text-white/90")}>{ad.description}</p>
                 </div>
                 <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-white/50 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0 self-center" />
               </>
@@ -205,10 +212,10 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
       </div>
 
       {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "business") && (
-        <div className="flex justify-center mt-2">
+        <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-20">
           <Link 
             to="/trader/banner-ads" 
-            className="bg-yellow-400 border border-black text-black px-4 py-1 rounded-full text-[9px] font-black hover:bg-yellow-500 transition-colors uppercase tracking-widest shadow-sm"
+            className="bg-yellow-400 border border-black text-black px-4 py-1 rounded-full text-[9px] font-black hover:bg-yellow-500 transition-colors uppercase tracking-widest shadow-[0_1.5px_0_0_rgba(0,0,0,1)] hover:shadow-none hover:translate-y-[1.5px]"
             onClick={(e) => e.stopPropagation()}
           >
             Click to advertise
