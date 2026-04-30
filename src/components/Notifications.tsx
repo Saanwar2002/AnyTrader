@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, MessageSquare, FileText, Info, Check, Trash2, Loader2, Clock } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Bell, MessageSquare, FileText, Info, Check, Trash2, Loader2, Clock, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 
 export default function Notifications() {
@@ -11,6 +11,7 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) return;
@@ -67,8 +68,15 @@ export default function Notifications() {
     <div className="max-w-2xl mx-auto space-y-6 pb-12">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Notifications</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+        <div className="flex items-center gap-4 text-sm text-slate-500">
           <span>{notifications.filter(n => !n.read).length} Unread</span>
+          <button 
+            onClick={() => navigate(-1)} 
+            className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors"
+            title="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       </div>
 

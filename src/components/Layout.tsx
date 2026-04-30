@@ -469,58 +469,8 @@ export default function Layout() {
               )}
             </div>
 
-            <div className="flex items-center justify-between flex-1 pl-3 sm:pl-0 sm:flex-none sm:justify-end sm:gap-4 pr-1 sm:pr-2">
-              {/* Quick Actions (Plus & Schedule) */}
-              {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "admin" || profile?.role === "ecosystem_manager") && activePortal !== "anyride" && (
-                <>
-                  <Link 
-                    to="/availability"
-                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"
-                    title="Schedule & Availability"
-                  >
-                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </Link>
-                  
-                  <div className="relative" ref={quickActionsRef}>
-                     <button 
-                       onClick={() => setShowQuickActions(!showQuickActions)}
-                       className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-sm"
-                     >
-                       <Plus className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-transform", showQuickActions && "rotate-45")} />
-                     </button>
-                     
-                     <AnimatePresence>
-                       {showQuickActions && (
-                         <motion.div 
-                           initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                           animate={{ opacity: 1, y: 0, scale: 1 }}
-                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                           className="absolute top-14 left-0 sm:left-auto sm:right-0 w-52 bg-white max-h-[80vh] overflow-y-auto rounded-2xl shadow-xl border border-slate-200 py-2 z-[60] origin-top-left sm:origin-top-right"
-                         >
-                           <Link onClick={() => setShowQuickActions(false)} to="/post-job" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Briefcase className="w-4 h-4"/></div>
-                             <span className="text-sm font-bold text-slate-800">Post a Job</span>
-                           </Link>
-                           <Link onClick={() => setShowQuickActions(false)} to="/job-feed" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0"><Search className="w-4 h-4"/></div>
-                             <span className="text-sm font-bold text-slate-800">Find Work</span>
-                           </Link>
-                           <Link onClick={() => setShowQuickActions(false)} to="/availability" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                             <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><Calendar className="w-4 h-4"/></div>
-                             <span className="text-sm font-bold text-slate-800">Set Availability</span>
-                           </Link>
-                           <Link onClick={() => setShowQuickActions(false)} to="/trader/banner-ads" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                             <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0"><Star className="w-4 h-4"/></div>
-                             <span className="text-sm font-bold text-slate-800">Advertise</span>
-                           </Link>
-                         </motion.div>
-                       )}
-                     </AnimatePresence>
-                  </div>
-                </>
-              )}
-
-            {/* AI Smart Shop Button & Popover */}
+            <div className="flex items-center justify-evenly flex-1 pl-1 sm:pl-0 sm:flex-none sm:justify-end sm:gap-4 pr-1">
+              {/* AI Smart Shop Button & Popover */}
             {(profile?.role === "tradesperson" || profile?.subscriptionType === "business") && (
               <div className="relative" ref={popoverRef}>
                 <button 
@@ -631,9 +581,59 @@ export default function Layout() {
               </div>
             )}
 
+              {/* Quick Actions (Plus & Schedule) */}
+              {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "admin" || profile?.role === "ecosystem_manager") && activePortal !== "anyride" && (
+                <>
+                  <div className="relative" ref={quickActionsRef}>
+                     <button 
+                       onClick={() => setShowQuickActions(!showQuickActions)}
+                       className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-sm"
+                     >
+                       <Plus className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-transform", showQuickActions && "rotate-45")} />
+                     </button>
+                     
+                     <AnimatePresence>
+                       {showQuickActions && (
+                         <motion.div 
+                           initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                           animate={{ opacity: 1, y: 0, scale: 1 }}
+                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                           className="absolute top-14 left-0 sm:left-auto sm:right-0 w-52 bg-white max-h-[80vh] overflow-y-auto rounded-2xl shadow-xl border border-slate-200 py-2 z-[60] origin-top-left sm:origin-top-right"
+                         >
+                           <Link onClick={() => setShowQuickActions(false)} to="/post-job" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Briefcase className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Post a Job</span>
+                           </Link>
+                           <Link onClick={() => setShowQuickActions(false)} to="/job-feed" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0"><Search className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Find Work</span>
+                           </Link>
+                           <Link onClick={() => setShowQuickActions(false)} to="/availability" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><Calendar className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Set Availability</span>
+                           </Link>
+                           <Link onClick={() => setShowQuickActions(false)} to="/trader/banner-ads" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0"><Star className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Advertise</span>
+                           </Link>
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
+                  </div>
+                  
+                  <Link 
+                    to="/availability"
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"
+                    title="Schedule & Availability"
+                  >
+                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </Link>
+                </>
+              )}
+
             <button 
               onClick={() => setIsTradeBotOpen(true)}
-              className="p-1 sm:p-2 text-slate-500 hover:text-primary transition-colors relative group"
+              className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-primary transition-colors relative group"
               title="AnyTrader Assistant"
             >
               <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -641,7 +641,7 @@ export default function Layout() {
             </button>
             <Link 
               to="/notifications" 
-              className="p-1 sm:p-2 text-slate-500 hover:text-slate-900 relative"
+              className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 relative"
             >
               <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
               {unreadCount > 0 && (
@@ -671,7 +671,7 @@ export default function Layout() {
             </Link>
             <button 
               onClick={() => setShowLogoutConfirm(true)}
-              className="p-1 sm:p-2 text-slate-500 hover:text-red-600 transition-colors"
+              className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />

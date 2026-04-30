@@ -1587,12 +1587,14 @@ export async function getShopRecommendations(role: string, category: string) {
     A user with the role "${role}" and trade/business category "${category}" is opening the store popup.
     Suggest exactly 3 highly specific, highly relevant categories of equipment, workwear, or tools they are likely to need.
 
-    Return a JSON array of 3 objects:
-    {
-      "name": "Category Name",
-      "reason": "Clear explanation (max 15 words)",
-      "icon": "One specific Lucide icon name (e.g., Shield, Wrench, Droplets, Zap, Ruler, Hammer)"
-    }`;
+    Return a JSON array of 3 objects according to this structure:
+    [
+      {
+        "name": "Category Name",
+        "reason": "Clear explanation (max 15 words)",
+        "icon": "One specific Lucide icon name (e.g., Shield, Wrench, Droplets, Zap, Ruler, Hammer)"
+      }
+    ]`;
 
   try {
     const response = await callGemini({
