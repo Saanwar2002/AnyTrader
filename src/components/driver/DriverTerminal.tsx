@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
-import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment } from "@/src/firebase";
+import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction } from "@/src/firebase";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
@@ -369,6 +369,9 @@ export default function DriverTerminal() {
             dropoffLng: activeRide?.dropoffLng || null,
             isStackingEnabled: profile?.isStackingEnabled !== false,
             isLastJob: profile?.isLastJob === true,
+            destinationModeActive: profile?.destinationModeActive === true,
+            homeLat: profile?.homeLat || null,
+            homeLng: profile?.homeLng || null,
             vehicleCategory: profile?.vehicleCategory || 'standard',
             vehicleCategories: profile?.vehicleCategories || [profile?.vehicleCategory || 'standard'],
             isPetFriendly: profile?.isPetFriendly === true
@@ -442,14 +445,21 @@ export default function DriverTerminal() {
     // If it's a real ride from Firestore, claim it!
     if (activeRide?.isReal && activeRide?.id && user) {
       try {
-        await updateDoc(doc(db, "ride_requests", activeRide.id), {
-          status: "accepted",
-          driverId: user.uid,
-          driverName: profile?.firstName || "Driver",
-          driverPhone: profile?.phone || profile?.phoneNumber || "",
-          vehicleInfo: profile?.vehicle || "Silver Toyota Prius",
-          vehiclePlate: profile?.vehicleRegistration || profile?.plate || "WK71 BCF",
-          acceptedAt: serverTimestamp()
+        await runTransaction(db, async (t) => {
+           const rideRef = doc(db, "ride_requests", activeRide.id);
+           const docSnap = await t.get(rideRef);
+           if (!docSnap.exists()) throw new Error("Ride not found");
+           if (docSnap.data().status !== "offered") throw new Error("Ride no longer available");
+
+           t.update(rideRef, {
+             status: "accepted",
+             driverId: user.uid,
+             driverName: profile?.firstName || "Driver",
+             driverPhone: profile?.phone || profile?.phoneNumber || "",
+             vehicleInfo: profile?.vehicle || "Silver Toyota Prius",
+             vehiclePlate: profile?.vehicleRegistration || profile?.plate || "WK71 BCF",
+             acceptedAt: serverTimestamp()
+           });
         });
         
         await updateDoc(doc(db, "driver_status", user.uid), {
@@ -457,9 +467,9 @@ export default function DriverTerminal() {
           pendingRideId: deleteField()
         } as any);
 
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to claim ride:", err);
-        toast.error("Failed to accept ride. It might have expired.");
+        toast.error(err.message || "Failed to accept ride. It might have expired.");
         setRideState('idle');
         return;
       }
@@ -515,6 +525,9 @@ export default function DriverTerminal() {
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [earlyCompletionReason, setEarlyCompletionReason] = useState("");
+  const [isEarlyCompletion, setIsEarlyCompletion] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showJobDetails, setShowJobDetails] = useState(false);
 
@@ -699,7 +712,44 @@ export default function DriverTerminal() {
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
   };
 
-  const handleCompleteRide = async () => {
+  const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3;
+    const p1 = lat1 * Math.PI/180;
+    const p2 = lat2 * Math.PI/180;
+    const dp = (lat2-lat1) * Math.PI/180;
+    const dl = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(dp/2) * Math.sin(dp/2) +
+              Math.cos(p1) * Math.cos(p2) *
+              Math.sin(dl/2) * Math.sin(dl/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const handleCompleteRideBtnClick = () => {
+    let dist = 1000;
+    if (activeRide && activeRide.dropoffLat && activeRide.dropoffLng) {
+       dist = getDistanceInMeters(mapCenter[0], mapCenter[1], activeRide.dropoffLat, activeRide.dropoffLng);
+    }
+    
+    setIsEarlyCompletion(dist > 300);
+    setEarlyCompletionReason("");
+    setShowCompleteConfirm(true);
+  };
+
+  const handleCompleteRideConfirmed = async () => {
+    setShowCompleteConfirm(false);
+
+    if (isEarlyCompletion && earlyCompletionReason && activeRide?.id && activeRide?.isReal) {
+      try {
+        await updateDoc(doc(db, "ride_requests", activeRide.id), {
+           earlyCompletionReason: earlyCompletionReason
+        });
+      } catch (e) {
+        console.error("Failed to save early completion reason", e);
+      }
+    }
+
     // Safety check - if driver forgot to turn off waiting at stop, turn it off now
     if (isWaitingAtStop) {
       setIsWaitingAtStop(false);
@@ -1154,10 +1204,10 @@ export default function DriverTerminal() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] bg-[#0D0D0F]/95 backdrop-blur-md overflow-y-auto pointer-events-auto"
+            className="fixed inset-0 z-[200] bg-[#0D0D0F]/95 backdrop-blur-md overflow-y-auto pointer-events-auto"
           >
-            <div className="min-h-full flex flex-col items-center justify-center p-6 py-12">
-              <div className="w-full max-w-sm bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden my-auto mt-16 mb-24">
+            <div className="min-h-full flex flex-col items-center justify-center p-6 py-12 pb-[140px]">
+              <div className="w-full max-w-sm bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden my-auto mt-16 mb-16">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-[#00D26A] to-emerald-500"></div>
               
               <h2 className="text-[13px] font-black text-[#E4E4E7] mb-1 tracking-[0.2em] uppercase">Total Fare</h2>
@@ -1578,7 +1628,7 @@ export default function DriverTerminal() {
                     {isWaitingAtStop ? (
                        <p className="text-xl font-black text-[#FF9500] leading-none mt-1">Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:{((totalPaidWaitSeconds) % 60).toString().padStart(2, '0')}</p>
                     ) : (
-                       <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left</p>
+                       <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left <span className="text-[#A1A1AA] text-sm"> • {activeRide?.distanceMiles?.toFixed(1) || '14.2'} mi</span></p>
                     )}
                   </div>
                   <div className="text-right">
@@ -1631,7 +1681,7 @@ export default function DriverTerminal() {
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                   </button>
                   <button 
-                    onClick={handleCompleteRide}
+                    onClick={handleCompleteRideBtnClick}
                     className="flex-1 h-11 bg-[#FF3B30] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
                   >
                     <Check className="w-4 h-4 stroke-[3]" /> COMPLETE
@@ -1703,9 +1753,10 @@ export default function DriverTerminal() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute inset-0 z-50 bg-[#0D0D0F]/95 backdrop-blur-xl flex flex-col justify-center p-4 pointer-events-auto"
+            className="fixed inset-0 z-[200] bg-[#0D0D0F]/95 backdrop-blur-xl flex flex-col pointer-events-auto overflow-y-auto scroll-smooth"
           >
-            <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center max-h-[90vh] overflow-y-auto w-full">
+            <div className="min-h-full flex items-center justify-center p-4 py-8 pb-[140px] mt-auto mb-auto">
+              <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-6 shadow-2xl relative w-full text-center">
               
               <div className="w-16 h-16 bg-[#00D26A]/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-[#00D26A]/30">
                 <Check className="w-8 h-8 text-[#00D26A] stroke-[3]" />
@@ -1815,6 +1866,7 @@ export default function DriverTerminal() {
               >
                 DONE — BACK TO MAP
               </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -1825,6 +1877,56 @@ export default function DriverTerminal() {
         
         {/* Primary Action Button moved to Menu - only map controls or status might remain here if needed */}
       </div>
+      {/* Complete Ride Confirmation Modal */}
+      <AnimatePresence>
+        {showCompleteConfirm && (
+          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm overflow-y-auto pointer-events-auto scroll-smooth">
+            <div className="min-h-full flex items-center justify-center p-4 py-8 pb-[140px]">
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-[#1A1A1E] w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-[#333338] text-center">
+              <div className="w-16 h-16 bg-[#00D26A]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-[#00D26A]" />
+              </div>
+              <h3 className="text-2xl font-black text-white mb-2">End Trip?</h3>
+              {isEarlyCompletion ? (
+                <>
+                  <p className="text-sm font-medium text-[#A1A1AA] mb-4">You are finishing the ride before arriving at the destination. Please provide a reason to complete the job.</p>
+                  <div className="space-y-2 mb-6">
+                    {["Customer requested drop-off here", "Car broke down", "Passenger behavior", "Emergency", "Other"].map((reason) => (
+                      <button
+                        key={reason}
+                        onClick={() => setEarlyCompletionReason(reason)}
+                        className={cn(
+                          "w-full p-3 rounded-xl border text-sm font-bold transition-all text-left",
+                          earlyCompletionReason === reason 
+                            ? "bg-[#00D26A]/20 border-[#00D26A] text-[#00D26A]" 
+                            : "bg-[#252529] border-[#333338] text-white hover:bg-[#333338]"
+                        )}
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm font-medium text-[#A1A1AA] mb-6">Please confirm you are dropping off the passenger at their destination.</p>
+              )}
+              
+              <div className="flex gap-3">
+                <button onClick={() => setShowCompleteConfirm(false)} className="flex-1 py-4 bg-[#252529] rounded-2xl font-black text-[#A1A1AA] hover:bg-[#333338] transition-colors shadow-none">Go Back</button>
+                <button 
+                  onClick={handleCompleteRideConfirmed} 
+                  disabled={isEarlyCompletion && !earlyCompletionReason}
+                  className="flex-1 py-4 bg-[#00D26A] text-black rounded-2xl font-black hover:bg-[#00D26A]/90 transition-colors shadow-[0_0_15px_rgba(0,210,106,0.3)] disabled:opacity-50 disabled:shadow-none"
+                >
+                  Confirm
+                </button>
+              </div>
+            </motion.div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
       </>
       )}
 

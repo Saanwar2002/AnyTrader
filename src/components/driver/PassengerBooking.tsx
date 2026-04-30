@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
-import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where, getDocs, orderBy, limit } from "@/src/firebase";
+import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where, getDocs, orderBy, limit, deleteField, getDoc } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
@@ -33,7 +33,7 @@ const formatAddressLines = (address: string) => {
   if (!address) return <span className="block truncate">{address}</span>;
   
   const ukPostcodeRegex = /([A-Z]{1,2}[0-9R][0-9A-Z]?\s?[0-9][A-Z]{2})/i;
-  let cleanAddress = address.replace(/,?\s*(UK|United Kingdom)$/i, '');
+  let cleanAddress = address;
   
   let postcode = "";
   const match = cleanAddress.match(ukPostcodeRegex);
@@ -42,24 +42,25 @@ const formatAddressLines = (address: string) => {
     cleanAddress = cleanAddress.replace(match[1], '').trim();
   }
   
-  cleanAddress = cleanAddress.replace(/,\s*$/, '').trim();
+  // Clean trailing commas and spaces
+  cleanAddress = cleanAddress.replace(/,\s*$/, '').replace(/,\s*UK$/i, ' UK').trim();
   const cparts = cleanAddress.split(',').map(p => p.trim()).filter(Boolean);
   
   let cityStr = "";
   let streetStr = "";
   
-  if (cparts.length >= 2) {
-     cityStr = cparts[cparts.length - 1];
-     streetStr = cparts.slice(0, cparts.length - 1).join(', ');
+  if (cparts.length > 1) {
+     cityStr = cparts[cparts.length - 1]; // e.g. "Huddersfield UK"
+     streetStr = cparts.slice(0, cparts.length - 1).join(', '); // e.g. "McDonald's, 10 Leeds Rd"
   } else {
      streetStr = cparts[0] || '';
   }
   
   return (
     <>
-      {streetStr && <span className="block truncate">{streetStr}</span>}
-      {cityStr && <span className="block truncate">{cityStr}</span>}
-      {postcode && <span className="block truncate uppercase">{postcode}</span>}
+      {streetStr && <span className="block max-w-[200px]" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{streetStr}</span>}
+      {cityStr && <span className="block max-w-[200px] truncate">{cityStr}</span>}
+      {postcode && <span className="block truncate uppercase font-extrabold max-w-[200px]">{postcode}</span>}
     </>
   );
 };
@@ -240,7 +241,6 @@ export default function PassengerBooking() {
   const [isPriority, setIsPriority] = useState(false);
   const [showPriorityPrompt, setShowPriorityPrompt] = useState(false);
   const [priorityInlineToast, setPriorityInlineToast] = useState<{message: string, type: 'success' | 'info'} | null>(null);
-  const [hasPaymentMeans, setHasPaymentMeans] = useState(false);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   const [showTipModal, setShowTipModal] = useState(false);
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
@@ -251,14 +251,6 @@ export default function PassengerBooking() {
   const hasCorporateAccount = profile?.corporateAccountId ? true : true; 
   const hasCardOnFile = profile?.hasCardOnFile ? true : false;
   
-  useEffect(() => {
-    if (rideContext === "business" || hasCardOnFile) {
-      setHasPaymentMeans(true);
-    } else {
-      setHasPaymentMeans(false);
-    }
-  }, [rideContext, hasCardOnFile]);
-
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
@@ -300,7 +292,27 @@ export default function PassengerBooking() {
   const [driversAvailableSoonCount, setDriversAvailableSoonCount] = useState<number>(0);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
-  const [fareConfig, setFareConfig] = useState({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12 });
+  const [fareConfig, setFareConfig] = useState({ 
+    baseFare: 3.5, 
+    distanceRate: 1.3, 
+    timeRate: 0.15, 
+    waitRatePerMinute: 0.25, 
+    minFare: 5.0, 
+    commissionRate: 0.12,
+    autoDispatchEnabled: true,
+    dispatchRadiusMiles: 15,
+    dispatchTimeoutSeconds: 15
+  });
+
+  // Fetch remote config
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "platform_config", "rides"), (doc) => {
+      if (doc.exists()) {
+        setFareConfig(prev => ({ ...prev, ...doc.data() }));
+      }
+    });
+    return () => unsub();
+  }, []);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showRegularJourneys, setShowRegularJourneys] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
@@ -758,7 +770,14 @@ export default function PassengerBooking() {
          smartMatches = pastAddresses.filter(p => !val || p.label.toLowerCase().includes(val.toLowerCase())).slice(0, 2);
       }
 
-      setSuggestions(smartMatches.map(p => ({ label: p.label, lat: p.lat, lon: p.lon, isHistory: true })));
+      let finalSmart = smartMatches.map(p => ({ label: p.label, lat: p.lat, lon: p.lon, isHistory: true }));
+      if (activeField === "dropoff" && pickup) {
+         finalSmart = finalSmart.filter(s => !s.label.toLowerCase().includes(pickup.toLowerCase().split(',')[0]));
+      } else if (activeField === "pickup" && dropoff) {
+         finalSmart = finalSmart.filter(s => !s.label.toLowerCase().includes(dropoff.toLowerCase().split(',')[0]));
+      }
+
+      setSuggestions(finalSmart);
       return; 
     }
 
@@ -774,14 +793,22 @@ export default function PassengerBooking() {
 
         const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
 
+        const userLat = passengerPos?.lat || mapCenter?.lat || 53.6458;
+        const userLng = passengerPos?.lng || mapCenter?.lng || -1.7850;
+
         const request = {
           input: val,
           includedRegionCodes: ['GB'],
+          locationBias: {
+            center: { lat: userLat, lng: userLng },
+            radius: 10000
+          }
         };
 
         const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
 
         setIsLoadingAddress(false);
+        let finalSuggestions: any[] = [];
         
         if (predictions && predictions.length > 0) {
           const cleaned = predictions.map((p: any) => ({
@@ -793,10 +820,26 @@ export default function PassengerBooking() {
           // Deduplicate based on label
           const uniqueCleaned = cleaned.filter((c: any) => !historyMatches.some(h => h.label.toLowerCase() === c.label.toLowerCase()));
           
-          setSuggestions([...historyMatches, ...uniqueCleaned]);
+          finalSuggestions = [...historyMatches, ...uniqueCleaned];
         } else {
-          setSuggestions(historyMatches);
+          finalSuggestions = historyMatches;
         }
+
+        if (activeField === "dropoff" && pickup) {
+           finalSuggestions = finalSuggestions.filter(s => !s.label.toLowerCase().includes(pickup.toLowerCase().split(',')[0]));
+        } else if (activeField === "pickup" && dropoff) {
+           finalSuggestions = finalSuggestions.filter(s => !s.label.toLowerCase().includes(dropoff.toLowerCase().split(',')[0]));
+        }
+
+        // Hide suggestions if the exact same address is already typed in
+        if (finalSuggestions.length === 1 && finalSuggestions[0].label.trim().toLowerCase() === val.trim().toLowerCase()) {
+            finalSuggestions = [];
+        } else if (finalSuggestions.length > 0 && finalSuggestions[0].label.trim().toLowerCase() === val.trim().toLowerCase() && finalSuggestions[0].isHistory === false) {
+            // Remove exact match from suggestions to avoid annoyance
+            finalSuggestions = finalSuggestions.filter(s => s.label.trim().toLowerCase() !== val.trim().toLowerCase());
+        }
+
+        setSuggestions(finalSuggestions);
       } catch (err: any) {
         console.error("Google Places Exception:", err);
         import("sonner").then(({ toast }) => toast.error(`Map Error: ${err.message}`));
@@ -837,11 +880,22 @@ export default function PassengerBooking() {
         if (status === "OK" && results && results[0]) {
           const res = results[0];
           let addr = res.formatted_address;
-          const postcode = res.address_components.find(c => c.types.includes("postal_code"))?.long_name;
+          const postcode = res.address_components.find((c: any) => c.types.includes("postal_code"))?.long_name;
           if (postcode && !addr.includes(postcode)) {
             addr += `, ${postcode}`;
           }
           setPickup(addr);
+          setSuggestions([]);
+          
+          if (!dropoff) {
+            dropoffInputRef.current?.focus();
+            setActiveField("dropoff");
+          } else {
+            setActiveField(null);
+            if (addr && dropoff) {
+              setDetailsView("vehicle");
+            }
+          }
         }
       });
     }, (err) => {
@@ -959,6 +1013,7 @@ export default function PassengerBooking() {
   };
 
   const handleAbandonSearch = async () => {
+    setShowAbandonPrompt(false);
     if (!currentRideId) return;
 
     try {
@@ -978,6 +1033,7 @@ export default function PassengerBooking() {
   };
 
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
+  const [showAbandonPrompt, setShowAbandonPrompt] = useState(false);
   const [cancelFeeToApply, setCancelFeeToApply] = useState(0);
 
   const handleCancelConfirmed = async () => {
@@ -1028,6 +1084,124 @@ export default function PassengerBooking() {
     }
     setShowTipModal(false);
   };
+
+  const [driverDispatchIntervalId, setDriverDispatchIntervalId] = useState<NodeJS.Timeout | null>(null);
+
+  // Auto-Dispatch Engine Effect
+  useEffect(() => {
+    if (step !== "searching" || !currentRideId || !pickupCoords || fareConfig.autoDispatchEnabled !== true) return;
+
+    let dispatchInterval: NodeJS.Timeout;
+
+    const runDispatch = async () => {
+       const rideRef = doc(db, "ride_requests", currentRideId);
+       const rideDoc = await getDoc(rideRef);
+       if (!rideDoc.exists()) return;
+       const rideInfo = rideDoc.data();
+       
+       if (rideInfo.status !== "pending") {
+          // If status is "offered", wait until timeout passes
+          if (rideInfo.status === "offered" && rideInfo.offerExpiresAt) {
+             if (Date.now() > rideInfo.offerExpiresAt) {
+                // Timeout! Update it back to pending and decline this driver
+                await updateDoc(rideRef, {
+                  status: "pending",
+                  assignedDriverId: deleteField(),
+                  offerExpiresAt: deleteField(),
+                  declinedBy: arrayUnion(rideInfo.assignedDriverId)
+                });
+             }
+          }
+          return; // Wait for next tick
+       }
+
+       // Ride is "pending". Let's find the best driver logically.
+       const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
+       const snapshot = await getDocs(q);
+       const declinedBy = rideInfo.declinedBy || [];
+
+       let bestDriver: any = null;
+       let bestDistance = Infinity;
+
+       snapshot.forEach(docSnap => {
+          const driver = docSnap.data();
+          if (docSnap.id === user?.uid) return; // Passenger can't be own driver
+          if (declinedBy.includes(docSnap.id)) return; // Already declined or timed out
+          
+          // Category check logic
+          const cats = driver.vehicleCategories || [driver.vehicleCategory || 'standard'];
+          if (!cats.includes(selectedCategory)) return;
+
+          // Stacking & Last Job logic
+          if (driver.isLastJob) return; // Never dispatch if it's their last job
+          
+          if (driver.status !== "available") { // e.g. on_ride
+             if (driver.status === "on_ride" && driver.isStackingEnabled) {
+                // We can stack. But only if we have their dropoff coordinates to compute ETA/Distance
+                if (!driver.dropoffLat || !driver.dropoffLng) return;
+             } else {
+                return; // Busy and not stackable
+             }
+          }
+
+          // Distance logic (either from current location or future dropoff location)
+          const startLat = driver.status === "on_ride" ? driver.dropoffLat : driver.lat;
+          const startLng = driver.status === "on_ride" ? driver.dropoffLng : driver.lng;
+          
+          if (!startLat || !startLng) return;
+
+          const R = 3958.8; // miles
+          const dist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+             const rLat1 = lat1 * Math.PI / 180;
+             const rLat2 = lat2 * Math.PI / 180;
+             const deltaLat = (lat2 - lat1) * Math.PI / 180;
+             const deltaLng = (lon2 - lon1) * Math.PI / 180;
+             const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) + Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+             return R * c;
+          };
+
+          const d = dist(startLat, startLng, pickupCoords.lat, pickupCoords.lng);
+
+          const radius = fareConfig.dispatchRadiusMiles || 15;
+          if (d > radius) return;
+
+          // Destination Mode Logic
+          // If the driver is heading home, the ride's dropoff must be closer to their home than the pickup
+          if (driver.destinationModeActive && driver.homeLat && driver.homeLng && dropoffCoords) {
+             const distToHomeFromPickup = dist(pickupCoords.lat, pickupCoords.lng, driver.homeLat, driver.homeLng);
+             const distToHomeFromDropoff = dist(dropoffCoords.lat, dropoffCoords.lng, driver.homeLat, driver.homeLng);
+             
+             // If this ride takes them further away from home, skip this driver
+             if (distToHomeFromDropoff > distToHomeFromPickup) {
+                 return;
+             }
+          }
+
+          // Match closest driver within the radius limit
+          if (d < bestDistance) {
+            bestDistance = d;
+            bestDriver = docSnap.id;
+          }
+       });
+
+       if (bestDriver) {
+          // Surge / Offer dispatch correctly matching the logic
+          const timeoutMs = (fareConfig.dispatchTimeoutSeconds || 15) * 1000;
+          await updateDoc(rideRef, {
+             status: "offered",
+             assignedDriverId: bestDriver,
+             offerExpiresAt: Date.now() + timeoutMs
+          });
+       }
+    };
+
+    dispatchInterval = setInterval(runDispatch, 3000);
+    runDispatch(); // initial tick
+
+    return () => clearInterval(dispatchInterval);
+
+  }, [step, currentRideId, pickupCoords, selectedCategory, user, fareConfig]);
 
   useEffect(() => {
     if (!currentRideId) return;
@@ -1154,9 +1328,24 @@ export default function PassengerBooking() {
       }
       try {
         const place = s.placePrediction.toPlace();
-        await place.fetchFields({ fields: ['location', 'formattedAddress', 'addressComponents'] });
+        await place.fetchFields({ fields: ['location', 'formattedAddress', 'addressComponents', 'displayName'] });
         const loc = place.location;
-        let finalAddr = place.formattedAddress || s.label;
+        let finalAddr = s.label;
+        
+        let pName = place.displayName || place.name;
+        if (pName && place.formattedAddress) {
+          // If it's a POI like McDonald's, formatted address is usually "123 Main St, City...".
+          // The prediction name might be "McDonald's, Main Street..." lacking the number.
+          // Extract the primary name (before any comma) to prevent duplicate road name in the address
+          const mainName = pName.split(',')[0].trim();
+          if (!place.formattedAddress.includes(mainName)) {
+            finalAddr = `${mainName}, ${place.formattedAddress}`;
+          } else {
+            finalAddr = place.formattedAddress;
+          }
+        } else if (place.formattedAddress) {
+          finalAddr = place.formattedAddress;
+        }
         
         // Ensure UK postcode specifically is present
         const components = (place as any).addressComponents;
@@ -1838,23 +2027,23 @@ export default function PassengerBooking() {
                     </div>
 
                     <div className="pt-2 space-y-4">
-                       {!((rideContext === "business") || (rideContext === "personal" && hasCardOnFile)) && (
-                         <label className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl cursor-pointer">
-                           <input 
-                             type="checkbox" 
-                             checked={hasPaymentMeans}
-                             onChange={(e) => setHasPaymentMeans(e.target.checked)}
-                             className="w-5 h-5 rounded text-primary focus:ring-primary border-primary/30"
-                           />
-                           <div className="flex-1">
-                             <p className="text-xs font-bold text-text-main">I confirm I have means to pay (QR Code / Cash)</p>
-                           </div>
-                         </label>
-                       )}
+                       <div className="relative">
+                         <div className="absolute top-3 left-3 flex items-center justify-center w-6 h-6 bg-blue-100 rounded-full">
+                           <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                         </div>
+                         <input 
+                           type="text"
+                           value={comments}
+                           onChange={(e) => setComments(e.target.value)}
+                           className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-[15px] font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all min-w-0"
+                           placeholder="Message to driver (e.g. Look for blue gate)"
+                           maxLength={100}
+                         />
+                       </div>
 
                        <button 
                          onClick={handleConfirmBooking} 
-                         disabled={!pickup || !dropoff || !hasPaymentMeans} 
+                         disabled={!pickup || !dropoff} 
                          className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
                        >
                          Confirm {CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}
@@ -1927,9 +2116,18 @@ export default function PassengerBooking() {
                   </div>
                 </div>
 
-                <div className="flex gap-4 w-full max-w-xs mt-2">
+                <div className="flex gap-4 w-full max-w-xs mt-2 relative">
+                  <AnimatePresence>
+                    {showAbandonPrompt && (
+                      <motion.div key="abandon-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-4 p-4 bg-white border border-danger/20 shadow-2xl rounded-3xl z-30 flex gap-3">
+                        <button onClick={handleAbandonSearch} className="flex-1 py-3 bg-danger rounded-2xl text-sm font-black text-white hover:bg-danger/90 shadow-lg active:scale-95 transition-all">Yes, Cancel</button>
+                        <button onClick={() => setShowAbandonPrompt(false)} className="flex-1 py-3 bg-slate-100 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-200 active:scale-95 transition-all">No, Keep</button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  
                   <button onClick={handleCancelSearching} className="flex-1 text-text-main font-black text-sm py-4 rounded-2xl border-2 border-border-main hover:bg-surface transition-colors active:scale-95">Edit</button>
-                  <button onClick={handleAbandonSearch} className="flex-1 font-black text-sm py-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors active:scale-95">Cancel</button>
+                  <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-black text-sm py-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors active:scale-95">Cancel</button>
                 </div>
               </motion.div>
             )}

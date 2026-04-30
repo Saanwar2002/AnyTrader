@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../AuthProvider";
 import { logout, db, doc, updateDoc } from "@/src/firebase";
-import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power } from "lucide-react";
+import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { toast } from "sonner";
 
 export default function DriverMenu({ 
   onNavigate, 
@@ -18,6 +19,56 @@ export default function DriverMenu({
   onClose?: () => void
 }) {
   const { profile, user } = useAuth();
+  const [showHomeModal, setShowHomeModal] = useState(false);
+  const [homeInput, setHomeInput] = useState("");
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
+  useEffect(() => {
+    if (!homeInput || homeInput.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        if (!window.google) return;
+        const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
+        const request = {
+          input: homeInput,
+          componentRestrictions: { country: "uk" }
+        };
+        const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+        setSuggestions(predictions);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [homeInput]);
+
+  const handleSelectHome = async (placeId: string, description: string) => {
+    if (!user || !window.google) return;
+    setIsGeocoding(true);
+    try {
+      const geocoder = new window.google.maps.Geocoder();
+      const result = await geocoder.geocode({ placeId });
+      if (result.results[0]) {
+        const { lat, lng } = result.results[0].geometry.location;
+        await updateDoc(doc(db, "users", user.uid), {
+           homeAddress: description,
+           homeLat: lat(),
+           homeLng: lng(),
+           destinationModeActive: true
+        });
+        toast.success("Home address set & Destination Mode ON");
+        setShowHomeModal(false);
+      }
+    } catch (err) {
+      toast.error("Failed to find location");
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
 
   const [confirmLastJob, setConfirmLastJob] = React.useState(false);
 
@@ -202,7 +253,11 @@ export default function DriverMenu({
                           updateDoc(doc(db, "users", user.uid), { isStackingEnabled: !item.active });
                         }
                         if (item.action === 'toggle-destination-mode') {
-                          updateDoc(doc(db, "users", user.uid), { destinationModeActive: !item.active });
+                          if (!profile?.homeLat && !item.active) {
+                             setShowHomeModal(true);
+                          } else {
+                             updateDoc(doc(db, "users", user.uid), { destinationModeActive: !item.active });
+                          }
                         }
                         if (item.action === 'toggle-last-job') {
                           updateDoc(doc(db, "users", user.uid), { isLastJob: !item.active });
@@ -253,6 +308,49 @@ export default function DriverMenu({
       </button>
 
       <p className="text-center text-[10px] text-[#A1A1AA] mt-8 font-medium">AnyTrader Driver v2.0.4</p>
+
+      {showHomeModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1A1A1E] w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-[#2C2C30]">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-white">Set Home Address</h3>
+              <button onClick={() => setShowHomeModal(false)} className="p-2 w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm font-medium text-[#A1A1AA] mb-4">
+              Where are you heading? We'll prioritize rides going in this direction.
+            </p>
+            <div className="relative mb-6">
+              <input
+                type="text"
+                placeholder="Search home address..."
+                className="w-full bg-[#2C2C30] border-none rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500 transition-all pl-12 placeholder:text-[#A1A1AA]"
+                value={homeInput}
+                onChange={(e) => setHomeInput(e.target.value)}
+              />
+              <Search className="w-5 h-5 text-[#A1A1AA] absolute left-4 top-1/2 -translate-y-1/2" />
+            </div>
+
+            {suggestions.length > 0 && (
+              <div className="bg-[#252529] rounded-2xl overflow-hidden shadow-lg border border-[#3F3F46] max-h-[50vh] overflow-y-auto mb-4">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSelectHome(s.place_id, s.description)}
+                    disabled={isGeocoding}
+                    className="w-full text-left px-5 py-4 border-b border-[#3F3F46] hover:bg-[#2C2C30] transition-colors disabled:opacity-50 flex items-start gap-4 text-left"
+                  >
+                    <MapPin className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-bold text-white leading-tight">{s.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {isGeocoding && <p className="text-xs text-center text-emerald-400 font-bold mb-4 flex justify-center items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Setting home...</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

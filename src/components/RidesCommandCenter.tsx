@@ -27,6 +27,9 @@ export default function RidesCommandCenter() {
     minFare: 5.0,
     commission: 12,
     allowRiderAbandonment: false,
+    dispatchRadiusMiles: 15,
+    dispatchTimeoutSeconds: 15,
+    autoDispatchEnabled: true,
     vehicleTypes: [
       { id: "standard", name: "AnyTrader Standard", multiplier: 1.0 },
       { id: "executive", name: "AnyTrader Executive", multiplier: 1.5 },
@@ -116,7 +119,7 @@ export default function RidesCommandCenter() {
 
   const isConfigEqual = (c1: any, c2: any) => {
     if (!c1 || !c2) return false;
-    const keys = ['baseFare', 'distanceRate', 'timeRate', 'waitRatePerMinute', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges', 'allowRiderAbandonment'];
+    const keys = ['baseFare', 'distanceRate', 'timeRate', 'waitRatePerMinute', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges', 'allowRiderAbandonment', 'dispatchRadiusMiles', 'dispatchTimeoutSeconds', 'autoDispatchEnabled'];
     return keys.every(key => JSON.stringify(c1[key]) === JSON.stringify(c2[key]));
   };
 
@@ -135,6 +138,9 @@ export default function RidesCommandCenter() {
         minFare: Number(config.minFare) || 0,
         commission: Number(config.commission) || 0,
         allowRiderAbandonment: Boolean(config.allowRiderAbandonment),
+        dispatchRadiusMiles: Number(config.dispatchRadiusMiles) || 15,
+        dispatchTimeoutSeconds: Number(config.dispatchTimeoutSeconds) || 15,
+        autoDispatchEnabled: Boolean(config.autoDispatchEnabled),
         vehicleTypes: (config.vehicleTypes || []).map((vt: any) => ({
           ...vt,
           multiplier: Number(vt.multiplier) || 1
@@ -628,6 +634,49 @@ export default function RidesCommandCenter() {
                     <span className="text-sm font-bold text-slate-900">Enable abandonment fee collection & termination</span>
                   </label>
                   <p className="text-[9px] font-medium text-slate-500 italic">When enabled, drivers can charge £5.00 after 7 minutes of unresponsiveness at a stop.</p>
+                </div>
+
+                {/* Auto Dispatch Engine UI */}
+                <div className="col-span-2 pt-6 border-t border-slate-50">
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">Auto-Dispatch Engine</h4>
+                  
+                  <div className="space-y-4">
+                    <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-slate-200 transition-colors">
+                      <div className="relative">
+                        <input 
+                          type="checkbox" 
+                          checked={config.autoDispatchEnabled} 
+                          onChange={(e) => setConfig({ ...config, autoDispatchEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </div>
+                      <span className="text-sm font-bold text-slate-900">Enable algorithmic Auto-Dispatch</span>
+                    </label>
+
+                    {config.autoDispatchEnabled && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Dispatch Radius (Miles)</label>
+                          <input 
+                            type="number" step="0.5" 
+                            className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-emerald-500 transition-all"
+                            value={config.dispatchRadiusMiles}
+                            onChange={(e) => setConfig({ ...config, dispatchRadiusMiles: parseFloat(e.target.value) })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Driver Offer Timeout (Seconds)</label>
+                          <input 
+                            type="number" step="1" 
+                            className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-emerald-500 transition-all"
+                            value={config.dispatchTimeoutSeconds}
+                            onChange={(e) => setConfig({ ...config, dispatchTimeoutSeconds: parseFloat(e.target.value) })}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
