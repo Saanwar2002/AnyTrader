@@ -240,11 +240,15 @@ export default function AdminAdvertsTab() {
                     ) : (
                       <span className="font-bold text-slate-900 ml-1">{ad.advertiserName || "N/A"}</span>
                     )}
-                    <span className="ml-1">({ad.billingCycle || "N/A"})</span>
+                    <span className="ml-1">({ad.type === "trader_promo" ? "Flat Rate" : ad.billingCycle || "N/A"})</span>
                   </p>
                   <p className="text-xs text-slate-500">
                     Clicks: <span className="font-bold text-blue-600">{ad.clicks || 0}</span> • 
-                    Limit: <span className="font-bold text-slate-900">{ad.dailyDisplayLimit}/day</span>
+                    {ad.type === "trader_promo" ? (
+                       <span>Duration: <span className="font-bold text-slate-900">{ad.durationDays} days</span> (Total: £{ad.totalCost?.toFixed(2)})</span>
+                    ) : (
+                       <span>Limit: <span className="font-bold text-slate-900">{ad.dailyDisplayLimit}/day</span></span>
+                    )}
                   </p>
                </div>
                <div className="flex gap-2">

@@ -64,6 +64,13 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
       const activeAds = snapshot.docs
         .map(d => ({ id: d.id, ...(d.data() as any) }))
         .filter((ad: any) => ad.isActive !== false)
+        .filter((ad: any) => {
+           if (ad.type === "trader_promo" && ad.endDate) {
+              const endMillis = ad.endDate.toMillis ? ad.endDate.toMillis() : ad.endDate.seconds * 1000;
+              if (Date.now() > endMillis) return false;
+           }
+           return true;
+        })
         .filter((ad: any) => ad.targetRole === "all" || ad.targetRole === role)
         .filter((ad: any) => {
             if (role !== "tradesperson") return true;
@@ -170,12 +177,12 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
               <img src={ad.imageUrl} alt={ad.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
             ) : (
               <>
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-                  <AdIcon className="w-6 h-6 text-white" />
+                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", ad.type === "trader_promo" ? "bg-amber-500/20" : "bg-white/20")}>
+                  <AdIcon className={cn("w-6 h-6", ad.type === "trader_promo" ? "text-amber-400" : "text-white")} />
                 </div>
                 <div className="flex-1 min-w-0 pr-2 sm:pr-4 flex flex-col justify-center">
-                  <p className="text-sm sm:text-base font-black truncate leading-tight">{ad.title}</p>
-                  <p className="text-xs sm:text-sm text-white/90 truncate leading-relaxed mt-1">{ad.description}</p>
+                  <p className={cn("text-sm sm:text-base font-black truncate leading-tight", ad.type === "trader_promo" ? "text-amber-400" : "text-white")}>{ad.title}</p>
+                  <p className={cn("text-xs sm:text-sm truncate leading-relaxed mt-1", ad.type === "trader_promo" ? "text-amber-200/90" : "text-white/90")}>{ad.description}</p>
                 </div>
                 <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-white/50 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0 self-center" />
               </>
@@ -184,14 +191,14 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
         </AnimatePresence>
       </div>
 
-      {profile?.role === "tradesperson" && (
-        <div className="flex justify-center -mt-2">
+      {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "business") && (
+        <div className="flex justify-center mt-2">
           <Link 
             to="/trader/banner-ads" 
-            className="bg-amber-400 hover:bg-amber-500 text-slate-900 px-5 max-w-max py-1 rounded-b-xl text-[10px] font-black z-0 transition-all pt-3 shadow-sm flex items-center justify-center cursor-pointer uppercase tracking-widest border border-t-0 border-amber-500/20"
+            className="bg-yellow-400 border border-black text-black px-4 py-1 rounded-full text-[9px] font-black hover:bg-yellow-500 transition-colors uppercase tracking-widest shadow-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            Click here to advertise
+            Click to advertise
           </Link>
         </div>
       )}

@@ -181,20 +181,18 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Bar */}
-      <div className="card-premium overflow-hidden">
-        <div className="grid grid-cols-3 divide-x divide-slate-100">
-          <div className="p-8 text-center">
-            <p className="text-4xl font-display font-black text-slate-900">{stats.total}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Total Jobs</p>
-          </div>
-          <div className="p-8 text-center">
-            <p className="text-4xl font-display font-black text-slate-900">{stats.active}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Active</p>
-          </div>
-          <div className="p-8 text-center">
-            <p className="text-4xl font-display font-black text-slate-900">{stats.done}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Done</p>
-          </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
+          <p className="text-3xl font-display font-black text-slate-900">{stats.total}</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Total Jobs</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
+          <p className="text-3xl font-display font-black text-slate-900">{stats.active}</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Active</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
+          <p className="text-3xl font-display font-black text-slate-900">{stats.done}</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Done</p>
         </div>
       </div>
       

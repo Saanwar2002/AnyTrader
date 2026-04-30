@@ -191,32 +191,6 @@ function SearchingTimer() {
   );
 }
 
-function SearchingCancelButton({ onCancel, startTime }: { onCancel: () => void, startTime: number }) {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [startTime]);
-
-  const timeLeft = 120 - elapsed;
-  const isPenalty = timeLeft <= 0;
-
-  const displayTime = Math.abs(timeLeft);
-  const mins = Math.floor(displayTime / 60);
-  const secs = (displayTime % 60).toString().padStart(2, '0');
-
-  return (
-    <button onClick={onCancel} className={cn("flex-1 font-black text-sm py-4 rounded-2xl border-2 shadow-sm active:scale-95 transition-colors flex items-center justify-center gap-2", isPenalty ? "bg-danger/5 border-danger/10 hover:bg-danger/10 text-danger" : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-700")}>
-      Cancel
-      <span className={cn("font-mono text-[10px] px-1.5 py-0.5 rounded-md border text-center min-w-[34px]", isPenalty ? "bg-danger/10 border-danger/20" : "bg-emerald-100 border-emerald-300")}>{isPenalty ? "+" : ""}{mins}:{secs}</span>
-    </button>
-  );
-}
-
 function CancelRideButton_ConfirmedPhase({ acceptedAt, onCancel }: { acceptedAt: number, onCancel: () => void }) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -987,34 +961,13 @@ export default function PassengerBooking() {
   const handleAbandonSearch = async () => {
     if (!currentRideId) return;
 
-    let fee = 0;
-    if (searchingStartTimeRef.current) {
-        const diffMs = Date.now() - searchingStartTimeRef.current;
-        if (diffMs > 120000) { // 2 minutes
-            fee = fareConfig.baseFare; 
-        }
-    }
-
-    if (fee > 0 && !showCancelPrompt) {
-        setCancelFeeToApply(fee);
-        setShowCancelPrompt(true);
-        return; 
-    }
-
     try {
       await updateDoc(doc(db, "ride_requests", currentRideId), { 
         status: "cancelled", 
         cancelledBy: "passenger", 
-        cancellationFee: fee,
+        cancellationFee: 0,
         cancelledAt: serverTimestamp() 
       });
-      
-      if (fee > 0 && user) {
-        await updateDoc(doc(db, "users", user.uid), {
-           pendingCharges: increment(fee),
-           cancellationCount: increment(1)
-        });
-      }
 
       toast.success("Ride cancelled.");
       navigate("/my-rides");
@@ -1035,11 +988,6 @@ export default function PassengerBooking() {
       const diffMs = Date.now() - assignedDriverInfo.acceptedAt;
       if (diffMs > 120000) { // 2 minutes
         fee = fareConfig.baseFare; 
-      }
-    } else if (step === "searching" && searchingStartTimeRef.current) {
-      const diffMs = Date.now() - searchingStartTimeRef.current;
-      if (diffMs > 120000) {
-        fee = fareConfig.baseFare;
       }
     }
 
@@ -1934,21 +1882,21 @@ export default function PassengerBooking() {
                 </div>
                 
                 <div className="w-full max-w-xs mt-4 relative">
-                  <AnimatePresence>
+                  <AnimatePresence mode="popLayout">
                     {isPriority && (
-                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-2 p-2.5 bg-emerald-500 rounded-xl text-center text-xs font-bold shadow-lg flex items-center justify-center gap-1.5 text-white">
+                      <motion.div key="priority-active" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-2 p-2.5 bg-emerald-500 rounded-xl text-center text-xs font-bold shadow-lg flex items-center justify-center gap-1.5 text-white">
                         <Check className="w-4 h-4 shrink-0" />
                         Priority activated! £3 added to base fare.
                       </motion.div>
                     )}
                     {!isPriority && priorityInlineToast && priorityInlineToast.type === 'info' && (!showPriorityPrompt) && (
-                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-2 p-2 bg-slate-800 rounded-xl text-center text-xs font-bold shadow-lg flex items-center justify-center gap-2 text-white">
+                      <motion.div key="priority-info" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-2 p-2 bg-slate-800 rounded-xl text-center text-xs font-bold shadow-lg flex items-center justify-center gap-2 text-white">
                         <AlertCircle className="w-4 h-4" />
                         {priorityInlineToast.message}
                       </motion.div>
                     )}
                     {showPriorityPrompt && (
-                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white border-2 border-warning/50 shadow-xl rounded-2xl z-20">
+                      <motion.div key="priority-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white border-2 border-warning/50 shadow-xl rounded-2xl z-20">
                         <p className="text-xs font-bold text-slate-800 text-center mb-2">Are you sure you want to add Priority Boost for <span className="text-warning font-black">£3.00</span>?</p>
                         <div className="flex gap-2">
                            <button onClick={() => setShowPriorityPrompt(false)} className="flex-1 py-2 bg-slate-100 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200">Cancel</button>
@@ -1977,7 +1925,7 @@ export default function PassengerBooking() {
 
                 <div className="flex gap-4 w-full max-w-xs mt-2">
                   <button onClick={handleCancelSearching} className="flex-1 text-text-main font-black text-sm py-4 rounded-2xl border-2 border-border-main hover:bg-surface transition-colors active:scale-95">Edit</button>
-                  <SearchingCancelButton onCancel={handleAbandonSearch} startTime={searchingStartTimeRef.current || Date.now()} />
+                  <button onClick={handleAbandonSearch} className="flex-1 font-black text-sm py-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors active:scale-95">Cancel</button>
                 </div>
               </motion.div>
             )}
@@ -2069,8 +2017,7 @@ export default function PassengerBooking() {
                         </div>
                         <h3 className="text-xl font-black text-text-main mb-2">Cancel Ride?</h3>
                         <p className="text-sm font-bold text-text-muted mb-6">
-                          {step === "searching" ? "You have been searching for over 2 minutes. " : "Your driver has been on the way for over 2 minutes. "}
-                          A cancellation fee of <span className="text-text-main font-black">£{cancelFeeToApply.toFixed(2)}</span> will apply.
+                          Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-text-main font-black">£{cancelFeeToApply.toFixed(2)}</span> will apply.
                         </p>
                         <div className="flex gap-3">
                           <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-4 bg-surface rounded-2xl font-black text-text-main hover:bg-surface-hover transition-colors">Go Back</button>

@@ -299,7 +299,7 @@ export default function Layout() {
   ];
 
   const passengerNav = [
-    { name: "Taxi", path: "/book-ride", icon: Car, isCta: false },
+    { name: "Book Taxi", path: "/book-ride", icon: Car, isCta: false },
     { name: "My Rides", path: "/my-rides", icon: MapPin, isCta: false },
     { name: "Favorite", path: "/saved-journeys", icon: (props: any) => <Star {...props} className={cn(props.className, "text-amber-500 fill-amber-400")} />, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
@@ -400,9 +400,9 @@ export default function Layout() {
               >
                 {activePortal === "anytrader" ? (
                   <>
-                    <div className="w-14 h-14 bg-[#EAB308] border-[3px] border-slate-900 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-[#EAB308]/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
-                      <Car className="w-5 h-5 text-slate-900 relative z-10 mb-0.5" />
-                      <span className="text-[8px] font-black text-slate-900 leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
+                    <div className="w-14 h-14 bg-yellow-300 border-[3px] border-black rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
+                      <Car className="w-5 h-5 text-black relative z-10 mb-0.5" />
+                      <span className="text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
                     </div>
                     <div className="hidden sm:block">
@@ -998,6 +998,7 @@ export default function Layout() {
             const isActive = location.pathname + location.search === item.path || (item.path === "/admin" && location.pathname === "/admin" && (!location.search || location.search === "?tab=users"));
             
             let hasUnread = false;
+            // Removed other types for brevity if not strictly needed or keep original
             if (item.path === "/job-feed" && unreadTypes.has("system")) hasUnread = true;
             if (item.path === "/messages" && unreadTypes.has("message")) hasUnread = true;
             if (item.path.startsWith("/my-quotes") && unreadTypes.has("quote")) hasUnread = true;
@@ -1010,8 +1011,8 @@ export default function Layout() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 transition-colors relative h-full flex-1 min-w-0 px-0.5",
                   isActive 
-                    ? (isDriverTerminal ? "text-white" : "text-blue-600 font-bold") 
-                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-900 hover:text-black font-medium"),
+                    ? (isDriverTerminal ? "text-white" : "text-black font-black") 
+                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-black font-bold"),
                   item.isCta && "text-blue-600"
                 )}
               >
@@ -1021,7 +1022,7 @@ export default function Layout() {
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                   )}
                 </div>
-                <span className="text-[10px] min-[380px]:text-[11px] sm:text-xs font-bold tracking-tight text-center leading-none truncate w-full">{item.name}</span>
+                <span className="text-[9px] min-[380px]:text-[10px] sm:text-[11px] font-black tracking-tight text-center leading-none truncate w-full">{item.name}</span>
                 {isActive && (
                    <motion.div 
                      layoutId="navDot"

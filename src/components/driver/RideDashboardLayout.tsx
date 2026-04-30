@@ -48,7 +48,7 @@ export default function RideDashboardLayout() {
                 className="flex flex-col items-center justify-center w-16 h-full gap-1 active:scale-95 transition-all"
               >
                 <item.icon className={cn("w-6 h-6", isActive ? "text-primary" : "text-text-muted")} />
-                <span className={cn("text-[10px] font-bold tracking-tight", isActive ? "text-text-main" : "text-text-muted")}>
+                <span className={cn("text-[8px] font-bold tracking-tight", isActive ? "text-text-main" : "text-text-muted")}>
                   {item.name}
                 </span>
               </button>
