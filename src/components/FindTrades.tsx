@@ -752,6 +752,13 @@ export default function FindTrades() {
             >
               <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-3 shrink-0" />
               
+              <button 
+                onClick={() => setSelectedTraderPreview(null)}
+                className="absolute top-4 right-4 w-9 h-9 bg-slate-100/80 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500 transition-colors z-10 border border-slate-200 border-b-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
               <div className="flex-1 overflow-y-auto px-6 pb-24 no-scrollbar">
                 <div className="flex gap-4 mb-6 pt-2">
                   <div className="w-24 h-24 bg-slate-800 rounded-2xl shrink-0 overflow-hidden shadow-sm border border-slate-100">

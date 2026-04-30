@@ -45,7 +45,7 @@ export default function RoleTabBar() {
   };
 
   return (
-    <div className="w-full bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm flex items-center justify-center p-2">
+    <div className="w-full bg-surface border-b border-slate-200 sticky top-16 z-40 sm:shadow-sm flex items-center justify-center p-2 mb-2">
       <div className="flex bg-slate-100/80 p-1 rounded-xl items-center shadow-inner max-w-sm w-full mx-auto relative">
         {uniqueRoles.map((role) => (
           <button

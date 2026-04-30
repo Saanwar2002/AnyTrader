@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark, Clock } from "lucide-react";
+import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Plus, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark, Clock } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc, updateDoc, arrayRemove, orderBy, limit, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
@@ -79,20 +79,26 @@ export default function Layout() {
   const [shopRecommendations, setShopRecommendations] = useState<any[]>([]);
   const [isLoadingShop, setIsLoadingShop] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+  
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  const quickActionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setShowShopPopover(false);
       }
+      if (quickActionsRef.current && !quickActionsRef.current.contains(event.target as Node)) {
+        setShowQuickActions(false);
+      }
     };
-    if (showShopPopover) {
+    if (showShopPopover || showQuickActions) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showShopPopover]);
+  }, [showShopPopover, showQuickActions]);
 
   const loadShopRecommendations = async () => {
     setShowShopPopover(true);
@@ -368,8 +374,8 @@ export default function Layout() {
       {/* Header */}
       {!isDriverTerminal && activePortal !== 'anyride' && (
       <header className="bg-slate-50/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-4 sm:gap-8">
+          <div className="max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-4">
               {activePortal === "anyride" && (
                 <button 
                   onClick={() => {
@@ -400,9 +406,9 @@ export default function Layout() {
               >
                 {activePortal === "anytrader" ? (
                   <>
-                    <div className="w-14 h-14 bg-yellow-300 border-[3px] border-black rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
-                      <Car className="w-5 h-5 text-black relative z-10 mb-0.5" />
-                      <span className="text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
+                    <div className="w-11 h-11 sm:w-14 sm:h-14 bg-yellow-300 border-[2px] sm:border-[3px] border-black rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
+                      <Car className="w-4 h-4 sm:w-5 sm:h-5 text-black relative z-10 mb-0.5" />
+                      <span className="text-[7px] sm:text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
                     </div>
                     <div className="hidden sm:block">
@@ -412,9 +418,9 @@ export default function Layout() {
                   </>
                 ) : (
                   <>
-                    <div className="w-12 h-12 bg-blue-600 rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
-                      <Hammer className="w-5 h-5 text-white" />
-                      <span className="text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
+                      <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      <span className="text-[8px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
                     </div>
                     <div className="hidden sm:block">
                       <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
@@ -426,7 +432,7 @@ export default function Layout() {
 
               {/* Desktop Navigation */}
               {activePortal !== 'anyride' && (
-                <nav className="hidden md:flex items-center gap-1">
+                <nav className="hidden md:flex items-center gap-1 ml-2">
                   {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname + location.search === item.path || (item.path === "/admin" && location.pathname === "/admin" && (!location.search || location.search === "?tab=users"));
@@ -463,14 +469,64 @@ export default function Layout() {
               )}
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-4 pr-1">
+            <div className="flex items-center justify-between flex-1 pl-3 sm:pl-0 sm:flex-none sm:justify-end sm:gap-4 pr-1 sm:pr-2">
+              {/* Quick Actions (Plus & Schedule) */}
+              {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "admin" || profile?.role === "ecosystem_manager") && activePortal !== "anyride" && (
+                <>
+                  <Link 
+                    to="/availability"
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"
+                    title="Schedule & Availability"
+                  >
+                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </Link>
+                  
+                  <div className="relative" ref={quickActionsRef}>
+                     <button 
+                       onClick={() => setShowQuickActions(!showQuickActions)}
+                       className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-sm"
+                     >
+                       <Plus className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-transform", showQuickActions && "rotate-45")} />
+                     </button>
+                     
+                     <AnimatePresence>
+                       {showQuickActions && (
+                         <motion.div 
+                           initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                           animate={{ opacity: 1, y: 0, scale: 1 }}
+                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                           className="absolute top-14 left-0 sm:left-auto sm:right-0 w-52 bg-white max-h-[80vh] overflow-y-auto rounded-2xl shadow-xl border border-slate-200 py-2 z-[60] origin-top-left sm:origin-top-right"
+                         >
+                           <Link onClick={() => setShowQuickActions(false)} to="/post-job" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Briefcase className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Post a Job</span>
+                           </Link>
+                           <Link onClick={() => setShowQuickActions(false)} to="/job-feed" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0"><Search className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Find Work</span>
+                           </Link>
+                           <Link onClick={() => setShowQuickActions(false)} to="/availability" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><Calendar className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Set Availability</span>
+                           </Link>
+                           <Link onClick={() => setShowQuickActions(false)} to="/trader/banner-ads" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                             <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0"><Star className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">Advertise</span>
+                           </Link>
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
+                  </div>
+                </>
+              )}
+
             {/* AI Smart Shop Button & Popover */}
             {(profile?.role === "tradesperson" || profile?.subscriptionType === "business") && (
               <div className="relative" ref={popoverRef}>
                 <button 
                   onClick={loadShopRecommendations}
                   className={cn(
-                    "w-8 h-8 rounded-full shadow-[inset_0_-2px_4px_rgba(0,0,0,0.2),0_4px_8px_rgba(0,0,0,0.1)] flex items-center justify-center text-white transition-all active:translate-y-0.5 active:shadow-[inset_0_-1px_2px_rgba(0,0,0,0.3),0_2px_4px_rgba(0,0,0,0.1)] relative",
+                    "w-8 h-8 sm:w-8 sm:h-8 rounded-full shadow-[inset_0_-2px_4px_rgba(0,0,0,0.2),0_4px_8px_rgba(0,0,0,0.1)] flex items-center justify-center text-white transition-all active:translate-y-0.5 active:shadow-[inset_0_-1px_2px_rgba(0,0,0,0.3),0_2px_4px_rgba(0,0,0,0.1)] relative",
                     showShopPopover ? "bg-blue-600 scale-105" : "bg-blue-500 hover:bg-blue-600 hover:scale-105"
                   )}
                   title="Trade Equipment Shop"
@@ -577,25 +633,25 @@ export default function Layout() {
 
             <button 
               onClick={() => setIsTradeBotOpen(true)}
-              className="p-2 text-slate-500 hover:text-primary transition-colors relative group"
+              className="p-1 sm:p-2 text-slate-500 hover:text-primary transition-colors relative group"
               title="AnyTrader Assistant"
             >
-              <Bot className="w-6 h-6" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white group-hover:scale-125 transition-transform" />
+              <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-2 h-2 bg-primary rounded-full border-2 border-white group-hover:scale-125 transition-transform" />
             </button>
             <Link 
               to="/notifications" 
-              className="p-2 text-slate-500 hover:text-slate-900 relative"
+              className="p-1 sm:p-2 text-slate-500 hover:text-slate-900 relative"
             >
-              <Bell className="w-6 h-6" />
+              <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                <span className="absolute top-0 right-0 sm:top-1.5 sm:right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </Link>
-            <Link to="/profile" className="w-10 h-10 relative group flex items-center justify-center -ml-1 sm:ml-0 z-20">
-              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-blue-500 flex items-center justify-center text-slate-400 relative z-10 bg-slate-200 shadow-md">
+            <Link to="/profile" className="w-8 h-8 sm:w-10 sm:h-10 relative group flex items-center justify-center z-20">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-blue-500 flex items-center justify-center text-slate-400 relative z-10 bg-slate-200 shadow-md">
                 {user?.photoURL ? (
                   <img 
                     src={user.photoURL} 
@@ -604,21 +660,21 @@ export default function Layout() {
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <UserIcon className="w-6 h-6 relative z-10" />
+                  <UserIcon className="w-4 h-4 sm:w-6 sm:h-6 relative z-10" />
                 )}
               </div>
               {profile?.role && (
-                <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase text-white bg-blue-600 px-2 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-sm z-20">
+                <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[7px] sm:text-[8px] font-black uppercase text-white bg-blue-600 px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-sm z-20">
                   {profile.role === 'tradesperson' ? 'Trader' : profile.role}
                 </span>
               )}
             </Link>
             <button 
               onClick={() => setShowLogoutConfirm(true)}
-              className="p-2 text-slate-500 hover:text-red-600 transition-colors"
+              className="p-1 sm:p-2 text-slate-500 hover:text-red-600 transition-colors"
               title="Sign Out"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
@@ -656,12 +712,13 @@ export default function Layout() {
         </div>
       )}
 
+      {(!isDriverTerminal && activePortal !== 'anyride') && <RoleTabBar />}
+
       {/* Main Content */}
       <main className={cn(
         "flex-1 w-full relative min-h-0",
-        isDriverTerminal ? "pb-60 p-0 h-[100dvh] flex flex-col overflow-hidden" : (activePortal === 'anyride' ? "pb-60 sm:pb-6 p-0 h-[100dvh] flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 py-6 pb-60 sm:pb-6")
+        isDriverTerminal ? "pb-60 p-0 h-[100dvh] flex flex-col overflow-hidden" : (activePortal === 'anyride' ? "pb-60 sm:pb-6 p-0 h-[100dvh] flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 pt-4 pb-60 sm:pb-6")
       )}>
-        {(!isDriverTerminal && activePortal !== 'anyride') && <RoleTabBar />}
         <Outlet />
       </main>
 
