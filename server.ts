@@ -723,9 +723,10 @@ async function startServer() {
   // NEW: Direct-to-Driver Taxi Payment (QR Handshake)
   app.post("/api/rides/create-trip-payment", async (req, res) => {
     try {
-      const { rideId, driverId, amount } = req.body;
+      const { rideId, driverId, baseFare = 0, tipAmount = 0 } = req.body;
+      const amount = baseFare + tipAmount;
       
-      console.log("Create Trip Payment Request:", { rideId, driverId, amount, dbStatus: !!db });
+      console.log("Create Trip Payment Request:", { rideId, driverId, baseFare, tipAmount, amount, dbStatus: !!db });
 
       if (!db) {
         console.warn("Retrying Firebase initialization in route handler...");
@@ -764,8 +765,8 @@ async function startServer() {
         return res.status(400).json({ error: "Driver has not completed Stripe onboarding." });
       }
 
-      // 2. Create Destination Charge with Platform Fee (12% Commission)
-      const feeAmount = Math.round(amount * 0.12 * 100); // 12% in pence
+      // 2. Create Destination Charge with Platform Fee (12% Commission on baseFare ONLY)
+      const feeAmount = Math.round(baseFare * 0.12 * 100); // 12% in pence of base fare, tip is untouched
       
       let session;
       try {

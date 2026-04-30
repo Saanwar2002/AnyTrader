@@ -230,7 +230,10 @@ export default function DriverTerminal() {
           comments: data.comments || data.instructions || "",
           isReal: true,
           offerExpiresAt: data.offerExpiresAt,
-          isPriority: data.isPriority || false
+          isPriority: data.isPriority || false,
+          hasCardOnFile: data.hasCardOnFile || false,
+          tipAmount: data.tipAmount || 0,
+          paymentMethod: data.paymentMethod
         });
         
         // Calculate remaining time for the offer
@@ -399,6 +402,36 @@ export default function DriverTerminal() {
     };
   }, [isOnline, user, activeRide]);
 
+  const simulatePassenger90sWarning = () => {
+    if (activeRide?.hasCardOnFile) {
+      toast.info("Auto-Pay Active", {
+        description: "Passenger has a card attached. No QR code needed.",
+        duration: 8000
+      });
+      toast("Passenger Phone (Auto-Pay):", {
+        description: "Your journey is about to end. Please appreciate the driver by giving a tip.",
+        duration: 8000,
+        action: {
+          label: "Add Tip (£3)",
+          onClick: () => setActiveRide((prev: any) => ({...prev, tipAmount: 3}))
+        }
+      });
+    } else {
+      toast.warning("QR Payment Required", {
+        description: "Passenger will pay via scan. Have your QR ready.",
+        duration: 8000
+      });
+      toast("Passenger Phone (No Card):", {
+        description: "Please have your phone ready to scan the driver's QR code.",
+        duration: 8000,
+        action: {
+          label: "Add Tip (£5)",
+          onClick: () => setActiveRide((prev: any) => ({...prev, tipAmount: 5}))
+        }
+      });
+    }
+  };
+
   const simulateIncomingRide = () => {
     if (!isOnline) {
       setIsOnline(true);
@@ -431,6 +464,7 @@ export default function DriverTerminal() {
       durationMinutes: simulatedTime,
       comments: "Please ring the bell, the baby is sleeping. Thanks!",
       isPriority: true,
+      hasCardOnFile: Math.random() > 0.5,
       isRiderPlus: true,
       distanceToPickupMiles: 1.2,
       isReal: false
@@ -765,6 +799,20 @@ export default function DriverTerminal() {
     const baseFinalFare = (activeRide?.fareEstimate || 38.50) + waitFare;
     const finalFare = baseFinalFare + (activeRide?.tipAmount || 0);
 
+    if (activeRide?.hasCardOnFile) {
+      toast("Processing Auto-Payment...", { duration: 1500 });
+      setTimeout(async () => {
+         if (activeRide?.isReal) {
+           await handleAutoPaymentCompletion();
+         } else {
+           setRideState('review');
+           setIsGeneratingPayment(false);
+           toast.success("Payment Received", { description: "Passenger's card was charged automatically."});
+         }
+      }, 1500);
+      return;
+    }
+
     // Generate the Direct-to-Driver QR Payment Link
     try {
       const response = await fetch("/api/rides/create-trip-payment", {
@@ -773,7 +821,8 @@ export default function DriverTerminal() {
         body: JSON.stringify({
           rideId: activeRide?.id || "sim_123",
           driverId: user?.uid,
-          amount: finalFare
+          baseFare: baseFinalFare,
+          tipAmount: activeRide?.tipAmount || 0
         })
       });
       
@@ -788,6 +837,51 @@ export default function DriverTerminal() {
     }
 
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  };
+
+  const handleAutoPaymentCompletion = async () => {
+    if (activeRide?.id && activeRide?.isReal && user) {
+      try {
+        const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+        const baseFare = (activeRide.fareEstimate || 0) + waitFare;
+        const totalFare = baseFare + (activeRide.tipAmount || 0);
+        
+        await updateDoc(doc(db, "ride_requests", activeRide.id), {
+          status: "completed",
+          paymentMethod: "stripe_auto",
+          finalFare: totalFare,
+          paidWaitSeconds: totalPaidWaitSeconds,
+          completedAt: serverTimestamp()
+        });
+        
+        if (activeRide.riderId && typeof activeRide.riderId === 'string' && activeRide.riderId.length > 0) {
+          await updateDoc(doc(db, "users", activeRide.riderId), {
+            pendingCharges: 0,
+            cancellationCount: 0
+          } as any).catch(err => console.error("Failed to clear passenger fees:", err));
+        }
+
+        // We can update the daily driver_metrics as well
+        const today = new Date().toISOString().split('T')[0];
+        await setDoc(doc(db, "driver_metrics", user.uid), {
+          date: today,
+          dailyEarnings: increment(totalFare),
+          jobsDoneToday: increment(1),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        // Update driver earnings in auth profile 
+        await updateDoc(doc(db, "users", user.uid), {
+          totalEarnings: increment(totalFare),
+          jobsCompleted: increment(1)
+        });
+
+      } catch (err) {
+        console.error("Failed to process auto payment:", err);
+      }
+    }
+    setRideState('review');
+    toast.success("Payment Received", { description: "Passenger's card was charged automatically."});
   };
 
   const handleClosePayment = async () => {
@@ -890,12 +984,22 @@ export default function DriverTerminal() {
       {activeTab === 'home' && (
       <>
       {/* Simulation Trigger (Dev Only) */}
-      <button 
-        onClick={simulateIncomingRide}
-        className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[150] bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
-      >
-        Simulate Job
-      </button>
+      <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[150] flex flex-col items-center gap-2 pointer-events-auto">
+        <button 
+          onClick={simulateIncomingRide}
+          className="bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
+        >
+          Simulate Job {activeRide ? (activeRide.hasCardOnFile ? '(Card)' : '(No Card)') : ''}
+        </button>
+        {rideState === 'in_progress' && (
+          <button 
+            onClick={simulatePassenger90sWarning}
+            className="bg-[#FF3B30] text-white text-[10px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all outline outline-2 outline-white/20"
+          >
+            Trigger 90s Warning
+          </button>
+        )}
+      </div>
 
       {/* 1. Map Layer (Background) */}
       <div className="absolute inset-0 z-0 h-full w-full bg-[#1A1A1E]">
@@ -1206,8 +1310,8 @@ export default function DriverTerminal() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[200] bg-[#0D0D0F]/95 backdrop-blur-md overflow-y-auto pointer-events-auto"
           >
-            <div className="min-h-full flex flex-col items-center justify-center p-6 py-12 pb-[140px]">
-              <div className="w-full max-w-sm bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden my-auto mt-16 mb-16">
+            <div className="min-h-full flex flex-col justify-start p-6 pt-16 pb-32 max-w-md mx-auto">
+              <div className="w-full max-w-sm mx-auto bg-[#1A1A1E] border border-[#2C2C30] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden my-auto mb-16">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-[#00D26A] to-emerald-500"></div>
               
               <h2 className="text-[13px] font-black text-[#E4E4E7] mb-1 tracking-[0.2em] uppercase">Total Fare</h2>
@@ -1631,10 +1735,19 @@ export default function DriverTerminal() {
                        <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left <span className="text-[#A1A1AA] text-sm"> • {activeRide?.distanceMiles?.toFixed(1) || '14.2'} mi</span></p>
                     )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-[#00D26A] font-bold text-lg">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
+                  <div className="text-right flex flex-col items-end">
+                    <p className="text-[#00D26A] font-bold text-lg leading-none mb-1.5">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
+                    {activeRide?.hasCardOnFile ? (
+                      <div className="inline-block bg-white border-2 border-[#00D26A] px-1.5 py-0.5 rounded-md shadow-sm">
+                        <span className="text-[#00D26A] text-[8px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                      </div>
+                    ) : (
+                      <div className="inline-block bg-white border-2 border-[#EAB308] px-1.5 py-0.5 rounded-md shadow-sm">
+                        <span className="text-[#EAB308] text-[8px] font-black uppercase tracking-wider block leading-none">QR Code</span>
+                      </div>
+                    )}
                     {totalPaidWaitSeconds > 0 && (
-                       <p className="text-[10px] text-[#FF9500] font-bold">+Wait</p>
+                       <p className="text-[10px] text-[#FF9500] font-bold mt-1">+Wait</p>
                     )}
                   </div>
                 </div>
@@ -1753,10 +1866,10 @@ export default function DriverTerminal() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="fixed inset-0 z-[200] bg-[#0D0D0F]/95 backdrop-blur-xl flex flex-col pointer-events-auto overflow-y-auto scroll-smooth"
+            className="fixed inset-0 z-[200] bg-[#0D0D0F]/95 backdrop-blur-xl pointer-events-auto overflow-y-auto"
           >
-            <div className="min-h-full flex items-center justify-center p-4 py-8 pb-[140px] mt-auto mb-auto">
-              <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-6 shadow-2xl relative w-full text-center">
+            <div className="min-h-full flex flex-col justify-start p-4 pt-16 pb-32 max-w-md mx-auto">
+              <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-6 shadow-2xl relative w-full text-center mt-auto mb-auto">
               
               <div className="w-16 h-16 bg-[#00D26A]/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-[#00D26A]/30">
                 <Check className="w-8 h-8 text-[#00D26A] stroke-[3]" />
@@ -1770,11 +1883,16 @@ export default function DriverTerminal() {
                   transition={{ type: "spring", damping: 15 }}
                   className="text-[56px] leading-[1] font-black text-white tracking-tighter"
                 >
-                  £{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}
+                  £{(activeRide?.finalFare || ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute) + (activeRide?.tipAmount || 0))).toFixed(2)}
                 </motion.h1>
-                <div className="mt-4 bg-[#00D26A]/10 border border-[#00D26A]/20 py-2.5 px-4 rounded-xl inline-block">
+                {activeRide?.tipAmount ? (
+                  <p className="text-emerald-400 font-bold text-[15px] mt-2 mb-4 bg-emerald-500/10 inline-block px-4 py-1.5 rounded-full border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">Includes £{activeRide.tipAmount.toFixed(2)} Tip</p>
+                ) : null}
+                <div className="mt-4 bg-[#00D26A]/10 border border-[#00D26A]/20 py-2.5 px-4 rounded-xl inline-block w-full">
                   <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider mb-0.5">You Earned</p>
-                  <p className="text-2xl font-black text-[#00D26A]">£{(((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                  <p className="text-2xl font-black text-[#00D26A]">
+                    £{((activeRide?.finalFare ? (activeRide.finalFare - (activeRide.tipAmount || 0)) : ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))) * (1 - fareConfig.commissionRate) + (activeRide?.tipAmount || 0)).toFixed(2)}
+                  </p>
                 </div>
               </div>
 
@@ -1792,15 +1910,35 @@ export default function DriverTerminal() {
                   )}
                   <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge ({activeRide?.surgeMultiplier || '1.4'}x):</span><span className="font-bold">+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
                 </div>
-                <div className="border-t border-[#333338] pt-2 mb-2 flex justify-between text-sm font-bold text-white">
-                  <span>Total fare:</span><span>£{(activeRide?.finalFare || ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs font-bold text-[#FF3B30] p-1.5 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20 mb-3">
-                  <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{((activeRide?.finalFare || ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))) * fareConfig.commissionRate).toFixed(2)}</span>
-                </div>
-                <div className="border-t border-[#333338] pt-2 flex justify-between text-[15px] font-black text-[#00D26A]">
-                  <span>YOUR EARNINGS:</span><span>£{((activeRide?.finalFare || ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))) * (1 - fareConfig.commissionRate)).toFixed(2)}</span>
-                </div>
+
+                {(() => {
+                  const baseJobFare = activeRide?.finalFare ? (activeRide.finalFare - (activeRide.tipAmount || 0)) : ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute));
+                  const commission = baseJobFare * fareConfig.commissionRate;
+                  const normalEarnings = baseJobFare - commission;
+                  const totalEarnings = normalEarnings + (activeRide?.tipAmount || 0);
+
+                  return (
+                    <>
+                      <div className="border-t border-[#333338] pt-2 mb-2 flex justify-between text-sm font-bold text-white">
+                        <span>Base job fare:</span><span>£{baseJobFare.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-bold text-[#FF3B30] p-1.5 bg-[#FF3B30]/10 rounded border border-[#FF3B30]/20 mb-3">
+                        <span>Commission ({(fareConfig.commissionRate * 100).toFixed(0)}%):</span><span>-£{commission.toFixed(2)}</span>
+                      </div>
+                      <div className="border-t border-[#333338] pt-2 pb-2 flex justify-between text-[15px] font-black text-white">
+                        <span>Normal Earnings:</span><span>£{normalEarnings.toFixed(2)}</span>
+                      </div>
+                      {activeRide?.tipAmount ? (
+                        <div className="flex justify-between text-[15px] font-black text-emerald-400 pb-2">
+                           <span>Passenger Tip:</span><span>+£{activeRide.tipAmount.toFixed(2)}</span>
+                        </div>
+                      ) : null}
+                      <div className="border-t-2 border-[#00D26A]/50 pt-2 flex justify-between text-lg font-black text-[#00D26A]">
+                        <span>YOUR EARNINGS:</span><span>£{totalEarnings.toFixed(2)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Passenger Rating Block */}

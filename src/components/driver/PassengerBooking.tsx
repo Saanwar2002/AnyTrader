@@ -961,6 +961,7 @@ export default function PassengerBooking() {
         comments,
         unpaidCancellationFeesOwed: pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0,
         status: "pending",
+        hasCardOnFile: !!profile?.stripeCustomerId,
         currency: "GBP",
         handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
       };
@@ -1235,6 +1236,11 @@ export default function PassengerBooking() {
           
           // Trigger the tip modal after a short delay for preview purposes
           setTimeout(() => {
+            if (hasCardOnFile) {
+              toast.info("Preparing Auto-Pay", { description: "Your journey is almost over. Want to add a tip?" });
+            } else {
+              toast.warning("Payment Required", { description: "Please have your phone ready to scan the driver's QR code to pay." });
+            }
             setShowTipModal(true);
             triggerHaptic(ImpactStyle.Heavy);
             // Vibrate pattern for alert
@@ -2238,13 +2244,18 @@ export default function PassengerBooking() {
                         <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100">
                           <Heart className="w-8 h-8 text-emerald-500 fill-emerald-500" />
                         </div>
-                        <h3 className="text-xl font-black text-text-main mb-1">Journey almost over</h3>
-                        <p className="text-sm font-bold text-text-muted mb-6">
-                          Want to leave a tip for your driver? 100% of tips go directly to them.
+                        <h3 className="text-xl font-black text-text-main mb-2">Journey almost over</h3>
+                        <p className="text-sm font-bold text-text-muted mb-2">
+                          {hasCardOnFile 
+                            ? "Your fare will be paid automatically. Want to leave a tip?" 
+                            : "Please have your phone ready to scan the driver's QR code to pay. Want to add a tip?"}
+                        </p>
+                        <p className="text-[10px] font-black uppercase text-emerald-600 mb-6 bg-emerald-50 py-1.5 px-3 rounded-md inline-block tracking-wider">
+                          100% of tips go directly to the driver
                         </p>
                         
                         <div className="grid grid-cols-3 gap-2 mb-4">
-                          {[1, 2, 5].map((amount) => (
+                          {[2, 3, 5].map((amount) => (
                             <button
                               key={amount}
                               onClick={() => { setSelectedTip(amount); setCustomTip(""); }}
@@ -2274,16 +2285,22 @@ export default function PassengerBooking() {
 
                         <div className="space-y-3">
                           <button
-                            onClick={() => handleAddTip(selectedTip || parseFloat(customTip) || 0)}
-                            className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg hover:opacity-90 transition-all active:scale-95"
+                            onClick={() => {
+                              const finalAmount = selectedTip || parseFloat(customTip) || 0;
+                              if (finalAmount > 0) {
+                                handleAddTip(finalAmount);
+                              }
+                            }}
+                            disabled={!selectedTip && !customTip}
+                            className="w-full py-4 bg-[#00D26A] text-black rounded-2xl font-black shadow-lg hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
                           >
-                            Add Tip & Continue
+                            Add {selectedTip || customTip ? `£${selectedTip || customTip}` : ''}
                           </button>
                           <button
                             onClick={() => handleAddTip(0)}
                             className="w-full py-3 bg-transparent text-text-muted font-bold hover:text-text-main transition-colors"
                           >
-                            No thanks
+                            No, thank you
                           </button>
                         </div>
                       </motion.div>
