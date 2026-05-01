@@ -1018,6 +1018,51 @@ export default function PassengerBooking() {
     // Do not clear currentRideId here, just let them edit
   };
 
+  const simulateDriverAccepts = async () => {
+    if (!currentRideId) return;
+    try {
+      await updateDoc(doc(db, "ride_requests", currentRideId), {
+        status: "accepted",
+        driverId: "sim-driver-123",
+        driverName: "Sim Driver",
+        driverPhone: "07700900000",
+        vehicleInfo: "Silver Toyota",
+        vehiclePlate: "SIM 123",
+        acceptedAt: serverTimestamp(),
+      });
+      if (pickupCoords) {
+        await setDoc(doc(db, "live_tracking", "sim-driver-123"), {
+           lat: pickupCoords.lat - 0.003,
+           lng: pickupCoords.lng - 0.003,
+           updatedAt: serverTimestamp(),
+           isOnline: true
+        });
+      }
+      toast.success("Simulated match!");
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  const simulateNextState = async () => {
+    if (!currentRideId || !assignedDriverInfo) return;
+    const currentStatus = assignedDriverInfo.status;
+    let nextStatus = "arrived";
+    if (currentStatus === "accepted") nextStatus = "arrived";
+    else if (currentStatus === "arrived") nextStatus = "in_progress";
+    else if (currentStatus === "in_progress") nextStatus = "completed";
+
+    try {
+      const updateData: any = { status: nextStatus };
+      if (nextStatus === "arrived") updateData.arrivedAt = serverTimestamp();
+      if (nextStatus === "in_progress") updateData.startedAt = serverTimestamp();
+      if (nextStatus === "completed") {
+         updateData.completedAt = serverTimestamp();
+      }
+      await updateDoc(doc(db, "ride_requests", currentRideId), updateData);
+    } catch(err) { console.error(err); }
+  };
+
   const handleAbandonSearch = async () => {
     setShowAbandonPrompt(false);
     if (!currentRideId) return;
@@ -2159,6 +2204,7 @@ export default function PassengerBooking() {
                   <button onClick={handleCancelSearching} className="flex-1 text-text-main font-black text-sm py-4 rounded-2xl border-2 border-border-main hover:bg-surface transition-colors active:scale-95">Edit</button>
                   <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-black text-sm py-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors active:scale-95">Cancel</button>
                 </div>
+                {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-xs mt-3 font-black text-sm py-3 rounded-2xl bg-indigo-100 text-indigo-700 active:scale-95 transition-transform">Simulate Match</button>}
               </motion.div>
             )}
 
@@ -2238,6 +2284,7 @@ export default function PassengerBooking() {
                 
                 <div className="text-center">
                   <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
+                  <button onClick={simulateNextState} className="w-full mt-4 font-black py-3 rounded-2xl bg-indigo-100 text-indigo-700 active:scale-95 transition-transform">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
                 </div>
                 
                 <AnimatePresence>
