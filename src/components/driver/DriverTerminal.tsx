@@ -21,6 +21,58 @@ type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progr
 
 const libraries: any[] = ['places'];
 
+const mapOptions: google.maps.MapOptions = {
+  disableDefaultUI: false,
+  zoomControl: true,
+  streetViewControl: false,
+  mapTypeControl: false,
+  fullscreenControl: false,
+  gestureHandling: "greedy",
+  styles: [
+    {
+      "featureType": "poi",
+      "stylers": [{ "visibility": "off" }]
+    },
+    {
+      "featureType": "transit",
+      "stylers": [{ "visibility": "simplified" }]
+    }
+  ]
+};
+
+const premiumMapOptions: google.maps.MapOptions = {
+  ...mapOptions,
+  disableDefaultUI: true,
+  clickableIcons: false,
+  keyboardShortcuts: false,
+  styles: [
+    { "elementType": "geometry", "stylers": [{ "color": "#ebe3cd" }] },
+    { "elementType": "labels.text.fill", "stylers": [{ "color": "#523735" }] },
+    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f1e6" }] },
+    { "featureType": "administrative", "elementType": "geometry.stroke", "stylers": [{ "color": "#c9b2a6" }] },
+    { "featureType": "administrative.land_parcel", "elementType": "geometry.stroke", "stylers": [{ "color": "#dcd2be" }] },
+    { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#ae9e90" }] },
+    { "featureType": "landscape.natural", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#93817c" }] },
+    { "featureType": "poi.park", "elementType": "geometry.fill", "stylers": [{ "color": "#a5b076" }] },
+    { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#447530" }] },
+    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#f5f1e6" }] },
+    { "featureType": "road.arterial", "elementType": "geometry", "stylers": [{ "color": "#fdfcf8" }] },
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#f8c967" }] },
+    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#e9bc62" }] },
+    { "featureType": "road.highway.controlled_access", "elementType": "geometry", "stylers": [{ "color": "#e98d58" }] },
+    { "featureType": "road.highway.controlled_access", "elementType": "geometry.stroke", "stylers": [{ "color": "#db8555" }] },
+    { "featureType": "road.local", "elementType": "labels.text.fill", "stylers": [{ "color": "#806b63" }] },
+    { "featureType": "transit.line", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "transit.line", "elementType": "labels.text.fill", "stylers": [{ "color": "#8f7d77" }] },
+    { "featureType": "transit.line", "elementType": "labels.text.stroke", "stylers": [{ "color": "#ebe3cd" }] },
+    { "featureType": "transit.station", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+    { "featureType": "water", "elementType": "geometry.fill", "stylers": [{ "color": "#b9d3c2" }] },
+    { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#92998d" }] }
+  ]
+};
+
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
   const { switchPortal } = usePortal();
@@ -1022,11 +1074,7 @@ export default function DriverTerminal() {
             }
             onLoad={map => setMapInstance(map)}
             options={{
-              disableDefaultUI: true,
-              clickableIcons: false,
-              keyboardShortcuts: false,
-              mapId: "a1b2c3d4e5f6g7h8", 
-              gestureHandling: 'greedy',
+              ...premiumMapOptions,
               padding: {
                 bottom: 350, // UI drawer height
                 top: 100,
@@ -1462,12 +1510,7 @@ export default function DriverTerminal() {
                           window.google.maps.event.removeListener(listener);
                         });
                       }}
-                      options={{
-                        disableDefaultUI: true,
-                        clickableIcons: false,
-                        keyboardShortcuts: false,
-                        mapId: "a1b2c3d4e5f6g7h8",
-                      }}
+                      options={premiumMapOptions}
                     >
                       {activeRide.pickupLat && (
                         <MarkerF position={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }} label="P" />

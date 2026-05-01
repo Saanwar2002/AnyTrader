@@ -290,6 +290,7 @@ export default function PassengerBooking() {
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
   const [nearbyDriversCount, setNearbyDriversCount] = useState<number>(0);
   const [driversAvailableSoonCount, setDriversAvailableSoonCount] = useState<number>(0);
+  const [nearbyDriversLocations, setNearbyDriversLocations] = useState<{lat: number, lng: number, id: string}[]>([]);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const [fareConfig, setFareConfig] = useState({ 
@@ -456,6 +457,7 @@ export default function PassengerBooking() {
       let countNow = 0;
       let countSoon = 0;
       const cats = new Set<string>();
+      const locations: {lat: number, lng: number, id: string}[] = [];
 
       snapshot.docs.forEach(docSnap => {
         const data = docSnap.data();
@@ -485,6 +487,7 @@ export default function PassengerBooking() {
             if (distToPickup <= 3) {
                countSoon++;
                driverCategories.forEach((cat: string) => cats.add(cat));
+               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
             }
           }
         } else if (data.lat && data.lng && data.status !== 'on_ride') {
@@ -493,12 +496,14 @@ export default function PassengerBooking() {
             if (distToPickup <= 3) {
                countNow++;
                driverCategories.forEach((cat: string) => cats.add(cat));
+               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
             }
           }
         }
       });
       setNearbyDriversCount(countNow);
       setDriversAvailableSoonCount(countSoon);
+      setNearbyDriversLocations(locations);
       setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
     });
     return () => unsub();
@@ -1253,7 +1258,17 @@ export default function PassengerBooking() {
     const unsubTrack = onSnapshot(doc(db, "live_tracking", assignedDriverInfo?.uid || "none"), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        if (data.lat && data.lng) setDriverPos({ lat: data.lat, lng: data.lng });
+        if (data.lat && data.lng) {
+          const newPos = { lat: data.lat, lng: data.lng };
+          setDriverPos(newPos);
+          if (map) {
+             const bounds = new window.google.maps.LatLngBounds();
+             bounds.extend(newPos);
+             if (assignedDriverInfo?.status === "accepted" && pickupCoords) bounds.extend(pickupCoords);
+             if (assignedDriverInfo?.status === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
+             map.fitBounds(bounds, { top: 60, bottom: 350, left: 40, right: 40 });
+          }
+        }
       }
     });
     return () => { unsubRide(); unsubTrack(); };
@@ -1510,6 +1525,15 @@ export default function PassengerBooking() {
                 </div>
               </OverlayViewF>
             )}
+
+            {!currentRideId && step === "details" && nearbyDriversLocations.map(driver => (
+              <OverlayViewF key={driver.id} position={{ lat: driver.lat, lng: driver.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                <div className="relative flex items-center justify-center w-6 h-6 -ml-3 -mt-3">
+                  <div className="absolute inset-0 bg-primary/40 rounded-full animate-pulse blur-[2px]"></div>
+                  <div className="bg-primary border-2 border-card w-3.5 h-3.5 rounded-sm shadow-md z-10 flex items-center justify-center transform rotate-45"></div>
+                </div>
+              </OverlayViewF>
+            ))}
 
             {driverPos && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
@@ -2151,7 +2175,7 @@ export default function PassengerBooking() {
                 ) : (
                   <div className="flex flex-col mb-6">
                      <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">
-                       {assignedDriverInfo?.status === "en_route_pickup" ? "Driver is on the way" : 
+                       {assignedDriverInfo?.status === "accepted" ? "Driver is on the way" : 
                         assignedDriverInfo?.status === "in_progress" ? "Heading to destination" : 
                         "Driver found!"}
                      </h2>
