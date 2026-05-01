@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../AuthProvider";
 import { logout, db, doc, updateDoc } from "@/src/firebase";
-import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2 } from "lucide-react";
+import { deleteField } from "firebase/firestore";
+import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 
@@ -35,10 +36,18 @@ export default function DriverMenu({
         const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
         const request = {
           input: homeInput,
-          componentRestrictions: { country: "uk" }
+          includedRegionCodes: ["gb"]
         };
         const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
-        setSuggestions(predictions);
+        if (predictions && predictions.length > 0) {
+            const cleaned = predictions.map((p: any) => ({
+              description: p.placePrediction.text.text,
+              place_id: p.placePrediction.placeId
+            }));
+            setSuggestions(cleaned);
+        } else {
+            setSuggestions([]);
+        }
       } catch (err) {
         console.error(err);
       }
@@ -115,7 +124,7 @@ export default function DriverMenu({
       title: "Ride Preferences (Active Ride)",
       items: [
         { icon: Repeat, label: "Ride Stacking", desc: "Receive offers during trip", color: "text-[#00D26A]", bg: "bg-white/5", type: 'toggle', action: 'toggle-stacking', active: profile?.isStackingEnabled !== false },
-        { icon: MapPin, label: "Destination Mode", desc: profile?.destinationModeActive ? "Active: Toward Home" : "Off", color: "text-[#AF52DE]", bg: "bg-white/5", type: 'toggle', action: 'toggle-destination-mode', active: profile?.destinationModeActive === true },
+        { icon: MapPin, label: "Destination Mode", desc: profile?.destinationModeActive ? `Active: ${profile?.homeAddress || "Toward Home"}` : "Off", color: "text-[#AF52DE]", bg: "bg-white/5", type: 'toggle', action: 'toggle-destination-mode', active: profile?.destinationModeActive === true },
       ]
     },
     {
@@ -285,8 +294,40 @@ export default function DriverMenu({
                       </div>
                     </div>
                     {item.type === 'toggle' ? (
-                      <div className="relative inline-block w-10 h-6 cursor-pointer rounded-full ml-4 shrink-0 transition-colors" style={{ backgroundColor: item.active ? '#00D26A' : '#3F3F46' }}>
-                        <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all", item.active ? "right-1" : "left-1")}></div>
+                      <div className="flex items-center gap-3">
+                        {item.action === 'toggle-destination-mode' && profile?.homeLat && (
+                          <div className="flex items-center gap-2 mr-2">
+                            <div 
+                              onClick={(e) => { e.stopPropagation(); setShowHomeModal(true); setHomeInput(""); setSuggestions([]); }}
+                              className="p-1.5 bg-[#2C2C30] hover:bg-[#3F3F46] rounded flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-[#A1A1AA] hover:text-white" />
+                            </div>
+                            <div 
+                              onClick={async (e) => { 
+                                e.stopPropagation(); 
+                                if (!user?.uid) return;
+                                try {
+                                  await updateDoc(doc(db, "users", user.uid), {
+                                    homeAddress: deleteField(),
+                                    homeLat: deleteField(),
+                                    homeLng: deleteField(),
+                                    destinationModeActive: false
+                                  });
+                                  toast.success("Destination mode cleared");
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}
+                              className="p-1.5 bg-[#2C2C30] hover:bg-[#FF3B30]/20 rounded flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-[#A1A1AA] hover:text-[#FF3B30]" />
+                            </div>
+                          </div>
+                        )}
+                        <div className="relative inline-block w-10 h-6 cursor-pointer rounded-full shrink-0 transition-colors" style={{ backgroundColor: item.active ? '#00D26A' : '#3F3F46' }}>
+                          <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all", item.active ? "right-1" : "left-1")}></div>
+                        </div>
                       </div>
                     ) : item.type !== 'text' ? (
                       <ChevronRight className="w-5 h-5 text-[#A1A1AA]" />
