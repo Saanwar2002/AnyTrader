@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../AuthProvider";
 import { logout, db, doc, updateDoc } from "@/src/firebase";
 import { deleteField } from "firebase/firestore";
-import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2 } from "lucide-react";
+import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2, VolumeX } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 
@@ -125,6 +125,7 @@ export default function DriverMenu({
       items: [
         { icon: Repeat, label: "Ride Stacking", desc: "Receive offers during trip", color: "text-[#00D26A]", bg: "bg-white/5", type: 'toggle', action: 'toggle-stacking', active: profile?.isStackingEnabled !== false },
         { icon: MapPin, label: "Destination Mode", desc: profile?.destinationModeActive ? `Active: ${profile?.homeAddress || "Toward Home"}` : "Off", color: "text-[#AF52DE]", bg: "bg-white/5", type: 'toggle', action: 'toggle-destination-mode', active: profile?.destinationModeActive === true },
+        { icon: VolumeX, label: "Mute Offer Alerts", desc: "Disable 3-sec sound ping", color: "text-[#FF9500]", bg: "bg-white/5", type: 'toggle', action: 'toggle-mute-alerts', active: profile?.muteRideOfferAlerts === true },
       ]
     },
     {
@@ -267,6 +268,9 @@ export default function DriverMenu({
                           } else {
                              updateDoc(doc(db, "users", user.uid), { destinationModeActive: !item.active });
                           }
+                        }
+                        if (item.action === 'toggle-mute-alerts') {
+                          updateDoc(doc(db, "users", user.uid), { muteRideOfferAlerts: !item.active });
                         }
                         if (item.action === 'toggle-last-job') {
                           updateDoc(doc(db, "users", user.uid), { isLastJob: !item.active });

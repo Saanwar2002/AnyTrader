@@ -9,6 +9,7 @@ import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction } from "@/src/firebase";
+import { playSound } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
@@ -359,11 +360,16 @@ export default function DriverTerminal() {
     let interval: any;
     if (rideState === 'incoming' && incomingTimer > 0) {
       interval = setInterval(() => setIncomingTimer(prev => prev - 1), 1000);
+      if (incomingTimer % 3 === 0) {
+        if (!profile?.muteRideOfferAlerts) {
+          playSound('alert');
+        }
+      }
     } else if (rideState === 'incoming' && incomingTimer === 0) {
       handleDeclineRide();
     }
     return () => clearInterval(interval);
-  }, [rideState, incomingTimer]);
+  }, [rideState, incomingTimer, profile?.muteRideOfferAlerts]);
 
   const handleToggleOnline = () => {
     if (rideState !== 'idle') return; // Cannot toggle while riding
@@ -619,10 +625,51 @@ export default function DriverTerminal() {
 
   const [waitStartTime, setWaitStartTime] = useState<number | null>(null);
   const [elapsedWaitSeconds, setElapsedWaitSeconds] = useState(0);
+  const [pickupProximityStartTime, setPickupProximityStartTime] = useState<number | null>(null);
 
   // Stop wait & abandonment logic
   const [isWaitingAtStop, setIsWaitingAtStop] = useState(false);
   const [stopWaitStartTime, setStopWaitStartTime] = useState<number | null>(null);
+
+  // Auto-arrive logic when driver is within 200m of pickup for 30 seconds
+  useEffect(() => {
+    if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng && mapCenter) {
+      const R = 6371e3;
+      const lat1 = mapCenter[0] * Math.PI/180;
+      const lat2 = activeRide.pickupLat * Math.PI/180;
+      const dLat = (activeRide.pickupLat-mapCenter[0]) * Math.PI/180;
+      const dLon = (activeRide.pickupLng-mapCenter[1]) * Math.PI/180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1) * Math.cos(lat2) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const dist = R * c;
+
+      if (dist <= 200) {
+        if (!pickupProximityStartTime) {
+          setPickupProximityStartTime(Date.now());
+        }
+      } else {
+        setPickupProximityStartTime(null);
+      }
+    } else {
+      setPickupProximityStartTime(null);
+    }
+  }, [mapCenter, rideState, activeRide?.pickupLat, activeRide?.pickupLng]);
+
+  useEffect(() => {
+    if (pickupProximityStartTime) {
+      const interval = setInterval(() => {
+         if (Date.now() - pickupProximityStartTime >= 30000) {
+            console.log("Auto-arriving as driver is stationary within 200m for 30s");
+            handleArrived(activeRide); // Avoid strict stale closures if activeRide hasn't changed.
+            setPickupProximityStartTime(null);
+            toast.success("Automatically marked as arrived", { description: "You've been waiting at the pickup location." });
+         }
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [pickupProximityStartTime, activeRide]);
   const [accumulatedPaidWaitSeconds, setAccumulatedPaidWaitSeconds] = useState(0);
   const [currentStopWaitSeconds, setCurrentStopWaitSeconds] = useState(0);
   const [waitStopLocation, setWaitStopLocation] = useState<[number, number] | null>(null);
@@ -770,13 +817,14 @@ export default function DriverTerminal() {
     }
   };
 
-  const handleArrived = async () => {
+  const handleArrived = async (overrideRide?: any) => {
+    const rideToUpdate = overrideRide || activeRide;
     setRideState('waiting');
     setWaitStartTime(Date.now());
     setElapsedWaitSeconds(0);
     setAccumulatedPaidWaitSeconds(0);
-    if (activeRide?.id && activeRide?.isReal) {
-      await updateDoc(doc(db, "ride_requests", activeRide.id), {
+    if (rideToUpdate?.id && rideToUpdate?.isReal) {
+      await updateDoc(doc(db, "ride_requests", rideToUpdate.id), {
         status: "arrived",
         arrivedAt: serverTimestamp()
       });

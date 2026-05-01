@@ -9,6 +9,7 @@ import {
 import RideChat from "./RideChat";
 import { cn } from "@/src/lib/utils";
 import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where, getDocs, orderBy, limit, deleteField, getDoc } from "@/src/firebase";
+import { playSound } from "@/src/lib/sound";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
@@ -293,6 +294,7 @@ export default function PassengerBooking() {
   const [nearbyDriversLocations, setNearbyDriversLocations] = useState<{lat: number, lng: number, id: string}[]>([]);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
+  const lastSoundStatusRef = useRef<string | null>(null);
   const [fareConfig, setFareConfig] = useState({ 
     baseFare: 3.5, 
     distanceRate: 1.3, 
@@ -1260,6 +1262,10 @@ export default function PassengerBooking() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.status === 'accepted' && data.driverId) {
+          if (lastSoundStatusRef.current !== 'accepted') {
+             playSound('success');
+             lastSoundStatusRef.current = 'accepted';
+          }
           setAssignedDriverInfo(prev => ({ 
              uid: data.driverId, 
              name: data.driverName || "Driver", 
@@ -1276,11 +1282,19 @@ export default function PassengerBooking() {
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
         }
         if (data.status === 'arrived') {
+          if (lastSoundStatusRef.current !== 'arrived') {
+             playSound('notification');
+             lastSoundStatusRef.current = 'arrived';
+          }
           setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis() } : null);
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
           toast.success("Your driver has arrived!");
         }
         if (data.status === 'in_progress') {
+          if (lastSoundStatusRef.current !== 'in_progress') {
+             playSound('notification');
+             lastSoundStatusRef.current = 'in_progress';
+          }
           setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis() } : null);
           setStep("confirmed");
           
@@ -1297,7 +1311,7 @@ export default function PassengerBooking() {
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
           }, 15000); // 15s after ride starts
         }
-        if (data.status === 'completed') { setStep("details"); setCurrentRideId(null); setAssignedDriverInfo(null); }
+        if (data.status === 'completed') { setStep("details"); setCurrentRideId(null); setAssignedDriverInfo(null); lastSoundStatusRef.current = null; }
       }
     });
     const unsubTrack = onSnapshot(doc(db, "live_tracking", assignedDriverInfo?.uid || "none"), (snapshot) => {
