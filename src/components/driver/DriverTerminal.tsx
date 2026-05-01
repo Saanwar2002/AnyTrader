@@ -9,7 +9,7 @@ import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction } from "@/src/firebase";
-import { playSound } from "@/src/lib/sound";
+import { playSound, speakText } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
@@ -212,7 +212,7 @@ export default function DriverTerminal() {
     } else {
       setDirections(null);
     }
-  }, [rideState, activeRide?.id, isLoaded, mapInstance]);
+  }, [rideState, activeRide?.id, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, isLoaded, mapInstance]);
 
   // Listen to Taxi Command Settings (platform_config/rides)
   useEffect(() => {
@@ -340,6 +340,30 @@ export default function DriverTerminal() {
           setPassengerPos(null);
           setDirections(null);
           if (navigator.vibrate) navigator.vibrate([300, 200, 300]);
+        }
+        
+        if (data.isModifiedByPassenger) {
+          // Play loud alert notification
+          playSound('notification');
+          speakText("Job details updated by passenger");
+          toast.info("Ride Details Updated", { description: "The passenger has updated the ride details or fare.", duration: 8000 });
+          
+          setActiveRide(prev => prev ? {
+             ...prev,
+             dropoffAddress: data.dropoff || prev.dropoffAddress,
+             dropoffLat: data.dropoffLat || prev.dropoffLat,
+             dropoffLng: data.dropoffLng || prev.dropoffLng,
+             pickupAddress: data.pickup || prev.pickupAddress,
+             pickupLat: data.pickupLat || prev.pickupLat,
+             pickupLng: data.pickupLng || prev.pickupLng,
+             fareEstimate: data.fareEstimate || prev.fareEstimate,
+             distanceMiles: data.distanceMiles || prev.distanceMiles,
+             stops: data.stops || prev.stops
+          } : null);
+          
+          updateDoc(doc(db, "ride_requests", activeRide.id), {
+            isModifiedByPassenger: false
+          }).catch(console.error);
         }
       }
     });

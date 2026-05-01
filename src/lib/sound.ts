@@ -46,3 +46,12 @@ export function playSound(type: 'alert' | 'success' | 'notification') {
     console.error('AudioContext error', err);
   }
 }
+
+export function speakText(text: string) {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  window.speechSynthesis.speak(utterance);
+}

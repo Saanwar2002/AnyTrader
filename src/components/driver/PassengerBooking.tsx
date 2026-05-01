@@ -942,8 +942,16 @@ export default function PassengerBooking() {
       toast.warning(`Notice: £${pendingCharges.toFixed(2)} unpaid cancellation fee will be added to this trip's fare.`);
     }
 
-    setStep("searching");
-    searchingStartTimeRef.current = Date.now();
+    const isUpdatingActiveRide = assignedDriverInfo && (assignedDriverInfo.status === 'accepted' || assignedDriverInfo.status === 'arrived' || assignedDriverInfo.status === 'in_progress');
+
+    if (isUpdatingActiveRide) {
+      setStep("confirmed");
+      toast.success("Ride Updated", { description: "Your driver has been notified of the changes." });
+    } else {
+      setStep("searching");
+      searchingStartTimeRef.current = Date.now();
+    }
+    
     try {
       const rideData = {
         riderId: user.uid,
@@ -967,14 +975,15 @@ export default function PassengerBooking() {
         waitTolerance,
         comments,
         unpaidCancellationFeesOwed: pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0,
-        status: "pending",
+        status: isUpdatingActiveRide ? assignedDriverInfo.status : "pending",
         hasCardOnFile: !!profile?.stripeCustomerId,
         currency: "GBP",
         handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
       };
+      
       const activeId = editId || currentRideId;
       if (activeId) {
-         await updateDoc(doc(db, "ride_requests", activeId), { ...rideData, updatedAt: serverTimestamp() });
+         await updateDoc(doc(db, "ride_requests", activeId), { ...rideData, updatedAt: serverTimestamp(), isModifiedByPassenger: true });
          setCurrentRideId(activeId);
       } else {
          const docRef = await addDoc(collection(db, "ride_requests"), { ...rideData, createdAt: serverTimestamp() });
@@ -1670,19 +1679,21 @@ export default function PassengerBooking() {
                         <div className="flex-1 flex items-center bg-emerald-50/20 border border-emerald-200/60 rounded-2xl group-focus-within:bg-white group-focus-within:border-emerald-500 group-focus-within:ring-4 group-focus-within:ring-emerald-500/10 transition-all shadow-sm min-w-0 pr-1 overflow-hidden">
                           <input 
                             type="text" 
-                            className="flex-none w-14 bg-transparent text-center font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] border-r border-emerald-200/60 py-3.5 focus:bg-emerald-500/5 transition-colors shrink-0 min-w-0" 
+                            className="flex-none w-14 bg-transparent text-center font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] border-r border-emerald-200/60 py-3.5 focus:bg-emerald-500/5 transition-colors shrink-0 min-w-0 disabled:opacity-50" 
                             placeholder="Flat" 
                             value={houseNumber} 
+                            disabled={!!assignedDriverInfo}
                             onChange={(e) => setHouseNumber(e.target.value)} 
                           />
                           <input 
                             ref={pickupInputRef}
                             type="text" 
-                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-emerald-500/5 transition-colors min-w-0" 
+                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-emerald-500/5 transition-colors min-w-0 disabled:opacity-50 disabled:cursor-not-allowed" 
                             placeholder="Current Location" 
                             value={pickup} 
-                            onFocus={() => setActiveField("pickup")} 
-                            onChange={(e) => setPickup(e.target.value)} 
+                            disabled={!!assignedDriverInfo}
+                            onFocus={() => { if (!assignedDriverInfo) setActiveField("pickup"); }} 
+                            onChange={(e) => { if (!assignedDriverInfo) setPickup(e.target.value); }} 
                           />
                           <div className="pl-1.5 pr-0.5 py-1.5 border-l border-emerald-200/60 flex items-center justify-center shrink-0 h-full">
                             <button onClick={handleDetectLocation} className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg tooltip-trigger shrink-0 transition-colors">
@@ -2133,9 +2144,10 @@ export default function PassengerBooking() {
                        <button 
                          onClick={handleConfirmBooking} 
                          disabled={!pickup || !dropoff} 
-                         className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+                         className="w-full py-5 bg-header text-surface rounded-3xl font-black text-xl shadow-xl hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all flex flex-col items-center leading-none"
                        >
-                         Confirm {CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}
+                         <span>{assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status) ? "Confirm Update" : `Confirm ${CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}`}</span>
+                         {assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status) && <span className="text-xs font-medium text-surface/80 mt-1">Driver will be notified immediately</span>}
                        </button>
                     </div>
                       </div>
@@ -2297,6 +2309,7 @@ export default function PassengerBooking() {
                 </div>
                 
                 <div className="text-center">
+                  <button onClick={() => setStep("details")} className="w-full mb-4 py-4 bg-emerald-50 text-emerald-700 border-2 border-emerald-200 rounded-2xl font-black active:scale-95 transition-transform">Edit Ride Options</button>
                   <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
                   <button onClick={simulateNextState} className="w-full mt-4 font-black py-3 rounded-2xl bg-indigo-100 text-indigo-700 active:scale-95 transition-transform">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
                 </div>
