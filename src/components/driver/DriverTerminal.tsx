@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
-import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction } from "@/src/firebase";
+import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
 import DriverInbox from "./DriverInbox";
@@ -95,6 +95,9 @@ export default function DriverTerminal() {
   const [rideState, setRideState] = useState<RideState>('idle');
   const [showFareBreakdown, setShowFareBreakdown] = useState(false);
   const [incomingTimer, setIncomingTimer] = useState(15);
+  const [stackedRideOffer, setStackedRideOffer] = useState<any>(null);
+  const [acceptedStackedRideOffer, setAcceptedStackedRideOffer] = useState<any>(null);
+  const [stackedIncomingTimer, setStackedIncomingTimer] = useState(0);
 
   // Rating State
   const [passengerRating, setPassengerRating] = useState(5);
@@ -252,7 +255,8 @@ export default function DriverTerminal() {
 
   // Listen for REAL incoming live ride requests (offered to this driver)
   useEffect(() => {
-    if (!isOnline || rideState !== 'idle' || !user) return;
+    if (!isOnline || !user) return;
+    if (rideState !== 'idle' && rideState !== 'in_progress') return;
 
     const q = query(
       collection(db, "ride_requests"), 
@@ -265,7 +269,7 @@ export default function DriverTerminal() {
         const rideDoc = snapshot.docs[0];
         const data = rideDoc.data();
         
-        setActiveRide({
+        const rideData = {
           id: rideDoc.id,
           userId: data.riderId,
           name: data.passengerName || "Live Passenger",
@@ -287,20 +291,32 @@ export default function DriverTerminal() {
           hasCardOnFile: data.hasCardOnFile || false,
           tipAmount: data.tipAmount || 0,
           paymentMethod: data.paymentMethod
-        });
+        };
         
         // Calculate remaining time for the offer
         const expiresAt = new Date(data.offerExpiresAt).getTime();
         const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
         
-        setIncomingTimer(remaining);
-        setRideState('incoming');
+        if (rideState === 'idle') {
+          setActiveRide(rideData);
+          setIncomingTimer(remaining);
+          setRideState('incoming');
+        } else if (rideState === 'in_progress') {
+          if (!stackedRideOffer) {
+            setStackedRideOffer(rideData);
+            setStackedIncomingTimer(remaining);
+          }
+        }
         if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+      } else {
+        if (rideState === 'in_progress' && stackedRideOffer && stackedRideOffer.isReal !== false) {
+          setStackedRideOffer(null);
+        }
       }
     });
     
     return () => unsub();
-  }, [isOnline, rideState, user]);
+  }, [isOnline, rideState, user, stackedRideOffer]);
 
   // Listen to Active Ride for Cancellations
   useEffect(() => {
@@ -348,6 +364,32 @@ export default function DriverTerminal() {
           speakText("Job details updated by passenger");
           toast.info("Ride Details Updated", { description: "The passenger has updated the ride details or fare.", duration: 8000 });
           
+          if (data.dropoffLat && data.dropoffLng && activeRide?.dropoffLat && activeRide?.dropoffLng && user?.uid) {
+            const R = 6371e3;
+            const p1 = activeRide.dropoffLat * Math.PI/180;
+            const p2 = data.dropoffLat * Math.PI/180;
+            const dp = (data.dropoffLat - activeRide.dropoffLat) * Math.PI/180;
+            const dl = (data.dropoffLng - activeRide.dropoffLng) * Math.PI/180;
+            const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
+            const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            
+            if (dist > 1609.34) { // More than 1 mile away
+              const delayMins = Math.max(5, Math.round(dist / 400)); // Rough estimate of 1 min per 400m
+              const stackedQuery = query(collection(db, "ride_requests"), where("driverId", "==", user.uid), where("status", "==", "accepted"));
+              getDocs(stackedQuery).then(snap => {
+                snap.forEach(d => {
+                  if (d.id !== activeRide.id) {
+                    updateDoc(doc(db, "ride_requests", d.id), {
+                      stackedDriverDelay: delayMins,
+                      updatedAt: serverTimestamp()
+                    });
+                    toast.warning("Stacked passenger notified", { description: "Your next passenger has been asked if they want to wait due to your destination change.", duration: 10000 });
+                  }
+                });
+              }).catch(console.error);
+            }
+          }
+          
           setActiveRide(prev => prev ? {
              ...prev,
              dropoffAddress: data.dropoff || prev.dropoffAddress,
@@ -381,19 +423,37 @@ export default function DriverTerminal() {
 
   // Timer simulation for Incoming request
   useEffect(() => {
-    let interval: any;
+    let interval: NodeJS.Timeout;
     if (rideState === 'incoming' && incomingTimer > 0) {
-      interval = setInterval(() => setIncomingTimer(prev => prev - 1), 1000);
+      interval = setInterval(() => setIncomingTimer((prev) => prev - 1), 1000);
       if (incomingTimer % 3 === 0) {
         if (!profile?.muteRideOfferAlerts) {
           playSound('alert');
         }
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       }
     } else if (rideState === 'incoming' && incomingTimer === 0) {
       handleDeclineRide();
     }
     return () => clearInterval(interval);
   }, [rideState, incomingTimer, profile?.muteRideOfferAlerts]);
+
+  // Timer simulation for Stacked Incoming request
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (stackedRideOffer && rideState === 'in_progress' && stackedIncomingTimer > 0) {
+      interval = setInterval(() => setStackedIncomingTimer((prev) => prev - 1), 1000);
+      if (stackedIncomingTimer % 3 === 0) {
+        if (!profile?.muteRideOfferAlerts) {
+          playSound('alert');
+        }
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      }
+    } else if (stackedRideOffer && rideState === 'in_progress' && stackedIncomingTimer === 0) {
+      handleDeclineStackedRide();
+    }
+    return () => clearInterval(interval);
+  }, [stackedRideOffer, rideState, stackedIncomingTimer, profile?.muteRideOfferAlerts]);
 
   const handleToggleOnline = () => {
     if (rideState !== 'idle') return; // Cannot toggle while riding
@@ -557,6 +617,38 @@ export default function DriverTerminal() {
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]); // Custom ride tone haptic
   };
 
+  const simulateStackedIncomingRide = () => {
+    if (!isOnline || rideState !== 'in_progress') return;
+    
+    const simulatedDist = Math.floor(Math.random() * 10) + 2; 
+    const simulatedTime = simulatedDist * 2.5; 
+    const calcFare = Math.max(fareConfig.minFare, fareConfig.baseFare + (simulatedDist * fareConfig.distanceRate));
+    
+    setStackedRideOffer({
+      id: "simulated_stacked_ride_456",
+      name: "Mike R.",
+      pickupAddress: "Next Pickup Location",
+      dropoffAddress: "Another Dropoff",
+      pickupLat: mapCenter[0] + 0.015,
+      pickupLng: mapCenter[1] - 0.015,
+      dropoffLat: mapCenter[0] - 0.025,
+      dropoffLng: mapCenter[1] + 0.035,
+      fareEstimate: calcFare,
+      baseCalc: calcFare,
+      distanceMiles: simulatedDist,
+      durationMinutes: simulatedTime,
+      comments: "Waiting outside.",
+      isPriority: false,
+      hasCardOnFile: true,
+      isRiderPlus: false,
+      distanceToPickupMiles: 0.8,
+      isReal: false
+    });
+
+    setStackedIncomingTimer(15);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+  };
+
   const handleAcceptRide = async () => {
     // If it's a real ride from Firestore, claim it!
     if (activeRide?.isReal && activeRide?.id && user) {
@@ -620,6 +712,70 @@ export default function DriverTerminal() {
     setRideState('idle');
   };
 
+  const handleDeclineStackedRide = async () => {
+    if (stackedRideOffer?.id && stackedRideOffer?.isReal && user) {
+      try {
+        await updateDoc(doc(db, "driver_status", user.uid), {
+          pendingRideId: deleteField(),
+          consecutiveDeclines: increment(1)
+        } as any);
+
+        await updateDoc(doc(db, "ride_requests", stackedRideOffer.id), {
+          status: "pending",
+          assignedDriverId: deleteField(),
+          offerExpiresAt: deleteField()
+        } as any);
+
+      } catch (err) {
+        console.error("Error declining stacked ride:", err);
+      }
+    }
+    setStackedRideOffer(null);
+  };
+
+  const handleAcceptStackedRide = async () => {
+    let success = false;
+    if (stackedRideOffer?.isReal && stackedRideOffer?.id && user) {
+      try {
+        await runTransaction(db, async (t) => {
+           const rideRef = doc(db, "ride_requests", stackedRideOffer.id);
+           const docSnap = await t.get(rideRef);
+           if (!docSnap.exists()) throw new Error("Ride not found");
+           if (docSnap.data().status !== "offered") throw new Error("Ride no longer available");
+
+           t.update(rideRef, {
+             status: "accepted",
+             driverId: user.uid,
+             driverName: profile?.firstName || "Driver",
+             driverPhone: profile?.phone || profile?.phoneNumber || "",
+             vehicleInfo: profile?.vehicle || "Silver Toyota Prius",
+             vehiclePlate: profile?.vehicleRegistration || profile?.plate || "WK71 BCF",
+             acceptedAt: serverTimestamp()
+           });
+        });
+        
+        await updateDoc(doc(db, "driver_status", user.uid), {
+          isBusy: true,
+          pendingRideId: deleteField()
+        } as any);
+        toast.success("Stacked job accepted. It will appear when your current ride is completed.", { duration: 5000 });
+        success = true;
+      } catch (err: any) {
+        console.error("Failed to claim stacked ride:", err);
+        toast.error(err.message || "Failed to accept stacked ride. It might have expired.");
+      }
+    } else {
+        toast.success("Stacked job accepted.", { duration: 3000 });
+        success = true;
+    }
+    
+    if (success) {
+      setAcceptedStackedRideOffer(stackedRideOffer);
+    }
+    // We do not replace activeRide. The stacked ride logic is done.
+    setStackedRideOffer(null);
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTabParam = searchParams.get("tab") || "home";
   
@@ -641,6 +797,7 @@ export default function DriverTerminal() {
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showEarlyArrivalConfirm, setShowEarlyArrivalConfirm] = useState(false);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [earlyCompletionReason, setEarlyCompletionReason] = useState("");
   const [isEarlyCompletion, setIsEarlyCompletion] = useState(false);
@@ -839,6 +996,27 @@ export default function DriverTerminal() {
     } finally {
       setIsGeneratingPayment(false);
     }
+  };
+
+  const onArrivedClick = () => {
+    if (activeRide?.pickupLat && activeRide?.pickupLng && mapCenter) {
+      const R = 6371e3;
+      const lat1 = mapCenter[0] * Math.PI/180;
+      const lat2 = activeRide.pickupLat * Math.PI/180;
+      const dLat = (activeRide.pickupLat-mapCenter[0]) * Math.PI/180;
+      const dLon = (activeRide.pickupLng-mapCenter[1]) * Math.PI/180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1) * Math.cos(lat2) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const dist = R * c;
+
+      if (dist > 200) {
+        setShowEarlyArrivalConfirm(true);
+        return;
+      }
+    }
+    handleArrived();
   };
 
   const handleArrived = async (overrideRide?: any) => {
@@ -1116,12 +1294,22 @@ export default function DriverTerminal() {
           Simulate Job {activeRide ? (activeRide.hasCardOnFile ? '(Card)' : '(No Card)') : ''}
         </button>
         {rideState === 'in_progress' && (
-          <button 
-            onClick={simulatePassenger90sWarning}
-            className="bg-[#FF3B30] text-white text-[10px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all outline outline-2 outline-white/20"
-          >
-            Trigger 90s Warning
-          </button>
+          <>
+            <button 
+              onClick={simulatePassenger90sWarning}
+              className="bg-[#FF3B30] text-white text-[10px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all outline outline-2 outline-white/20"
+            >
+              Trigger 90s Warning
+            </button>
+            {!stackedRideOffer && (
+              <button 
+                onClick={simulateStackedIncomingRide}
+                className="bg-indigo-500 text-white text-[10px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all outline outline-2 outline-white/20"
+              >
+                Simulate Stacked Job
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -1500,7 +1688,7 @@ export default function DriverTerminal() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 text-center rounded-t-3xl border-t border-[#2C2C30]"
+                    className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 pb-28 text-center rounded-t-3xl border-t border-[#2C2C30]"
                   >
                     <button 
                       onClick={() => setShowCashConfirm(false)}
@@ -1704,6 +1892,136 @@ export default function DriverTerminal() {
         )}
       </AnimatePresence>
 
+      {/* Screen 3b: Stacked Incoming Ride Request Overlay */}
+      <AnimatePresence>
+        {stackedRideOffer && rideState === 'in_progress' && (
+          <motion.div 
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-3 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
+          >
+            {/* Same content as before */}
+            <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
+              
+              {/* Highlight header */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
+
+              <div className="flex items-center justify-between mb-3 shrink-0">
+                <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
+                  <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
+                  Next Ride Request (Stacked)
+                </h2>
+              </div>
+
+              <div className="flex-1 flex flex-col min-h-0 scrollbar-hide">
+                {/* Rider Details */}
+                <div className="pt-1 pb-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-base border border-white shrink-0">
+                      {(stackedRideOffer?.name || "S")[0]}
+                    </div>
+                    <div className="flex-1 min-w-0 flex justify-between items-start">
+                      <div>
+                        <h3 className="text-sm font-bold text-white leading-tight truncate">{stackedRideOffer?.name || "Sarah T."}</h3>
+                        <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
+                      </div>
+                      {stackedRideOffer?.isRiderPlus !== false && (
+                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {/* Fare Section (Moved below rider profile) */}
+                    <div className="bg-[#252529] rounded-xl p-3 relative overflow-hidden shrink-0">
+                      <div className="flex justify-between items-end mb-1">
+                        <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
+                          £{stackedRideOffer?.fareEstimate?.toFixed(2) || '38.50'}
+                          <span className="text-[15px] font-bold text-white/80 tracking-normal mb-1">({((stackedRideOffer?.distanceToPickupMiles || 1.2) + (stackedRideOffer?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                        </h1>
+                        <div className="flex gap-1.5 items-center">
+                          {stackedRideOffer?.isPriority && (
+                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
+                          )}
+                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {stackedRideOffer?.surgeMultiplier || '1.4'}x</span>
+                        </div>
+                      </div>
+                      <p className="text-[#00D26A] text-[12px] font-bold mt-1">You earn: £{((stackedRideOffer?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-2 mb-1">
+                      <div className="relative pl-5 space-y-3 flex-1">
+                        {/* Route Line indicator */}
+                        <div className="absolute left-2 top-1.5 bottom-1.5 w-[3px] bg-[#2C2C30] rounded-full"></div>
+                        
+                        <div className="relative">
+                          <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
+                          <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Next Pickup After Drop-off</p>
+                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stackedRideOffer?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{stackedRideOffer?.distanceToPickupMiles || "1.2"} mi from next dropoff</p>
+                        </div>
+
+                        {(stackedRideOffer?.stops || []).map((stop: any, idx: number) => (
+                          <div key={idx} className="relative mt-3">
+                            <div className="absolute w-3.5 h-3.5 rounded-full bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
+                            <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
+                            <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stop.address}</p>
+                          </div>
+                        ))}
+
+                        <div className="relative mt-3">
+                          <div className="absolute w-3.5 h-3.5 bg-[#FF3B30] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
+                          <p className="text-[10px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
+                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
+                        </div>
+                      </div>
+
+                      {/* Circular Timer Ring */}
+                      <div className="relative w-16 h-16 flex items-center justify-center shrink-0 ml-3 mr-2">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle cx="32" cy="32" r="28" className="stroke-[#2C2C30] fill-none" strokeWidth="5" />
+                          <motion.circle 
+                            cx="32" cy="32" r="28" 
+                            className={cn("fill-none", stackedIncomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
+                            strokeWidth="5" 
+                            strokeDasharray="176" 
+                            strokeLinecap="round"
+                            initial={{ strokeDashoffset: 0 }}
+                            animate={{ strokeDashoffset: 176 - (176 * (stackedIncomingTimer / 15)) }}
+                            transition={{ duration: 1, ease: 'linear' }}
+                          />
+                        </svg>
+                        <span className="absolute text-xl font-black text-white">{stackedIncomingTimer}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-2.5 mt-3 shrink-0 relative z-20">
+                <button 
+                  onClick={handleAcceptStackedRide}
+                  className="w-full h-12 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-black text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                >
+                  <Check className="w-5 h-5 stroke-[3]" /> ACCEPT NEXT JOB
+                </button>
+                <button 
+                  onClick={handleDeclineStackedRide}
+                  className="w-full py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      
       {/* Job Details Modal - Quick Glance */}
       <AnimatePresence>
         {showJobDetails && activeRide && (
@@ -1773,10 +2091,10 @@ export default function DriverTerminal() {
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                   </button>
                   <button 
-                    onClick={handleArrived}
+                    onClick={onArrivedClick}
                     className="flex-1 h-11 bg-[#FF9500] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
                   >
-                    <MapPin className="w-4 h-4" /> ARRIVED AT PICKUP
+                    <MapPin className="w-4 h-4" /> MARK AS ARRIVED
                   </button>
                 </div>
               </>
@@ -1933,7 +2251,7 @@ export default function DriverTerminal() {
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 text-center rounded-t-3xl border-t border-[#2C2C30]"
+                      className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 pb-28 text-center rounded-t-3xl border-t border-[#2C2C30]"
                     >
                       <button 
                         onClick={() => setShowCancelConfirm(false)}
@@ -1963,6 +2281,47 @@ export default function DriverTerminal() {
                         className="w-full h-12 flex-shrink-0 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform"
                       >
                         BACK
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {showEarlyArrivalConfirm && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="absolute inset-0 z-[60] bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 pb-28 text-center rounded-t-3xl border-t border-[#2C2C30]"
+                    >
+                      <button 
+                        onClick={() => setShowEarlyArrivalConfirm(false)}
+                        className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-[#2C2C30] hover:bg-white/10 rounded-full transition-colors z-50"
+                      >
+                        <X className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                      </button>
+                      <div className="w-12 h-12 rounded-full bg-[#FF9500]/20 flex flex-shrink-0 items-center justify-center mb-3 mt-4">
+                        <MapPin className="w-6 h-6 text-[#FF9500]" />
+                      </div>
+                      <h3 className="text-white text-lg font-black tracking-wide mb-1 uppercase">Too far from pickup?</h3>
+                      <p className="text-[#E4E4E7] text-xs mb-4 px-2 leading-relaxed font-medium">
+                        You appear to be quite far away from the pickup location. Are you sure you've arrived? Marking as arrived early can confuse the rider.
+                      </p>
+                      
+                      <button 
+                        onClick={() => {
+                          setShowEarlyArrivalConfirm(false);
+                          handleArrived();
+                        }}
+                        className="w-full h-12 flex-shrink-0 bg-[#FF9500] text-white rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,149,0,0.3)] active:scale-95 transition-transform mb-3 uppercase tracking-wider"
+                      >
+                        Yes, Mark as Arrived
+                      </button>
+                      <button 
+                        onClick={() => setShowEarlyArrivalConfirm(false)}
+                        className="w-full h-12 flex-shrink-0 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform uppercase tracking-wider"
+                      >
+                        Wait, Go Back
                       </button>
                     </motion.div>
                   )}
@@ -2102,6 +2461,15 @@ export default function DriverTerminal() {
 
               <button 
                 onClick={async () => {
+                  if (acceptedStackedRideOffer) {
+                    setActiveRide(acceptedStackedRideOffer);
+                    setRideState('en_route_pickup');
+                    setAcceptedStackedRideOffer(null);
+                    setPassengerRating(5);
+                    setRatingComment("");
+                    return;
+                  }
+
                   setRideState('idle');
                   setIsOnline(profile?.isLastJob ? false : true);
                   

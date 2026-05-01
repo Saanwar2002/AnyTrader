@@ -1098,6 +1098,41 @@ export default function PassengerBooking() {
   const [showAbandonPrompt, setShowAbandonPrompt] = useState(false);
   const [cancelFeeToApply, setCancelFeeToApply] = useState(0);
 
+  const handleKeepWaiting = async () => {
+    if (!currentRideId) return;
+    try {
+      await updateDoc(doc(db, "ride_requests", currentRideId), {
+        stackedDriverDelay: deleteField()
+      });
+      setAssignedDriverInfo((prev: any) => prev ? { ...prev, stackedDriverDelay: undefined } : null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleFindAnotherDriver = async () => {
+     if (!currentRideId) return;
+     try {
+       await updateDoc(doc(db, "ride_requests", currentRideId), {
+          status: "pending",
+          driverId: deleteField(),
+          assignedDriverId: deleteField(),
+          driverName: deleteField(),
+          driverPhone: deleteField(),
+          vehicleInfo: deleteField(),
+          vehiclePlate: deleteField(),
+          acceptedAt: deleteField(),
+          stackedDriverDelay: deleteField(),
+          updatedAt: serverTimestamp()
+       });
+       setAssignedDriverInfo(null);
+       setStep("searching");
+       searchingStartTimeRef.current = Date.now();
+     } catch (err) {
+       console.error(err);
+     }
+  };
+
   const handleCancelConfirmed = async () => {
     if (!currentRideId) return;
 
@@ -1286,7 +1321,8 @@ export default function PassengerBooking() {
              fareEstimate: data.fareEstimate || 0,
              rating: data.driverRating || "4.8",
              acceptedAt: data.acceptedAt?.toMillis() || Date.now(),
-             isFinishingTrip: prev?.isFinishingTrip !== undefined ? prev.isFinishingTrip : (nearbyDriversCount === 0 && driversAvailableSoonCount > 0)
+             isFinishingTrip: prev?.isFinishingTrip !== undefined ? prev.isFinishingTrip : (nearbyDriversCount === 0 && driversAvailableSoonCount > 0),
+             stackedDriverDelay: data.stackedDriverDelay
           }));
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
         }
@@ -2236,6 +2272,40 @@ export default function PassengerBooking() {
 
             {step === "confirmed" && (
               <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] border-t border-border-main pointer-events-auto">
+                <AnimatePresence>
+                   {assignedDriverInfo?.stackedDriverDelay && assignedDriverInfo.status === "accepted" && (
+                       <motion.div
+                          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                          className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 shadow-sm"
+                       >
+                         <h3 className="font-black text-amber-900 text-lg mb-1 flex items-center gap-2">
+                           <AlertCircle className="w-5 h-5" /> Driver Delayed
+                         </h3>
+                         <p className="text-amber-800 text-sm font-semibold mb-4 leading-snug">
+                           Your driver's current trip has been extended and will take approx {assignedDriverInfo.stackedDriverDelay} mins longer. Would you like to keep waiting or find another driver?
+                           {nearbyDriversCount === 0 && driversAvailableSoonCount === 0 && (
+                             <span className="block mt-2 text-amber-900 bg-amber-200/50 p-2 rounded-lg font-bold">
+                               Note: There are currently no other drivers available in your area (15-20+ min wait expected).
+                             </span>
+                           )}
+                         </p>
+                         <div className="flex gap-3">
+                           <button 
+                             onClick={handleKeepWaiting}
+                             className="flex-1 py-3 px-4 bg-amber-200 text-amber-900 rounded-xl font-bold active:scale-95 transition-transform"
+                           >
+                             Keep Waiting
+                           </button>
+                           <button 
+                             onClick={handleFindAnotherDriver}
+                             className="flex-1 py-3 px-4 bg-white border-2 border-amber-200 text-amber-800 rounded-xl font-bold active:scale-95 transition-transform"
+                           >
+                             Find Another
+                           </button>
+                         </div>
+                       </motion.div>
+                   )}
+                </AnimatePresence>
                 {assignedDriverInfo?.status === "arrived" ? (
                   <div className="flex items-center gap-4 mb-6">
                      <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center"><Clock className="w-8 h-8 text-warning animate-pulse" /></div>

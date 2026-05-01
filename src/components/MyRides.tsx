@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, arrayUnion, deleteDoc, serverTimestamp } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
-import { motion } from "motion/react";
-import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle, Info, Calendar, User, FileText, X } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ export default function MyRides() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "completed">("active");
+  const [selectedRideDetails, setSelectedRideDetails] = useState<any | null>(null);
 
   const handleSaveJourney = async (ride: any) => {
     if (!user) return;
@@ -274,6 +275,15 @@ export default function MyRides() {
                     <Bookmark className="w-4 h-4" />
                     {isSaved ? "Saved to Regulars" : "Save as Regular"}
                   </button>
+                  {ride.status === "completed" && (
+                     <button
+                       onClick={() => setSelectedRideDetails(ride)}
+                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100"
+                     >
+                       <FileText className="w-4 h-4" />
+                       Show job detail
+                     </button>
+                  )}
                 </div>
                 
                 {ride.status === "pending" && (
@@ -313,6 +323,121 @@ export default function MyRides() {
             })
           )}
       </div>
+      
+      {/* Job Details Modal */}
+      <AnimatePresence>
+        {selectedRideDetails && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={() => setSelectedRideDetails(null)}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 sm:p-0"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+             <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+                <div>
+                   <h2 className="text-xl font-black text-slate-900">Job Details</h2>
+                   <p className="text-xs font-bold text-slate-500 mt-1">{selectedRideDetails.createdAt?.toDate ? new Date(selectedRideDetails.createdAt.toDate()).toLocaleString() : 'N/A'}</p>
+                </div>
+                <button onClick={() => setSelectedRideDetails(null)} className="p-2 bg-slate-200/50 hover:bg-slate-200 text-slate-500 rounded-full transition-colors active:scale-95">
+                  <X className="w-5 h-5" />
+                </button>
+             </div>
+             
+             <div className="p-5 overflow-y-auto w-full max-h-[70vh]">
+                {/* Route */}
+                <div className="space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</p>
+                      <p className="text-sm font-bold text-slate-700">{selectedRideDetails.pickup}</p>
+                    </div>
+                  </div>
+
+                  {selectedRideDetails.stops && selectedRideDetails.stops.length > 0 && selectedRideDetails.stops.map((stop: any, index: number) => (
+                    <div key={index} className="relative">
+                      <div className="absolute -top-4 left-4 w-0.5 h-4 bg-slate-200" />
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                          <MapPin className="w-4 h-4 text-amber-500" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stop {index + 1}</p>
+                          <p className="text-sm font-bold text-slate-700">{stop.address || stop.name}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="relative">
+                     <div className="absolute -top-4 left-4 w-0.5 h-4 bg-slate-200" />
+                     <div className="flex items-start gap-3">
+                       <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                         <MapPin className="w-4 h-4 text-emerald-500" />
+                       </div>
+                       <div>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dropoff</p>
+                         <p className="text-sm font-bold text-slate-700">{selectedRideDetails.dropoff}</p>
+                       </div>
+                     </div>
+                  </div>
+                </div>
+                
+                {/* Driver & Vehicle */}
+                <div className="mb-6 grid gap-3">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Driver & Vehicle</h3>
+                  <div className="bg-slate-50 rounded-2xl p-4 flex items-center justify-between border border-slate-100">
+                     <div className="flex items-center gap-3">
+                       <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRideDetails.driverName || 'Driver')}`} alt={selectedRideDetails.driverName} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+                       <div>
+                         <p className="text-sm font-bold text-slate-900">{selectedRideDetails.driverName || 'Unknown Driver'}</p>
+                         <p className="text-xs font-semibold text-slate-500">{selectedRideDetails.vehicleInfo || 'Vehicle Unknown'}</p>
+                       </div>
+                     </div>
+                     <div className="text-right">
+                       <div className="bg-yellow-100 text-yellow-800 font-mono text-xs font-bold px-2 py-1 rounded-md border border-yellow-200 shadow-sm uppercase tracking-wider">
+                         {selectedRideDetails.vehiclePlate || 'UNKNOWN'}
+                       </div>
+                     </div>
+                  </div>
+                </div>
+                
+                {/* Trip Stats */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1"><Clock className="inline w-3 h-3 mr-1 -mt-0.5" />Duration & Dist</p>
+                    <p className="text-lg font-black text-slate-800">
+                      {selectedRideDetails.startedAt && selectedRideDetails.completedAt ? 
+                        `${Math.max(1, Math.round((selectedRideDetails.completedAt.toMillis() - selectedRideDetails.startedAt.toMillis()) / 60000))} min` 
+                        : (selectedRideDetails.durationMinutes ? `${selectedRideDetails.durationMinutes} min` : 'N/A')}
+                      {selectedRideDetails.distanceMiles ? <><span className="text-slate-300 mx-1">•</span> <span className="text-sm font-semibold text-slate-500">{selectedRideDetails.distanceMiles} mi</span></> : null}
+                    </p>
+                  </div>
+                  <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex flex-col justify-center">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Total Fare</p>
+                    <p className="text-2xl font-black text-indigo-700">
+                      £{parseFloat(selectedRideDetails.finalFare || selectedRideDetails.fareEstimate || selectedRideDetails.price || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+             </div>
+             <div className="p-4 border-t border-slate-100 bg-white">
+                <button onClick={() => setSelectedRideDetails(null)} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-transform">Close</button>
+             </div>
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

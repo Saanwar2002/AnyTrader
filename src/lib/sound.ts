@@ -5,6 +5,7 @@ export function playSound(type: 'alert' | 'success' | 'notification') {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
+    
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
@@ -12,20 +13,20 @@ export function playSound(type: 'alert' | 'success' | 'notification') {
     gainNode.connect(ctx.destination);
 
     if (type === 'alert') {
-      // Pleasant double chime (D5 to G5), increased volume for noisy conditions
-      osc.type = 'triangle'; // Triangle cuts through background noise better than sine
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.1); // G5
+      // Pleasant softer double chime (C5 to E5)
+      osc.type = 'sine'; // Sine is softer and rounder
+      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+      osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15); // E5
       
       gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.1, ctx.currentTime + 0.1);
+      gainNode.gain.linearRampToValueAtTime(1.2, ctx.currentTime + 0.03);
+      gainNode.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.15);
       
-      gainNode.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.12);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      gainNode.gain.linearRampToValueAtTime(1.2, ctx.currentTime + 0.18);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
       
       osc.start();
-      osc.stop(ctx.currentTime + 0.5);
+      osc.stop(ctx.currentTime + 0.6);
     } else if (type === 'success') {
       osc.frequency.setValueAtTime(600, ctx.currentTime);
       osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.1);

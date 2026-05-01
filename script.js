@@ -1,0 +1,15 @@
+import fs from 'fs';
+let code = fs.readFileSync('src/components/driver/DriverTerminal.tsx', 'utf8');
+const startIndex = code.indexOf('{/* Screen 3: Incoming Ride Request Overlay');
+const endIndex = code.indexOf('{/* Job Details Modal - Quick Glance */}');
+let block = code.substring(startIndex, endIndex);
+block = block.replace('{/* Screen 3: Incoming Ride Request Overlay (z-50) */}', '{/* Screen 3b: Stacked Incoming Ride Request Overlay */}');
+block = block.replace(/rideState === 'incoming'/g, "stackedRideOffer && rideState === 'in_progress'");
+block = block.replace(/activeRide\?/g, 'stackedRideOffer?');
+block = block.replace(/activeRide\./g, 'stackedRideOffer.');
+block = block.replace(/handleAcceptRide/g, 'handleAcceptStackedRide');
+block = block.replace(/handleDeclineRide/g, 'handleDeclineStackedRide');
+block = block.replace(/incomingTimer/g, 'stackedIncomingTimer');
+block = block.replaceAll('New Ride Request', 'Next Ride Request (Stacked)');
+let finalCode = code.slice(0, endIndex) + block + '\n      ' + code.slice(endIndex);
+fs.writeFileSync('src/components/driver/DriverTerminal.tsx', finalCode);
