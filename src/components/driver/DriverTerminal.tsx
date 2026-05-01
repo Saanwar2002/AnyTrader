@@ -1738,12 +1738,12 @@ export default function DriverTerminal() {
                   <div className="text-right flex flex-col items-end">
                     <p className="text-[#00D26A] font-bold text-lg leading-none mb-1.5">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
                     {activeRide?.hasCardOnFile ? (
-                      <div className="inline-block bg-white border-2 border-[#00D26A] px-1.5 py-0.5 rounded-md shadow-sm">
-                        <span className="text-[#00D26A] text-[8px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                      <div className="inline-block bg-white border-2 border-[#00D26A] px-2 py-1 rounded-md shadow-sm mt-0.5">
+                        <span className="text-[#059669] text-[9px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
                       </div>
                     ) : (
-                      <div className="inline-block bg-white border-2 border-[#EAB308] px-1.5 py-0.5 rounded-md shadow-sm">
-                        <span className="text-[#EAB308] text-[8px] font-black uppercase tracking-wider block leading-none">QR Code</span>
+                      <div className="inline-block bg-white border-2 border-[#EA580C] px-2 py-1 rounded-md shadow-sm mt-0.5">
+                        <span className="text-[#EA580C] text-[10px] font-black uppercase tracking-wider block leading-none">QR Code</span>
                       </div>
                     )}
                     {totalPaidWaitSeconds > 0 && (
