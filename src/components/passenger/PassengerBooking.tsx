@@ -186,9 +186,9 @@ function SearchingTimer() {
   const secs = (elapsed % 60).toString().padStart(2, '0');
   
   return (
-    <div className="flex flex-col items-center justify-center bg-surface border border-border-main px-4 py-2 rounded-2xl shadow-sm mb-6">
-      <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-1">Time Elapsed</p>
-      <p className="text-xl font-black text-primary font-mono">{mins.toString().padStart(2, '0')}:{secs}</p>
+    <div className="flex flex-col items-center justify-center bg-[#f8fafc] border border-slate-200 px-6 py-3.5 rounded-[20px] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] mb-4 min-w-[140px]">
+      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.1em] mb-1.5">Time Elapsed</p>
+      <p className="text-[28px] leading-none font-black text-slate-900 tracking-tight">{mins.toString().padStart(2, '0')}:{secs}</p>
     </div>
   );
 }
@@ -2200,22 +2200,20 @@ export default function PassengerBooking() {
             )}
 
             {step === "searching" && (
-              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-8 pb-6 flex flex-col items-center border-t border-border-main pointer-events-auto h-full overflow-y-auto no-scrollbar">
-                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center relative mb-4">
-                  <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
-                  <Car className="w-10 h-10 text-primary animate-pulse" />
-                </div>
-                <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">Requesting...</h2>
-                <p className="text-text-muted font-bold text-sm text-center mb-6">Pinging the fleet to find your professional driver.</p>
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 pb-6 flex flex-col items-center border-t border-slate-200 pointer-events-auto h-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)]">
+                <div className="w-10 h-[5px] bg-slate-200 rounded-full mb-5"/>
+                <p className="text-slate-800 text-sm font-semibold mb-1">Searching for drivers...</p>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Requesting...</h2>
+                <p className="text-slate-600 font-medium text-[15px] text-center mb-6 max-w-[280px]">Pinging the fleet to find your professional driver.</p>
                 
                 <SearchingTimer />
 
-                <div className="w-full max-w-xs mt-2 bg-surface rounded-2xl p-4 border-2 border-primary/20 flex flex-col items-center justify-center shadow-sm">
-                  <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-1">Total Fare Estimate</p>
-                  <p className="text-3xl font-black text-primary">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
+                <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[20px] p-5 border border-[#bae6fd]/50 flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-4">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Total Fare Estimate</p>
+                  <p className="text-3xl font-black text-[#0f172a]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
                 </div>
                 
-                <div className="w-full max-w-xs mt-4 relative">
+                <div className="w-full max-w-[320px] relative">
                   <AnimatePresence mode="popLayout">
                     {isPriority && (
                       <motion.div key="priority-active" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-2 p-2.5 bg-emerald-500 rounded-xl text-center text-xs font-bold shadow-lg flex items-center justify-center gap-1.5 text-white">
@@ -2230,47 +2228,46 @@ export default function PassengerBooking() {
                       </motion.div>
                     )}
                     {showPriorityPrompt && (
-                      <motion.div key="priority-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white border-2 border-warning/50 shadow-xl rounded-2xl z-20">
-                        <p className="text-xs font-bold text-slate-800 text-center mb-2">Are you sure you want to add Priority Boost for <span className="text-warning font-black">£3.00</span>?</p>
+                      <motion.div key="priority-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-3 p-4 bg-white border border-slate-200 shadow-xl rounded-2xl z-20">
+                        <p className="text-sm font-bold text-slate-800 text-center mb-3">Add Priority Boost for <span className="text-amber-600 font-black">£3.00</span>?</p>
                         <div className="flex gap-2">
-                           <button onClick={() => setShowPriorityPrompt(false)} className="flex-1 py-2 bg-slate-100 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200">Cancel</button>
-                           <button onClick={() => confirmTogglePriority(true)} className="flex-1 py-2 bg-warning rounded-xl text-xs font-black text-white shadow-sm hover:bg-warning/90">Confirm</button>
+                           <button onClick={() => setShowPriorityPrompt(false)} className="flex-1 py-2.5 bg-slate-100 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
+                           <button onClick={() => confirmTogglePriority(true)} className="flex-1 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 rounded-xl text-sm font-black text-white shadow-sm hover:opacity-90 transition-opacity">Confirm</button>
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                   
-                  <div onClick={handleTogglePriorityClick} className="w-full mb-2 bg-gradient-to-r from-amber-200 to-amber-300 rounded-2xl p-4 shadow-sm border border-amber-400 relative overflow-hidden group cursor-pointer active:scale-95 transition-all">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-400/50 rounded-full blur-xl group-hover:scale-150 transition-transform"></div>
-                    <div className="flex items-center gap-3 relative z-10 w-full">
-                      <div className="p-2 bg-white/50 rounded-full shrink-0">
-                        <Zap className="w-5 h-5 text-amber-700" />
+                  <div onClick={handleTogglePriorityClick} className="w-full mb-3 bg-gradient-to-r from-[#ffeaa7] to-[#ffd43b] rounded-[20px] p-5 shadow-[0_4px_14px_-6px_rgba(255,212,59,0.5)] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
+                    <div className="flex items-center gap-4 relative z-10 w-full">
+                      <div className="p-2.5 bg-amber-600/10 rounded-full shrink-0">
+                        <Zap className="w-6 h-6 text-amber-800" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="text-amber-950 font-black text-sm">Boost Priority (+£3)</h4>
-                        <p className="text-amber-800 text-[11px] font-semibold leading-tight mt-0.5">Jump to the top of the queue.</p>
+                        <h4 className="text-amber-950 font-black text-[15px]">Boost Priority (+£3)</h4>
+                        <p className="text-amber-800/80 text-[13px] font-semibold tracking-tight mt-0.5">Jump to the top of the queue.</p>
                       </div>
-                      <div className={cn("w-10 h-6 rounded-full p-1 transition-colors relative flex items-center shrink-0", isPriority ? "bg-amber-600" : "bg-black/20")}>
-                        <div className={cn("w-4 h-4 bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
+                      <div className={cn("w-[42px] h-[26px] rounded-full p-1 transition-colors relative flex items-center shrink-0 border", isPriority ? "bg-amber-900 border-amber-950/20" : "bg-black/10 border-black/5")}>
+                        <div className={cn("w-[18px] h-[18px] bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex gap-4 w-full max-w-xs mt-2 relative">
+                <div className="flex gap-3 w-full max-w-[320px] relative mb-4">
                   <AnimatePresence>
                     {showAbandonPrompt && (
-                      <motion.div key="abandon-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-4 p-4 bg-white border border-danger/20 shadow-2xl rounded-3xl z-30 flex gap-3">
-                        <button onClick={handleAbandonSearch} className="flex-1 py-3 bg-danger rounded-2xl text-sm font-black text-white hover:bg-danger/90 shadow-lg active:scale-95 transition-all">Yes, Cancel</button>
-                        <button onClick={() => setShowAbandonPrompt(false)} className="flex-1 py-3 bg-slate-100 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-200 active:scale-95 transition-all">No, Keep</button>
+                      <motion.div key="abandon-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-4 p-4 bg-white border border-red-200 shadow-2xl rounded-[20px] z-30 flex gap-3">
+                        <button onClick={handleAbandonSearch} className="flex-1 py-3 bg-red-500 rounded-2xl text-sm font-black text-white hover:bg-red-600 shadow-lg active:scale-95 transition-all">Cancel Request</button>
+                        <button onClick={() => setShowAbandonPrompt(false)} className="flex-1 py-3 bg-slate-100 rounded-2xl text-sm font-bold text-slate-700 hover:bg-slate-200 active:scale-95 transition-all">Keep Waiting</button>
                       </motion.div>
                     )}
                   </AnimatePresence>
                   
-                  <button onClick={handleCancelSearching} className="flex-1 text-text-main font-black text-sm py-4 rounded-2xl border-2 border-border-main hover:bg-surface transition-colors active:scale-95">Edit</button>
-                  <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-black text-sm py-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors active:scale-95">Cancel</button>
+                  <button onClick={handleCancelSearching} className="flex-1 text-slate-800 font-bold text-[15px] py-4 rounded-[16px] border border-slate-300 bg-white hover:bg-slate-50 transition-colors active:scale-[0.98]">Edit</button>
+                  <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-bold text-[15px] py-4 rounded-[16px] bg-[#dcfce7] text-[#15803d] hover:bg-[#bbf7d0] transition-colors active:scale-[0.98]">Cancel</button>
                 </div>
-                {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-xs mt-3 font-black text-sm py-3 rounded-2xl bg-indigo-100 text-indigo-700 active:scale-95 transition-transform">Simulate Match</button>}
+                {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-[320px] font-black text-[15px] py-4 rounded-[16px] bg-[#e0e7ff] text-[#4338ca] hover:bg-[#c7d2fe] active:scale-[0.98] transition-transform">Simulate Match</button>}
               </motion.div>
             )}
 
