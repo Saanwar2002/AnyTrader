@@ -176,6 +176,10 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    match /promo_codes/{promoId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
     match /partners/{partnerId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();

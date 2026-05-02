@@ -323,7 +323,16 @@ The prefix is determined by the user's primary registration role:
 *   **Driver Nudge Delay:** Implemented a time delay logic in `RideChat` where the driver is only allowed to send an SMS nudge to the passenger after they've been waiting at the pickup location for more than 3 minutes (180 seconds). This prevents drivers from spamming passengers immediately upon arrival during the grace period.
 *   **Priority Job Lead Notifications:** Rewrote the job notification dispatcher (`notificationService.ts`) to programmatically calculate push lead delivery times. Traders holding a tier with Priority advantages ("Gold", "Premium", "Platinum Enterprise", "Business Professional") receive instant `visibleAt` access to new posts, whereas standard accounts are dynamically time-delayed by 30 minutes, guaranteeing ecosystem ROI for paying users. Emergency jobs bypass this rule constraint.
 
-## 🚕 Phase 15: Post-Ride Experience & Driver Reviews (Completed May 02, 2026)
+## 🚕 Phase 16: Post-Ride Archiving and Marketing Engine (Completed May 02, 2026)
+*   **Persistent Soft Deletes (Jobs & Rides):**
+    *   *Implementation:* Instead of permanent deletion via `deleteDoc`, homeowner jobs and passenger ride history items now execute a soft delete using `updateDoc` setting `clientDeleted: true` and `passengerDeleted: true`.
+    *   *Security & Compliance:* This ensures user data remains accessible for audit logs and platform inquiries securely in the backend, avoiding full database destruction while maintaining a clean user-facing UI. 
+*   **Marketing & Promo Engine (Promotions.tsx):**
+    *   *Implementation:* Built out the `PromoCode` system mapped to Firestore collection `promo_codes`. Master Admins can seamlessly create discounts and upgrade codes.
+    *   *Real-time Updates:* Usage limits and expirations are dynamically tracked.
+*   **Broadcast Operations (BroadcastMessaging.tsx):**
+    *   *Implementation:* Secured the Broadcast center for operations and CRM. Configured real-time dispatching to Firestore `broadcasts` collection mapped natively to the `Network` routing mechanism.
+    *   *Delivery Strategy:* Admins can deliver segment-specific targeted notifications directly into user mailboxes or push clients, supporting seasonal campaigns like Valentine's Day and win-back offers.
 *   **The Mission:** Implement a robust passenger rating system integrated with safety protocols and privacy mechanisms to ensure fair driver feedback.
 *   **Review Shielding (Cooling-off Period):**
     *   *Implementation:* Driver reviews with an unfavorable rating (3 stars or below) trigger an automatic 14-day visibility delay (`visibilityDate` = `createdAt` + 14 days) written via Firestore `addDoc` in `PassengerBooking.tsx`.

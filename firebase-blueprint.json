@@ -591,6 +591,25 @@
       },
       "required": ["id", "name", "category", "status", "createdAt"]
     },
+    "PromoCode": {
+      "title": "PromoCode",
+      "description": "Discount or priority promotion codes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "type": { "type": "string", "enum": ["Discount", "Upgrade"] },
+        "value": { "type": "string" },
+        "discountPercent": { "type": "number" },
+        "maxDiscount": { "type": "number" },
+        "maxUses": { "type": "integer" },
+        "currentUses": { "type": "integer" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "expired"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "code", "type", "status", "createdAt"]
+    },
     "Campaign": {
       "title": "Campaign",
       "description": "Monetization campaigns and offers.",
@@ -767,6 +786,10 @@
         }
       },
       "description": "Atomic counters for member IDs and job numbers."
+    },
+    "/promo_codes/{promoId}": {
+      "schema": "PromoCode",
+      "description": "Promotional codes for discounts and upgrades."
     },
     "/partners/{partnerId}": {
       "schema": "Partner",
