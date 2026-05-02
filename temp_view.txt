@@ -1,0 +1,426 @@
+331:    if (step === "details" && detailsView === "address") {
+332-      setTimeout(() => {
+333-        if (!pickup) {
+334-          pickupInputRef.current?.focus();
+335-          setActiveField("pickup");
+336-        }
+337-      }, 300); // 300ms delay to ensure animation finishes
+338-    }
+339-  }, [step, detailsView]);
+340-
+341-  // Auto-scroll when route is calculated
+342-  useEffect(() => {
+343-    if (distanceMiles > 0 && vehicleSelectionRef.current && bottomSheetRef.current) {
+344-      setTimeout(() => {
+345-        vehicleSelectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+346-      }, 500);
+347-    }
+348-  }, [distanceMiles]);
+349-
+350-  // Map States
+351-  const [mapCenter, setMapCenter] = useState(defaultCenter);
+352-  const [pickupCoords, setPickupCoords] = useState<{lat: number, lng: number} | null>(null);
+353-  const [dropoffCoords, setDropoffCoords] = useState<{lat: number, lng: number} | null>(null);
+354-  const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
+355-  const [routeLine, setRouteLine] = useState<{lat: number, lng: number}[]>([]);
+356-
+357-  const panToWithOffset = useCallback((coords: {lat: number, lng: number}) => {
+358-    if (!map) return;
+359-    map.panTo(coords);
+360-    // Offset North-South based on screen height to keep the pin visible above the sheet
+361-    setTimeout(() => {
+362-       map.panBy(0, window.innerHeight * 0.25); 
+363-    }, 100);
+364-  }, [map]);
+365-
+366-  useEffect(() => {
+367-    if (mapCenter && map && step === "details") {
+368-      panToWithOffset(mapCenter);
+369-    }
+370-  }, [mapCenter, map, panToWithOffset, step]);
+371-
+372-  // Routing and Distance Calculation (consolidated)
+373-  useEffect(() => {
+374-    if (pickupCoords && dropoffCoords && isLoaded) {
+375-      const getRoute = () => {
+376-        const directionsService = new google.maps.DirectionsService();
+377-        const validStops = stops.filter(s => s.coords !== null).map(s => ({
+378-          location: new google.maps.LatLng(s.coords!.lat, s.coords!.lng),
+379-          stopover: true
+380-        }));
+381-
+382-        directionsService.route({
+383-          origin: new google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
+384-          destination: new google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
+385-          waypoints: validStops,
+386-          travelMode: google.maps.TravelMode.DRIVING,
+387-        }, (result, status) => {
+388-          if (status === google.maps.DirectionsStatus.OK && result) {
+389-            // Draw the line
+390-            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+391-            setRouteLine(path);
+392-
+393-            // Fit bounds
+394-            if (map) {
+395-              const bounds = new google.maps.LatLngBounds();
+396-              path.forEach((p: any) => bounds.extend(p));
+397-              map.fitBounds(bounds, { 
+398-                padding: { 
+399-                  top: window.innerHeight * 0.08, 
+400-                  right: 50, 
+401-                  bottom: window.innerHeight * 0.62, 
+402-                  left: 50 
+403-                } 
+404-              });
+405-              
+406-              // Zoom out 1-2 ticks after bounds are set to give more breathing room
+407-              setTimeout(() => {
+408-                const currentZoom = map.getZoom();
+409-                if (currentZoom) {
+410-                   map.setZoom(currentZoom - 1);
+411-                }
+412-              }, 150);
+413-            }
+414-
+415-            // Calculate distance/fare
+416-            let totalDistanceMeters = 0;
+417-            let totalDurationSeconds = 0;
+418-            result.routes[0].legs.forEach(leg => {
+419-              if (leg.distance) totalDistanceMeters += leg.distance.value;
+420-              if (leg.duration) totalDurationSeconds += leg.duration.value;
+421-            });
+422-            const dMiles = totalDistanceMeters / 1609.34;
+423-            const dMins = totalDurationSeconds / 60;
+424-            
+425-            setDistanceMiles(dMiles);
+426-            setDurationMinutes(dMins);
+427-
+428-            // Base Fare + Distance + Time
+429-            const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
+430-            setFareEstimate(Math.max(calcFare, fareConfig.minFare));
+431-          } else {
+432-            console.warn("Directions failed:", status);
+433-          }
+434-        });
+435-      };
+436-      getRoute();
+437-    } else {
+438-      setRouteLine([]);
+439-    }
+440-  }, [pickupCoords, dropoffCoords, stops, map, fareConfig, isLoaded]);
+441-
+442-  useEffect(() => {
+443-    if (navigator.geolocation && !pickupCoords) {
+444-      navigator.geolocation.getCurrentPosition((pos) => {
+445-        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+446-        setMapCenter(c);
+447-        setPickupCoords(c);
+448-      });
+449-    }
+450-  }, [pickupCoords]);
+451-
+452-  useEffect(() => {
+453-    if (!pickupCoords) {
+454-      setNearbyDriversCount(0);
+455-      setDriversAvailableSoonCount(0);
+456-      return;
+457-    }
+458-    const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
+459-    const unsub = onSnapshot(q, (snapshot) => {
+460-      let countNow = 0;
+461-      let countSoon = 0;
+462-      const cats = new Set<string>();
+463-      const locations: {lat: number, lng: number, id: string}[] = [];
+464-
+465-      snapshot.docs.forEach(docSnap => {
+466-        const data = docSnap.data();
+467-        
+468-        // Match user's pet preference
+469-        if (isPetFriendly && data.isPetFriendly !== true) {
+470-          return;
+471-        }
+472-
+473-        let driverCategories = data.vehicleCategories || [data.vehicleCategory || 'standard'];
+474-        
+475-        const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+476-          const R = 3958.8; // Radius of Earth in miles
+477-          const dLat = (lat2 - lat1) * Math.PI / 180;
+478-          const dLon = (lon2 - lon1) * Math.PI / 180;
+479-          const a = 
+480-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+481-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+482-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+483-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+484-          return R * c; 
+485-        };
+486-
+487-        if (data.status === 'on_ride' && data.dropoffLat && data.dropoffLng) {
+488-          if (data.isStackingEnabled !== false && data.isLastJob !== true) {
+489-            const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.dropoffLat, data.dropoffLng);
+490-            if (distToPickup <= 3) {
+491-               countSoon++;
+492-               driverCategories.forEach((cat: string) => cats.add(cat));
+493-               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
+494-            }
+495-          }
+496-        } else if (data.lat && data.lng && data.status !== 'on_ride') {
+497-          if (data.isLastJob !== true) {
+498-            const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.lat, data.lng);
+499-            if (distToPickup <= 3) {
+500-               countNow++;
+501-               driverCategories.forEach((cat: string) => cats.add(cat));
+502-               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
+503-            }
+504-          }
+505-        }
+506-      });
+507-      setNearbyDriversCount(countNow);
+508-      setDriversAvailableSoonCount(countSoon);
+509-      setNearbyDriversLocations(locations);
+510-      setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
+511-    });
+512-    return () => unsub();
+513-  }, [pickupCoords, isPetFriendly]);
+514-
+515-  useEffect(() => {
+516-    if (!availableCategories.has(selectedCategory)) {
+517-      if (availableCategories.size > 0) {
+518-        const firstAvail = CAR_CATEGORIES.find(c => availableCategories.has(c.id));
+519-        if (firstAvail) setSelectedCategory(firstAvail.id);
+520-      }
+521-    }
+522-  }, [availableCategories, selectedCategory]);
+523-
+524-  useEffect(() => {
+525-    const unsub = onSnapshot(doc(db, "platform_config", "rides"), (doc) => {
+526-      if (doc.exists()) {
+527-        const data = doc.data();
+528-        setFareConfig({
+529-          baseFare: Number(data.baseFare) || 3.5,
+530-          distanceRate: Number(data.distanceRate) || 1.3,
+531-          timeRate: Number(data.timeRate) || 0.15,
+--
+1687:                {detailsView === "address" && (
+1688-                    <button onClick={toggleListening} disabled={isAiProcessing} className="w-full bg-slate-900 border-b border-white/10 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-1 px-4 flex items-center justify-center gap-1.5 font-bold shadow-sm active:scale-95 transition-all text-[11px] uppercase tracking-wider shrink-0 z-10 relative rounded-none h-8">
+1689-                      {isListening ? (
+1690-                        <>
+1691-                          <div className="relative flex items-center justify-center">
+1692-                            <div className="absolute inset-0 bg-danger/20 rounded-full animate-ping" />
+1693-                            <div className="w-2.5 h-2.5 bg-danger rounded-sm animate-pulse" />
+1694-                          </div>
+1695-                          Tap to Stop & Process...
+1696-                        </>
+1697-                      ) : isAiProcessing ? (
+1698-                        <>
+1699-                          <Loader2 className="w-4 h-4 animate-spin"/> Processing...
+1700-                        </>
+1701-                      ) : (
+1702-                        <>
+1703-                          <Mic className="w-4 h-4"/> Tap to Book by Voice
+1704-                        </>
+1705-                      )}
+1706-                    </button>
+1707-                )}
+1708-                
+1709:                <div ref={bottomSheetRef} className={cn("p-4 overflow-x-hidden overflow-y-auto space-y-4 no-scrollbar pb-[calc(5rem+env(safe-area-inset-bottom))]", detailsView === "address" ? "pt-2" : "pt-4")}>
+1710:                  {detailsView === "address" ? (
+1711-                    <>
+1712-                      <div className="bg-surface rounded-3xl p-2 pb-3 border border-border-main shadow-sm mb-4 shrink-0">
+1713-                    <div className="space-y-2 relative">
+1714-                      <div className="absolute left-3 top-8 bottom-8 w-0.5 border-l-2 border-dashed border-border-main/60" />
+1715-                      
+1716-                      {/* Pickup */}
+1717-                      <div className="relative flex items-center group w-full">
+1718-                        <div className="w-6 flex justify-center shrink-0">
+1719-                           <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-surface z-10 
+1720-                             group-focus-within:border-emerald-500 group-focus-within:scale-125 transition-all" />
+1721-                        </div>
+1722-                        <div className="flex-1 flex items-center bg-emerald-50/20 border border-emerald-200/60 rounded-2xl group-focus-within:bg-white group-focus-within:border-emerald-500 group-focus-within:ring-4 group-focus-within:ring-emerald-500/10 transition-all shadow-sm min-w-0 pr-1 overflow-hidden">
+1723-                          <input 
+1724-                            type="text" 
+1725-                            className="flex-none w-14 bg-transparent text-center font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] border-r border-emerald-200/60 py-3.5 focus:bg-emerald-500/5 transition-colors shrink-0 min-w-0 disabled:opacity-50" 
+1726-                            placeholder="Flat" 
+1727-                            value={houseNumber} 
+1728-                            disabled={!!assignedDriverInfo}
+1729-                            onChange={(e) => setHouseNumber(e.target.value)} 
+1730-                          />
+1731-                          <input 
+1732-                            ref={pickupInputRef}
+1733-                            type="text" 
+1734-                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-emerald-500/5 transition-colors min-w-0 disabled:opacity-50 disabled:cursor-not-allowed" 
+1735-                            placeholder="Current Location" 
+1736-                            value={pickup} 
+1737-                            disabled={!!assignedDriverInfo}
+1738-                            onFocus={() => { if (!assignedDriverInfo) setActiveField("pickup"); }} 
+1739-                            onChange={(e) => { if (!assignedDriverInfo) setPickup(e.target.value); }} 
+1740-                          />
+1741-                          <div className="pl-1.5 pr-0.5 py-1.5 border-l border-emerald-200/60 flex items-center justify-center shrink-0 h-full">
+1742-                            <button onClick={handleDetectLocation} className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg tooltip-trigger shrink-0 transition-colors">
+1743-                              {isDetecting ? (
+1744-                                <Loader2 className="w-5 h-5 animate-spin" />
+1745-                              ) : (
+1746-                                <Target className="w-5 h-5" />
+1747-                              )}
+1748-                            </button>
+1749-                          </div>
+1750-                        </div>
+1751-
+1752-                        <AnimatePresence>
+1753-                          {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
+1754-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 top-full mt-1 overflow-hidden rounded-2xl shadow-xl border border-slate-200 bg-white">
+1755-                              <div className="text-sm max-h-48 overflow-y-auto">
+1756-                              {suggestions.map((s, idx) => (
+1757-                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 last:border-b-0">
+1758-                                  {s.isHistory ? 
+1759-                                    <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
+1760-                                    <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
+1761-                                  }
+1762-                                  <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+1763-                                </button>
+1764-                              ))}
+1765-                              {suggestions.length === 0 && isLoadingAddress && (
+1766-                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-b border-slate-200 bg-white">
+1767-                                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+1768-                                </div>
+1769-                              )}
+1770-                              </div>
+1771-                            </motion.div>
+1772-                          )}
+1773-                        </AnimatePresence>
+1774-                      </div>
+1775-
+1776-                      {/* Stops */}
+1777-                      {stops.map((stop, i) => (
+1778-                        <React.Fragment key={i}>
+1779-                          <div className="relative flex items-center group w-full">
+1780-                          <div className="w-6 flex justify-center shrink-0">
+1781-                             <div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-surface z-10" />
+1782-                          </div>
+1783-                          <div className="flex-1 flex bg-slate-50 border border-slate-200 rounded-2xl group-focus-within:bg-white group-focus-within:border-amber-500 group-focus-within:ring-4 group-focus-within:ring-amber-500/10 transition-all pr-1 shadow-sm min-w-0">
+1784-                            <input 
+1785-                              type="text" 
+1786-                              className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-amber-500/5 rounded-l-2xl transition-colors min-w-0" 
+1787-                              placeholder={`Stop ${i+1}`} 
+1788-                              value={stop.address} 
+1789-                              onFocus={() => setActiveField(`stop-${i}`)} 
+1790-                              onChange={(e) => {
+1791-                                const ns = [...stops]; ns[i].address = e.target.value; setStops(ns);
+1792-                              }} 
+1793-                            />
+1794-                            <button onClick={() => setStops(stops.filter((_, idx) => idx !== i))} className="p-2 text-text-muted hover:text-danger rounded-full shrink-0"><X className="w-4 h-4" /></button>
+1795-                          </div>
+1796-                        </div>
+1797-                        
+1798-                        <AnimatePresence>
+1799-                          {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
+1800-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
+1801-                                {suggestions.map((s, idx) => (
+1802-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
+1803-                                    {s.isHistory ? 
+1804-                                      <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+1805-                                      <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
+1806-                                    }
+1807-                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+1808-                                  </button>
+1809-                                ))}
+1810-                              {suggestions.length === 0 && isLoadingAddress && (
+1811-                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
+1812-                                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+1813-                                </div>
+1814-                              )}
+1815-                            </motion.div>
+1816-                          )}
+1817-                        </AnimatePresence>
+1818-                      </React.Fragment>
+1819-                    ))}
+1820-
+1821-                    {/* Dropoff */}
+1822-                      <div className="relative flex items-center group w-full">
+1823-                        <div className="w-6 flex justify-center shrink-0">
+1824-                           <div className="w-2.5 h-2.5 bg-red-500 rounded-sm z-10 group-focus-within:bg-red-500 group-focus-within:scale-125 transition-all" />
+1825-                        </div>
+1826-                        <div className="flex-1 flex items-center bg-red-50/20 border border-red-200/60 rounded-2xl group-focus-within:bg-white group-focus-within:border-red-500 group-focus-within:ring-4 group-focus-within:ring-red-500/10 transition-all pr-1 shadow-sm min-w-0 overflow-hidden">
+1827-                          <input 
+1828-                            ref={dropoffInputRef}
+1829-                            type="text" 
+1830-                            className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-red-500/5 transition-colors min-w-0" 
+1831-                            placeholder="Where to?" 
+1832-                            value={dropoff} 
+1833-                            onFocus={() => setActiveField("dropoff")} 
+1834-                            onChange={(e) => setDropoff(e.target.value)} 
+1835-                          />
+1836-                          {stops.length < 3 && (
+1837-                            <div className="pl-2 pr-1 py-1 border-l border-red-200/60 flex items-center justify-center shrink-0 h-full">
+1838-                              <button onClick={() => setStops([...stops, { address: "", coords: null }])} className="w-[30px] h-[34px] bg-[#FFB800] text-black hover:bg-[#E6A600] rounded-[10px] border-[1.5px] border-black flex flex-col items-center justify-center shrink-0 transition-colors shadow-sm" title="Add a stop">
+1839-                                <Plus className="w-3.5 h-3.5 -mb-[1px]" strokeWidth={4} />
+1840-                                <span className="text-[9px] font-black tracking-tighter leading-none mb-0.5 ml-0.5">STP</span>
+1841-                              </button>
+1842-                            </div>
+1843-                          )}
+1844-                        </div>
+1845-
+1846-                        <AnimatePresence>
+1847-                          {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
+1848-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 top-full mt-1 overflow-hidden rounded-2xl shadow-xl border border-slate-200 bg-white">
+1849-                              <div className="text-sm max-h-48 overflow-y-auto">
+1850-                                {suggestions.map((s, idx) => (
+1851-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 last:border-b-0">
+1852-                                    {s.isHistory ? 
+1853-                                      <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+1854-                                      <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
+1855-                                    }
+1856-                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+1857-                                  </button>
+1858-                                ))}
+1859-                                {suggestions.length === 0 && isLoadingAddress && (
+1860-                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-b border-slate-200 bg-white">
+1861-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+1862-                                  </div>
+1863-                                )}
+1864-                              </div>
+1865-                            </motion.div>
+1866-                          )}
+1867-                        </AnimatePresence>
+1868-                      </div>
+1869-                      
+1870-                      <div className="flex justify-between gap-1 py-2 mt-1 mx-2 sm:ml-6 sm:mx-0 pr-1 items-center">
+1871-                        <button 
+1872-                          onClick={() => { 
+1873-                            const home = favoriteAddresses.find(f => f?.name?.toLowerCase() === 'home');
+1874-                            if (!home) {
+1875-                              toast.info("Please save an address as 'Home' to use this quick link.");
+1876-                            } else {
+1877-                              selectSuggestion({ label: home.address, lat: home.lat, lon: home.lng, placeId: home.placeId });
+1878-                            }
+1879-                          }} 
+1880-                          className="flex-1 justify-center px-2 py-1.5 bg-blue-50 border border-blue-200 rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm whitespace-nowrap"
+1881-                        >
+1882-                          <Home className="w-3 h-3 text-blue-500" /> Home
+1883-                        </button>
+1884-                        <button 
+1885-                          onClick={() => { 
+1886-                            const work = favoriteAddresses.find(f => f?.name?.toLowerCase() === 'work');
+1887-                            if (!work) {
+1888-                              toast.info("Please save an address as 'Work' to use this quick link.");
+1889-                            } else {
+1890-                              selectSuggestion({ label: work.address, lat: work.lat, lon: work.lng, placeId: work.placeId });
+1891-                            }
+1892-                          }} 
+1893-                          className="flex-1 justify-center px-2 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm whitespace-nowrap"
+1894-                        >
+1895-                          <Briefcase className="w-3 h-3 text-indigo-500" /> Work
+1896-                        </button>
+1897-                        <button 
+1898-                          onClick={() => setShowRegularJourneys(!showRegularJourneys)} 
+1899-                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showRegularJourneys ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300")}
+1900-                        >
+1901-                          <History className="w-3 h-3 text-emerald-500" /> Regular
+1902-                        </button>
+1903-                        <button 
+1904-                          onClick={() => setShowFavorites(!showFavorites)} 
+1905-                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showFavorites ? "bg-rose-100 border-rose-300 text-rose-800" : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300")}
+1906-                        >
+1907-                          <Heart className="w-3 h-3 text-rose-500" /> Favorite
+1908-                        </button>
+1909-                      </div>
+1910-
