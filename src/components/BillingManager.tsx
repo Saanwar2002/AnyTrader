@@ -104,13 +104,13 @@ export default function BillingManager() {
   // -------------------------------------------------------------
   // CUSTOMER / PASSENGER BILLING UI (PAYMENT METHODS)
   // -------------------------------------------------------------
-  if (profile?.role === "homeowner") {
+  if (profile?.role === "homeowner" || profile?.role === "customer") {
     return (
       <div className="min-h-screen bg-slate-50 pb-20">
         <div className="max-w-2xl mx-auto px-6 pt-8">
           <div className="mb-8">
             <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Payment Methods</h1>
-            <p className="text-slate-500 font-medium">Manage your cards and bank accounts for seamless booking.</p>
+            <p className="text-slate-500 font-medium">Manage your cards and bank accounts for seamless booking and rides.</p>
           </div>
 
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50 p-6 mb-6">

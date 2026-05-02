@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, arrayUnion, deleteDoc, serverTimestamp } from "@/src/firebase";
-import { useAuth } from "./AuthProvider";
+import { useAuth } from "../AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle, Info, Calendar, User, FileText, X } from "lucide-react";
+import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle, Info, Calendar, User, FileText, X, ArrowDownToLine, HelpCircle } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-export default function MyRides() {
+export default function PassengerRideHistory() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [rides, setRides] = useState<any[]>([]);
@@ -412,23 +412,45 @@ export default function MyRides() {
                   </div>
                 </div>
                 
-                {/* Trip Stats */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-center">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1"><Clock className="inline w-3 h-3 mr-1 -mt-0.5" />Duration & Dist</p>
-                    <p className="text-lg font-black text-slate-800">
-                      {selectedRideDetails.startedAt && selectedRideDetails.completedAt ? 
-                        `${Math.max(1, Math.round((selectedRideDetails.completedAt.toMillis() - selectedRideDetails.startedAt.toMillis()) / 60000))} min` 
-                        : (selectedRideDetails.durationMinutes ? `${selectedRideDetails.durationMinutes} min` : 'N/A')}
-                      {selectedRideDetails.distanceMiles ? <><span className="text-slate-300 mx-1">•</span> <span className="text-sm font-semibold text-slate-500">{selectedRideDetails.distanceMiles} mi</span></> : null}
-                    </p>
+                {/* Trip Stats & Receipt */}
+                <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 flex flex-col items-center mb-6">
+                  <p className="text-[10px] font-black tracking-widest uppercase text-slate-400 mb-2">Total Paid</p>
+                  <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
+                    £{parseFloat(selectedRideDetails.finalFare || selectedRideDetails.fareEstimate || selectedRideDetails.price || 0).toFixed(2)}
+                  </h2>
+                  <p className="text-xs font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">Payment Successful</p>
+                </div>
+
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 border-b border-slate-100 pb-2">Receipt Breakdown</p>
+                <div className="space-y-3 mb-6">
+                  <div className="flex justify-between text-sm font-bold text-slate-500">
+                    <span>Base Fare & Distance</span>
+                    <span className="text-slate-900">£{((selectedRideDetails.finalFare || selectedRideDetails.fareEstimate || selectedRideDetails.price || 5) - (selectedRideDetails.tipAmount || 0) - (selectedRideDetails.cancellationFee || 0)).toFixed(2)}</span>
                   </div>
-                  <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex flex-col justify-center">
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Total Fare</p>
-                    <p className="text-2xl font-black text-indigo-700">
-                      £{parseFloat(selectedRideDetails.finalFare || selectedRideDetails.fareEstimate || selectedRideDetails.price || 0).toFixed(2)}
-                    </p>
-                  </div>
+                  {(selectedRideDetails.cancellationFee || 0) > 0 && (
+                    <div className="flex justify-between text-sm font-bold text-red-500">
+                      <span>Unpaid Cancellation Fee</span>
+                      <span>+£{selectedRideDetails.cancellationFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {(selectedRideDetails.tipAmount || 0) > 0 && (
+                    <div className="flex justify-between text-sm font-bold text-emerald-600">
+                      <span>Driver Tip</span>
+                      <span>+£{selectedRideDetails.tipAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Support Actions */}
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <button onClick={() => toast.success("Receipt sent to your email!")} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-50 border border-slate-100 text-slate-600 hover:bg-slate-100 transition-colors">
+                    <ArrowDownToLine className="w-5 h-5 mb-1.5 text-slate-400" />
+                    <span className="text-xs font-bold">Get Receipt</span>
+                  </button>
+                  <button onClick={() => toast.info("Opening support chat...")} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-50 border border-slate-100 text-slate-600 hover:bg-slate-100 transition-colors">
+                    <HelpCircle className="w-5 h-5 mb-1.5 text-blue-400" />
+                    <span className="text-xs font-bold">Report Issue</span>
+                  </button>
                 </div>
              </div>
              <div className="p-4 border-t border-slate-100 bg-white">

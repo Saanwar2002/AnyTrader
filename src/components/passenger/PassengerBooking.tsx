@@ -4,9 +4,9 @@ import {
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, ChevronLeft, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, Heart,
-  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer
+  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine
 } from "lucide-react";
-import RideChat from "./RideChat";
+import RideChat from "../driver/RideChat";
 import { cn } from "@/src/lib/utils";
 import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where, getDocs, orderBy, limit, deleteField, getDoc } from "@/src/firebase";
 import { playSound } from "@/src/lib/sound";
@@ -132,7 +132,7 @@ const darkMapOptions: google.maps.MapOptions = {
 
 const libraries: any[] = ['places'];
 
-type BookingStep = "details" | "searching" | "confirmed";
+type BookingStep = "details" | "searching" | "confirmed" | "receipt";
 
 const CAR_CATEGORIES = [
   { id: 'standard', name: 'Standard Car', multiplier: 1.0, wait: '3-5', capacity: 4, icon: Car },
@@ -230,6 +230,7 @@ export default function PassengerBooking() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<BookingStep>("details");
+  const [completedRideData, setCompletedRideData] = useState<any>(null);
   const [houseNumber, setHouseNumber] = useState("");
   const [pickup, setPickup] = useState(searchParams.get("pickup") || "");
   const [dropoff, setDropoff] = useState(searchParams.get("dropoff") || "");
@@ -1356,7 +1357,13 @@ export default function PassengerBooking() {
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
           }, 15000); // 15s after ride starts
         }
-        if (data.status === 'completed') { setStep("details"); setCurrentRideId(null); setAssignedDriverInfo(null); lastSoundStatusRef.current = null; }
+        if (data.status === 'completed') { 
+          setCompletedRideData(data);
+          setStep("receipt"); 
+          setCurrentRideId(null); 
+          setAssignedDriverInfo(null); 
+          lastSoundStatusRef.current = null; 
+        }
       }
     });
     const unsubTrack = onSnapshot(doc(db, "live_tracking", assignedDriverInfo?.uid || "none"), (snapshot) => {
@@ -2475,6 +2482,64 @@ export default function PassengerBooking() {
                     </div>
                   )}
                 </AnimatePresence>
+              </motion.div>
+            )}
+
+            {step === "receipt" && completedRideData && (
+              <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-[40px] p-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] border border-border-main pointer-events-auto absolute inset-0 z-[200] overflow-y-auto m-4 mt-16 flex flex-col shadow-2xl">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Check className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <h3 className="text-2xl font-black text-text-main flex-1 ml-4 tracking-tight">Trip Completed</h3>
+                  <button onClick={() => toast.success("Receipt downloaded!")} className="w-10 h-10 rounded-full bg-surface border border-border-main flex items-center justify-center text-text-muted hover:text-text-main hover:bg-surface-hover">
+                    <ArrowDownToLine className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="bg-surface rounded-3xl p-5 mb-6 border border-border-main shadow-sm flex flex-col items-center">
+                  <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
+                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || (completedRideData.estimatedFare || 5).toFixed(2)}</h2>
+                  <p className="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1 rounded-lg">Payment Successful</p>
+                </div>
+
+                <p className="text-[10px] font-black uppercase text-text-muted tracking-widest mb-3 border-b border-border-main pb-2">Receipt Breakdown</p>
+                <div className="space-y-3 mb-6 flex-1">
+                  <div className="flex justify-between text-sm font-bold text-text-muted">
+                    <span>Base Fare & Distance</span>
+                    <span className="text-text-main">£{((completedRideData.finalFare || completedRideData.estimatedFare || 5) - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0)).toFixed(2)}</span>
+                  </div>
+                  {(completedRideData.cancellationFee || 0) > 0 && (
+                    <div className="flex justify-between text-sm font-bold text-danger">
+                      <span>Unpaid Cancellation Fee</span>
+                      <span>+£{completedRideData.cancellationFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {(completedRideData.tipAmount || 0) > 0 && (
+                    <div className="flex justify-between text-sm font-bold text-emerald-600">
+                      <span>Driver Tip</span>
+                      <span>+£{completedRideData.tipAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  <div className="border-t border-dashed border-border-main my-4 pt-4 flex justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-text-muted text-left mb-1">Driver</p>
+                      <p className="text-sm font-black text-text-main text-left">{completedRideData.driverName || "AnyRide Driver"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-text-muted text-right mb-1">Date</p>
+                      <p className="text-sm font-black text-text-main text-right">{new Date().toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => { setStep("details"); setCompletedRideData(null); }}
+                  className="w-full py-4 mt-auto rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform"
+                >
+                  Done
+                </button>
               </motion.div>
             )}
           </AnimatePresence>

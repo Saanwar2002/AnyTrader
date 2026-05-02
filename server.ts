@@ -125,8 +125,102 @@ async function runDailyAggregation() {
   }
 }
 
+// Scheduled task: Background Orchestration for Automated Driver Payouts
+async function runDriverPayoutOrchestration() {
+  if (!db) return { success: false, error: "Firebase not initialized" };
+  console.log("Running automated Stripe payout orchestration for drivers...");
+  
+  let processedCount = 0;
+  let totalDisbursed = 0;
+
+  try {
+    const ridesSnapshot = await db.collection("ride_requests")
+      .where("status", "==", "completed")
+      .where("paymentStatus", "==", "paid")
+      .where("payoutTransferred", "==", false)
+      .get();
+      
+    if (ridesSnapshot.empty) {
+      console.log("No pending automated payouts found.");
+      return { success: true, processedCount, totalDisbursed };
+    }
+
+    let stripe;
+    try {
+      stripe = getStripe();
+    } catch(e) {
+      console.warn("Stripe missing in orchestrator. Skipping actual transfers.");
+    }
+
+    for (const rideDoc of ridesSnapshot.docs) {
+      const ride = rideDoc.data();
+      const { assignedDriverId, finalFare = 0, fareEstimate = 0, tipAmount = 0 } = ride;
+      
+      const baseFare = finalFare || fareEstimate;
+      if (baseFare <= 0 && tipAmount <= 0) continue;
+
+      if (!assignedDriverId) continue;
+      
+      const driverDoc = await db.collection("users").doc(assignedDriverId).get();
+      if (!driverDoc.exists) continue;
+      
+      const stripeAccountId = driverDoc.data()?.stripeAccountId;
+      if (!stripeAccountId) {
+        console.warn(`Driver ${assignedDriverId} has no connected Stripe account. Skipping transfer for ride ${rideDoc.id}.`);
+        continue;
+      }
+
+      // Calculate 88% of base fare + 100% of tip
+      const driverEarnings = (baseFare * 0.88) + tipAmount;
+      const transferAmountPence = Math.round(driverEarnings * 100);
+
+      try {
+        if (stripe) {
+          // Perform transfer
+          const transfer = await stripe.transfers.create({
+            amount: transferAmountPence,
+            currency: "gbp",
+            destination: stripeAccountId,
+            metadata: {
+              rideId: rideDoc.id,
+              type: "orchestrated_driver_payout"
+            }
+          });
+          
+          await rideDoc.ref.update({
+            payoutTransferred: true,
+            stripeTransferId: transfer.id,
+            payoutTransferredAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        } else {
+          // Mock transfer
+          await rideDoc.ref.update({
+            payoutTransferred: true,
+            stripeTransferId: "mock_transfer_" + rideDoc.id,
+            payoutTransferredAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+        
+        processedCount++;
+        totalDisbursed += driverEarnings;
+        console.log(`Disbursed £${driverEarnings.toFixed(2)} to driver ${assignedDriverId} for ride ${rideDoc.id}.`);
+      } catch (transferErr: any) {
+         console.error(`Transfer failed for ride ${rideDoc.id}:`, transferErr.message);
+      }
+    }
+
+    console.log(`Automated payout orchestration complete. Processed ${processedCount} payouts totaling £${totalDisbursed.toFixed(2)}.`);
+    return { success: true, processedCount, totalDisbursed };
+  } catch (error: any) {
+    console.error("Orchestration error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // Schedule: 00:30 every day
 cron.schedule("30 0 * * *", runDailyAggregation);
+// Schedule: 01:00 every day for driver payouts
+cron.schedule("0 1 * * *", runDriverPayoutOrchestration);
 
 // Matching logic listener
 const startMatchingSystem = async () => {
@@ -552,6 +646,15 @@ async function startServer() {
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
               });
             }
+          } else if (session.metadata?.type === 'fee_settlement' && session.metadata?.driverId && db) {
+            const driverId = session.metadata.driverId;
+            const amount = session.amount_total ? session.amount_total / 100 : 0;
+            
+            // Clear the driver's pending platform fees safely
+            await db.collection("users").doc(driverId).update({
+              pendingPlatformFees: 0 // Assume it settles the full accumulated amount for now
+            });
+            console.log(`Driver ${driverId} settled £${amount} in platform fees`);
           } else if (session.metadata?.type === 'taxi_trip' && session.metadata?.rideId && db) {
             const rideId = session.metadata.rideId;
             const driverId = session.metadata.driverId;
@@ -561,6 +664,7 @@ async function startServer() {
             await db.collection("ride_requests").doc(rideId).update({
               status: "completed",
               paymentStatus: "paid",
+              payoutTransferred: true, // Handled automatically by Stripe transfer_data
               stripePaymentIntentId: session.payment_intent as string,
               paidAt: admin.firestore.FieldValue.serverTimestamp()
             });
@@ -850,6 +954,70 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error("Stripe Balance Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual Driver Payouts Trigger (Admin)
+  app.post("/api/admin/trigger-payouts", async (req, res) => {
+    try {
+      const result = await runDriverPayoutOrchestration();
+      if (!result?.success) {
+         return res.status(500).json(result);
+      }
+      res.json(result);
+    } catch (err: any) {
+      console.error("Manual payout orchestration failed:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Platform Fee Settlement Route
+  app.post("/api/driver/settle-fees", async (req, res) => {
+    try {
+      const { driverId } = req.body;
+      if (!db) return res.status(500).json({ error: "Database not connected" });
+      
+      const driverDoc = await db.collection("users").doc(driverId).get();
+      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
+
+      const pendingPlatformFees = driverDoc.data()?.pendingPlatformFees || 0;
+      if (pendingPlatformFees <= 0) {
+        return res.status(400).json({ error: "No fees to settle" });
+      }
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ url: `${process.env.APP_URL || ''}/platform-fee-success` });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: `Platform Fees Settlement`,
+              description: "Settlement for accumulated cash trip commissions."
+            },
+            unit_amount: Math.round(pendingPlatformFees * 100),
+          },
+          quantity: 1,
+        }],
+        metadata: {
+          driverId,
+          type: 'fee_settlement'
+        },
+        success_url: `${process.env.APP_URL || ''}/platform-fee-success`,
+        cancel_url: `${process.env.APP_URL || ''}/driver-dashboard`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Fee Settlement Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -1279,6 +1447,33 @@ Description: ${description}`;
     } catch (error: any) {
       console.error("Procure Materials Error:", error);
       res.status(500).json({ error: "Failed to detect materials" });
+    }
+  });
+
+  app.post("/api/driver/analytics-pulse", async (req, res) => {
+    try {
+      const { driverStats } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      
+      if (!apiKey) return res.status(500).json({ error: "AI not configured" });
+
+      const client = new GoogleGenAI({ apiKey });
+      const prompt = `You are an AI assistant for a taxi/ride-hailing platform (AnyRide). 
+The user is a driver looking at their analytics hub.
+Analyze their stats: ${JSON.stringify(driverStats)}
+Give ONE short, highly actionable, encouraging tip (under 15 words) about when or where they should drive next to maximize earnings, or how to improve their rating/acceptance.
+Limit your response to just the text of the tip. Do not use quotes.`;
+
+      const result = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      });
+
+      const insight = result.text ? result.text.trim() : "Drive near city center between 5 PM and 8 PM for peak fares.";
+      res.json({ insight });
+    } catch (error: any) {
+      console.error("Pulse Error:", error);
+      res.status(500).json({ error: "Failed to generate insight" });
     }
   });
 

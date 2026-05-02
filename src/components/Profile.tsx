@@ -876,7 +876,7 @@ export default function Profile() {
     {
       title: "Account",
       items: [
-        { icon: CreditCard, label: "Payment Methods", path: "#payments" },
+        { icon: CreditCard, label: "Payment Methods", path: "/billing" },
         { icon: Ticket, label: "Promotions & Promo Codes", path: "#promotions" },
         { icon: Gift, label: "Refer a Friend — Earn £5", path: "#referrals" },
         { icon: Briefcase, label: "Business Profile", path: "#business" },
@@ -1332,7 +1332,7 @@ export default function Profile() {
               )}
             </h2>
             {profile.role === "tradesperson" && (
-              <div className="flex flex-col items-center gap-3 mb-8">
+              <div className="flex flex-col items-center gap-3 mb-8 mt-2">
                 <div className="flex items-stretch gap-3 bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 w-full max-w-sm">
                   <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-slate-900 rounded-2xl shadow-lg">
                     <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
@@ -1351,6 +1351,16 @@ export default function Profile() {
                       <span className="text-lg font-black text-green-900 leading-none">{profile.totalRecommendations || 0}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+            {activePortal === "anyride" && profile.role !== "driver" && (
+              <div className="flex justify-center mt-3 mb-6">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 rounded-2xl border border-slate-200 shadow-sm">
+                  <Star className="w-5 h-5 text-slate-800 fill-slate-800" />
+                  <span className="font-black text-slate-900 text-lg">{profile.rating?.toFixed(1) || "5.0"}</span>
+                  <span className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Rider Rating</span>
                 </div>
               </div>
             )}

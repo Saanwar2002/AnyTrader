@@ -11,6 +11,7 @@ import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayVie
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
+import DriverAnalytics from "./DriverAnalytics";
 import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
 import DriverDocuments from "./DriverDocuments";
@@ -74,6 +75,8 @@ const premiumMapOptions: google.maps.MapOptions = {
   ]
 };
 
+import { fetchLiveDemandZones } from "@/src/services/surgeHeatmapService";
+
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
   const { switchPortal } = usePortal();
@@ -82,14 +85,26 @@ export default function DriverTerminal() {
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
   const [onlineDurationText, setOnlineDurationText] = useState("0 min");
   const [mapCenter, setMapCenter] = useState<[number, number]>([53.6458, -1.7850]); // Default to Huddersfield from spec
-  const [demandZones, setDemandZones] = useState<any[]>([
-    { lat: 53.6458, lng: -1.7850, radius: 500, intensity: "high", label: "£5.00 Surge" },
-    { lat: 53.6558, lng: -1.7750, radius: 800, intensity: "medium", label: "£2.50 Surge" },
-  ]);
+  const [demandZones, setDemandZones] = useState<any[]>([]);
   const [showPredictiveSurge, setShowPredictiveSurge] = useState(false);
   
   // Storage for directions
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (showPredictiveSurge) {
+       const loadSurge = async () => {
+         const zones = await fetchLiveDemandZones();
+         setDemandZones(zones);
+       };
+       loadSurge();
+       interval = setInterval(loadSurge, 30000); // 30 sec refresh for live mapping
+    } else {
+       setDemandZones([]);
+    }
+    return () => clearInterval(interval);
+  }, [showPredictiveSurge]);
   
   // Ride Simulation State
   const [rideState, setRideState] = useState<RideState>('idle');
@@ -779,7 +794,7 @@ export default function DriverTerminal() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTabParam = searchParams.get("tab") || "home";
   
-  const [activeTab, setActiveTabState] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents' | 'jobs'>(currentTabParam as any);
+  const [activeTab, setActiveTabState] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents' | 'jobs' | 'analytics'>(currentTabParam as any);
 
   useEffect(() => {
     setActiveTabState((searchParams.get("tab") as any) || "home");
@@ -1535,7 +1550,6 @@ export default function DriverTerminal() {
           )}
         </AnimatePresence>
         
-        {/*
         {isOnline && !activeRide && (
           <button 
             onClick={() => setShowPredictiveSurge(!showPredictiveSurge)}
@@ -1550,7 +1564,6 @@ export default function DriverTerminal() {
             <TrendingUp className={cn("w-4 h-4 relative z-10", showPredictiveSurge ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
           </button>
         )}
-        */}
       </div>
 
       {/* Floating Map Navigation (Left Side) - Decreased size and moved to left side corner */}
@@ -2553,6 +2566,7 @@ export default function DriverTerminal() {
 
       {/* Render Other Tabs */}
       {activeTab === 'earnings' && <DriverEarnings onClose={() => setActiveTab('home')} />}
+      {activeTab === 'analytics' && <DriverAnalytics onClose={() => setActiveTab('menu')} />}
       {activeTab === 'inbox' && <DriverInbox onClose={() => setActiveTab('home')} />}
       {activeTab === 'jobs' && <DriverJobs onClose={() => setActiveTab('home')} />}
       {activeTab === 'menu' && (

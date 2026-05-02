@@ -16,10 +16,13 @@ import {
   Loader2,
   Car,
   X,
+  Edit2,
+  Check,
 } from "lucide-react";
 import {
   db,
   doc,
+  setDoc,
   onSnapshot,
   collection,
   query,
@@ -53,6 +56,53 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
   });
   const [recentTrips, setRecentTrips] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [editingGoalValue, setEditingGoalValue] = useState("");
+
+  const handleEditGoal = () => {
+    setEditingGoalValue(metrics[period].goal.toString());
+    setIsEditingGoal(true);
+  };
+
+  const handleSaveGoal = async () => {
+    const newGoal = parseInt(editingGoalValue, 10);
+    if (!isNaN(newGoal) && newGoal > 0) {
+      setMetrics((prev) => ({
+        ...prev,
+        [period]: {
+          ...prev[period as keyof typeof prev],
+          goal: newGoal
+        }
+      }));
+      setIsEditingGoal(false);
+
+      if (user) {
+        try {
+          await setDoc(doc(db, "users", user.uid), {
+            earningsGoals: {
+              [period]: newGoal
+            }
+          }, { merge: true });
+          toast.success("Goal updated");
+        } catch (e) {
+          console.error("Failed to save goal", e);
+        }
+      }
+    } else {
+       toast.error("Please enter a valid amount");
+    }
+  };
+
+  useEffect(() => {
+    if (profile?.earningsGoals) {
+      setMetrics((prev) => ({
+        ...prev,
+        today: { ...prev.today, goal: profile.earningsGoals.today || prev.today.goal },
+        week: { ...prev.week, goal: profile.earningsGoals.week || prev.week.goal },
+        month: { ...prev.month, goal: profile.earningsGoals.month || prev.month.goal },
+      }));
+    }
+  }, [profile?.earningsGoals]);
 
   useEffect(() => {
     if (!user) return;
@@ -343,14 +393,41 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
         <div className="space-y-3">
           <div className="flex justify-between items-end px-1">
             <div className="flex flex-col">
-              <p className="text-[9px] font-black text-[#A1A1AA] uppercase tracking-widest mb-0.5">
-                Progress to Daily Goal
-              </p>
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-[9px] font-black text-[#A1A1AA] uppercase tracking-widest">
+                  Progress to {period === 'today' ? 'Daily' : period === 'week' ? 'Weekly' : 'Monthly'} Goal
+                </p>
+                {!isEditingGoal && (
+                  <button onClick={handleEditGoal} className="text-[#A1A1AA] hover:text-[#00D26A] transition-colors p-0.5 rounded-sm outline-none">
+                    <Edit2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <Target className="w-3.5 h-3.5 text-[#00D26A]" />
-                <span className="text-sm font-black text-white px-0.5">
-                  £{displayGoal}
-                </span>
+                {isEditingGoal ? (
+                  <div className="flex items-center">
+                    <span className="text-sm font-black text-white mr-0.5">£</span>
+                    <input 
+                      type="number"
+                      value={editingGoalValue}
+                      onChange={(e) => setEditingGoalValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveGoal(); }}
+                      className="w-16 bg-transparent border-b border-[#00D26A] text-sm font-black text-white outline-none px-0.5 mr-2"
+                      autoFocus
+                    />
+                    <button onClick={handleSaveGoal} className="bg-[#00D26A] text-[#1A1A1E] rounded-full p-1 active:scale-95 transition-transform flex items-center justify-center w-5 h-5 mr-1.5">
+                      <Check className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => setIsEditingGoal(false)} className="bg-[#FF3B30]/20 text-[#FF3B30] rounded-full p-1 active:scale-95 transition-transform flex items-center justify-center w-5 h-5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-sm font-black text-white px-0.5">
+                    £{displayGoal}
+                  </span>
+                )}
               </div>
             </div>
             <span className="text-xl font-black text-[#00D26A] tracking-tighter">
@@ -412,12 +489,24 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           </p>
           {profile?.pendingPlatformFees > 0 && (
             <button
-              onClick={() =>
-                toast.info("Platform Fee Settlement", {
-                  description:
-                    "This will open a Stripe payment sheet to clear your cash trip fees.",
-                })
-              }
+              onClick={async () => {
+                toast.loading("Preparing settlement...");
+                try {
+                  const res = await fetch("/api/driver/settle-fees", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ driverId: user?.uid }),
+                  });
+                  const data = await res.json();
+                  if (data.url) {
+                    window.location.href = data.url;
+                  } else {
+                    toast.error(data.error || "Failed to initiate settlement");
+                  }
+                } catch (e) {
+                  toast.error("An error occurred");
+                }
+              }}
               className="absolute top-4 right-4 text-[9px] font-black uppercase text-white bg-[#FF3B30] px-2 py-1 rounded shadow-lg active:scale-95 transition-transform z-20"
             >
               Settle
@@ -473,7 +562,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           <div className="text-center py-8 bg-[#1A1A1E]/50 rounded-3xl border border-dashed border-[#2C2C30]">
             <Activity className="w-8 h-8 text-[#2C2C30] mx-auto mb-2" />
             <p className="text-xs text-[#A1A1AA] font-bold">
-              No trips recorded today yet.
+              No trips recorded {period === 'today' ? 'today' : `this ${period}`} yet.
             </p>
           </div>
         )}

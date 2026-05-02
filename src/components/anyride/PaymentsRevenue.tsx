@@ -72,8 +72,23 @@ export default function PaymentsRevenue() {
                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Stripe Connect Balance</p>
                <h3 className="text-3xl font-black text-slate-900">£4,250.00</h3>
                <p className="text-sm font-bold text-slate-500 mt-2">Available to payout</p>
-               <button className="mt-4 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors">
-                  Initiate Payout
+               <button 
+                 onClick={async () => {
+                   try {
+                     const response = await fetch("/api/admin/trigger-payouts", { method: "POST" });
+                     const data = await response.json();
+                     if (data.success) {
+                       alert(`Successfully disbursed £${data.totalDisbursed.toFixed(2)} across ${data.processedCount} drivers.`);
+                     } else {
+                       alert(`Error: ${data.error}`);
+                     }
+                   } catch (err: any) {
+                     alert("Payout orchestration failed");
+                   }
+                 }}
+                 className="mt-4 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
+               >
+                  Initiate Payouts
                </button>
             </div>
           </div>

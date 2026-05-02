@@ -1,0 +1,1151 @@
+218:export default function Profile() {
+219-  const { user, profile, setProfile } = useAuth();
+220-  const { activePortal, switchPortal } = usePortal();
+221-  const navigate = useNavigate();
+222-  const location = useLocation();
+223-  const { isInstallable, installApp } = usePWAInstall();
+224-  const [isEditing, setIsEditing] = useState(false);
+225-  const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
+226-  const [expandedMenuGroups, setExpandedMenuGroups] = useState<string[]>([]);
+227-  const [isEditingNotifications, setIsEditingNotifications] = useState(false);
+228-  const [showBioInfo, setShowBioInfo] = useState(false);
+229-  const [showBadgeInfo, setShowBadgeInfo] = useState(false);
+230-  const [showUserGuide, setShowUserGuide] = useState(false);
+231-  const [isTradeBotOpen, setIsTradeBotOpen] = useState(false);
+232-  const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
+233-  const [isVerificationExpanded, setIsVerificationExpanded] = useState(false);
+234-  const [isNotificationsExpanded, setIsNotificationsExpanded] = useState(false);
+235-  const [isBannerAdsEnabled, setIsBannerAdsEnabled] = useState(true);
+236-  const [isEditingServices, setIsEditingServices] = useState(false);
+237-  const [tempServices, setTempServices] = useState<string[]>([]);
+238-  const [newService, setNewService] = useState("");
+239-  const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
+240-  const [privacyConsent, setPrivacyConsent] = useState<Record<string, boolean>>({});
+241-  const [verificationError, setVerificationError] = useState<string | null>(null);
+242-  const [editData, setEditData] = useState({
+243-    name: profile?.name || "",
+244-    postcode: profile?.postcode || "",
+245-    city: profile?.city || "",
+246-    county: profile?.county || "",
+247-    bio: profile?.bio || "",
+248-    trades: (profile?.trades || []).join(", "),
+249-    tags: (profile?.tags || []).join(", "),
+250-    services: profile?.services || [],
+251-    badges: profile?.badges || [],
+252-    searchFeedBadges: profile?.searchFeedBadges || []
+253-  });
+254-  const [notificationSettings, setNotificationSettings] = useState(profile?.notificationSettings || {
+255-    quietHoursEnabled: false,
+256-    quietHoursStart: "22:00",
+257-    quietHoursEnd: "07:00",
+258-    pushEnabled: true,
+259-    emailEnabled: true
+260-  });
+261-  const [newEmergencyContact, setNewEmergencyContact] = useState({ name: "", phone: "" });
+262-  const [isAddingEmergency, setIsAddingEmergency] = useState(false);
+263-  const [isSaving, setIsSaving] = useState(false);
+264-  const [error, setError] = useState<string | null>(null);
+265-  const [platformConfig, setPlatformConfig] = useState<any>(null);
+266-  const [globalTiers, setGlobalTiers] = useState<any>(null);
+267-  const [isUploading, setIsUploading] = useState(false);
+268-  const [reviews, setReviews] = useState<any[]>([]);
+269-  const [loadingReviews, setLoadingReviews] = useState(false);
+270-  const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+271-  const [usage, setUsage] = useState({ quotes: 0, acceptedQuotes: 0 });
+272-  const [loadingUsage, setLoadingUsage] = useState(false);
+273-  const [showCheckoutForTier, setShowCheckoutForTier] = useState<any | null>(null);
+274-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+275-  const [cardNumber, setCardNumber] = useState("");
+276-  const [expiryDate, setExpiryDate] = useState("");
+277-  const [cvc, setCvc] = useState("");
+278-  
+279-  const sensors = useSensors(
+280-    useSensor(PointerSensor, {
+281-      activationConstraint: {
+282-        distance: 8,
+283-      },
+284-    }),
+285-    useSensor(TouchSensor, {
+286-      activationConstraint: {
+287-        delay: 250,
+288-        tolerance: 5,
+289-      },
+290-    }),
+291-    useSensor(KeyboardSensor, {
+292-      coordinateGetter: sortableKeyboardCoordinates,
+293-    })
+294-  );
+295-
+296-  const activeTiers = React.useMemo(() => {
+297-    if (!platformConfig) return [];
+298-    if (profile?.role === "homeowner") {
+299-      if (globalTiers?.providerModels?.homeowners?.tiers) {
+300-        return Object.entries(globalTiers.providerModels.homeowners.tiers).map(([k, v]: [string, any]) => ({
+301-          name: k,
+302-          price: v.price || 0,
+303-          description: v.description,
+304-          maxQuotes: v.maxQuotes || 0,
+305-          maxAcceptedQuotes: v.maxAcceptedQuotes || 0,
+306-          commission: (v.commission || 0) * 100,
+307-          limitPeriod: "monthly",
+308-          leadFee: v.leadFee || 0,
+309-          includesRecommendation: k.toLowerCase() === "business"
+310-        })).sort((a,b) => a.price - b.price);
+311-      }
+312-      return platformConfig.businessTiers || [];
+313-    } else if (profile?.role === "driver") {
+314-      if (globalTiers?.providerModels?.on_demand_transport?.tiers) {
+315-        return Object.entries(globalTiers.providerModels.on_demand_transport.tiers).map(([k, v]: [string, any]) => ({
+316-          name: k,
+317-          price: v.price || 0,
+318-          description: v.description,
+319-          maxQuotes: v.maxQuotes || 9999,
+320-          maxAcceptedQuotes: v.maxAcceptedQuotes || 9999,
+321-          commission: (v.commission || 0) * 100,
+322-          limitPeriod: "monthly",
+323-          leadFee: v.leadFee || 0,
+324-          includesRecommendation: false
+325-        })).sort((a,b) => a.price - b.price);
+326-      }
+327-      return [];
+328-    } else {
+329-      if (globalTiers?.providerModels?.one_off_trades?.tiers) {
+330-        return Object.entries(globalTiers.providerModels.one_off_trades.tiers).map(([k, v]: [string, any]) => ({
+331-          name: k,
+332-          price: v.price || 0,
+333-          description: v.description,
+334-          maxQuotes: v.maxQuotes || 10,
+335-          maxAcceptedQuotes: v.maxAcceptedQuotes || 2,
+336-          commission: (v.commission || 0) * 100, // ui expects whole numbers
+337-          limitPeriod: "monthly",
+338-          leadFee: v.leadFee || 0,
+339-          includesRecommendation: k.toLowerCase() === "pro"
+340-        })).sort((a,b) => a.price - b.price);
+341-      }
+342-      return platformConfig.feeTiers || [];
+343-    }
+344-  }, [profile?.role, platformConfig, globalTiers]);
+345-
+346-  const handleDragEnd = async (event: DragEndEvent) => {
+347-    const { active, over } = event;
+348-    if (active.id !== over?.id && user) {
+349-      const oldIndex = (profile.portfolio || []).indexOf(active.id as string);
+350-      const newIndex = (profile.portfolio || []).indexOf(over?.id as string);
+351-      
+352-      const newPortfolio = arrayMove(profile.portfolio || [], oldIndex, newIndex);
+353-      setProfile((prev: any) => ({ ...prev, portfolio: newPortfolio }));
+354-      
+355-      try {
+356-        await updateDoc(doc(db, "users", user.uid), {
+357-          portfolio: newPortfolio
+358-        });
+359-      } catch (err) {
+360-        console.error("Error reordering portfolio:", err);
+361-      }
+362-    }
+363-  };
+364-
+365-  useEffect(() => {
+366-    if (isEditing && profile) {
+367-      setEditData({
+368-        name: profile.name || "",
+369-        postcode: profile.postcode || "",
+370-        city: profile.city || "",
+371-        county: profile.county || "",
+372-        bio: profile.bio || "",
+373-        trades: (profile.trades || []).join(", "),
+374-        tags: (profile.tags || []).join(", "),
+375-        services: profile.services || [],
+376-        badges: profile.badges || [],
+377-        searchFeedBadges: profile.searchFeedBadges || []
+378-      });
+379-    }
+380-  }, [isEditing, profile]);
+381-
+382-  useEffect(() => {
+383-    const unsubConfig = onSnapshot(doc(db, "platform_config", "advertising"), (docSnapshot) => {
+384-      if (docSnapshot.exists()) {
+385-        setIsBannerAdsEnabled(docSnapshot.data().isBannerAdsEnabled !== false);
+386-      }
+387-    });
+388-    return () => unsubConfig();
+389-  }, []);
+390-
+391-  useEffect(() => {
+392-    if (profile?.role === "tradesperson" && user?.uid) {
+393-      setLoadingReviews(true);
+394-      const q = query(
+395-        collection(db, "reviews"),
+396-        where("revieweeId", "==", user.uid),
+397-        orderBy("createdAt", "desc")
+398-      );
+399-
+400-      const unsubscribe = onSnapshot(q, (snapshot) => {
+401-        const fetchedReviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+402-        // Only show published reviews or reviews without a status (legacy)
+403-        setReviews(fetchedReviews.filter((r: any) => r.status !== "cooling_off"));
+404-        setLoadingReviews(false);
+405-      }, (error) => {
+406-        console.error("Error fetching reviews:", error);
+407-        handleFirestoreError(error, OperationType.LIST, "reviews");
+408-        setLoadingReviews(false);
+409-      });
+410-
+411-      return () => unsubscribe();
+412-    }
+413-  }, [user?.uid, profile?.role]);
+414-
+415-  useEffect(() => {
+416-    if (profile?.role === "tradesperson" && user?.uid && platformConfig) {
+417-      setLoadingUsage(true);
+418-      const tier = platformConfig.feeTiers?.find((t: any) => t.name === (profile.tierId || "Free Trial"));
+419-      const isLifetime = tier?.limitPeriod === "lifetime";
+420-      
+421-      const q = query(
+422-        collection(db, "quotes"),
+423-        where("tradespersonId", "==", user.uid)
+424-      );
+425-
+426-      const unsubscribe = onSnapshot(q, (snapshot) => {
+427-        let quotesCount = 0;
+428-        let acceptedCount = 0;
+429-        const now = new Date();
+430-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+431-
+432-        snapshot.docs.forEach(doc => {
+433-          const data = doc.data();
+434-          const createdAt = data.createdAt?.toMillis?.() || 0;
+435-          
+436-          if (isLifetime || createdAt >= startOfMonth) {
+437-            quotesCount++;
+438-            if (data.status === "accepted") {
+439-              acceptedCount++;
+440-            }
+441-          }
+442-        });
+443-
+444-        setUsage({ quotes: quotesCount, acceptedQuotes: acceptedCount });
+445-        setLoadingUsage(false);
+446-      }, (error) => {
+447-        console.error("Error fetching usage:", error);
+448-        setLoadingUsage(false);
+449-      });
+450-
+451-      return () => unsubscribe();
+452-    }
+453-  }, [user?.uid, profile?.role, profile?.tierId, platformConfig]);
+454-
+455-  const [homeownerJobs, setHomeownerJobs] = useState<any[]>([]);
+456-  const [loadingJobs, setLoadingJobs] = useState(false);
+457-  const [recurringSchedules, setRecurringSchedules] = useState<any[]>([]);
+458-  const [loadingRecurring, setLoadingRecurring] = useState(false);
+459-
+460-  useEffect(() => {
+461-    if (user?.uid) {
+462-      setLoadingRecurring(true);
+463-      const q = query(
+464-        collection(db, "recurring_schedules"),
+465-        or(
+466-          where("participants", "array-contains", user.uid),
+467-          where("homeownerId", "==", user.uid),
+468-          where("tradespersonId", "==", user.uid)
+469-        )
+470-      );
+471-      
+472-      const unsubscribe = onSnapshot(q, (snapshot) => {
+473-        const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+474-        setRecurringSchedules(schedules);
+475-        setLoadingRecurring(false);
+476-      }, (err) => {
+477-        console.error("Error fetching recurring schedules:", err);
+478-        setLoadingRecurring(false);
+479-      });
+480-
+481-      return () => unsubscribe();
+482-    }
+483-  }, [user?.uid, profile?.role]);
+484-
+485-  useEffect(() => {
+486-    if (profile?.role === "homeowner" && user?.uid) {
+487-      setLoadingJobs(true);
+488-      const q = query(
+489-        collection(db, "jobs"),
+490-        where("homeownerId", "==", user.uid),
+491-        orderBy("createdAt", "desc")
+492-      );
+493-
+494-      const unsubscribe = onSnapshot(q, (snapshot) => {
+495-        setHomeownerJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+496-        setLoadingJobs(false);
+497-      }, (error) => {
+498-        console.error("Error fetching homeowner jobs:", error);
+499-        handleFirestoreError(error, OperationType.LIST, "jobs");
+500-        setLoadingJobs(false);
+501-      });
+502-
+503-      return () => unsubscribe();
+504-    }
+505-  }, [user?.uid, profile?.role]);
+506-
+507-  useEffect(() => {
+508-    const unsubConfig = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
+509-      if (doc.exists()) {
+510-        setPlatformConfig(doc.data());
+511-      }
+512-    });
+513-    const unsubTiers = onSnapshot(doc(db, "platform_config", "global_tiers"), (doc) => {
+514-      if (doc.exists()) {
+515-        setGlobalTiers(doc.data());
+516-      }
+517-    });
+518-    return () => {
+519-      unsubConfig();
+520-      unsubTiers();
+521-    };
+522-  }, []);
+523-
+524-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+525-    const file = e.target.files?.[0];
+526-    if (!file || !user) return;
+527-
+528-    setIsUploading(true);
+529-    setError(null);
+530-    try {
+531-      let downloadUrl = "";
+532-      if (user.isAnonymous) {
+533-        // Simulate upload for guest accounts to allow testing without storage restrictions
+534-        await new Promise(resolve => setTimeout(resolve, 1000));
+535-        downloadUrl = `https://placehold.co/200x200?text=Guest+Avatar`;
+536-      } else {
+537-        const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}_${file.name}`);
+538-        await uploadBytes(storageRef, file);
+539-        downloadUrl = await getDownloadURL(storageRef);
+540-      }
+541-      
+542-      await updateDoc(doc(db, "users", user.uid), {
+543-        photoURL: downloadUrl
+544-      });
+545-      
+546-      setProfile((prev: any) => ({ ...prev, photoURL: downloadUrl }));
+547-    } catch (err) {
+548-      console.error("Error uploading photo:", err);
+549-      setError("Failed to upload photo.");
+550-    } finally {
+551-      setIsUploading(false);
+552-    }
+553-  };
+554-
+555-  const handlePortfolioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+556-    const file = e.target.files?.[0];
+557-    if (!file || !user) return;
+558-
+559-    setIsUploadingPortfolio(true);
+560-    setError(null);
+561-    try {
+562-      let downloadUrl = "";
+563-      if (user.isAnonymous) {
+564-        // Simulate upload for guest accounts to allow testing without storage restrictions
+565-        await new Promise(resolve => setTimeout(resolve, 1000));
+566-        downloadUrl = `https://placehold.co/600x400?text=Portfolio+Item`;
+567-      } else {
+568-        const storageRef = ref(storage, `portfolio/${user.uid}/${Date.now()}_${file.name}`);
+569-        await uploadBytes(storageRef, file);
+570-        downloadUrl = await getDownloadURL(storageRef);
+571-      }
+572-      
+573-      const newPortfolio = [...(profile.portfolio || []), downloadUrl];
+574-      await updateDoc(doc(db, "users", user.uid), {
+575-        portfolio: newPortfolio
+576-      });
+577-      
+578-      setProfile((prev: any) => ({ ...prev, portfolio: newPortfolio }));
+579-    } catch (err) {
+580-      console.error("Error uploading portfolio image:", err);
+581-      setError("Failed to upload portfolio image.");
+582-    } finally {
+583-      setIsUploadingPortfolio(false);
+584-    }
+585-  };
+586-
+587-  const removePortfolioImage = async (url: string) => {
+588-    if (!user) return;
+589-    try {
+590-      const newPortfolio = (profile.portfolio || []).filter((item: string) => item !== url);
+591-      await updateDoc(doc(db, "users", user.uid), {
+592-        portfolio: newPortfolio
+593-      });
+594-      setProfile((prev: any) => ({ ...prev, portfolio: newPortfolio }));
+595-    } catch (err) {
+596-      console.error("Error removing portfolio image:", err);
+597-    }
+598-  };
+599-
+600-  const handleVerificationUpload = async (e: React.ChangeEvent<HTMLInputElement>, certType: string) => {
+601-    const file = e.target.files?.[0];
+602-    if (!file || !user) return;
+603-
+604-    setIsUploading(true);
+605-    setError(null);
+606-    setVerificationError(null);
+607-    console.log("Starting upload for:", certType, "isAnonymous:", user.isAnonymous);
+608-    
+609-    try {
+610-      if (!privacyConsent[certType]) {
+611-        setVerificationError(`Please consent to data processing for ${certType}.`);
+612-        setIsUploading(false);
+613-        return;
+614-      }
+615-
+616-      const expiryDate = expiryDates[certType];
+617-      if (!expiryDate) {
+618-        setVerificationError(`Please select an expiry date for ${certType}.`);
+619-        setIsUploading(false);
+620-        return;
+621-      }
+622-
+623-      let downloadUrlFinal = "";
+624-
+625-      if (user.isAnonymous) {
+626-        // Simulate upload for guest accounts to allow testing without storage restrictions
+627-        console.log("Simulating upload for guest account...");
+628-        await new Promise(resolve => setTimeout(resolve, 1500)); // Artificial delay
+629-        downloadUrlFinal = `https://placehold.co/600x400?text=${certType.replace(/\s/g, '+')}+Verified`;
+630-      } else {
+631-        const storageRef = ref(storage, `verifications/${user.uid}/${certType.replace(/\s/g, '_')}_${Date.now()}_${file.name}`);
+632-        console.log("Uploading to:", storageRef.fullPath);
+633-        
+634-        const uploadResult = await uploadBytes(storageRef, file);
+635-        downloadUrlFinal = await getDownloadURL(uploadResult.ref);
+636-      }
+637-
+638-      console.log("Upload successful, URL:", downloadUrlFinal);
+639-      
+640-      const currentDocs = profile.verificationDocs || [];
+641-      const updatedDocs = [
+642-        ...currentDocs.filter((d: any) => d.type !== certType),
+643-        {
+644-          type: certType,
+645-          status: "pending",
+646-          fileUrl: downloadUrlFinal,
+647-          createdAt: new Date().toISOString(),
+648-          expiryDate: expiryDate
+649-        }
+650-      ];
+651-
+652-      await updateDoc(doc(db, "users", user.uid), {
+653-        verificationDocs: updatedDocs,
+654-        verificationStatus: "pending"
+655-      });
+656-      
+657-      setProfile((prev: any) => ({ 
+658-        ...prev, 
+659-        verificationDocs: updatedDocs,
+660-        verificationStatus: "pending"
+661-      }));
+662-
+663-      // Trigger automated public record check
+664-      performInitialPublicRecordCheck(user.uid, certType);
+665-    } catch (err) {
+666-      console.error("Error uploading verification doc:", err);
+667-      setError("Failed to upload document. Please try again.");
+668-    } finally {
+669-      setIsUploading(false);
+670-    }
+671-  };
+672-
+673-  useEffect(() => {
+674-    if (location.hash) {
+675-      const id = location.hash.substring(1);
+676-      const element = document.getElementById(id);
+677-      if (element) {
+678-        setTimeout(() => {
+679-          element.scrollIntoView({ behavior: "smooth" });
+680-        }, 100);
+681-      }
+682-    } else {
+683-      window.scrollTo({ top: 0, behavior: "smooth" });
+684-    }
+685-  }, [location.hash]);
+686-
+687-  const handleSaveNotifications = async (settings: any) => {
+688-    if (!user) return;
+689-    setIsSaving(true);
+690-    try {
+691-      await updateDoc(doc(db, "users", user.uid), {
+692-        notificationSettings: settings
+693-      });
+694-      setProfile((prev: any) => ({ ...prev, notificationSettings: settings }));
+695-    } catch (err) {
+696-      console.error("Error saving notification settings:", err);
+697-      try {
+698-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+699-      } catch (e: any) {
+700-        setError(e.message);
+701-      }
+702-    } finally {
+703-      setIsSaving(false);
+704-    }
+705-  };
+706-
+707-  const handleLogout = async () => {
+708-    try {
+709-      await logout();
+710-      window.location.href = "/";
+711-    } catch (error) {
+712-      console.error("Error logging out:", error);
+713-    }
+714-  };
+715-
+716-  const handleSave = async () => {
+717-    if (!user) return;
+718-    setIsSaving(true);
+719-    setError(null);
+720-    try {
+721-      const tradesArray = editData.trades.split(",").map(t => t.trim()).filter(t => t !== "");
+722-      const tagsArray = editData.tags.split(",").map(t => t.trim()).filter(t => t !== "");
+723-      
+724-      const finalData = {
+725-        ...editData,
+726-        trades: tradesArray,
+727-        tags: tagsArray,
+728-        services: editData.services,
+729-        badges: editData.badges?.includes('local_business') 
+730-          ? editData.badges 
+731-          : [...(editData.badges || []), 'local_business'],
+732-        searchFeedBadges: editData.searchFeedBadges || []
+733-      };
+734-      
+735-      await updateDoc(doc(db, "users", user.uid), finalData);
+736-      setProfile((prev: any) => ({ ...prev, ...finalData }));
+737-      setIsEditing(false);
+738-    } catch (err) {
+739-      console.error("Error updating profile:", err);
+740-      try {
+741-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+742-      } catch (e: any) {
+743-        setError(e.message);
+744-      }
+745-    } finally {
+746-      setIsSaving(false);
+747-    }
+748-  };
+749-
+750-  const handleSaveServices = async () => {
+751-    if (!user) return;
+752-    setIsSaving(true);
+753-    try {
+754-      await updateDoc(doc(db, "users", user.uid), {
+755-        services: tempServices
+756-      });
+757-      setProfile((prev: any) => ({ ...prev, services: tempServices }));
+758-      setIsEditingServices(false);
+759-    } catch (err) {
+760-      console.error("Error saving services:", err);
+761-      try {
+762-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+763-      } catch (e: any) {
+764-        setError(e.message);
+765-      }
+766-    } finally {
+767-      setIsSaving(false);
+768-    }
+769-  };
+770-
+771-  const handleAddEmergencyContact = async () => {
+772-    if (!user || !newEmergencyContact.name || !newEmergencyContact.phone) return;
+773-    setIsSaving(true);
+774-    try {
+775-      const updatedContacts = [...(profile.emergencyContacts || []), newEmergencyContact];
+776-      await updateDoc(doc(db, "users", user.uid), {
+777-        emergencyContacts: updatedContacts
+778-      });
+779-      setProfile((prev: any) => ({ ...prev, emergencyContacts: updatedContacts }));
+780-      setNewEmergencyContact({ name: "", phone: "" });
+781-      setIsAddingEmergency(false);
+782-    } catch (err) {
+783-      console.error("Error adding emergency contact:", err);
+784-    } finally {
+785-      setIsSaving(false);
+786-    }
+787-  };
+788-
+789-  const handleRemoveEmergencyContact = async (index: number) => {
+790-    if (!user) return;
+791-    try {
+792-      const updatedContacts = (profile.emergencyContacts || []).filter((_: any, i: number) => i !== index);
+793-      await updateDoc(doc(db, "users", user.uid), {
+794-        emergencyContacts: updatedContacts
+795-      });
+796-      setProfile((prev: any) => ({ ...prev, emergencyContacts: updatedContacts }));
+797-    } catch (err) {
+798-      console.error("Error removing emergency contact:", err);
+799-    }
+800-  };
+801-
+802-  const handleUpdateRecurringStatus = async (scheduleId: string, newStatus: string, otherPartyId: string, title: string) => {
+803-    if (!user) return;
+804-    try {
+805-      await updateDoc(doc(db, "recurring_schedules", scheduleId), {
+806-        status: newStatus
+807-      });
+808-      
+809-      let notificationMessage = "";
+810-      if (newStatus === "active") notificationMessage = `Your recurring schedule for "${title}" was accepted.`;
+811-      else if (newStatus === "cancelled") notificationMessage = `The recurring schedule for "${title}" was cancelled.`;
+812-      else if (newStatus === "paused") notificationMessage = `The recurring schedule for "${title}" was paused.`;
+813-      
+814-      if (notificationMessage) {
+815-        await sendNotification(
+816-          otherPartyId,
+817-          "Schedule Update",
+818-          notificationMessage,
+819-          "status",
+820-          "/profile"
+821-        );
+822-      }
+823-    } catch (err) {
+824-      console.error("Error updating recurring schedule:", err);
+825-    }
+826-  };
+827-
+828-  const startEditingServices = () => {
+829-    setTempServices(profile?.services || []);
+830-    setIsEditingServices(true);
+831-  };
+832-
+833-  const cancelEditingServices = () => {
+834-    setIsEditingServices(false);
+835-    setNewService("");
+836-  };
+837-
+838-  if (!user || !profile) return null;
+839-
+840-  const homeownerMenuGroups = [
+841-    {
+842-      title: "Account",
+843-      items: [
+844-        { icon: User, label: "Account Details", path: "#account" },
+845-        { icon: CreditCard, label: "Payment Methods", path: "#payments" },
+846-        { icon: Shield, label: "Privacy & Security", path: "#privacy" },
+847-      ]
+848-    },
+849-    {
+850-      title: "Properties & Jobs",
+851-      items: [
+852-        { icon: Home, label: "My Properties", path: "/profile" },
+853-        { icon: Briefcase, label: "My Jobs History", path: "/my-jobs?history=true" },
+854-      ]
+855-    },
+856-    {
+857-      title: "Tools",
+858-      items: [
+859-        { icon: BookOpen, label: "📖 Platform User Guide", path: "#userguide" },
+860-        { icon: Bot, label: "AI Price Chatbot", path: "#tradebot" },
+861-        { icon: Search, label: "Find Tradespeople", path: "/find-trades" },
+862-        { icon: Zap, label: "Emergency Alerts", path: "/profile" },
+863-      ]
+864-    },
+865-    {
+866-      title: "Support",
+867-      items: [
+868-        { icon: Bell, label: "Notifications", path: "/notifications" },
+869-        { icon: HelpCircle, label: "Help & Support", path: "/profile" },
+870-        { icon: FileText, label: "Terms & Conditions", path: "/profile" },
+871-      ]
+872-    }
+873-  ];
+874-
+875-  const passengerMenuGroups = [
+876-    {
+877-      title: "Account",
+878-      items: [
+879-        { icon: CreditCard, label: "Payment Methods", path: "/billing" },
+880-        { icon: Ticket, label: "Promotions & Promo Codes", path: "#promotions" },
+881-        { icon: Gift, label: "Refer a Friend — Earn £5", path: "#referrals" },
+882-        { icon: Briefcase, label: "Business Profile", path: "#business" },
+883-        { icon: FileText, label: "Ride Receipts", path: "/my-rides" },
+884-      ]
+885-    },
+886-    {
+887-      title: "Ride Preferences",
+888-      items: [
+889-        { icon: Accessibility, label: "Accessibility Settings", path: "#accessibility" },
+890-        { icon: Users, label: "Ride for Someone Else", path: "#rideforself" },
+891-        { icon: MapPin, label: "Saved Places", path: "/saved-journeys" },
+892-      ]
+893-    },
+894-    {
+895-      title: "Safety",
+896-      items: [
+897-        { icon: ShieldAlert, label: "Emergency Contacts", path: "#emergency" },
+898-        { icon: Users, label: "Trusted Contacts", path: "#trusted" },
+899-      ]
+900-    },
+901-    {
+902-      title: "Support",
+903-      items: [
+904-        { icon: HelpCircle, label: "Help Centre", path: "#help" },
+905-        { icon: Ticket, label: "My Support Tickets", path: "#tickets" },
+906-        { icon: MessageSquare, label: "Live Chat", path: "#chat" },
+907-      ]
+908-    },
+909-    {
+910-      title: "App",
+911-      items: [
+912-        { icon: Repeat, label: "Switch to AnyTrader", path: "#switch_portal" },
+913-        { icon: Bell, label: "Notifications", path: "/notifications" },
+914-        { icon: Settings, label: "App Settings", path: "#settings" },
+915-        { icon: Shield, label: "Legal & Privacy", path: "#privacy" },
+916-      ]
+917-    }
+918-  ];
+919-
+920-  const tradespersonMenuGroups = [
+921-    {
+922-      title: "Account",
+923-      items: [
+924-        { icon: User, label: "Account Details", path: "#account" },
+925-        { icon: Bell, label: "Notification Preferences", path: "#notifications" },
+926-        { icon: CreditCard, label: "Payment Methods", path: "#payments" },
+927-        { icon: Shield, label: "Privacy & Security", path: "#privacy" },
+928-      ]
+929-    },
+930-    {
+931-      title: "Business",
+932-      items: [
+933-        { icon: Layout, label: "My Dashboard", path: "/" },
+934-        { icon: Briefcase, label: "My Jobs", path: "/my-jobs" },
+935-        { icon: CreditCard, label: "My Completed Quotes/Jobs", path: "/my-quotes?mode=completed" },
+936-        { icon: BarChart3, label: "Job Analytics", path: "/analytics" },
+937-        { icon: Calendar, label: "Availability Calendar", path: "/availability" },
+938-        ...(isBannerAdsEnabled ? [{ icon: Zap, label: "Traders Banner Ad Studio", path: "/trader/banner-ads" }] : []),
+939-      ]
+940-    },
+941-    {
+942-      title: "Tools",
+943-      items: [
+944-        { icon: BookOpen, label: "📖 Platform User Guide", path: "#userguide" },
+945-        { icon: Bot, label: "AI Price Chatbot", path: "#tradebot" },
+946-        { icon: Search, label: "Find Tradespeople", path: "/find-trades" },
+947-        { icon: History, label: "Search History", path: "/job-feed" },
+948-      ]
+949-    },
+950-    {
+951-      title: "Support",
+952-      items: [
+953-        { icon: Bell, label: "Notifications", path: "/notifications" },
+954-        { icon: HelpCircle, label: "Help & Support", path: "/profile" },
+955-        { icon: FileText, label: "Terms & Conditions", path: "/profile" },
+956-      ]
+957-    }
+958-  ];
+959-
+960-  const menuGroups = activePortal === "anyride" 
+961-    ? passengerMenuGroups 
+962-    : (profile.role === "tradesperson" ? tradespersonMenuGroups : homeownerMenuGroups);
+963-
+964-  const handleSubscribe = async () => {
+965-    if (!user || !showCheckoutForTier) return;
+966-    setIsProcessingPayment(true);
+967-    
+968-    try {
+969-      if (showCheckoutForTier.price > 0) {
+970-        // Redirect to Stripe checkout for paid plans
+971-        const response = await fetch("/api/create-checkout-session", {
+972-          method: "POST",
+973-          headers: { "Content-Type": "application/json" },
+974-          body: JSON.stringify({
+975-            userId: user.uid,
+976-            tierName: showCheckoutForTier.name,
+977-            priceId: "price_mock_" + showCheckoutForTier.name.toLowerCase().replace(/\s/g, "_"), // Replace with actual price ID in future
+978-            successUrl: `${window.location.origin}/profile?session_id={CHECKOUT_SESSION_ID}`,
+979-            cancelUrl: `${window.location.origin}/profile`
+980-          }),
+981-        });
+982-
+983-        const data = await response.json();
+984-        if (data.url) {
+985-          window.location.href = data.url;
+986-          return; // Do not clear loading state as we are redirecting
+987-        } else {
+988-          throw new Error(data.error || "Failed to initiate checkout");
+989-        }
+990-      } else {
+991-        // Auto-subscribe for free tiers
+992-        const nextBillingDate = new Date();
+993-        nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+994-
+995-        const tierField = profile.role === "homeowner" ? "homeownerTierId" : "tierId";
+996-        const statusField = profile.role === "homeowner" ? "homeownerSubscriptionStatus" : "subscriptionStatus";
+997-        const periodEndField = profile.role === "homeowner" ? "homeownerCurrentPeriodEnd" : "currentPeriodEnd";
+998-        const cancelField = profile.role === "homeowner" ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
+999-
+1000-        await updateDoc(doc(db, "users", user.uid), { 
+1001-          [tierField]: showCheckoutForTier.name,
+1002-          [statusField]: 'trialing',
+1003-          [periodEndField]: nextBillingDate.toISOString(),
+1004-          [cancelField]: false
+1005-        });
+1006-        
+1007-        setProfile((prev: any) => ({ 
+1008-          ...prev, 
+1009-          [tierField]: showCheckoutForTier.name,
+1010-          [statusField]: 'trialing',
+1011-          [periodEndField]: nextBillingDate.toISOString(),
+1012-          [cancelField]: false
+1013-        }));
+1014-        
+1015-        setShowCheckoutForTier(null);
+1016-        setIsProcessingPayment(false);
+1017-      }
+1018-    } catch (err: any) {
+1019-      console.error("Error updating tier:", err);
+1020-      alert(err.message || "Payment init failed. Please try again.");
+1021-      setIsProcessingPayment(false);
+1022-    }
+1023-  };
+1024-
+1025-  const handleCancelSubscription = async () => {
+1026-    if (!user || !confirm("Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing cycle.")) return;
+1027-    
+1028-    const cancelField = profile.role === "homeowner" ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
+1029-
+1030-    try {
+1031-      await updateDoc(doc(db, "users", user.uid), { 
+1032-        [cancelField]: true
+1033-      });
+1034-      setProfile((prev: any) => ({ ...prev, [cancelField]: true }));
+1035-    } catch (err) {
+1036-      console.error("Error canceling subscription:", err);
+1037-    }
+1038-  };
+1039-
+1040-  const currentRoleTierId = profile.role === "homeowner" ? (profile.homeownerTierId || "Standard Homeowner") : (profile.tierId || "Free Explorer");
+1041-  const currentRoleSubscriptionStatus = profile.role === "homeowner" ? profile.homeownerSubscriptionStatus : profile.subscriptionStatus;
+1042-  const currentRoleCancelAtPeriodEnd = profile.role === "homeowner" ? profile.homeownerCancelAtPeriodEnd : profile.cancelAtPeriodEnd;
+1043-  const currentRoleCurrentPeriodEnd = profile.role === "homeowner" ? profile.homeownerCurrentPeriodEnd : profile.currentPeriodEnd;
+1044-
+1045-  return (
+1046-    <div id="account" className="max-w-2xl mx-auto pb-24 px-4">
+1047-      {/* Header */}
+1048-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+1049-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Profile</h1>
+1050-        <button 
+1051-          onClick={() => navigate("/")} 
+1052-          className="w-12 h-12 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-full flex items-center justify-center transition-all shadow-sm text-slate-600 hover:text-slate-900 focus:ring-2 focus:ring-slate-200"
+1053-        >
+1054-          <X className="w-6 h-6" />
+1055-        </button>
+1056-      </div>
+1057-
+1058-      {error && (
+1059-        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
+1060-          {error}
+1061-        </div>
+1062-      )}
+1063-
+1064-      {/* Referral Program */}
+1065-      {profile.role === "tradesperson" && (
+1066-        <div className="mb-8">
+1067-          <ReferralCard profile={profile} />
+1068-        </div>
+1069-      )}
+1070-
+1071-      {/* Subscription Plan Card */}
+1072-      {activePortal === 'rides' && profile.role === "homeowner" && (
+1073-        <div className="bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-500 rounded-[2rem] shadow-[0_8px_30px_rgb(251,191,36,0.25)] overflow-hidden p-8 mb-8 relative">
+1074-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/30 rounded-full blur-3xl pointer-events-none" />
+1075-          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-amber-600/20 rounded-full blur-2xl pointer-events-none" />
+1076-          
+1077-          <div className="flex justify-between items-start mb-6 relative z-10">
+1078-            <div>
+1079-              <h3 className="text-2xl font-black text-amber-950 flex items-center gap-2">
+1080-                <Star className="w-6 h-6 outline-amber-900 fill-amber-200" />
+1081-                Rider Plus
+1082-              </h3>
+1083-              <p className="text-sm font-bold text-amber-900/80 mt-1">Unlock the ultimate AnyRide experience.</p>
+1084-            </div>
+1085-            {profile.tierId === "rider_plus" && (
+1086-               <div className="px-3 py-1.5 bg-amber-950 text-amber-300 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+1087-                 <CheckCircle2 className="w-4 h-4" /> Active
+1088-               </div>
+1089-            )}
+1090-          </div>
+1091-
+1092-          <div className="space-y-4 mb-8 relative z-10 bg-white/20 backdrop-blur-sm p-4 rounded-3xl border border-white/30">
+1093-            <div className="flex items-center gap-3">
+1094-              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+1095-                <Zap className="w-4 h-4 text-amber-950 fill-amber-950" />
+1096-              </div>
+1097-              <p className="text-sm font-bold text-amber-950">Priority Matching during peak hours</p>
+1098-            </div>
+1099-            <div className="flex items-center gap-3">
+1100-              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+1101-                <Percent className="w-4 h-4 text-amber-950" />
+1102-              </div>
+1103-              <p className="text-sm font-bold text-amber-950">10% discount on every journey</p>
+1104-            </div>
+1105-            <div className="flex items-center gap-3">
+1106-              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+1107-                <Award className="w-4 h-4 text-amber-950" />
+1108-              </div>
+1109-              <p className="text-sm font-bold text-amber-950">Exclusive Rider Plus badge on your profile</p>
+1110-            </div>
+1111-          </div>
+1112-
+1113-          <div className="relative z-10">
+1114-            {profile.tierId !== "rider_plus" ? (
+1115-              <button 
+1116-                onClick={() => {
+1117-                  setShowCheckoutForTier({ 
+1118-                    name: "rider_plus", 
+1119-                    price: 9.99, 
+1120-                    limitPeriod: "monthly", 
+1121-                    description: "Premium privileges for AnyRide passengers." 
+1122-                  });
+1123-                }}
+1124-                className="w-full py-4 bg-amber-950 text-amber-300 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-amber-900 transition-colors shadow-xl active:scale-95 flex justify-center items-center gap-2"
+1125-              >
+1126-                Subscribe for £9.99 <span className="text-[10px] text-amber-500">/ month</span>
+1127-              </button>
+1128-            ) : (
+1129-              <button
+1130-                onClick={handleCancelSubscription}
+1131-                className="w-full py-3 bg-white/30 border border-white/50 text-amber-950 rounded-2xl font-bold text-sm hover:bg-white/40 transition-colors"
+1132-              >
+1133-                Cancel Subscription
+1134-              </button>
+1135-            )}
+1136-          </div>
+1137-        </div>
+1138-      )}
+1139-
+1140-      {(profile.role === "tradesperson" || (profile.role === "homeowner" && profile.subscriptionType === "business")) && platformConfig && (
+1141-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8">
+1142-          {platformConfig.paywallEnabled === false && (
+1143-            <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center gap-4">
+1144-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+1145-                <Sparkles className="w-5 h-5" />
+1146-              </div>
+1147-              <div>
+1148-                <p className="text-sm font-black text-amber-900 leading-none mb-1 uppercase tracking-tight">Beta Mode Active</p>
+1149-                <p className="text-xs text-amber-700 font-medium">Subscription fees and limits are currently waived. Enjoy unlimited access!</p>
+1150-              </div>
+1151-            </div>
+1152-          )}
+1153-          <div className="flex items-center justify-between mb-6">
+1154-            <div className="flex items-center gap-3">
+1155-              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+1156-                <CreditCard className="w-5 h-5" />
+1157-              </div>
+1158-              <div>
+1159-                <h3 className="text-xl font-bold text-slate-900">Subscription Plan</h3>
+1160-                <p className="text-xs text-slate-500">Manage your platform structure</p>
+1161-              </div>
+1162-            </div>
+1163-            <div id="tier-badge" className="px-3 py-1 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+1164-              {currentRoleTierId}
+1165-              {currentRoleSubscriptionStatus === 'active' && !currentRoleCancelAtPeriodEnd && (
+1166-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="Active Subscription" />
+1167-              )}
+1168-            </div>
+1169-          </div>
+1170-
+1171-          {currentRoleSubscriptionStatus === 'active' && currentRoleCurrentPeriodEnd && (
+1172-            <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-center justify-between">
+1173-              <div>
+1174-                <p className="text-xs font-bold text-blue-900">Next Billing Date</p>
+1175-                <p className="text-[10px] text-blue-700">
+1176-                  {new Date(currentRoleCurrentPeriodEnd).toLocaleDateString()}
+1177-                  {currentRoleCancelAtPeriodEnd && " (Cancels at end of period)"}
+1178-                </p>
+1179-              </div>
+1180-              {!currentRoleCancelAtPeriodEnd && (
+1181-                <button 
+1182-                  onClick={handleCancelSubscription}
+1183-                  className="text-[10px] font-bold text-red-600 hover:text-red-700 underline"
+1184-                >
+1185-                  Cancel Subscription
+1186-                </button>
+1187-              )}
+1188-            </div>
+1189-          )}
+1190-
+1191-          <div className="grid grid-cols-1 gap-3">
+1192-            {activeTiers.map((tier: any) => (
+1193-              <button
+1194-                key={tier.name}
+1195-                onClick={() => {
+1196-                  if (currentRoleTierId === tier.name) return;
+1197-                  if (tier.price > 0) {
+1198-                    setShowCheckoutForTier(tier);
+1199-                  } else {
+1200-                    if (confirm(`Switch to the ${tier.name} plan?`)) {
+1201-                      setShowCheckoutForTier(tier);
+1202-                      // In a real app we'd call handleSubscribe directly here if price is 0
+1203-                      // or show a simplified checkout
+1204-                    }
+1205-                  }
+1206-                }}
+1207-                className={cn(
+1208-                  "w-full p-4 rounded-2xl border text-left transition-all relative group",
+1209-                  currentRoleTierId === tier.name ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/10" : "border-slate-100 hover:border-slate-200 bg-white"
+1210-                )}
+1211-              >
+1212-                <div className="flex items-center justify-between mb-2">
+1213-                  <span className="font-bold text-slate-900">{tier.name}</span>
+1214-                  <div className="text-right">
+1215-                    <span className="text-lg font-black text-blue-600">
+1216-                      {tier.price === 0 ? "Free" : `£${tier.price}`}
+1217-                    </span>
+1218-                    {tier.price > 0 && (
+1219-                      <span className="text-[10px] text-slate-400 block font-bold uppercase">
+1220-                        {tier.limitPeriod === "monthly" ? "Per Month" : "Lifetime"}
+1221-                      </span>
+1222-                    )}
+1223-                  </div>
+1224-                </div>
+1225-                <p className="text-[10px] text-slate-500 mb-2">{tier.description}</p>
+1226-                
+1227-                <div className="flex items-center gap-2 flex-wrap mb-4">
+1228-                  {profile.role === "tradesperson" ? (
+1229-                    <>
+1230-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
+1231-                        {tier.maxQuotes} Quotes / {tier.limitPeriod === "lifetime" ? "Lifetime" : "Month"}
+1232-                      </div>
+1233-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
+1234-                        {tier.maxAcceptedQuotes} Accepted / {tier.limitPeriod === "lifetime" ? "Lifetime" : "Month"}
+1235-                      </div>
+1236-                      {tier.includesRecommendation && (
+1237-                        <div className="px-2 py-0.5 bg-orange-100 rounded text-[9px] font-bold text-orange-700 flex items-center gap-1">
+1238-                          <Award className="w-3 h-3" /> Includes Recommended Status
+1239-                        </div>
+1240-                      )}
+1241-                      <div className="px-2 py-0.5 bg-blue-100 rounded text-[9px] font-bold text-blue-700">
+1242-                        {tier.commission || 0}% Comm
+1243-                      </div>
+1244-                      <div className="px-2 py-0.5 bg-emerald-100 rounded text-[9px] font-bold text-emerald-700">
+1245-                        £{tier.leadFee || 0} Lead Fee
+1246-                      </div>
+1247-                    </>
+1248-                  ) : (
+1249-                    <div className="flex items-center gap-2 flex-wrap">
+1250-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
+1251-                        {tier.jobPostsLimit === 9999 ? "Unlimited" : tier.jobPostsLimit} Job Posts
+1252-                      </div>
+1253-                      <div className="px-2 py-0.5 bg-blue-100 rounded text-[9px] font-bold text-blue-700">
+1254-                        {tier.commission || 0}% Comm
+1255-                      </div>
+1256-                    </div>
+1257-                  )}
+1258-                </div>
+1259-                
+1260-                {profile.role === "tradesperson" && currentRoleTierId === tier.name && (
+1261-                  <div className="space-y-3 pt-4 border-t border-slate-100">
+1262-                    <div className="space-y-1">
+1263-                      <div className="flex items-center justify-between text-[10px] font-bold">
+1264-                        <span className="text-slate-500">Quotes Used</span>
+1265-                        <span className={cn(usage.quotes >= tier.maxQuotes ? "text-red-600" : "text-blue-600")}>
+1266-                          {usage.quotes} / {tier.maxQuotes}
+1267-                        </span>
+1268-                      </div>
+1269-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+1270-                        <div 
+1271-                          className={cn("h-full rounded-full transition-all", usage.quotes >= tier.maxQuotes ? "bg-red-500" : "bg-blue-500")}
+1272-                          style={{ width: `${Math.min((usage.quotes / tier.maxQuotes) * 100, 100)}%` }}
+1273-                        />
+1274-                      </div>
+1275-                    </div>
+1276-                    <div className="space-y-1">
+1277-                      <div className="flex items-center justify-between text-[10px] font-bold">
+1278-                        <span className="text-slate-500">Accepted Quotes</span>
+1279-                        <span className={cn(usage.acceptedQuotes >= tier.maxAcceptedQuotes ? "text-red-600" : "text-green-600")}>
+1280-                          {usage.acceptedQuotes} / {tier.maxAcceptedQuotes}
+1281-                        </span>
+1282-                      </div>
+1283-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+1284-                        <div 
+1285-                          className={cn("h-full rounded-full transition-all", usage.acceptedQuotes >= tier.maxAcceptedQuotes ? "bg-red-500" : "bg-green-500")}
+1286-                          style={{ width: `${Math.min((usage.acceptedQuotes / tier.maxAcceptedQuotes) * 100, 100)}%` }}
+1287-                        />
+1288-                      </div>
+1289-                    </div>
+1290-                  </div>
+1291-                )}
+1292-
+1293-                {currentRoleTierId === tier.name && (
+1294-                  <div className="absolute top-2 right-2">
+1295-                    <CheckCircle2 className="w-4 h-4 text-blue-600" />
+1296-                  </div>
+1297-                )}
+1298-              </button>
+1299-            ))}
+1300-          </div>
+1301-        </div>
+1302-      )}
+1303-
+1304-      {/* Profile Card */}
+1305-      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-8 mb-8 relative">
+1306-        <div className="flex flex-col items-center">
+1307-          <div className="relative mb-4">
+1308-            <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-4xl font-bold overflow-hidden border-4 border-white shadow-lg relative">
+1309-              {profile.photoURL ? (
+1310-                <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+1311-              ) : (
+1312-                profile.name?.charAt(0).toUpperCase() || "U"
+1313-              )}
+1314-              <BadgeOverlay 
+1315-                badges={getTraderBadges(profile)} 
+1316-                className="absolute -bottom-2 -left-2 -right-2 justify-center z-10" 
+1317-              />
+1318-            </div>
+1319-            <label className="absolute bottom-0 right-0 w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100">
+1320-              <Camera className="w-5 h-5 text-orange-500" />
+1321-              <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
+1322-            </label>
+1323-          </div>
+1324-          
+1325-          <div className="text-center">
+1326-            <h2 className="text-2xl font-bold text-slate-900 mb-1 flex items-center justify-center gap-2">
+1327-              {profile.name}
+1328-              {profile.referralBoostUntil && new Date(profile.referralBoostUntil) > new Date() && (
+1329-                <div className="w-6 h-6 bg-yellow-400 rounded-lg flex items-center justify-center shadow-lg shadow-yellow-400/20" title="Profile Boost Active">
+1330-                  <Zap className="w-4 h-4 text-slate-900 fill-slate-900" />
+1331-                </div>
+1332-              )}
+1333-            </h2>
+1334-            {profile.role === "tradesperson" && (
+1335-              <div className="flex flex-col items-center gap-3 mb-8">
+1336-                <div className="flex items-stretch gap-3 bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 w-full max-w-sm">
+1337-                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-slate-900 rounded-2xl shadow-lg">
+1338-                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+1339-                    <div className="flex flex-col items-start">
+1340-                      <span className="font-black text-white text-lg leading-none">{profile.rating?.toFixed(1) || "5.0"}</span>
+1341-                      <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter mt-0.5">{profile.totalReviews || 0} reviews</span>
+1342-                    </div>
+1343-                  </div>
+1344-                  
+1345-                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-green-100/50 rounded-2xl border border-green-200/50">
+1346-                    <div className="w-7 h-7 rounded-lg bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 shrink-0">
+1347-                      <Users className="w-3.5 h-3.5 text-white" />
+1348-                    </div>
+1349-                    <div className="flex flex-col items-start">
+1350-                      <span className="text-[9px] font-black text-green-700 uppercase tracking-widest leading-none mb-0.5">Recommended</span>
+1351-                      <span className="text-lg font-black text-green-900 leading-none">{profile.totalRecommendations || 0}</span>
+1352-                    </div>
+1353-                  </div>
+1354-                </div>
+1355-              </div>
+1356-            )}
+1357-            <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+1358-              {profile.role === "tradesperson" ? (
+1359-                <>
+1360-                  <p className="text-slate-500 text-sm font-medium">Professional Tradesperson</p>
+1361-                  <span className="text-slate-300">•</span>
+1362-                  <p className="text-slate-500 text-sm flex items-center gap-1">
+1363-                    <MapPin className="w-3.5 h-3.5" />
+1364-                    {profile.postcode || profile.location || "Location not set"}
+1365-                  </p>
+1366-                </>
+1367-              ) : (
+1368-                <div className="flex flex-col items-center gap-1">

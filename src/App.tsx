@@ -43,11 +43,11 @@ import { PlusCircle, Briefcase, MessageSquare, User as UserIcon, Bell, ChevronRi
 import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "@/src/firebase";
 
 import DriverTerminal from "./components/driver/DriverTerminal";
-import PassengerBooking from "./components/driver/PassengerBooking";
-import RideDashboardLayout from "./components/driver/RideDashboardLayout";
+import PassengerBooking from "./components/passenger/PassengerBooking";
+
 import DriverEarnings from "./components/driver/DriverEarnings";
 import DriverInbox from "./components/driver/DriverInbox";
-import MyRides from "./components/MyRides";
+import PassengerRideHistory from "./components/passenger/PassengerRideHistory";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
 import CorporatePortal from "./components/anyride/CorporatePortal";
@@ -66,7 +66,7 @@ function IndexRoute() {
   }
 
   if (activePortal === "anyride") {
-    return activeRole === "driver" ? <DriverTerminal /> : <RideDashboardLayout />;
+    return activeRole === "driver" ? <DriverTerminal /> : <Navigate to="/book-ride" replace />;
   }
 
   // AnyTrader context
@@ -207,7 +207,7 @@ export default function App() {
                 {/* AnyRide specific routes inside Layout */}
                 <Route path="driver-terminal" element={<DriverTerminal />} />
                 <Route path="book-ride" element={<PassengerBooking />} />
-                <Route path="my-rides" element={<MyRides />} />
+                <Route path="my-rides" element={<PassengerRideHistory />} />
                 <Route path="saved-journeys" element={<SavedJourneys />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
