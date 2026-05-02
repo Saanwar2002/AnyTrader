@@ -460,7 +460,7 @@ export default function PassengerRideHistory() {
                 <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 flex flex-col items-center mb-6">
                   <p className="text-[10px] font-black tracking-widest uppercase text-slate-400 mb-2">Total Paid</p>
                   <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
-                    £{parseFloat(selectedRideDetails.finalFare || selectedRideDetails.fareEstimate || selectedRideDetails.price || 0).toFixed(2)}
+                    £{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) : (parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 0) + (selectedRideDetails.tipAmount || 0) + (selectedRideDetails.cancellationFee || 0))).toFixed(2)}
                   </h2>
                   <p className="text-xs font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">Payment Successful</p>
                 </div>
@@ -469,7 +469,7 @@ export default function PassengerRideHistory() {
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm font-bold text-slate-500">
                     <span>Base Fare & Distance</span>
-                    <span className="text-slate-900">£{((selectedRideDetails.finalFare || selectedRideDetails.fareEstimate || selectedRideDetails.price || 5) - (selectedRideDetails.tipAmount || 0) - (selectedRideDetails.cancellationFee || 0)).toFixed(2)}</span>
+                    <span className="text-slate-900">£{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) - (selectedRideDetails.tipAmount || 0) - (selectedRideDetails.cancellationFee || 0) : parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 5)).toFixed(2)}</span>
                   </div>
                   {(selectedRideDetails.cancellationFee || 0) > 0 && (
                     <div className="flex justify-between text-sm font-bold text-red-500">

@@ -297,6 +297,7 @@ export default function PassengerBooking() {
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const lastSoundStatusRef = useRef<string | null>(null);
+  const hasTriggeredTipModalRef = useRef(false);
   const [fareConfig, setFareConfig] = useState({ 
     baseFare: 3.5, 
     distanceRate: 1.3, 
@@ -1069,11 +1070,17 @@ export default function PassengerBooking() {
     else if (currentStatus === "in_progress") nextStatus = "completed";
 
     try {
+      const rideDoc = await getDoc(doc(db, "ride_requests", currentRideId));
+      const rideData = rideDoc.exists() ? rideDoc.data() : null;
+
       const updateData: any = { status: nextStatus };
       if (nextStatus === "arrived") updateData.arrivedAt = serverTimestamp();
       if (nextStatus === "in_progress") updateData.startedAt = serverTimestamp();
       if (nextStatus === "completed") {
          updateData.completedAt = serverTimestamp();
+         if (rideData) {
+            updateData.finalFare = (rideData.estimatedFare || fareConfig.baseFare) + (rideData.tipAmount || 0) + (rideData.cancellationFee || 0);
+         }
       }
       await updateDoc(doc(db, "ride_requests", currentRideId), updateData);
     } catch(err) { console.error(err); }
@@ -1171,7 +1178,7 @@ export default function PassengerBooking() {
       }
     }
 
-    if (fee > 0 && !showCancelPrompt) {
+    if (!showCancelPrompt) {
         setCancelFeeToApply(fee);
         setShowCancelPrompt(true);
         return; 
@@ -1360,7 +1367,7 @@ export default function PassengerBooking() {
              playSound('notification');
              lastSoundStatusRef.current = 'arrived';
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis() } : null);
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount } : null);
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
           toast.success("Your driver has arrived!");
         }
@@ -1369,21 +1376,24 @@ export default function PassengerBooking() {
              playSound('notification');
              lastSoundStatusRef.current = 'in_progress';
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis() } : null);
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis(), tipAmount: data.tipAmount } : null);
           setStep("confirmed");
           
           // Trigger the tip modal after a short delay for preview purposes
-          setTimeout(() => {
-            if (hasCardOnFile) {
-              toast.info("Preparing Auto-Pay", { description: "Your journey is almost over. Want to add a tip?" });
-            } else {
-              toast.warning("Payment Required", { description: "Please have your phone ready to scan the driver's QR code to pay." });
-            }
-            setShowTipModal(true);
-            triggerHaptic(ImpactStyle.Heavy);
-            // Vibrate pattern for alert
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-          }, 15000); // 15s after ride starts
+          if (!hasTriggeredTipModalRef.current) {
+            hasTriggeredTipModalRef.current = true;
+            setTimeout(() => {
+              if (hasCardOnFile) {
+                toast.info("Preparing Auto-Pay", { description: "Your journey is almost over. Want to add a tip?" });
+              } else {
+                toast.warning("Payment Required", { description: "Please have your phone ready to scan the driver's QR code to pay." });
+              }
+              setShowTipModal(true);
+              triggerHaptic(ImpactStyle.Heavy);
+              // Vibrate pattern for alert
+              if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            }, 15000); // 15s after ride starts
+          }
         }
         if (data.status === 'completed') { 
           setCompletedRideData(data);
@@ -1391,6 +1401,8 @@ export default function PassengerBooking() {
           setCurrentRideId(null); 
           setAssignedDriverInfo(null); 
           lastSoundStatusRef.current = null; 
+          hasTriggeredTipModalRef.current = false;
+          setShowTipModal(false);
         }
       }
     });
@@ -2509,7 +2521,10 @@ export default function PassengerBooking() {
                    </div>
                    <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
-                      <p className="text-[17px] font-black text-slate-900 leading-none">£{(assignedDriverInfo?.fareEstimate || fareEstimate || 0).toFixed(2)}</p>
+                      <p className="text-[17px] font-black text-slate-900 leading-none">£{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
+                      {(assignedDriverInfo?.tipAmount || 0) > 0 && (
+                          <p className="text-[11px] font-bold text-emerald-600 mt-1">Added £{assignedDriverInfo.tipAmount.toFixed(2)} Tip</p>
+                      )}
                    </div>
                 </div>
                 
@@ -2543,11 +2558,15 @@ export default function PassengerBooking() {
                         </div>
                         <h3 className="text-xl font-black text-slate-900 mb-2">Cancel Ride?</h3>
                         <p className="text-[13px] font-medium text-slate-600 mb-6 leading-relaxed">
-                          Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-slate-900 font-bold">£{cancelFeeToApply.toFixed(2)}</span> will apply.
+                          {cancelFeeToApply > 0 ? (
+                            <>Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-slate-900 font-bold">£{cancelFeeToApply.toFixed(2)}</span> will apply.</>
+                          ) : (
+                            <>Are you sure you want to cancel your ride? No cancellation fee will be charged at this time.</>
+                          )}
                         </p>
                         <div className="flex gap-3">
-                          <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-3 bg-slate-100 rounded-[12px] font-bold text-slate-700 hover:bg-slate-200 transition-colors">Go Back</button>
                           <button onClick={handleCancelConfirmed} className="flex-1 py-3 bg-red-500 text-white rounded-[12px] font-bold hover:bg-red-600 transition-colors shadow-[0_4px_14px_0_rgba(239,68,68,0.2)]">Yes, Cancel</button>
+                          <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-3 bg-slate-100 rounded-[12px] font-bold text-slate-700 hover:bg-slate-200 transition-colors">Go Back</button>
                         </div>
                       </motion.div>
                     </div>
@@ -2643,7 +2662,7 @@ export default function PassengerBooking() {
 
                 <div className="bg-surface rounded-3xl p-5 mb-6 border border-border-main shadow-sm flex flex-col items-center">
                   <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
-                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || (completedRideData.estimatedFare || 5).toFixed(2)}</h2>
+                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.estimatedFare || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
                   <p className="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1 rounded-lg">Payment Successful</p>
                 </div>
 
@@ -2651,7 +2670,7 @@ export default function PassengerBooking() {
                 <div className="space-y-3 mb-6 flex-1">
                   <div className="flex justify-between text-sm font-bold text-text-muted">
                     <span>Base Fare & Distance</span>
-                    <span className="text-text-main">£{((completedRideData.finalFare || completedRideData.estimatedFare || 5) - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0)).toFixed(2)}</span>
+                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0) : (completedRideData.estimatedFare || fareConfig.baseFare)).toFixed(2)}</span>
                   </div>
                   {(completedRideData.cancellationFee || 0) > 0 && (
                     <div className="flex justify-between text-sm font-bold text-danger">
