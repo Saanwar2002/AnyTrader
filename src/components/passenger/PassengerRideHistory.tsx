@@ -4,19 +4,28 @@ import { useAuth } from "../AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle, Info, Calendar, User, FileText, X, ArrowDownToLine, HelpCircle } from "lucide-react";
 import { cn } from "@/src/lib/utils";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function PassengerRideHistory() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [rides, setRides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "completed">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "completed">(
+    location.state?.tab || "active"
+  );
+
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location.state]);
   const [selectedRideDetails, setSelectedRideDetails] = useState<any | null>(null);
 
   const handleSaveJourney = async (ride: any) => {
@@ -40,9 +49,11 @@ export default function PassengerRideHistory() {
     try {
       await updateDoc(doc(db, "ride_requests", rideId), {
         status: "cancelled",
+        cancelledBy: "passenger",
         updatedAt: serverTimestamp()
       });
       toast.success("Ride cancelled successfully");
+      setActiveTab("cancelled");
     } catch (error) {
       console.error("Error cancelling ride:", error);
       toast.error("Failed to cancel ride. Please try again.");

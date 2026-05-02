@@ -2679,7 +2679,19 @@ export default function PassengerBooking() {
                 </div>
 
                 <button 
-                  onClick={() => { setStep("details"); setCompletedRideData(null); }}
+                  onClick={() => { 
+                    setStep("details"); 
+                    setCompletedRideData(null); 
+                    setPickup("");
+                    setDropoff("");
+                    setPickupCoords(null);
+                    setDropoffCoords(null);
+                    setDistanceMiles(0);
+                    setStops([]);
+                    setRouteLine([]);
+                    setLiveRouteLine([]);
+                    navigate("/my-rides", { replace: true, state: { tab: "completed" } });
+                  }}
                   className="w-full py-4 mt-auto rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform"
                 >
                   Done
