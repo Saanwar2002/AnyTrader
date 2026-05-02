@@ -64,6 +64,18 @@ service cloud.firestore {
     }
 
     // --- Rides Portal ---
+    match /driver_reviews/{reviewId} {
+      allow create: if isSignedIn() && request.resource.data.passengerId == request.auth.uid;
+      // Passengers cannot read them afterwards.
+      // Drivers can only list reviews that have passed the cooling-off period.
+      allow read, list: if isAdmin() || (
+        isSignedIn() && 
+        resource.data.driverId == request.auth.uid && 
+        resource.data.visibilityDate <= request.time
+      );
+      allow update: if false; // immutable by users
+    }
+
     match /ride_requests/{rideId} {
       allow get: if isSignedIn() && (resource.data.get('riderId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && request.resource.data.riderId == request.auth.uid;

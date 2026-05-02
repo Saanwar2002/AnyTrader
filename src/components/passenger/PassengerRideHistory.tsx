@@ -66,7 +66,7 @@ export default function PassengerRideHistory() {
   const handleDeleteRide = async (rideId: string) => {
     setDeletingId(rideId);
     try {
-      await deleteDoc(doc(db, "ride_requests", rideId));
+      await updateDoc(doc(db, "ride_requests", rideId), { passengerDeleted: true });
       toast.success("Ride deleted successfully");
     } catch (error) {
       console.error("Error deleting ride:", error);
@@ -87,7 +87,9 @@ export default function PassengerRideHistory() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ridesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const ridesData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((ride: any) => !ride.passengerDeleted);
       setRides(ridesData);
       setLoading(false);
     }, (error) => {
@@ -206,7 +208,7 @@ export default function PassengerRideHistory() {
                     {ride.price && (
                       <span className="font-extrabold text-slate-900">£{parseFloat(ride.price).toFixed(2)}</span>
                     )}
-                    {(ride.status === "cancelled" || ride.status === "draft") && (
+                    {(ride.status === "cancelled" || ride.status === "draft" || ride.status === "completed") && (
                       <div className="relative flex items-center justify-center">
                         {confirmDeleteId === ride.id && (
                           <div className="absolute bottom-full mb-2 right-0 whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom-right flex items-center gap-1.5 border border-amber-500/30">

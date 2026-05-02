@@ -248,6 +248,11 @@ export default function PassengerBooking() {
   const [showTipModal, setShowTipModal] = useState(false);
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTip, setCustomTip] = useState("");
+  const [rideRating, setRideRating] = useState<number>(5);
+  const [selectedReviewTags, setSelectedReviewTags] = useState<string[]>([]);
+  const [reviewComment, setReviewComment] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
   const [rideContext, setRideContext] = useState<"personal" | "business">("personal");
   
   // Mock settings for demonstrating corporate and card functionality
@@ -1079,7 +1084,7 @@ export default function PassengerBooking() {
       if (nextStatus === "completed") {
          updateData.completedAt = serverTimestamp();
          if (rideData) {
-            updateData.finalFare = (rideData.estimatedFare || fareConfig.baseFare) + (rideData.tipAmount || 0) + (rideData.cancellationFee || 0);
+            updateData.finalFare = (rideData.fareEstimate || fareConfig.baseFare) + (rideData.tipAmount || 0) + (rideData.cancellationFee || 0);
          }
       }
       await updateDoc(doc(db, "ride_requests", currentRideId), updateData);
@@ -1396,7 +1401,7 @@ export default function PassengerBooking() {
           }
         }
         if (data.status === 'completed') { 
-          setCompletedRideData(data);
+          setCompletedRideData({ ...data, id: currentRideId });
           setStep("receipt"); 
           setCurrentRideId(null); 
           setAssignedDriverInfo(null); 
@@ -1637,6 +1642,40 @@ export default function PassengerBooking() {
       </div>
     );
   }
+
+  const handleSubmitReview = async () => {
+    if (!rideRating || !completedRideData || !user) return;
+    setIsSubmittingReview(true);
+    
+    try {
+      const visibilityDate = new Date();
+      if (rideRating <= 3) {
+        // 14 days cooling off
+        visibilityDate.setDate(visibilityDate.getDate() + 14);
+      }
+      
+      await addDoc(collection(db, "driver_reviews"), {
+        rideId: completedRideData.id,
+        driverId: completedRideData.driverId,
+        passengerId: user.uid,
+        rating: rideRating,
+        tags: selectedReviewTags,
+        comment: reviewComment,
+        createdAt: serverTimestamp(),
+        visibilityDate: visibilityDate,
+        isAnonymous: true,
+        status: "pending_aggregation" 
+      });
+      
+      setHasSubmittedReview(true);
+      toast.success("Review submitted anonymously. Thank you!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to submit review");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   if (!isLoaded) return <div className="h-full flex items-center justify-center bg-surface"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
@@ -2528,21 +2567,19 @@ export default function PassengerBooking() {
                    </div>
                 </div>
                 
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => setIsChatOpen(true)} className="flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform"><MessageSquare className="w-[22px] h-[22px] text-white" /></button>
+                  <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
+                  <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Map</button>
+                </div>
+                
                 {assignedDriverInfo?.status !== "in_progress" && (
-                  <>
-                    <div className="flex gap-3 mt-4">
-                      <button onClick={() => setIsChatOpen(true)} className="flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform"><MessageSquare className="w-[22px] h-[22px] text-white" /></button>
-                      <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
-                      <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Map</button>
+                  <div className="flex gap-3 mt-4">
+                    <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
+                    <div className="flex-1">
+                      <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
                     </div>
-                    
-                    <div className="flex gap-3 mt-4">
-                      <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
-                      <div className="flex-1">
-                        <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
-                      </div>
-                    </div>
-                  </>
+                  </div>
                 )}
                 
                 <div className="text-center">
@@ -2662,15 +2699,15 @@ export default function PassengerBooking() {
 
                 <div className="bg-surface rounded-3xl p-5 mb-6 border border-border-main shadow-sm flex flex-col items-center">
                   <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
-                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.estimatedFare || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
+                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
                   <p className="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1 rounded-lg">Payment Successful</p>
                 </div>
 
                 <p className="text-[10px] font-black uppercase text-text-muted tracking-widest mb-3 border-b border-border-main pb-2">Receipt Breakdown</p>
-                <div className="space-y-3 mb-6 flex-1">
+                <div className="space-y-3 flex-1 mb-4">
                   <div className="flex justify-between text-sm font-bold text-text-muted">
                     <span>Base Fare & Distance</span>
-                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0) : (completedRideData.estimatedFare || fareConfig.baseFare)).toFixed(2)}</span>
+                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0) : (completedRideData.fareEstimate || fareConfig.baseFare)).toFixed(2)}</span>
                   </div>
                   {(completedRideData.cancellationFee || 0) > 0 && (
                     <div className="flex justify-between text-sm font-bold text-danger">
@@ -2692,15 +2729,106 @@ export default function PassengerBooking() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-text-muted text-right mb-1">Date</p>
-                      <p className="text-sm font-black text-text-main text-right">{new Date().toLocaleDateString()}</p>
+                      <p className="text-sm font-black text-text-main text-right">{completedRideData.completedAt ? new Date(completedRideData.completedAt.toMillis ? completedRideData.completedAt.toMillis() : Date.now()).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
                 </div>
+                
+                {!hasSubmittedReview ? (
+                   <div className="mb-6 bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                     <p className="text-center text-sm font-black text-slate-700 mb-3">Rate your driver</p>
+                     <div className="flex justify-center gap-2 mb-4">
+                       {[1, 2, 3, 4, 5].map((star) => (
+                         <button
+                           key={star}
+                           onClick={() => setRideRating(star)}
+                           className="p-2 hover:scale-110 active:scale-95 transition-transform"
+                         >
+                           <Star className={cn("w-9 h-9 transition-colors", star <= rideRating ? "text-amber-400 fill-amber-400" : "text-slate-300 hover:text-amber-400 fill-transparent hover:fill-amber-400")} />
+                         </button>
+                       ))}
+                     </div>
+                     
+                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="flex flex-col gap-4 overflow-hidden">
+                         <div className="flex overflow-x-auto no-scrollbar gap-2 justify-start px-0.5 pb-1">
+                           {(rideRating >= 4 ? ["Smooth Navigator", "Clean Car", "Great Conversation", "Expert Route"] : ["Unclean", "Navigation Issues", "Driving Safety", "Rude", "Late"]).map((tag) => (
+                              <button 
+                                key={tag} 
+                                onClick={() => setSelectedReviewTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
+                                className={cn("px-3 border-[1.5px] whitespace-nowrap flex-none py-1.5 rounded-full text-[13.5px] font-bold transition-colors shadow-sm", selectedReviewTags.includes(tag) ? (rideRating >= 4 ? "bg-[#f0f9ff] text-[#0369a1] border-[#bae6fd]" : "bg-rose-50 text-rose-700 border-rose-200") : "bg-white text-slate-600 border-slate-200")}
+                              >
+                                {tag}
+                              </button>
+                           ))}
+                         </div>
+                         
+                         {rideRating < 5 && (
+                           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
+                              <p className="text-[11px] font-black text-slate-500 mb-1.5 ml-1 uppercase tracking-widest pl-1">Add a comment</p>
+                              <textarea 
+                                className="w-full bg-white border border-slate-200 rounded-xl p-3.5 text-[15px] font-medium text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none transition-all shadow-sm"
+                                rows={3}
+                                placeholder="Tell us more about your experience..."
+                                value={reviewComment}
+                                onChange={(e) => setReviewComment(e.target.value)}
+                              />
+                           </motion.div>
+                         )}
+
+                         {rideRating <= 2 && (
+                             <button 
+                               onClick={async () => {
+                                 if (!completedRideData?.id || !user) {
+                                  toast.error("Ride data missing."); 
+                                  return;
+                                 }
+                                 try {
+                                   await addDoc(collection(db, "support_tickets"), {
+                                     subject: "High Priority: Passenger Safety Report",
+                                     preview: "Passenger flagged a critical safety issue during driver review.",
+                                     userId: user.uid,
+                                     userRole: "rider",
+                                     status: "open",
+                                     priority: "high",
+                                     rideId: completedRideData.id,
+                                     driverId: completedRideData.driverId,
+                                     createdAt: serverTimestamp()
+                                   });
+                                   toast.success("Safety issue reported. Master Admin has been notified immediately.");
+                                 } catch(e) {
+                                   console.error(e);
+                                   toast.error("Failed to sequence safety alert.");
+                                 }
+                               }}
+                               className="flex items-center justify-center gap-2 w-full py-2 bg-rose-50 text-rose-600 font-bold rounded-xl border border-rose-100 mt-2 hover:bg-rose-100 transition-colors"
+                             >
+                               <AlertCircle className="w-4 h-4" /> Report a Safety Issue
+                             </button>
+                         )}
+                     </motion.div>
+                   </div>
+                ) : (
+                   <div className="mb-6 bg-emerald-50 rounded-2xl p-4 border border-emerald-200 flex flex-col items-center justify-center">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mb-2">
+                         <MapPin className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <p className="text-sm font-bold text-emerald-800 text-center">Thank you for your feedback!</p>
+                      <p className="text-[11px] text-emerald-600 mt-1 text-center">Your anonymous review helps us keep the community safe.</p>
+                   </div>
+                )}
 
                 <button 
-                  onClick={() => { 
+                  onClick={async () => {
+                    if (!hasSubmittedReview) {
+                      await handleSubmitReview();
+                    }
                     setStep("details"); 
                     setCompletedRideData(null); 
+                    setRideRating(5);
+                    setSelectedReviewTags([]);
+                    setReviewComment("");
+                    setHasSubmittedReview(false);
+                    setIsSubmittingReview(false);
                     setPickup("");
                     setDropoff("");
                     setPickupCoords(null);
@@ -2711,9 +2839,10 @@ export default function PassengerBooking() {
                     setLiveRouteLine([]);
                     navigate("/my-rides", { replace: true, state: { tab: "completed" } });
                   }}
-                  className="w-full py-4 mt-auto rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform"
+                  disabled={isSubmittingReview}
+                  className="w-full py-4 mt-auto rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform disabled:bg-slate-700"
                 >
-                  Done
+                  {isSubmittingReview ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-5 h-5 animate-spin"/> Submitting...</span> : "Done"}
                 </button>
               </motion.div>
             )}

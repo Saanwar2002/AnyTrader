@@ -152,6 +152,25 @@
       },
       "required": ["uid", "role", "name"]
     },
+    "DriverReview": {
+      "title": "DriverReview",
+      "description": "A review for a driver with a cooling-off period.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rideId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "passengerId": { "type": "string" },
+        "rating": { "type": "integer" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "visibilityDate": { "type": "string", "format": "date-time", "description": "When this review becomes public" },
+        "isAnonymous": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pending_aggregation", "aggregated", "flagged"] }
+      },
+      "required": ["id", "rideId", "driverId", "passengerId", "rating", "createdAt", "visibilityDate"]
+    },
     "Job": {
       "title": "Job",
       "description": "A job posted by a homeowner.",
@@ -223,6 +242,7 @@
           }
         },
         "postedDate": { "type": "string", "format": "date-time" },
+        "clientDeleted": { "type": "boolean", "description": "Soft delete flag for the homeowner" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -627,6 +647,7 @@
         "waitTolerance": { "type": "integer", "enum": [10, 20, 30], "description": "Max wait time in minutes for ASAP requests." },
         "comments": { "type": "string" },
         "scheduledAt": { "type": "string", "format": "date-time", "description": "Optional future date for pre-booked rides." },
+        "passengerDeleted": { "type": "boolean", "description": "Soft delete flag for the passenger" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "riderId", "status", "createdAt"]
@@ -782,6 +803,10 @@
     "/driver_status/{driverId}": {
       "schema": { "type": "object" },
       "description": "Driver status."
+    },
+    "/driver_reviews/{reviewId}": {
+      "schema": "DriverReview",
+      "description": "Reviews for drivers with a cooling-off period."
     },
     "/driver_metrics/{driverId}": {
       "schema": "DriverMetrics",

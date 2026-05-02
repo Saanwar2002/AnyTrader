@@ -323,5 +323,18 @@ The prefix is determined by the user's primary registration role:
 *   **Driver Nudge Delay:** Implemented a time delay logic in `RideChat` where the driver is only allowed to send an SMS nudge to the passenger after they've been waiting at the pickup location for more than 3 minutes (180 seconds). This prevents drivers from spamming passengers immediately upon arrival during the grace period.
 *   **Priority Job Lead Notifications:** Rewrote the job notification dispatcher (`notificationService.ts`) to programmatically calculate push lead delivery times. Traders holding a tier with Priority advantages ("Gold", "Premium", "Platinum Enterprise", "Business Professional") receive instant `visibleAt` access to new posts, whereas standard accounts are dynamically time-delayed by 30 minutes, guaranteeing ecosystem ROI for paying users. Emergency jobs bypass this rule constraint.
 
+## 🚕 Phase 15: Post-Ride Experience & Driver Reviews (Completed May 02, 2026)
+*   **The Mission:** Implement a robust passenger rating system integrated with safety protocols and privacy mechanisms to ensure fair driver feedback.
+*   **Review Shielding (Cooling-off Period):**
+    *   *Implementation:* Driver reviews with an unfavorable rating (3 stars or below) trigger an automatic 14-day visibility delay (`visibilityDate` = `createdAt` + 14 days) written via Firestore `addDoc` in `PassengerBooking.tsx`.
+    *   *Security:* Firestore rules explicitly block Drivers from querying or reading low-rated reviews before the cooling-off period has passed, preventing targeted immediate retaliation against passengers.
+*   **Safety Escrow & Rapid Escalation:**
+    *   *Direct SOS Integration:* Ratings of 2 stars or below dynamically surface a "Report a Safety Issue" inline button. This action bypasses standard CS queues, immediately bridging to the Master Admin alert channels.
+*   **Frictionless Rating UI:**
+    *   *Initial State:* 5-stars pre-filled in gold inside the Trip Receipt modal to encourage positive feedback with minimal taps.
+    *   *Smart Actions:* 4 compact "Quick Action Tabs" (tag pills) dynamically shift their narrative based on rating. (e.g., *Smooth Navigator* vs *Navigation Issues* when < 4 stars).
+    *   *Progressive Disclosure:* The optional comment text area is deliberately hidden unless the passenger drops the rating strictly below 5 stars to keep the default completion path rapid.
+    *   *Robust State Management:* Re-coupled standard timestamp components and safely captured the `currentRideId` mapping for completed jobs ensuring zero data mismatches upon submission.
+
 
 

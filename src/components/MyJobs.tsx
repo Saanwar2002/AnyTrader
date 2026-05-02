@@ -33,7 +33,9 @@ export default function MyJobs() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const jobsData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((job: any) => !job.clientDeleted);
       setJobs(jobsData);
       setLoading(false);
     }, (error) => {
@@ -102,7 +104,7 @@ export default function MyJobs() {
     
     setIsProcessing(jobToDelete);
     try {
-      await deleteDoc(doc(db, "jobs", jobToDelete));
+      await updateDoc(doc(db, "jobs", jobToDelete), { clientDeleted: true });
       setActionId(null);
       setJobToDelete(null);
     } catch (error) {
@@ -368,7 +370,19 @@ export default function MyJobs() {
                         {quoteCounts[job.id] || 0} quotes
                       </p>
                       
-                      <div className="relative">
+                      <div className="relative flex items-center gap-1">
+                        {(job.status === "cancelled" || job.status === "completed") && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(job.id);
+                            }}
+                            disabled={isProcessing === job.id}
+                            className="p-2 hover:bg-red-50 rounded-xl text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                          </button>
+                        )}
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
