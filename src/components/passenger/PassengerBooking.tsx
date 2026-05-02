@@ -211,14 +211,14 @@ function CancelRideButton_ConfirmedPhase({ acceptedAt, onCancel }: { acceptedAt:
   const secs = (remaining % 60).toString().padStart(2, '0');
 
   return (
-    <button onClick={onCancel} className={cn("text-xs font-bold uppercase tracking-widest py-3 px-8 border transition-colors flex items-center justify-center gap-2 mx-auto rounded-xl", 
-      isFree ? "border-emerald-500/50 text-emerald-600 hover:bg-emerald-50" : "border-danger/20 text-danger hover:bg-danger/5"
+    <button onClick={onCancel} className={cn("w-full py-2.5 rounded-[16px] flex flex-col items-center justify-center transition-transform active:scale-[0.98] shadow-lg", 
+      isFree ? "bg-[#d32f2f] text-white shadow-red-900/10" : "bg-[#d32f2f] text-white shadow-red-900/10"
     )}>
-      Cancel Ride
+      <span className="font-bold text-[15px] leading-tight text-white mb-0.5">Cancel Ride</span>
       {isFree ? (
-        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-mono">{mins}:{secs}</span>
+        <span className="text-white/80 text-[13px] font-medium leading-none">{mins}:{secs}</span>
       ) : (
-        <span className="bg-danger/10 text-danger px-2 py-0.5 rounded-md font-mono">Fee Applies</span>
+        <span className="text-white/80 text-[13px] font-medium leading-none">Fee Applies</span>
       )}
     </button>
   );
@@ -1097,6 +1097,7 @@ export default function PassengerBooking() {
 
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
   const [showAbandonPrompt, setShowAbandonPrompt] = useState(false);
+  const [showDriverFoundOverlay, setShowDriverFoundOverlay] = useState(false);
   const [cancelFeeToApply, setCancelFeeToApply] = useState(0);
 
   const handleKeepWaiting = async () => {
@@ -1310,6 +1311,8 @@ export default function PassengerBooking() {
           if (lastSoundStatusRef.current !== 'accepted') {
              playSound('success');
              lastSoundStatusRef.current = 'accepted';
+             // Only show the overlay if we just transitioned to accepted
+             setShowDriverFoundOverlay(true);
           }
           setAssignedDriverInfo(prev => ({ 
              uid: data.driverId, 
@@ -1554,7 +1557,10 @@ export default function PassengerBooking() {
 
   return (
     <div className="relative flex-1 w-full overflow-hidden bg-[#e8eaed] dark:bg-slate-900 flex flex-col min-h-0">
-       <div className="h-[45vh] lg:h-[50vh] relative z-0 shrink-0">
+       <div className={cn(
+         "relative z-0 shrink-0", 
+         "h-[40vh] lg:h-[45vh]"
+       )}>
           <GoogleMap
             mapContainerStyle={containerStyle}
             center={mapCenter}
@@ -1648,13 +1654,13 @@ export default function PassengerBooking() {
 
             {driverPos && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
-                  <div className="absolute inset-0 bg-primary rounded-full opacity-30 animate-pulse"></div>
-                  <div className="bg-primary border-2 border-white w-4 h-4 rounded-full shadow-lg z-10 flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 bg-black rounded-full"></span>
+                <div className="relative flex items-center justify-center w-10 h-10 -ml-5 -mt-5">
+                  <div className="absolute inset-0 bg-zinc-900 rounded-full opacity-20 animate-pulse blur-[2px]"></div>
+                  <div className="bg-white border-2 border-slate-200 w-8 h-8 rounded-full shadow-xl z-10 flex items-center justify-center">
+                     <Car className="w-4 h-4 text-slate-800" />
                   </div>
-                  <div className="absolute -top-6 bg-black/80 px-2 py-0.5 rounded text-[9px] font-bold text-white whitespace-nowrap shadow border border-primary/30">
-                    TAXI
+                  <div className="absolute -top-6 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5">
+                    {assignedDriverInfo?.status === "accepted" ? "Heading to you" : "In Progress"}
                   </div>
                 </div>
               </OverlayViewF>
@@ -1674,7 +1680,7 @@ export default function PassengerBooking() {
          />
        )}
        
-       <div className="flex-1 relative z-20 pointer-events-none flex flex-col justify-end pb-[72px]">
+       <div className="relative z-20 pointer-events-none flex flex-col justify-end overflow-hidden flex-1 pb-[72px]">
           <AnimatePresence mode="wait">
             {step === "details" && (
               <motion.div
@@ -2200,7 +2206,7 @@ export default function PassengerBooking() {
             )}
 
             {step === "searching" && (
-              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 pb-6 flex flex-col items-center border-t border-slate-200 pointer-events-auto h-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)]">
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex flex-col items-center border-t border-slate-200 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)] relative z-20">
                 <div className="w-10 h-[5px] bg-slate-200 rounded-full mb-5"/>
                 <p className="text-slate-800 text-sm font-semibold mb-1">Searching for drivers...</p>
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Requesting...</h2>
@@ -2272,133 +2278,137 @@ export default function PassengerBooking() {
             )}
 
             {step === "confirmed" && (
-              <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-6 border-t border-border-main pointer-events-auto h-full overflow-y-auto no-scrollbar">
+              <>
+                {assignedDriverInfo?.status === "accepted" && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[16px] px-4 py-2.5 border border-slate-200 shadow-[0_6px_16px_rgba(0,0,0,0.08)] flex items-center justify-center gap-2.5 mb-3 pointer-events-auto w-fit mx-auto z-20 mt-auto">
+                     <Car className="w-[18px] h-[18px] text-[#0a1930]" />
+                     <span className="font-bold text-[#0a1930] text-[15px]">{assignedDriverInfo.isFinishingTrip ? "Driver finishing a trip" : "Driver arriving in 4 mins"}</span>
+                  </motion.div>
+                )}
+                <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border-t border-slate-200/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
+                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4"/>
                 <AnimatePresence>
                    {assignedDriverInfo?.stackedDriverDelay && assignedDriverInfo.status === "accepted" && (
                        <motion.div
                           initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                          className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 shadow-sm"
+                          className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5 shadow-sm"
                        >
-                         <h3 className="font-black text-amber-900 text-lg mb-1 flex items-center gap-2">
-                           <AlertCircle className="w-5 h-5" /> Driver Delayed
+                         <h3 className="font-black text-amber-900 text-[15px] mb-1 flex items-center gap-2">
+                           <AlertCircle className="w-4 h-4" /> Driver Delayed
                          </h3>
-                         <p className="text-amber-800 text-sm font-semibold mb-4 leading-snug">
-                           Your driver's current trip has been extended and will take approx {assignedDriverInfo.stackedDriverDelay} mins longer. Would you like to keep waiting or find another driver?
+                         <p className="text-amber-800 text-[13px] font-semibold mb-3 leading-snug">
+                           Your driver's current trip has been extended by {assignedDriverInfo.stackedDriverDelay} mins. Would you like to keep waiting or find another driver?
                            {nearbyDriversCount === 0 && driversAvailableSoonCount === 0 && (
-                             <span className="block mt-2 text-amber-900 bg-amber-200/50 p-2 rounded-lg font-bold">
+                             <span className="block mt-1.5 text-amber-900 bg-amber-200/50 p-2 rounded-lg font-bold">
                                Note: There are currently no other drivers available in your area (15-20+ min wait expected).
                              </span>
                            )}
                          </p>
                          <div className="flex gap-3">
-                           <button 
-                             onClick={handleKeepWaiting}
-                             className="flex-1 py-3 px-4 bg-amber-200 text-amber-900 rounded-xl font-bold active:scale-95 transition-transform"
-                           >
-                             Keep Waiting
-                           </button>
-                           <button 
-                             onClick={handleFindAnotherDriver}
-                             className="flex-1 py-3 px-4 bg-white border-2 border-amber-200 text-amber-800 rounded-xl font-bold active:scale-95 transition-transform"
-                           >
-                             Find Another
-                           </button>
+                           <button onClick={handleKeepWaiting} className="flex-1 py-2.5 px-3 bg-[#f59e0b] text-white rounded-[12px] font-bold text-sm active:scale-95 transition-transform shadow-sm">Keep Waiting</button>
+                           <button onClick={handleFindAnotherDriver} className="flex-1 py-2.5 px-3 bg-white border border-amber-300 text-amber-800 rounded-[12px] font-bold text-sm active:scale-95 transition-transform">Find Another</button>
                          </div>
                        </motion.div>
                    )}
                 </AnimatePresence>
+                
                 {assignedDriverInfo?.status === "arrived" ? (
-                  <div className="flex items-center gap-4 mb-6">
-                     <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center"><Clock className="w-8 h-8 text-warning animate-pulse" /></div>
-                     <div>
-                       <h2 className="text-2xl font-black text-text-main tracking-tight">Driver is Outside</h2>
-                       <p className="text-text-muted font-bold text-sm">Please meet your driver now.</p>
+                  <div className="flex items-center justify-between mb-5">
+                     <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center"><Clock className="w-6 h-6 text-amber-600 animate-pulse" /></div>
+                        <div>
+                          <h2 className="text-xl font-black text-slate-900 tracking-tight">Driver Outside</h2>
+                          <p className="text-slate-500 font-medium text-[13px]">Please meet your driver now.</p>
+                        </div>
                      </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col mb-6">
-                     <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">
-                       {assignedDriverInfo?.status === "accepted" ? "Driver is on the way" : 
-                        assignedDriverInfo?.status === "in_progress" ? "Heading to destination" : 
-                        "Driver found!"}
-                     </h2>
-                     {assignedDriverInfo?.isFinishingTrip && assignedDriverInfo?.status === "accepted" && (
-                       <div className="bg-lime-50 border border-lime-200 text-lime-800 px-3 py-2 rounded-xl mb-4 text-sm font-bold flex items-center justify-center gap-2">
-                         <span className="relative flex h-3 w-3">
-                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-400 opacity-75"></span>
-                           <span className="relative inline-flex rounded-full h-3 w-3 bg-lime-500"></span>
-                         </span>
-                         Currently finishing another trip nearby. Will head to you soon.
+                     {assignedDriverInfo?.arrivedAt && (
+                       <div className="bg-amber-50 border border-amber-200/60 px-3 py-1.5 rounded-lg text-amber-700 font-bold text-sm shadow-[0_2px_4px_-1px_rgba(0,0,0,0.05)]">
+                         <PassengerTimer arrivedAt={assignedDriverInfo.arrivedAt} />
                        </div>
                      )}
-                     <div className="flex flex-col md:flex-row md:items-center justify-between bg-surface border border-border-main p-4 rounded-3xl shadow-sm gap-4">
-                       <div className="flex items-center gap-4">
-                         <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo?.name || "driver"}`} alt="Driver" className="w-14 h-14 rounded-full border border-border-main shadow-sm bg-card object-cover" />
-                         <div>
-                           <div className="flex items-center gap-2">
-                             <p className="font-black text-lg text-text-main">{assignedDriverInfo?.name || "Assigning..."}</p>
-                             <div className="flex items-center gap-1 bg-card px-1.5 py-0.5 rounded-md border border-border-main">
-                               <Star className="w-3 h-3 text-warning fill-warning" />
-                               <span className="text-xs font-bold text-text-main">{assignedDriverInfo?.rating || "4.8"}</span>
-                             </div>
-                           </div>
-                           <p className="text-xs font-bold text-text-muted mt-0.5">{assignedDriverInfo?.vehicle || "Silver Toyota Prius"}</p>
-                         </div>
-                       </div>
-                       
-                       <div className="bg-[#FFCC00] rounded-lg border-2 border-black px-3 py-1 flex items-center justify-center shadow-sm w-fit">
-                          <p className="font-mono font-black text-black text-sm uppercase tracking-widest">{assignedDriverInfo?.plate || "WK71 BCF"}</p>
-                       </div>
-                     </div>
                   </div>
-                )}
-                
-                {assignedDriverInfo?.status === "arrived" && assignedDriverInfo?.arrivedAt && (
-                   <div className="bg-warning/10 border border-warning/20 p-4 rounded-2xl mb-6">
-                     <div className="flex justify-between items-center">
-                       <p className="text-sm font-black text-warning">Waiting Time</p>
-                       <PassengerTimer arrivedAt={assignedDriverInfo.arrivedAt} />
-                     </div>
-                   </div>
+                ) : (
+                  <AnimatePresence>
+                     {assignedDriverInfo?.isFinishingTrip && assignedDriverInfo?.status === "accepted" && (
+                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mb-4">
+                         <div className="bg-[#f0fdf4] border border-[#bbf7d0]/60 text-[#166534] px-4 py-2.5 rounded-[12px] text-[13px] font-semibold flex items-center justify-center gap-2 shadow-[0_2px_4px_-1px_rgba(0,0,0,0.05)]">
+                           <span className="relative flex h-2.5 w-2.5">
+                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                           </span>
+                           Finishing a trip nearby. Will head to you soon.
+                         </div>
+                       </motion.div>
+                     )}
+                  </AnimatePresence>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                   <div className="bg-surface p-4 rounded-2xl border border-border-main">
-                      <p className="text-[10px] font-black text-text-muted uppercase mb-1">Pass Code</p>
-                      <p className="text-2xl font-black text-primary tracking-widest">{assignedDriverInfo?.code || "1234"}</p>
+                <div className="flex items-start gap-3">
+                  <div className="w-[52px] h-[52px] bg-slate-100 rounded-full border border-slate-200 shadow-sm shrink-0 overflow-hidden">
+                     <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo?.name || "driver"}`} alt="Driver" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                     <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-[17px] text-slate-900 leading-tight truncate">{assignedDriverInfo?.name || "Sim Driver"}</p>
+                          <div className="flex items-center gap-1">
+                             <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                             <span className="text-[13px] font-bold text-slate-700">{assignedDriverInfo?.rating || "4.8"}</span>
+                          </div>
+                        </div>
+                        <p className="text-[13px] font-medium text-slate-600 truncate mt-0.5">{assignedDriverInfo?.vehicle || "Silver Toyota"}</p>
+                     </div>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0">
+                     <p className="text-[11px] font-medium text-slate-500 mb-1">License plate</p>
+                     <div className="bg-[#ffcc00] rounded-[6px] border-[1.5px] border-slate-900 px-2 py-1 shadow-sm">
+                        <p className="font-mono font-black text-slate-900 text-[15px] tracking-widest">{assignedDriverInfo?.plate || "SIM 123"}</p>
+                     </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-5">
+                   <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
+                      <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Pass Code</p>
+                      <p className="text-[17px] font-black text-slate-900 tracking-wider leading-none">{assignedDriverInfo?.code || "1234"}</p>
                    </div>
-                   <div className="bg-surface p-4 rounded-2xl border border-border-main">
-                      <p className="text-[10px] font-black text-text-muted uppercase mb-1">Total Estimate</p>
-                      <p className="text-2xl font-black text-text-main">£{(assignedDriverInfo?.fareEstimate || fareEstimate || 0).toFixed(2)}</p>
+                   <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
+                      <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
+                      <p className="text-[17px] font-black text-slate-900 leading-none">£{(assignedDriverInfo?.fareEstimate || fareEstimate || 0).toFixed(2)}</p>
                    </div>
                 </div>
                 
-                <div className="flex gap-3 mb-4">
-                  <button onClick={() => setIsChatOpen(true)} className="flex-1 py-4 shrink-0 bg-surface border-2 border-border-main rounded-2xl flex items-center justify-center active:scale-95 transition-transform"><MessageSquare className="w-6 h-6 text-text-main" /></button>
-                  <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-4 shrink-0 bg-surface border-2 border-border-main rounded-2xl flex items-center justify-center active:scale-95 transition-transform"><Phone className="w-6 h-6 text-text-main" /></a>
-                  <button onClick={() => navigate("/my-rides")} className="flex-[2] py-4 bg-header text-surface rounded-2xl font-black text-lg shadow-xl shrink-0">Track Live Map</button>
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => setIsChatOpen(true)} className="flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform"><MessageSquare className="w-[22px] h-[22px] text-white" /></button>
+                  <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
+                  <button onClick={() => navigate("/my-rides")} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Map</button>
+                </div>
+                
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
+                  <div className="flex-1">
+                    <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
+                  </div>
                 </div>
                 
                 <div className="text-center">
-                  <button onClick={() => setStep("details")} className="w-full mb-4 py-4 bg-emerald-50 text-emerald-700 border-2 border-emerald-200 rounded-2xl font-black active:scale-95 transition-transform">Edit Ride Options</button>
-                  <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
-                  <button onClick={simulateNextState} className="w-full mt-4 font-black py-3 rounded-2xl bg-indigo-100 text-indigo-700 active:scale-95 transition-transform">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
+                  <button onClick={simulateNextState} className="w-full mt-3 font-bold py-3 rounded-[16px] bg-[#e0e7ff] text-[#4338ca] active:scale-[0.98] transition-transform text-[15px]">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
                 </div>
                 
                 <AnimatePresence>
                   {showCancelPrompt && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-card w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-border-main text-center">
-                        <div className="w-16 h-16 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <AlertCircle className="w-8 h-8 text-danger" />
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-[2px]">
+                      <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white w-full max-w-sm rounded-[24px] p-6 shadow-2xl border border-slate-200">
+                        <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4">
+                          <AlertCircle className="w-6 h-6 text-red-500" />
                         </div>
-                        <h3 className="text-xl font-black text-text-main mb-2">Cancel Ride?</h3>
-                        <p className="text-sm font-bold text-text-muted mb-6">
-                          Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-text-main font-black">£{cancelFeeToApply.toFixed(2)}</span> will apply.
+                        <h3 className="text-xl font-black text-slate-900 mb-2">Cancel Ride?</h3>
+                        <p className="text-[13px] font-medium text-slate-600 mb-6 leading-relaxed">
+                          Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-slate-900 font-bold">£{cancelFeeToApply.toFixed(2)}</span> will apply.
                         </p>
                         <div className="flex gap-3">
-                          <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-4 bg-surface rounded-2xl font-black text-text-main hover:bg-surface-hover transition-colors">Go Back</button>
-                          <button onClick={handleCancelConfirmed} className="flex-1 py-4 bg-danger text-white rounded-2xl font-black hover:bg-danger/90 transition-colors">Yes, Cancel</button>
+                          <button onClick={() => setShowCancelPrompt(false)} className="flex-1 py-3 bg-slate-100 rounded-[12px] font-bold text-slate-700 hover:bg-slate-200 transition-colors">Go Back</button>
+                          <button onClick={handleCancelConfirmed} className="flex-1 py-3 bg-red-500 text-white rounded-[12px] font-bold hover:bg-red-600 transition-colors shadow-[0_4px_14px_0_rgba(239,68,68,0.2)]">Yes, Cancel</button>
                         </div>
                       </motion.div>
                     </div>
@@ -2477,10 +2487,11 @@ export default function PassengerBooking() {
                   )}
                 </AnimatePresence>
               </motion.div>
+              </>
             )}
 
             {step === "receipt" && completedRideData && (
-              <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-[40px] p-6 pb-6 border border-border-main pointer-events-auto absolute inset-0 z-[200] overflow-y-auto m-4 mt-0 flex flex-col shadow-2xl">
+              <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border border-border-main pointer-events-auto h-full w-full overflow-y-auto no-scrollbar relative z-[200] flex flex-col shadow-2xl">
                 <div className="flex justify-between items-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
                     <Check className="w-6 h-6 text-emerald-600" />
@@ -2537,7 +2548,59 @@ export default function PassengerBooking() {
               </motion.div>
             )}
           </AnimatePresence>
-       </div>
-    </div>
+        </div>
+        
+        <AnimatePresence>
+          {showDriverFoundOverlay && assignedDriverInfo && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-white flex flex-col pointer-events-auto overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-white/50 pattern-bg pointer-events-none" />
+              
+              <button onClick={() => setShowDriverFoundOverlay(false)} className="absolute top-12 right-6 w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 z-10">
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex-1 flex flex-col items-center justify-center px-6 relative z-10">
+                <div className="relative mb-10 w-48 h-48 flex items-center justify-center">
+                   <motion.div animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.2, 0.5] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute inset-0 bg-emerald-400/20 rounded-full blur-xl" />
+                   <div className="absolute inset-4 bg-emerald-500/10 rounded-full border-[6px] border-emerald-400" />
+                   <div className="absolute inset-8 bg-emerald-100 rounded-full overflow-hidden shadow-2xl">
+                     <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo.name || "driver"}`} alt="Driver" className="w-full h-full object-cover" />
+                   </div>
+                   
+                   {/* Fake confetti dots */}
+                   {[...Array(12)].map((_, i) => (
+                     <motion.div 
+                       key={i}
+                       initial={{ opacity: 0, scale: 0, x: 0, y: 0 }}
+                       animate={{ 
+                         opacity: [0, 1, 0], 
+                         scale: [0, 1, 0.5],
+                         x: Math.random() * 200 - 100, 
+                         y: Math.random() * -200 - 50 
+                       }}
+                       transition={{ duration: 2.5, repeat: Infinity, delay: Math.random() * 2 }}
+                       className={cn("absolute w-2 h-2 rounded-sm", ["bg-blue-400", "bg-yellow-400", "bg-emerald-400", "bg-amber-400"][i % 4])}
+                     />
+                   ))}
+                </div>
+
+                <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="text-4xl font-black text-[#0a1930] tracking-tight mb-3 text-center">
+                  Driver Found!
+                </motion.h2>
+
+                <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-lg font-medium text-slate-700 text-center max-w-[280px] leading-relaxed">
+                  <span className="font-bold">{assignedDriverInfo.name?.split(' ')[0] || "Driver"}</span> is on {assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sim") || assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sara") ? "her" : "their"} way in a <span className="font-bold">{assignedDriverInfo.vehicle || "Silver Toyota"}</span>
+                </motion.p>
+              </div>
+
+              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] relative z-10 w-full mt-auto">
+                <motion.button initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} onClick={() => setShowDriverFoundOverlay(false)} className="w-full py-4 rounded-[20px] bg-[#0a1930] text-white font-bold text-lg active:scale-[0.98] transition-transform shadow-[0_8px_30px_rgba(10,25,48,0.2)]">
+                  Great!
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+     </div>
   );
 }
