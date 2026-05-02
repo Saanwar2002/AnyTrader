@@ -344,6 +344,12 @@ The prefix is determined by the user's primary registration role:
     *   *Smart Actions:* 4 compact "Quick Action Tabs" (tag pills) dynamically shift their narrative based on rating. (e.g., *Smooth Navigator* vs *Navigation Issues* when < 4 stars).
     *   *Progressive Disclosure:* The optional comment text area is deliberately hidden unless the passenger drops the rating strictly below 5 stars to keep the default completion path rapid.
     *   *Robust State Management:* Re-coupled standard timestamp components and safely captured the `currentRideId` mapping for completed jobs ensuring zero data mismatches upon submission.
+    
+## 🚕 Phase 17: Booking Page UX Enhancements (Completed May 02, 2026)
+*   **Booking Layout Resizing & Dynamic Views:**
+    *   *Implementation:* Refactored `PassengerBooking.tsx` to automatically scale and balance the active map viewport and address input sheets.
+    *   *Behavior adjustments:* Changed the map view and information card wrapper to each explicitly occupy 50dvh with responsive scrolling for the cards. This ensures exactly a 50/50 split across all screens between Map and Content, without either covering or breaking the other layout.
+    *   *Outcome:* The user can easily access both the map view and information content with perfectly bounded 50% split portions. Scroll behavior correctly applies only to the information cards leaving map untouched.
 
 
 

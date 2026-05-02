@@ -1683,7 +1683,7 @@ export default function PassengerBooking() {
     <div className="relative flex-1 w-full overflow-hidden bg-[#e8eaed] dark:bg-slate-900 flex flex-col min-h-0">
        <div className={cn(
          "transition-all duration-300",
-         isMapFullScreen ? "fixed inset-0 z-[200] h-[100dvh] w-[100dvw]" : "relative z-0 shrink-0 h-[40vh] lg:h-[45vh]"
+         isMapFullScreen ? "fixed inset-0 z-[200] h-[100dvh] w-[100dvw]" : "relative z-0 shrink-0 h-[50dvh] w-full"
        )}>
           {isMapFullScreen && (
             <button 
