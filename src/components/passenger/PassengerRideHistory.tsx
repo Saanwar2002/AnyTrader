@@ -318,6 +318,39 @@ export default function PassengerRideHistory() {
                     </button>
                   </div>
                 )}
+
+                {["accepted", "arrived", "in_progress"].includes(ride.status) && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => navigate(`/book-ride`)}
+                      className="flex-[2] flex items-center justify-center gap-2 py-2.5 bg-[#0a1930] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      Track Live Map
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirmCancelId === ride.id) {
+                          handleCancelRide(ride.id);
+                        } else {
+                          setConfirmCancelId(ride.id);
+                          setTimeout(() => setConfirmCancelId(null), 3000);
+                        }
+                      }}
+                      disabled={cancellingId === ride.id}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
+                    >
+                      {cancellingId === ride.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : confirmCancelId === ride.id ? (
+                        <AlertCircle className="w-4 h-4" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                      {confirmCancelId === ride.id ? "Confirm" : "Cancel"}
+                    </button>
+                  </div>
+                )}
               </motion.div>
               )
             })

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   MapPin, Navigation, Car, Clock, X, Check, Target, 
-  MessageSquare, ChevronRight, ChevronLeft, Zap, History, Loader2, 
+  MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, Heart,
   Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine
 } from "lucide-react";
@@ -159,13 +159,13 @@ function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
   
   return (
     <div className="text-right">
-      <p className="text-xl font-black text-warning">{mins}:{secs}</p>
+      <p className="text-2xl font-black text-purple-900 leading-none mb-1">{mins}:{secs}</p>
       {elapsed < 180 ? (
-        <p className="text-[10px] font-bold text-text-muted mt-0.5 uppercase tracking-widest">Free wait: {Math.floor((180 - elapsed) / 60)}:{((180 - elapsed) % 60).toString().padStart(2, '0')}</p>
+        <p className="text-[10px] font-bold text-purple-700/80 uppercase tracking-widest leading-none">Free wait: {Math.floor((180 - elapsed) / 60)}:{((180 - elapsed) % 60).toString().padStart(2, '0')}</p>
       ) : elapsed < 300 ? (
-        <p className="text-[10px] font-bold text-warning mt-0.5 uppercase tracking-widest text-[#FF9500]">Paid wait: {Math.floor((elapsed - 180) / 60)}:{((elapsed - 180) % 60).toString().padStart(2, '0')}</p>
+        <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF9500] leading-none">Paid wait: {Math.floor((elapsed - 180) / 60)}:{((elapsed - 180) % 60).toString().padStart(2, '0')}</p>
       ) : (
-        <p className="text-[10px] font-bold text-danger mt-0.5 uppercase tracking-widest">Cancel fee applies</p>
+        <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF3B30] leading-none">Cancel fee applies</p>
       )}
     </div>
   );
@@ -230,6 +230,7 @@ export default function PassengerBooking() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<BookingStep>("details");
+  const [isMapFullScreen, setIsMapFullScreen] = useState(false);
   const [completedRideData, setCompletedRideData] = useState<any>(null);
   const [houseNumber, setHouseNumber] = useState("");
   const [pickup, setPickup] = useState(searchParams.get("pickup") || "");
@@ -307,6 +308,9 @@ export default function PassengerBooking() {
     dispatchRadiusMiles: 15,
     dispatchTimeoutSeconds: 15
   });
+
+  const [liveRouteLine, setLiveRouteLine] = useState<{lat: number, lng: number}[]>([]);
+  const [liveEtaMins, setLiveEtaMins] = useState<number | null>(null);
 
   // Fetch remote config
   useEffect(() => {
@@ -1098,7 +1102,28 @@ export default function PassengerBooking() {
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
   const [showAbandonPrompt, setShowAbandonPrompt] = useState(false);
   const [showDriverFoundOverlay, setShowDriverFoundOverlay] = useState(false);
+  const [driverFoundCountdown, setDriverFoundCountdown] = useState(10);
   const [cancelFeeToApply, setCancelFeeToApply] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (showDriverFoundOverlay) {
+      setDriverFoundCountdown(10);
+      timer = setInterval(() => {
+        setDriverFoundCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setShowDriverFoundOverlay(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showDriverFoundOverlay]);
 
   const handleKeepWaiting = async () => {
     if (!currentRideId) return;
@@ -1376,11 +1401,16 @@ export default function PassengerBooking() {
           const newPos = { lat: data.lat, lng: data.lng };
           setDriverPos(newPos);
           if (map) {
-             const bounds = new window.google.maps.LatLngBounds();
-             bounds.extend(newPos);
-             if (assignedDriverInfo?.status === "accepted" && pickupCoords) bounds.extend(pickupCoords);
-             if (assignedDriverInfo?.status === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
-             map.fitBounds(bounds, { top: 60, bottom: 350, left: 40, right: 40 });
+             if (isMapFullScreenRef.current) {
+                 map.panTo(newPos);
+                 map.setZoom(10);
+             } else {
+                 const bounds = new window.google.maps.LatLngBounds();
+                 bounds.extend(newPos);
+                 if (assignedDriverInfo?.status === "accepted" && pickupCoords) bounds.extend(pickupCoords);
+                 if (assignedDriverInfo?.status === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
+                 map.fitBounds(bounds, { top: 60, bottom: 350, left: 40, right: 40 });
+             }
           }
         }
       }
@@ -1522,6 +1552,49 @@ export default function PassengerBooking() {
     }
   };
 
+  const isMapFullScreenRef = useRef(false);
+  useEffect(() => {
+    isMapFullScreenRef.current = isMapFullScreen;
+  }, [isMapFullScreen]);
+  
+  useEffect(() => {
+    if (map && driverPos && isMapFullScreen) {
+      map.panTo(driverPos);
+      map.setZoom(10);
+    }
+  }, [isMapFullScreen, map, driverPos]);
+
+  useEffect(() => {
+    if (assignedDriverInfo?.status === "in_progress" && driverPos && dropoffCoords && isLoaded) {
+      const getLiveRoute = () => {
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route({
+          origin: new window.google.maps.LatLng(driverPos.lat, driverPos.lng),
+          destination: new window.google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        }, (result, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK && result && result.routes[0]) {
+            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+            setLiveRouteLine(path);
+            
+            let totalSecs = 0;
+            result.routes[0].legs.forEach((leg: any) => {
+              if (leg.duration?.value) totalSecs += leg.duration.value;
+            });
+            setLiveEtaMins(Math.ceil(totalSecs / 60));
+          }
+        });
+      };
+      
+      getLiveRoute();
+      const interval = setInterval(getLiveRoute, 15000); // refresh every 15s
+      return () => clearInterval(interval);
+    } else {
+      setLiveRouteLine([]);
+      setLiveEtaMins(null);
+    }
+  }, [assignedDriverInfo?.status, driverPos?.lat, driverPos?.lng, dropoffCoords, isLoaded]);
+
   // Handle Google Maps load errors (e.g. ApiProjectMapError)
   if (loadError || (!isLoaded && !(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY)) {
     return (
@@ -1558,13 +1631,49 @@ export default function PassengerBooking() {
   return (
     <div className="relative flex-1 w-full overflow-hidden bg-[#e8eaed] dark:bg-slate-900 flex flex-col min-h-0">
        <div className={cn(
-         "relative z-0 shrink-0", 
-         "h-[40vh] lg:h-[45vh]"
+         "transition-all duration-300",
+         isMapFullScreen ? "fixed inset-0 z-[200] h-[100dvh] w-[100dvw]" : "relative z-0 shrink-0 h-[40vh] lg:h-[45vh]"
        )}>
+          {isMapFullScreen && (
+            <button 
+              onClick={() => setIsMapFullScreen(false)}
+              className="absolute top-[env(safe-area-inset-top,1.5rem)] left-4 z-[210] bg-white border-2 border-slate-900 text-[#0a1930] p-3 rounded-full font-bold shadow-2xl pointer-events-auto flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <ArrowLeft className="w-6 h-6 shrink-0" />
+            </button>
+          )}
+
+          {isMapFullScreen && assignedDriverInfo && (
+            <div className="absolute bottom-[env(safe-area-inset-bottom,1.5rem)] left-4 right-4 z-[210] pointer-events-none">
+              <div className="bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl rounded-[20px] p-4 flex items-center justify-between pointer-events-auto">
+                 <div className="flex items-center gap-3">
+                     <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo.name || "driver"}`} alt="Driver" className="w-full h-full object-cover rounded-full" />
+                     </div>
+                     <div className="flex-1 min-w-0 pr-4">
+                        <p className="font-bold text-slate-900 text-lg truncate">{assignedDriverInfo.name || "Driver"}</p>
+                        <p className="text-[14px] font-semibold text-slate-600 truncate">{assignedDriverInfo.vehicle || "Toyota"}</p>
+                     </div>
+                 </div>
+                 
+                 <div className="flex flex-col items-end shrink-0">
+                     <div className="flex border-2 border-slate-900 rounded-[8px] overflow-hidden shadow-sm h-10 w-fit">
+                        <div className="bg-blue-700 w-5 flex flex-col items-center justify-center pointer-events-none">
+                           <span className="text-[8px] text-white font-bold leading-none">UK</span>
+                        </div>
+                        <div className="bg-[#ffcc00] px-3 flex items-center justify-center">
+                           <p className="font-mono font-black text-slate-900 text-[15px] tracking-widest uppercase">{assignedDriverInfo.plate || "SIM 123"}</p>
+                        </div>
+                     </div>
+                 </div>
+              </div>
+            </div>
+          )}
+
           <GoogleMap
             mapContainerStyle={containerStyle}
-            center={mapCenter}
-            zoom={15}
+            center={isMapFullScreen ? (driverPos || mapCenter) : mapCenter}
+            zoom={isMapFullScreen ? 10 : 15}
             onLoad={setMap}
             options={theme === "dark" ? darkMapOptions : premiumMapOptions}
             onClick={(e) => {
@@ -1665,7 +1774,11 @@ export default function PassengerBooking() {
                 </div>
               </OverlayViewF>
             )}
-            {routeLine.length > 0 && <PolylineF path={routeLine} options={{ strokeColor: '#2563eb', strokeOpacity: 0.8, strokeWeight: 5 }} />}
+            {liveRouteLine.length > 0 ? (
+               <PolylineF path={liveRouteLine} options={{ strokeColor: '#2563eb', strokeOpacity: 0.8, strokeWeight: 5 }} />
+            ) : (
+               routeLine.length > 0 && <PolylineF path={routeLine} options={{ strokeColor: '#2563eb', strokeOpacity: 0.8, strokeWeight: 5 }} />
+            )}
           </GoogleMap>
        </div>
 
@@ -1680,7 +1793,7 @@ export default function PassengerBooking() {
          />
        )}
        
-       <div className="relative z-20 pointer-events-none flex flex-col justify-end overflow-hidden flex-1 pb-[72px]">
+       <div className={cn("relative z-20 pointer-events-none flex flex-col justify-end overflow-hidden flex-1 pb-[72px]", isMapFullScreen && "opacity-0 invisible pointer-events-none")}>
           <AnimatePresence mode="wait">
             {step === "details" && (
               <motion.div
@@ -2214,9 +2327,9 @@ export default function PassengerBooking() {
                 
                 <SearchingTimer />
 
-                <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[20px] p-5 border border-[#bae6fd]/50 flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-4">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Total Fare Estimate</p>
-                  <p className="text-3xl font-black text-[#0f172a]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
+                <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[16px] py-1.5 px-4 border border-[#bae6fd]/50 flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-2 mt-1">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0">Total Fare Estimate</p>
+                  <p className="text-2xl font-black text-[#0f172a] leading-tight">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
                 </div>
                 
                 <div className="w-full max-w-[320px] relative">
@@ -2244,14 +2357,14 @@ export default function PassengerBooking() {
                     )}
                   </AnimatePresence>
                   
-                  <div onClick={handleTogglePriorityClick} className="w-full mb-3 bg-gradient-to-r from-[#ffeaa7] to-[#ffd43b] rounded-[20px] p-5 shadow-[0_4px_14px_-6px_rgba(255,212,59,0.5)] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
-                    <div className="flex items-center gap-4 relative z-10 w-full">
-                      <div className="p-2.5 bg-amber-600/10 rounded-full shrink-0">
-                        <Zap className="w-6 h-6 text-amber-800" />
+                  <div onClick={handleTogglePriorityClick} className="w-full mb-3 bg-gradient-to-r from-[#ffeaa7] to-[#ffd43b] rounded-[16px] py-2 px-3 shadow-[0_4px_14px_-6px_rgba(255,212,59,0.5)] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
+                    <div className="flex items-center gap-3 relative z-10 w-full">
+                      <div className="p-1.5 bg-amber-600/10 rounded-full shrink-0">
+                        <Zap className="w-5 h-5 text-amber-800" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="text-amber-950 font-black text-[15px]">Boost Priority (+£3)</h4>
-                        <p className="text-amber-800/80 text-[13px] font-semibold tracking-tight mt-0.5">Jump to the top of the queue.</p>
+                        <h4 className="text-amber-950 font-black text-[13px] leading-[1.1]">Boost Priority (+£3)</h4>
+                        <p className="text-amber-800/80 text-[11px] font-bold tracking-tight mt-0.5 leading-[1.1]">Jump to the top of the queue.</p>
                       </div>
                       <div className={cn("w-[42px] h-[26px] rounded-full p-1 transition-colors relative flex items-center shrink-0 border", isPriority ? "bg-amber-900 border-amber-950/20" : "bg-black/10 border-black/5")}>
                         <div className={cn("w-[18px] h-[18px] bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
@@ -2313,16 +2426,22 @@ export default function PassengerBooking() {
                 </AnimatePresence>
                 
                 {assignedDriverInfo?.status === "arrived" ? (
-                  <div className="flex items-center justify-between mb-5">
-                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center"><Clock className="w-6 h-6 text-amber-600 animate-pulse" /></div>
+                  <div className="flex items-center justify-between mb-5 bg-[#faf5ff] border-2 border-[#d8b4fe] rounded-[20px] p-4 shadow-[0_4px_20px_-4px_rgba(168,85,247,0.15)] relative overflow-hidden">
+                     {/* Decorative background accent */}
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-200/40 rounded-full blur-2xl -mt-10 -mr-10 pointer-events-none" />
+                     <div className="absolute bottom-0 left-0 w-24 h-24 bg-fuchsia-200/30 rounded-full blur-xl -mb-10 -ml-10 pointer-events-none" />
+                     
+                     <div className="flex items-center gap-4 relative z-10">
+                        <div className="w-[52px] h-[52px] bg-white border-2 border-purple-200 rounded-full flex items-center justify-center shadow-sm shrink-0">
+                           <Clock className="w-7 h-7 text-purple-600 animate-pulse" />
+                        </div>
                         <div>
-                          <h2 className="text-xl font-black text-slate-900 tracking-tight">Driver Outside</h2>
-                          <p className="text-slate-500 font-medium text-[13px]">Please meet your driver now.</p>
+                          <h2 className="text-[22px] font-black text-purple-950 tracking-tight leading-tight">Driver Outside</h2>
+                          <p className="text-purple-700/80 font-bold text-[13px] mt-0.5">Please meet your driver now.</p>
                         </div>
                      </div>
                      {assignedDriverInfo?.arrivedAt && (
-                       <div className="bg-amber-50 border border-amber-200/60 px-3 py-1.5 rounded-lg text-amber-700 font-bold text-sm shadow-[0_2px_4px_-1px_rgba(0,0,0,0.05)]">
+                       <div className="bg-white border-2 border-purple-200 px-3 py-2 rounded-xl text-purple-900 font-bold text-sm shadow-sm relative z-10 flex flex-col items-center justify-center min-w-[76px]">
                          <PassengerTimer arrivedAt={assignedDriverInfo.arrivedAt} />
                        </div>
                      )}
@@ -2360,17 +2479,33 @@ export default function PassengerBooking() {
                      </div>
                   </div>
                   <div className="flex flex-col items-end shrink-0">
-                     <p className="text-[11px] font-medium text-slate-500 mb-1">License plate</p>
-                     <div className="bg-[#ffcc00] rounded-[6px] border-[1.5px] border-slate-900 px-2 py-1 shadow-sm">
-                        <p className="font-mono font-black text-slate-900 text-[15px] tracking-widest">{assignedDriverInfo?.plate || "SIM 123"}</p>
+                     <p className="text-[10px] font-black text-black uppercase tracking-widest mb-1.5">License plate</p>
+                     <div className="flex border-2 border-slate-900 rounded-[8px] overflow-hidden shadow-sm h-10">
+                        <div className="bg-blue-700 w-5 flex flex-col items-center justify-center pointer-events-none">
+                           <span className="text-[8px] text-yellow-400 font-bold leading-none">UK</span>
+                        </div>
+                        <div className="bg-[#ffcc00] px-3 flex items-center justify-center">
+                           <p className="font-mono font-black text-slate-900 text-xl tracking-widest uppercase">{assignedDriverInfo?.plate || "SIM 123"}</p>
+                        </div>
                      </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mt-5">
                    <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
-                      <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Pass Code</p>
-                      <p className="text-[17px] font-black text-slate-900 tracking-wider leading-none">{assignedDriverInfo?.code || "1234"}</p>
+                      {assignedDriverInfo?.status === "in_progress" ? (
+                        <>
+                           <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Dropoff ETA</p>
+                           <p className="text-[17px] font-black text-slate-900 tracking-wider leading-none">
+                             {liveEtaMins ? `${liveEtaMins} min` : "Calculating..."}
+                           </p>
+                        </>
+                      ) : (
+                        <>
+                           <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Pass Code</p>
+                           <p className="text-[17px] font-black text-slate-900 tracking-wider leading-none">{assignedDriverInfo?.code || "1234"}</p>
+                        </>
+                      )}
                    </div>
                    <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
@@ -2378,18 +2513,22 @@ export default function PassengerBooking() {
                    </div>
                 </div>
                 
-                <div className="flex gap-3 mt-4">
-                  <button onClick={() => setIsChatOpen(true)} className="flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform"><MessageSquare className="w-[22px] h-[22px] text-white" /></button>
-                  <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
-                  <button onClick={() => navigate("/my-rides")} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Map</button>
-                </div>
-                
-                <div className="flex gap-3 mt-4">
-                  <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
-                  <div className="flex-1">
-                    <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
-                  </div>
-                </div>
+                {assignedDriverInfo?.status !== "in_progress" && (
+                  <>
+                    <div className="flex gap-3 mt-4">
+                      <button onClick={() => setIsChatOpen(true)} className="flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform"><MessageSquare className="w-[22px] h-[22px] text-white" /></button>
+                      <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
+                      <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Map</button>
+                    </div>
+                    
+                    <div className="flex gap-3 mt-4">
+                      <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
+                      <div className="flex-1">
+                        <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
+                      </div>
+                    </div>
+                  </>
+                )}
                 
                 <div className="text-center">
                   <button onClick={simulateNextState} className="w-full mt-3 font-bold py-3 rounded-[16px] bg-[#e0e7ff] text-[#4338ca] active:scale-[0.98] transition-transform text-[15px]">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
@@ -2591,9 +2730,23 @@ export default function PassengerBooking() {
                 <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-lg font-medium text-slate-700 text-center max-w-[280px] leading-relaxed">
                   <span className="font-bold">{assignedDriverInfo.name?.split(' ')[0] || "Driver"}</span> is on {assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sim") || assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sara") ? "her" : "their"} way in a <span className="font-bold">{assignedDriverInfo.vehicle || "Silver Toyota"}</span>
                 </motion.p>
+                
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.35 }} className="mt-8">
+                  <div className="flex border-2 border-slate-900 rounded-[12px] overflow-hidden shadow-xl h-14 w-fit mx-auto">
+                     <div className="bg-blue-700 w-8 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-[12px] text-white font-bold leading-none">UK</span>
+                     </div>
+                     <div className="bg-[#ffcc00] px-5 flex items-center justify-center">
+                        <p className="font-mono font-black text-slate-900 text-3xl tracking-widest uppercase">{assignedDriverInfo.plate || "SIM 123"}</p>
+                     </div>
+                  </div>
+                </motion.div>
               </div>
 
-              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] relative z-10 w-full mt-auto">
+              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] relative z-10 w-full mt-auto flex flex-col items-center">
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-slate-500 font-bold mb-4 text-[13px] uppercase tracking-wider">
+                  Proceeding to tracking in <span className="text-slate-700 font-black">{driverFoundCountdown}</span> sec
+                </motion.p>
                 <motion.button initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} onClick={() => setShowDriverFoundOverlay(false)} className="w-full py-4 rounded-[20px] bg-[#0a1930] text-white font-bold text-lg active:scale-[0.98] transition-transform shadow-[0_8px_30px_rgba(10,25,48,0.2)]">
                   Great!
                 </motion.button>
