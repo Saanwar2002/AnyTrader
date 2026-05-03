@@ -347,9 +347,25 @@ The prefix is determined by the user's primary registration role:
     
 ## 🚕 Phase 17: Booking Page UX Enhancements (Completed May 02, 2026)
 *   **Booking Layout Resizing & Dynamic Views:**
-    *   *Implementation:* Refactored `PassengerBooking.tsx` to automatically scale and balance the active map viewport and address input sheets.
-    *   *Behavior adjustments:* Changed the map view and information card wrapper to each explicitly occupy 50dvh with responsive scrolling for the cards. This ensures exactly a 50/50 split across all screens between Map and Content, without either covering or breaking the other layout.
-    *   *Outcome:* The user can easily access both the map view and information content with perfectly bounded 50% split portions. Scroll behavior correctly applies only to the information cards leaving map untouched.
+    *   *Implementation:* Refactored `PassengerBooking.tsx` to explicitly define an absolute Google Maps wrapper constrained to `relative h-[50dvh]`. The main information sheets (details, searching, confirmed, receipt) are placed in a `flex-1` bottom container and stretch to take the remaining `h-[50dvh]`. Bottom padding `pb-[calc(5.5rem...)]` added explicitly to the internal scrollable content areas.
+    *   *Behavior adjustments:* The map no longer floats absolutely but is a structural part of a vertically split `flex-col` layout, enforcing a strict 50/50 ratio. The content cards dynamically fill the lower half, but padding ensures content remains scrollable without being hidden by the sticky bottom nav bar.
+    *   *Outcome:* True 50/50 responsive split on all screens. The user can interact with the scrollable 50% sheet reliably, and the bottom tabs perfectly overlap only empty scrollable space instead of actual buttons.
+*   **Category List UI Streamlining:**
+    *   *Refactor:* Redesigned the horizontal scroll container for vehicle categories. Altered `flex-col` stack into a `flex-row` pattern for the individual cards.
+    *   *Outcome:* Vertically compressed the car category cards by a full 50%, returning valuable screen estate to crucial form fields without compromising click target size or text legibility.
+*   **Booking Navigation Deadzone Fix:**
+    *   *Refactor:* Replaced `padding-bottom` (pb) utility classes on `overflow-y-auto` scroll containers with explicit spacer `div`s. Added the spacer `div` to the "Searching" view as well to unblock the Cancel and Edit buttons.
+    *   *Outcome:* Fixed an issue on mobile browsers where padding bottom fails to increase the scrollHeight of a flex container. Now all bottom buttons (Book Ride, Cancel, Edit, Done) can be cleanly scrolled into fully visible territory above the persistent bottom navigation bar.
+*   **Live Tracking Map Zoom Adjustments:**
+    *   *Refactor:* Replaced static map panning with dynamic `fitBounds` calculation that accounts for both the driver's live GPS position and the user's pickup point. Fixed the extreme zooming out issue caused by stale state and excessive static bottom padding.
+    *   *Outcome:* Both the passenger and the an incoming driver are visibly framed on the map simultaneously when in the 50dvh split view and fullscreen view. Extraneous drop-off dimensions are correctly ignored during the arrival phase.
+*   **Address Autocomplete Visibility Enhancement:**
+    *   *Refactor:* Altered the Autocomplete suggestions drop-down container to position absolutely from `bottom-full mb-2` rather than `top-full mt-1`. Used `flex-col-reverse` so the list naturally grows upwards while adhering to the input element and keeping the closest match aligned with the input box.
+    *   *Outcome:* The dropdown menu elegantly pops *above* the input fields, completely unblocking the Quick Action tabs ("Home", "Work", etc.) that sit directly under the Location configuration.
+*   **Booking Passenger Chat Enhancements:**
+    *   *Feature:* Added horizontally-scrollable quick text reply chips ("I'm coming!", "Wait for me", etc.) directly above the driver arrival display in the primary sheet. These chips only appear when the driver arrives at the pickup location.
+    *   *Refactor:* Shrunk the visual footprint of the "Driver Outside" indicator box by nearly 50% horizontally and vertically to comfortably fit the new quick tags without hiding crucial map visibility.
+    *   *Outcome:* Passengers can now rapid-fire common conversational updates to the driver directly from the main view with a single tap.
 
 
 

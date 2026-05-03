@@ -302,6 +302,7 @@ export default function PassengerBooking() {
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const lastSoundStatusRef = useRef<string | null>(null);
+  const currentRideStatusRef = useRef<string | null>(null);
   const hasTriggeredTipModalRef = useRef(false);
   const [fareConfig, setFareConfig] = useState({ 
     baseFare: 3.5, 
@@ -364,84 +365,79 @@ export default function PassengerBooking() {
   const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
   const [routeLine, setRouteLine] = useState<{lat: number, lng: number}[]>([]);
 
-  const panToWithOffset = useCallback((coords: {lat: number, lng: number}) => {
-    if (!map) return;
-    map.panTo(coords);
-    // Offset North-South based on screen height to keep the pin visible above the sheet
-    setTimeout(() => {
-       map.panBy(0, window.innerHeight * 0.25); 
-    }, 100);
-  }, [map]);
-
   useEffect(() => {
     if (mapCenter && map && step === "details") {
-      panToWithOffset(mapCenter);
+      map.panTo(mapCenter);
     }
-  }, [mapCenter, map, panToWithOffset, step]);
+  }, [mapCenter, map, step]);
 
   // Routing and Distance Calculation (consolidated)
   useEffect(() => {
     if (pickupCoords && dropoffCoords && isLoaded) {
       const getRoute = () => {
-        const directionsService = new google.maps.DirectionsService();
-        const validStops = stops.filter(s => s.coords !== null).map(s => ({
-          location: new google.maps.LatLng(s.coords!.lat, s.coords!.lng),
-          stopover: true
-        }));
+        try {
+          const directionsService = new google.maps.DirectionsService();
+          const validStops = stops.filter(s => s.coords !== null).map(s => ({
+            location: new google.maps.LatLng(s.coords!.lat, s.coords!.lng),
+            stopover: true
+          }));
 
-        directionsService.route({
-          origin: new google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
-          destination: new google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
-          waypoints: validStops,
-          travelMode: google.maps.TravelMode.DRIVING,
-        }, (result, status) => {
-          if (status === google.maps.DirectionsStatus.OK && result) {
-            // Draw the line
-            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-            setRouteLine(path);
+          directionsService.route({
+            origin: new google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
+            destination: new google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
+            waypoints: validStops,
+            travelMode: google.maps.TravelMode.DRIVING,
+          }, (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK && result) {
+              // Draw the line
+              const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+              setRouteLine(path);
 
-            // Fit bounds
-            if (map) {
-              const bounds = new google.maps.LatLngBounds();
-              path.forEach((p: any) => bounds.extend(p));
-              map.fitBounds(bounds, { 
-                padding: { 
-                  top: window.innerHeight * 0.08, 
-                  right: 50, 
-                  bottom: window.innerHeight * 0.62, 
-                  left: 50 
-                } 
+              // Fit bounds
+              if (map) {
+                const bounds = new google.maps.LatLngBounds();
+                path.forEach((p: any) => bounds.extend(p));
+                map.fitBounds(bounds, { 
+                  padding: { 
+                    top: window.innerHeight * 0.08, 
+                    right: 50, 
+                    bottom: window.innerHeight * 0.62, 
+                    left: 50 
+                  } 
+                });
+                
+                // Zoom out 1-2 ticks after bounds are set to give more breathing room
+                setTimeout(() => {
+                  const currentZoom = map.getZoom();
+                  if (currentZoom) {
+                     map.setZoom(currentZoom - 1);
+                  }
+                }, 150);
+              }
+
+              // Calculate distance/fare
+              let totalDistanceMeters = 0;
+              let totalDurationSeconds = 0;
+              result.routes[0].legs.forEach(leg => {
+                if (leg.distance) totalDistanceMeters += leg.distance.value;
+                if (leg.duration) totalDurationSeconds += leg.duration.value;
               });
+              const dMiles = totalDistanceMeters / 1609.34;
+              const dMins = totalDurationSeconds / 60;
               
-              // Zoom out 1-2 ticks after bounds are set to give more breathing room
-              setTimeout(() => {
-                const currentZoom = map.getZoom();
-                if (currentZoom) {
-                   map.setZoom(currentZoom - 1);
-                }
-              }, 150);
+              setDistanceMiles(dMiles);
+              setDurationMinutes(dMins);
+
+              // Base Fare + Distance + Time
+              const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
+              setFareEstimate(Math.max(calcFare, fareConfig.minFare));
+            } else {
+              console.warn("Directions failed:", status);
             }
-
-            // Calculate distance/fare
-            let totalDistanceMeters = 0;
-            let totalDurationSeconds = 0;
-            result.routes[0].legs.forEach(leg => {
-              if (leg.distance) totalDistanceMeters += leg.distance.value;
-              if (leg.duration) totalDurationSeconds += leg.duration.value;
-            });
-            const dMiles = totalDistanceMeters / 1609.34;
-            const dMins = totalDurationSeconds / 60;
-            
-            setDistanceMiles(dMiles);
-            setDurationMinutes(dMins);
-
-            // Base Fare + Distance + Time
-            const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
-            setFareEstimate(Math.max(calcFare, fareConfig.minFare));
-          } else {
-            console.warn("Directions failed:", status);
-          }
-        });
+          });
+        } catch (e) {
+          console.error("DIRECTIONS_ROUTE error:", e);
+        }
       };
       getRoute();
     } else {
@@ -1213,6 +1209,21 @@ export default function PassengerBooking() {
     }
   };
 
+  const handleSendQuickMessage = async (text: string) => {
+    if (!currentRideId || !user) return;
+    try {
+      await addDoc(collection(db, "ride_requests", currentRideId, "chat"), {
+        text,
+        senderId: user.uid,
+        createdAt: serverTimestamp()
+      });
+      toast.success("Sent");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to send");
+    }
+  };
+
   const handleAddTip = async (amount: number) => {
     if (currentRideId) {
        await updateDoc(doc(db, "ride_requests", currentRideId), { tipAmount: amount, tipAddedAt: serverTimestamp() });
@@ -1344,6 +1355,7 @@ export default function PassengerBooking() {
     const unsubRide = onSnapshot(doc(db, "ride_requests", currentRideId), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
+        currentRideStatusRef.current = data.status || null;
         if (data.status === 'accepted' && data.driverId) {
           if (lastSoundStatusRef.current !== 'accepted') {
              playSound('success');
@@ -1370,11 +1382,12 @@ export default function PassengerBooking() {
         if (data.status === 'arrived') {
           if (lastSoundStatusRef.current !== 'arrived') {
              playSound('notification');
+             if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]); // Distinct arrival vibration pattern
              lastSoundStatusRef.current = 'arrived';
           }
           setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount } : null);
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
-          toast.success("Your driver has arrived!");
+          toast.success("Your driver has arrived!", { duration: 8000, position: "top-center" });
         }
         if (data.status === 'in_progress') {
           if (lastSoundStatusRef.current !== 'in_progress') {
@@ -1418,15 +1431,18 @@ export default function PassengerBooking() {
           const newPos = { lat: data.lat, lng: data.lng };
           setDriverPos(newPos);
           if (map) {
+             const bounds = new window.google.maps.LatLngBounds();
+             bounds.extend(newPos);
+             
+             // If driver is accepted, they are heading to pick you up
+             if (currentRideStatusRef.current === "accepted" && pickupCoords) bounds.extend(pickupCoords);
+             // If driver is in progress, they are heading to the dropoff
+             if (currentRideStatusRef.current === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
+
              if (isMapFullScreenRef.current) {
-                 map.panTo(newPos);
-                 map.setZoom(10);
+                 map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
              } else {
-                 const bounds = new window.google.maps.LatLngBounds();
-                 bounds.extend(newPos);
-                 if (assignedDriverInfo?.status === "accepted" && pickupCoords) bounds.extend(pickupCoords);
-                 if (assignedDriverInfo?.status === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
-                 map.fitBounds(bounds, { top: 60, bottom: 350, left: 40, right: 40 });
+                 map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
              }
           }
         }
@@ -1575,32 +1591,47 @@ export default function PassengerBooking() {
   }, [isMapFullScreen]);
   
   useEffect(() => {
-    if (map && driverPos && isMapFullScreen) {
-      map.panTo(driverPos);
-      map.setZoom(10);
+    if (map && driverPos) {
+       const bounds = new window.google.maps.LatLngBounds();
+       bounds.extend(driverPos);
+       
+       if (currentRideStatusRef.current === "accepted" && pickupCoords) bounds.extend(pickupCoords);
+       if (currentRideStatusRef.current === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
+
+       if (isMapFullScreen) {
+           map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
+       } else {
+           map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
+       }
     }
-  }, [isMapFullScreen, map, driverPos]);
+  }, [isMapFullScreen]);
 
   useEffect(() => {
     if (assignedDriverInfo?.status === "in_progress" && driverPos && dropoffCoords && isLoaded) {
       const getLiveRoute = () => {
-        const directionsService = new window.google.maps.DirectionsService();
-        directionsService.route({
-          origin: new window.google.maps.LatLng(driverPos.lat, driverPos.lng),
-          destination: new window.google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        }, (result, status) => {
-          if (status === window.google.maps.DirectionsStatus.OK && result && result.routes[0]) {
-            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-            setLiveRouteLine(path);
-            
-            let totalSecs = 0;
-            result.routes[0].legs.forEach((leg: any) => {
-              if (leg.duration?.value) totalSecs += leg.duration.value;
-            });
-            setLiveEtaMins(Math.ceil(totalSecs / 60));
-          }
-        });
+        try {
+          const directionsService = new window.google.maps.DirectionsService();
+          directionsService.route({
+            origin: new window.google.maps.LatLng(driverPos.lat, driverPos.lng),
+            destination: new window.google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          }, (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result && result.routes[0]) {
+              const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+              setLiveRouteLine(path);
+              
+              let totalSecs = 0;
+              result.routes[0].legs.forEach((leg: any) => {
+                if (leg.duration?.value) totalSecs += leg.duration.value;
+              });
+              setLiveEtaMins(Math.ceil(totalSecs / 60));
+            } else {
+              console.warn("Live route directions failed with status:", status);
+            }
+          });
+        } catch (e) {
+          console.error("DIRECTIONS_ROUTE error:", e);
+        }
       };
       
       getLiveRoute();
@@ -1724,7 +1755,7 @@ export default function PassengerBooking() {
           <GoogleMap
             mapContainerStyle={containerStyle}
             center={isMapFullScreen ? (driverPos || mapCenter) : mapCenter}
-            zoom={isMapFullScreen ? 10 : 15}
+            zoom={isMapFullScreen ? 13 : 15}
             onLoad={setMap}
             options={theme === "dark" ? darkMapOptions : premiumMapOptions}
             onClick={(e) => {
@@ -1844,7 +1875,7 @@ export default function PassengerBooking() {
          />
        )}
        
-       <div className={cn("relative z-20 pointer-events-none flex flex-col justify-end overflow-hidden flex-1 pb-[72px]", isMapFullScreen && "opacity-0 invisible pointer-events-none")}>
+       <div className={cn("relative z-20 pointer-events-none flex flex-col justify-end overflow-hidden flex-1", isMapFullScreen && "opacity-0 invisible pointer-events-none")}>
           <AnimatePresence mode="wait">
             {step === "details" && (
               <motion.div
@@ -1876,7 +1907,7 @@ export default function PassengerBooking() {
                     </button>
                 )}
                 
-                <div ref={bottomSheetRef} className={cn("overflow-x-hidden overflow-y-auto no-scrollbar pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex-1 min-h-0", detailsView === "address" ? "p-4 pt-2 space-y-4" : "p-3 pt-3 flex flex-col gap-2")}>
+                <div ref={bottomSheetRef} className={cn("overflow-x-hidden overflow-y-auto no-scrollbar flex-1 min-h-0", detailsView === "address" ? "p-4 pt-2 space-y-4 relative" : "p-3 pt-3 flex flex-col gap-2 relative")}>
                   {detailsView === "address" ? (
                     <>
                       <div className="bg-surface rounded-3xl p-2 pb-3 border border-border-main shadow-sm mb-4 shrink-0">
@@ -1921,22 +1952,22 @@ export default function PassengerBooking() {
 
                         <AnimatePresence>
                           {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 top-full mt-1 overflow-hidden rounded-2xl shadow-xl border border-slate-200 bg-white">
-                              <div className="text-sm max-h-48 overflow-y-auto">
-                              {suggestions.map((s, idx) => (
-                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 last:border-b-0">
-                                  {s.isHistory ? 
-                                    <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
-                                    <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
-                                  }
-                                  <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
-                                </button>
-                              ))}
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 bottom-full mb-2 overflow-hidden rounded-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border border-slate-200 bg-white origin-bottom">
+                              <div className="text-sm max-h-48 overflow-y-auto flex flex-col-reverse">
                               {suggestions.length === 0 && isLoadingAddress && (
-                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-b border-slate-200 bg-white">
+                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
                                 </div>
                               )}
+                                {[...suggestions].map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0">
+                                    {s.isHistory ? 
+                                      <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
+                                      <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
+                                    }
+                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                  </button>
+                                ))}
                               </div>
                             </motion.div>
                           )}
@@ -1967,21 +1998,23 @@ export default function PassengerBooking() {
                         
                         <AnimatePresence>
                           {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="ml-6 overflow-hidden pr-1">
-                                {suggestions.map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-x border-b border-slate-200 last:rounded-b-2xl flex items-center gap-3 transition-colors bg-white shadow-sm mt-1">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 bottom-full mb-2 overflow-hidden rounded-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border border-slate-200 bg-white origin-bottom">
+                              <div className="text-sm max-h-48 overflow-y-auto flex flex-col-reverse">
+                                {suggestions.length === 0 && isLoadingAddress && (
+                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                  </div>
+                                )}
+                                {[...suggestions].map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0">
                                     {s.isHistory ? 
-                                      <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                      <History className="w-4 h-4 text-amber-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
                                     }
                                     <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
                                   </button>
                                 ))}
-                              {suggestions.length === 0 && isLoadingAddress && (
-                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-x border-b border-slate-200 rounded-b-2xl bg-white shadow-sm mt-1">
-                                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
-                                </div>
-                              )}
+                              </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -2015,10 +2048,15 @@ export default function PassengerBooking() {
 
                         <AnimatePresence>
                           {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 top-full mt-1 overflow-hidden rounded-2xl shadow-xl border border-slate-200 bg-white">
-                              <div className="text-sm max-h-48 overflow-y-auto">
-                                {suggestions.map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 last:border-b-0">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 bottom-full mb-2 overflow-hidden rounded-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border border-slate-200 bg-white origin-bottom">
+                              <div className="text-sm max-h-48 overflow-y-auto flex flex-col-reverse">
+                                {suggestions.length === 0 && isLoadingAddress && (
+                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
+                                  </div>
+                                )}
+                                {[...suggestions].map((s, idx) => (
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0">
                                     {s.isHistory ? 
                                       <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
@@ -2026,11 +2064,6 @@ export default function PassengerBooking() {
                                     <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
                                   </button>
                                 ))}
-                                {suggestions.length === 0 && isLoadingAddress && (
-                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-b border-slate-200 bg-white">
-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
-                                  </div>
-                                )}
                               </div>
                             </motion.div>
                           )}
@@ -2242,21 +2275,20 @@ export default function PassengerBooking() {
                                 onClick={() => { if(isAvailable) setSelectedCategory(cat.id); }} 
                                 disabled={!isAvailable}
                                 className={cn(
-                                  "flex-none min-w-[105px] snap-center flex flex-col items-center justify-center p-2 rounded-[8px] transition-all border", 
+                                  "flex-none min-w-[125px] snap-center flex flex-row items-center p-2 rounded-[8px] transition-all border gap-2.5", 
                                   active ? "bg-[#2563EB] text-white border-[#2563EB] shadow-md shadow-blue-500/20 scale-[1.02]" : 
                                   isAvailable ? "bg-white text-slate-600 hover:bg-slate-50 border-slate-300 shadow-sm" : "bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed border-slate-200"
                                 )}
                               >
-                                <cat.icon className={cn("w-6 h-6 mb-1", active ? "text-white" : isAvailable ? "text-slate-500" : "text-slate-400")} />
-                                <span className={cn("text-[9px] font-bold tracking-tight text-center leading-none mb-1 uppercase", active ? "text-white" : "text-slate-600")}>{cat.name}</span>
-                                {!isAvailable ? (
-                                  <>
-                                    <span className="text-[8px] font-medium tracking-tight mb-0.5 uppercase">Unavailable</span>
-                                    <span className="text-xs font-bold line-through opacity-60">£{getComputedFare(cat.id).toFixed(2)}</span>
-                                  </>
-                                ) : (
-                                  <span className="text-sm font-bold">£{getComputedFare(cat.id).toFixed(2)}</span>
-                                )}
+                                <cat.icon className={cn("w-5 h-5 shrink-0 ml-1", active ? "text-white" : isAvailable ? "text-slate-500" : "text-slate-400")} />
+                                <div className="flex flex-col items-start min-w-0 flex-1">
+                                  <span className={cn("text-[9px] font-bold tracking-tight text-left leading-none uppercase max-w-full truncate", active ? "text-white" : "text-slate-600")}>{cat.name}</span>
+                                  {!isAvailable ? (
+                                    <span className="text-[10px] font-bold line-through opacity-60 mt-0.5">£{getComputedFare(cat.id).toFixed(2)}</span>
+                                  ) : (
+                                    <span className="text-sm font-bold mt-0.5 leading-none">£{getComputedFare(cat.id).toFixed(2)}</span>
+                                  )}
+                                </div>
                               </button>
                             );
                           })}
@@ -2365,12 +2397,13 @@ export default function PassengerBooking() {
                   </AnimatePresence>
                   </>
                   )}
+                  <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full" />
                 </div>
               </motion.div>
             )}
 
             {step === "searching" && (
-              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex flex-col items-center border-t border-slate-200 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)] relative z-20">
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 flex flex-col items-center border-t border-slate-200 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)] relative z-20">
                 <div className="w-10 h-[5px] bg-slate-200 rounded-full mb-5"/>
                 <p className="text-slate-800 text-sm font-semibold mb-1">Searching for drivers...</p>
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Requesting...</h2>
@@ -2438,6 +2471,7 @@ export default function PassengerBooking() {
                   <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-bold text-[15px] py-4 rounded-[16px] bg-[#dcfce7] text-[#15803d] hover:bg-[#bbf7d0] transition-colors active:scale-[0.98]">Cancel</button>
                 </div>
                 {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-[320px] font-black text-[15px] py-4 rounded-[16px] bg-[#e0e7ff] text-[#4338ca] hover:bg-[#c7d2fe] active:scale-[0.98] transition-transform">Simulate Match</button>}
+                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />
               </motion.div>
             )}
 
@@ -2449,7 +2483,7 @@ export default function PassengerBooking() {
                      <span className="font-bold text-[#0a1930] text-[15px]">{assignedDriverInfo.isFinishingTrip ? "Driver finishing a trip" : "Driver arriving in 4 mins"}</span>
                   </motion.div>
                 )}
-                <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border-t border-slate-200/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
+                <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 border-t border-slate-200/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
                 <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4"/>
                 <AnimatePresence>
                    {assignedDriverInfo?.stackedDriverDelay && assignedDriverInfo.status === "accepted" && (
@@ -2476,23 +2510,37 @@ export default function PassengerBooking() {
                    )}
                 </AnimatePresence>
                 
+                {(assignedDriverInfo?.status === "arrived") && (
+                  <div className="flex overflow-x-auto no-scrollbar gap-2 mb-3 w-full pb-1">
+                    {["I'm coming!", "Be there in 2 mins", "Wait for me", "I'm outside"].map((msg, i) => (
+                      <button 
+                        key={i} 
+                        onClick={() => handleSendQuickMessage(msg)}
+                        className="whitespace-nowrap px-4 py-2 bg-slate-800 border border-slate-700 text-white font-bold text-[13px] rounded-[12px] shadow-sm active:scale-95 transition-transform"
+                      >
+                        {msg}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
                 {assignedDriverInfo?.status === "arrived" ? (
-                  <div className="flex items-center justify-between mb-5 bg-[#faf5ff] border-2 border-[#d8b4fe] rounded-[20px] p-4 shadow-[0_4px_20px_-4px_rgba(168,85,247,0.15)] relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-4 bg-[#faf5ff] border border-[#d8b4fe] rounded-[16px] p-2.5 shadow-[0_2px_10px_-4px_rgba(168,85,247,0.15)] relative overflow-hidden">
                      {/* Decorative background accent */}
-                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-200/40 rounded-full blur-2xl -mt-10 -mr-10 pointer-events-none" />
-                     <div className="absolute bottom-0 left-0 w-24 h-24 bg-fuchsia-200/30 rounded-full blur-xl -mb-10 -ml-10 pointer-events-none" />
+                     <div className="absolute top-0 right-0 w-24 h-24 bg-purple-200/40 rounded-full blur-xl -mt-8 -mr-8 pointer-events-none" />
+                     <div className="absolute bottom-0 left-0 w-16 h-16 bg-fuchsia-200/30 rounded-full blur-lg -mb-6 -ml-6 pointer-events-none" />
                      
-                     <div className="flex items-center gap-4 relative z-10">
-                        <div className="w-[52px] h-[52px] bg-white border-2 border-purple-200 rounded-full flex items-center justify-center shadow-sm shrink-0">
-                           <Clock className="w-7 h-7 text-purple-600 animate-pulse" />
+                     <div className="flex items-center gap-3 relative z-10">
+                        <div className="w-9 h-9 bg-white border border-purple-200 rounded-full flex items-center justify-center shadow-sm shrink-0">
+                           <Clock className="w-5 h-5 text-purple-600 animate-pulse" />
                         </div>
                         <div>
-                          <h2 className="text-[22px] font-black text-purple-950 tracking-tight leading-tight">Driver Outside</h2>
-                          <p className="text-purple-700/80 font-bold text-[13px] mt-0.5">Please meet your driver now.</p>
+                          <h2 className="text-[17px] font-black text-purple-950 tracking-tight leading-none mb-0.5">Driver Outside</h2>
+                          <p className="text-purple-700/80 font-bold text-[11px] leading-none mt-0.5">Please meet your driver now.</p>
                         </div>
                      </div>
                      {assignedDriverInfo?.arrivedAt && (
-                       <div className="bg-white border-2 border-purple-200 px-3 py-2 rounded-xl text-purple-900 font-bold text-sm shadow-sm relative z-10 flex flex-col items-center justify-center min-w-[76px]">
+                       <div className="bg-white border border-purple-200 px-2.5 py-1.5 rounded-lg text-purple-900 font-bold text-xs shadow-sm relative z-10 flex flex-col items-center justify-center min-w-[68px]">
                          <PassengerTimer arrivedAt={assignedDriverInfo.arrivedAt} />
                        </div>
                      )}
@@ -2681,12 +2729,13 @@ export default function PassengerBooking() {
                     </div>
                   )}
                 </AnimatePresence>
+                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />
               </motion.div>
               </>
             )}
 
             {step === "receipt" && completedRideData && (
-              <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border border-border-main pointer-events-auto h-full w-full overflow-y-auto no-scrollbar relative z-[200] flex flex-col shadow-2xl">
+              <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 border border-border-main pointer-events-auto h-full w-full overflow-y-auto no-scrollbar relative z-[200] flex flex-col shadow-2xl">
                 <div className="flex justify-between items-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
                     <Check className="w-6 h-6 text-emerald-600" />
@@ -2844,6 +2893,7 @@ export default function PassengerBooking() {
                 >
                   {isSubmittingReview ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-5 h-5 animate-spin"/> Submitting...</span> : "Done"}
                 </button>
+                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />
               </motion.div>
             )}
           </AnimatePresence>
