@@ -1205,7 +1205,10 @@ export default function PassengerBooking() {
     let nextStatus = "arrived";
     if (currentStatus === "accepted") nextStatus = "arrived";
     else if (currentStatus === "arrived") nextStatus = "in_progress";
-    else if (currentStatus === "in_progress") nextStatus = "completed";
+    else if (currentStatus === "in_progress") {
+       nextStatus = profile?.stripeCustomerId ? "completed" : "awaiting_payment";
+    }
+    else if (currentStatus === "awaiting_payment") nextStatus = "completed";
 
     try {
       const rideDoc = await getDoc(doc(db, "ride_requests", currentRideId));
@@ -1225,6 +1228,11 @@ export default function PassengerBooking() {
       if (nextStatus === "in_progress") {
          updateData.startedAt = serverTimestamp();
          setAssignedDriverInfo((prev: any) => prev ? { ...prev, status: "in_progress", startedAt: Date.now() } : null);
+         playSound('notification');
+      }
+      if (nextStatus === "awaiting_payment") {
+         updateData.paymentUrl = "https://example.com/pay";
+         setAssignedDriverInfo((prev: any) => prev ? { ...prev, status: "awaiting_payment", paymentUrl: updateData.paymentUrl } : null);
          playSound('notification');
       }
       if (nextStatus === "completed") {
@@ -2898,9 +2906,9 @@ export default function PassengerBooking() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mt-5">
-                   <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
-                      {assignedDriverInfo?.status === "in_progress" ? (
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                   <div className="bg-slate-100/80 p-2.5 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
+                      {(assignedDriverInfo?.status === "in_progress" || assignedDriverInfo?.status === "awaiting_payment") ? (
                         <>
                            <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Dropoff ETA</p>
                            <p className="text-[17px] font-black text-slate-900 tracking-wider leading-none">
@@ -2920,7 +2928,7 @@ export default function PassengerBooking() {
                         </>
                       )}
                    </div>
-                   <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center text-center">
+                   <div className="bg-slate-100/80 p-2.5 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center text-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
                       <p className="text-[17px] font-black text-slate-900 leading-none">Total: £{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
                       
@@ -2941,18 +2949,36 @@ export default function PassengerBooking() {
                       )}
                    </div>
                 </div>
+
+                {!assignedDriverInfo?.hasCardOnFile && (
+                  <button
+                    disabled={assignedDriverInfo?.status !== "awaiting_payment"}
+                    onClick={() => {
+                       if (assignedDriverInfo?.status === "awaiting_payment" && assignedDriverInfo.paymentUrl) {
+                          window.open(assignedDriverInfo.paymentUrl, "_blank");
+                       }
+                    }}
+                    className={cn(
+                      "w-full py-2.5 mt-3 rounded-xl font-bold text-[15px] transition-all flex items-center justify-center gap-2",
+                      assignedDriverInfo?.status === "awaiting_payment" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:bg-emerald-600" : "bg-slate-100 text-slate-400 border border-slate-200"
+                    )}
+                  >
+                     <Zap className="w-4 h-4 fill-current" /> Pay by Card / Scan QR
+                  </button>
+                )}
                 
-                {assignedDriverInfo?.status === "in_progress" && (
-                    <div className="flex items-center gap-2 mt-4 overflow-x-auto no-scrollbar pb-1">
+                {(assignedDriverInfo?.status === "in_progress" || assignedDriverInfo?.status === "awaiting_payment") && (
+                    <div className="flex items-center gap-2 mt-3 overflow-x-auto no-scrollbar pb-1">
                       <button 
                          onClick={submitTipInline}
-                         disabled={(!selectedTip && (!customTip || parseFloat(customTip) <= 0)) || isAddingTip}
-                         className={cn("px-3 py-2 rounded-[10px] font-bold text-[15px] transition-all shrink-0 border-2", isAddingTip ? "bg-[#0a1930] text-white border-[#0a1930]" : ((selectedTip || parseFloat(customTip)) ? "border-[#0a1930] bg-white text-[#0a1930]" : "border-transparent text-slate-900 bg-transparent px-1 mr-1"))}
+                         disabled={(!selectedTip && (!customTip || parseFloat(customTip) <= 0)) || isAddingTip || assignedDriverInfo?.status === "awaiting_payment"}
+                         className={cn("px-3 py-1.5 rounded-[10px] font-bold text-[14px] transition-all shrink-0 border-2", isAddingTip ? "bg-[#0a1930] text-white border-[#0a1930]" : ((selectedTip || parseFloat(customTip)) ? "border-[#0a1930] bg-white text-[#0a1930]" : "border-transparent text-slate-900 bg-transparent px-1 mr-1"), assignedDriverInfo?.status === "awaiting_payment" && "opacity-50")}
                       >
                          {(!selectedTip && (!customTip || parseFloat(customTip) <= 0)) ? "Select Tip" : "Add Tip"}
                       </button>
                       {[2, 3, 5].map((amount) => (
                         <button key={amount} onClick={() => { 
+                            if (assignedDriverInfo?.status === "awaiting_payment") return;
                             if (selectedTip === amount) {
                               setSelectedTip(null);
                             } else {
@@ -2960,12 +2986,13 @@ export default function PassengerBooking() {
                               setCustomTip(""); 
                             }
                           }}
-                          className={cn("px-4 py-2 rounded-[10px] font-bold text-[15px] transition-all shrink-0", selectedTip === amount ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930] hover:bg-slate-300")}
+                          className={cn("px-4 py-1.5 rounded-[10px] font-bold text-[14px] transition-all shrink-0", selectedTip === amount ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930]", assignedDriverInfo?.status === "awaiting_payment" ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-300")}
                         >
                           £{amount}
                         </button>
                       ))}
                       <button onClick={() => {
+                          if (assignedDriverInfo?.status === "awaiting_payment") return;
                           if (!selectedTip && parseFloat(customTip) > 0) {
                             setCustomTip("");
                             setSelectedTip(null);
@@ -2973,7 +3000,7 @@ export default function PassengerBooking() {
                             setShowCustomTipKeypad(true);
                           }
                         }}
-                        className={cn("px-4 py-2 rounded-[10px] font-bold text-[15px] transition-all shrink-0", (!selectedTip && parseFloat(customTip) > 0) ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930] hover:bg-slate-300")}
+                        className={cn("px-4 py-1.5 rounded-[10px] font-bold text-[14px] transition-all shrink-0", (!selectedTip && parseFloat(customTip) > 0) ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930]", assignedDriverInfo?.status === "awaiting_payment" ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-300")}
                       >
                         {(!selectedTip && parseFloat(customTip) > 0) ? `£${parseFloat(customTip)}` : "Custom"}
                       </button>
@@ -2996,7 +3023,7 @@ export default function PassengerBooking() {
                   <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Driver</button>
                 </div>
                 
-                {assignedDriverInfo?.status !== "in_progress" && (
+                {assignedDriverInfo?.status !== "in_progress" && assignedDriverInfo?.status !== "awaiting_payment" && (
                   <div className="flex gap-3 mt-4">
                     <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
                     <div className="flex-1">

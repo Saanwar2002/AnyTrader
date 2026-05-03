@@ -376,6 +376,12 @@ export default function DriverTerminal() {
           if (navigator.vibrate) navigator.vibrate([300, 200, 300]);
         }
         
+        if (data.status === "completed" && rideState === "completed" && paymentUrl) {
+           toast.success("Payment Received", { description: "Passenger has completed the payment."});
+           setPaymentUrl(null);
+           setRideState("review");
+        }
+        
         if (data.isModifiedByPassenger) {
           // Play loud alert notification
           playSound('notification');
@@ -1206,6 +1212,12 @@ export default function DriverTerminal() {
       const data = await response.json();
       if (data.url) {
         setPaymentUrl(data.url);
+        if (activeRide?.id && activeRide?.isReal) {
+           await updateDoc(doc(db, "ride_requests", activeRide.id), {
+              status: "awaiting_payment",
+              paymentUrl: data.url
+           });
+        }
       }
     } catch (err) {
       console.error("Payment generation failed:", err);
