@@ -4,7 +4,7 @@ import {
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, Heart,
-  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine
+  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete
 } from "lucide-react";
 import RideChat from "../driver/RideChat";
 import { cn } from "@/src/lib/utils";
@@ -246,6 +246,8 @@ export default function PassengerBooking() {
   const [priorityInlineToast, setPriorityInlineToast] = useState<{message: string, type: 'success' | 'info'} | null>(null);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   const [showTipModal, setShowTipModal] = useState(false);
+  const [showCustomTipKeypad, setShowCustomTipKeypad] = useState(false);
+  const [isAddingTip, setIsAddingTip] = useState(false);
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTip, setCustomTip] = useState("");
   const [rideRating, setRideRating] = useState<number>(5);
@@ -331,7 +333,22 @@ export default function PassengerBooking() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showRegularJourneys, setShowRegularJourneys] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [showHomeBlank, setShowHomeBlank] = useState(false);
+  const [showWorkBlank, setShowWorkBlank] = useState(false);
   
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (showRegularJourneys || showFavorites || showHomeBlank || showWorkBlank) {
+      timeout = setTimeout(() => {
+        setShowRegularJourneys(false);
+        setShowFavorites(false);
+        setShowHomeBlank(false);
+        setShowWorkBlank(false);
+      }, 5000);
+    }
+    return () => clearTimeout(timeout);
+  }, [showRegularJourneys, showFavorites, showHomeBlank, showWorkBlank]);
+
   const [detailsView, setDetailsView] = useState<"address" | "vehicle">("address");
 
   const bottomSheetRef = useRef<HTMLDivElement>(null);
@@ -399,9 +416,9 @@ export default function PassengerBooking() {
                 path.forEach((p: any) => bounds.extend(p));
                 map.fitBounds(bounds, { 
                   padding: { 
-                    top: window.innerHeight * 0.08, 
+                    top: 60, 
                     right: 50, 
-                    bottom: window.innerHeight * 0.62, 
+                    bottom: 60, 
                     left: 50 
                   } 
                 });
@@ -795,7 +812,7 @@ export default function PassengerBooking() {
       return; 
     }
 
-    const fetchSuggestions = async () => {
+      const fetchSuggestions = async () => {
       setIsLoadingAddress(true);
       
       const historyMatches = pastAddresses.filter(p => p.label.toLowerCase().includes(val.toLowerCase())).slice(0, 3).map(p => ({...p, isHistory: true}));
@@ -815,8 +832,9 @@ export default function PassengerBooking() {
           includedRegionCodes: ['GB'],
           locationBias: {
             center: { lat: userLat, lng: userLng },
-            radius: 10000
-          }
+            radius: 50000
+          },
+          origin: { lat: userLat, lng: userLng }
         };
 
         const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
@@ -825,7 +843,14 @@ export default function PassengerBooking() {
         let finalSuggestions: any[] = [];
         
         if (predictions && predictions.length > 0) {
-          const cleaned = predictions.map((p: any) => ({
+          // Sort predictions by distanceMeters if available
+          const sortedPredictions = [...predictions].sort((a: any, b: any) => {
+            const distA = a.placePrediction.distanceMeters ?? 9999999;
+            const distB = b.placePrediction.distanceMeters ?? 9999999;
+            return distA - distB;
+          });
+          
+          const cleaned = sortedPredictions.map((p: any) => ({
             label: p.placePrediction.text.text,
             placeId: p.placePrediction.placeId,
             placePrediction: p.placePrediction // Save the raw prediction object to use toPlace() later
@@ -985,7 +1010,8 @@ export default function PassengerBooking() {
         status: isUpdatingActiveRide ? assignedDriverInfo.status : "pending",
         hasCardOnFile: !!profile?.stripeCustomerId,
         currency: "GBP",
-        handshakeCode: Math.floor(1000 + Math.random() * 9000).toString(),
+        handshakeCode: (profile?.phone || profile?.phoneNumber || "").replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000).toString(),
+        requirePasscode: profile?.requirePasscode === true,
       };
       
       const activeId = editId || currentRideId;
@@ -1046,6 +1072,7 @@ export default function PassengerBooking() {
         driverPhone: "07700900000",
         vehicleInfo: "Silver Toyota",
         vehiclePlate: "SIM 123",
+        driverRequirePasscode: false,
         acceptedAt: serverTimestamp(),
       });
       if (pickupCoords) {
@@ -1227,9 +1254,23 @@ export default function PassengerBooking() {
   const handleAddTip = async (amount: number) => {
     if (currentRideId) {
        await updateDoc(doc(db, "ride_requests", currentRideId), { tipAmount: amount, tipAddedAt: serverTimestamp() });
-       toast.success(amount > 0 ? `£${amount.toFixed(2)} tip added. Thank you!` : "Tip skipped.");
+       toast.success(amount > 0 ? `Tip added successfully!` : "Tip skipped.");
     }
     setShowTipModal(false);
+  };
+
+  const submitTipInline = async () => {
+    setIsAddingTip(true);
+    const finalAmount = selectedTip || (customTip ? parseFloat(customTip) : 0);
+    if (finalAmount > 0) {
+        await handleAddTip(finalAmount);
+    }
+    setTimeout(() => {
+        setIsAddingTip(false);
+        // Optionally reset selection after success
+        // setSelectedTip(null);
+        // setCustomTip("");
+    }, 2000);
   };
 
   const [driverDispatchIntervalId, setDriverDispatchIntervalId] = useState<NodeJS.Timeout | null>(null);
@@ -1369,6 +1410,7 @@ export default function PassengerBooking() {
              vehicle: data.vehicleInfo || "Taxi", 
              plate: data.vehiclePlate || "UNKNOWN",
              code: data.handshakeCode || "---", 
+             requirePasscode: data.driverRequirePasscode === true || profile?.requirePasscode === true,
              phone: data.driverPhone || "", 
              status: "accepted",
              fareEstimate: data.fareEstimate || 0,
@@ -1397,20 +1439,9 @@ export default function PassengerBooking() {
           setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis(), tipAmount: data.tipAmount } : null);
           setStep("confirmed");
           
-          // Trigger the tip modal after a short delay for preview purposes
+          // Let's remove the automatic tip modal per user instructions.
           if (!hasTriggeredTipModalRef.current) {
             hasTriggeredTipModalRef.current = true;
-            setTimeout(() => {
-              if (hasCardOnFile) {
-                toast.info("Preparing Auto-Pay", { description: "Your journey is almost over. Want to add a tip?" });
-              } else {
-                toast.warning("Payment Required", { description: "Please have your phone ready to scan the driver's QR code to pay." });
-              }
-              setShowTipModal(true);
-              triggerHaptic(ImpactStyle.Heavy);
-              // Vibrate pattern for alert
-              if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-            }, 15000); // 15s after ride starts
           }
         }
         if (data.status === 'completed') { 
@@ -1714,7 +1745,7 @@ export default function PassengerBooking() {
     <div className="relative flex-1 w-full overflow-hidden bg-[#e8eaed] dark:bg-slate-900 flex flex-col min-h-0">
        <div className={cn(
          "transition-all duration-300",
-         isMapFullScreen ? "fixed inset-0 z-[200] h-[100dvh] w-[100dvw]" : "relative z-0 shrink-0 h-[50dvh] w-full"
+         isMapFullScreen ? "fixed inset-0 z-[200] h-[100dvh] w-[100dvw]" : (step === "details" ? "relative z-0 shrink-0 h-[60dvh] w-full" : "relative z-0 shrink-0 h-[50dvh] w-full")
        )}>
           {isMapFullScreen && (
             <button 
@@ -1915,7 +1946,8 @@ export default function PassengerBooking() {
                       <div className="absolute left-3 top-8 bottom-8 w-0.5 border-l-2 border-dashed border-border-main/60" />
                       
                       {/* Pickup */}
-                      <div className="relative flex items-center group w-full">
+                      <div className="relative flex flex-col group w-full">
+                        <div className="relative flex items-center w-full">
                         <div className="w-6 flex justify-center shrink-0">
                            <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-surface z-10 
                              group-focus-within:border-emerald-500 group-focus-within:scale-125 transition-all" />
@@ -1937,7 +1969,7 @@ export default function PassengerBooking() {
                             value={pickup} 
                             disabled={!!assignedDriverInfo}
                             onFocus={() => { if (!assignedDriverInfo) setActiveField("pickup"); }} 
-                            onChange={(e) => { if (!assignedDriverInfo) setPickup(e.target.value); }} 
+                            onChange={(e) => { if (!assignedDriverInfo) { setPickup(e.target.value); setActiveField("pickup"); } }} 
                           />
                           <div className="pl-1.5 pr-0.5 py-1.5 border-l border-emerald-200/60 flex items-center justify-center shrink-0 h-full">
                             <button onClick={handleDetectLocation} className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg tooltip-trigger shrink-0 transition-colors">
@@ -1949,18 +1981,23 @@ export default function PassengerBooking() {
                             </button>
                           </div>
                         </div>
+                        </div>
 
                         <AnimatePresence>
                           {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 bottom-full mb-2 overflow-hidden rounded-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border border-slate-200 bg-white origin-bottom">
-                              <div className="text-sm max-h-48 overflow-y-auto flex flex-col-reverse">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
+                              <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
+                                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                              </div>
+                              <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                               {suggestions.length === 0 && isLoadingAddress && (
                                 <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
                                 </div>
                               )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0">
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                     {s.isHistory ? 
                                       <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
@@ -1977,7 +2014,8 @@ export default function PassengerBooking() {
                       {/* Stops */}
                       {stops.map((stop, i) => (
                         <React.Fragment key={i}>
-                          <div className="relative flex items-center group w-full">
+                          <div className="relative flex flex-col group w-full">
+                          <div className="relative flex items-center w-full">
                           <div className="w-6 flex justify-center shrink-0">
                              <div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-surface z-10" />
                           </div>
@@ -1990,23 +2028,29 @@ export default function PassengerBooking() {
                               onFocus={() => setActiveField(`stop-${i}`)} 
                               onChange={(e) => {
                                 const ns = [...stops]; ns[i].address = e.target.value; setStops(ns);
+                                setActiveField(`stop-${i}`);
                               }} 
                             />
                             <button onClick={() => setStops(stops.filter((_, idx) => idx !== i))} className="p-2 text-text-muted hover:text-danger rounded-full shrink-0"><X className="w-4 h-4" /></button>
                           </div>
                         </div>
+                        </div>
                         
                         <AnimatePresence>
                           {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 bottom-full mb-2 overflow-hidden rounded-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border border-slate-200 bg-white origin-bottom">
-                              <div className="text-sm max-h-48 overflow-y-auto flex flex-col-reverse">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
+                              <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
+                                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                              </div>
+                              <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                 {suggestions.length === 0 && isLoadingAddress && (
                                   <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
                                   </div>
                                 )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0">
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                     {s.isHistory ? 
                                       <History className="w-4 h-4 text-amber-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
@@ -2022,7 +2066,8 @@ export default function PassengerBooking() {
                     ))}
 
                     {/* Dropoff */}
-                      <div className="relative flex items-center group w-full">
+                      <div className="relative flex flex-col group w-full">
+                        <div className="relative flex items-center w-full">
                         <div className="w-6 flex justify-center shrink-0">
                            <div className="w-2.5 h-2.5 bg-red-500 rounded-sm z-10 group-focus-within:bg-red-500 group-focus-within:scale-125 transition-all" />
                         </div>
@@ -2034,7 +2079,7 @@ export default function PassengerBooking() {
                             placeholder="Where to?" 
                             value={dropoff} 
                             onFocus={() => setActiveField("dropoff")} 
-                            onChange={(e) => setDropoff(e.target.value)} 
+                            onChange={(e) => { setDropoff(e.target.value); setActiveField("dropoff"); }} 
                           />
                           {stops.length < 3 && (
                             <div className="pl-2 pr-1 py-1 border-l border-red-200/60 flex items-center justify-center shrink-0 h-full">
@@ -2045,18 +2090,23 @@ export default function PassengerBooking() {
                             </div>
                           )}
                         </div>
+                        </div>
 
                         <AnimatePresence>
                           {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="absolute z-[60] left-6 right-0 bottom-full mb-2 overflow-hidden rounded-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border border-slate-200 bg-white origin-bottom">
-                              <div className="text-sm max-h-48 overflow-y-auto flex flex-col-reverse">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
+                              <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
+                                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                              </div>
+                              <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                 {suggestions.length === 0 && isLoadingAddress && (
                                   <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
                                   </div>
                                 )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0">
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                     {s.isHistory ? 
                                       <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
@@ -2075,12 +2125,17 @@ export default function PassengerBooking() {
                           onClick={() => { 
                             const home = favoriteAddresses.find(f => f?.name?.toLowerCase() === 'home');
                             if (!home) {
-                              toast.info("Please save an address as 'Home' to use this quick link.");
+                              setShowHomeBlank(!showHomeBlank);
+                              if (!showHomeBlank) {
+                                setShowWorkBlank(false);
+                                setShowRegularJourneys(false);
+                                setShowFavorites(false);
+                              }
                             } else {
                               selectSuggestion({ label: home.address, lat: home.lat, lon: home.lng, placeId: home.placeId });
                             }
                           }} 
-                          className="flex-1 justify-center px-2 py-1.5 bg-blue-50 border border-blue-200 rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm whitespace-nowrap"
+                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showHomeBlank ? "bg-blue-100 border-blue-300 text-blue-800" : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300")}
                         >
                           <Home className="w-3 h-3 text-blue-500" /> Home
                         </button>
@@ -2088,28 +2143,85 @@ export default function PassengerBooking() {
                           onClick={() => { 
                             const work = favoriteAddresses.find(f => f?.name?.toLowerCase() === 'work');
                             if (!work) {
-                              toast.info("Please save an address as 'Work' to use this quick link.");
+                              setShowWorkBlank(!showWorkBlank);
+                              if (!showWorkBlank) {
+                                setShowHomeBlank(false);
+                                setShowRegularJourneys(false);
+                                setShowFavorites(false);
+                              }
                             } else {
                               selectSuggestion({ label: work.address, lat: work.lat, lon: work.lng, placeId: work.placeId });
                             }
                           }} 
-                          className="flex-1 justify-center px-2 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm whitespace-nowrap"
+                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showWorkBlank ? "bg-indigo-100 border-indigo-300 text-indigo-800" : "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300")}
                         >
                           <Briefcase className="w-3 h-3 text-indigo-500" /> Work
                         </button>
                         <button 
-                          onClick={() => setShowRegularJourneys(!showRegularJourneys)} 
+                          onClick={() => {
+                             setShowRegularJourneys(!showRegularJourneys);
+                             if (!showRegularJourneys) {
+                                setShowFavorites(false);
+                                setShowHomeBlank(false);
+                                setShowWorkBlank(false);
+                             }
+                          }} 
                           className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showRegularJourneys ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300")}
                         >
                           <History className="w-3 h-3 text-emerald-500" /> Regular
                         </button>
                         <button 
-                          onClick={() => setShowFavorites(!showFavorites)} 
+                          onClick={() => {
+                             setShowFavorites(!showFavorites);
+                             if (!showFavorites) {
+                                setShowRegularJourneys(false);
+                                setShowHomeBlank(false);
+                                setShowWorkBlank(false);
+                             }
+                          }} 
                           className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showFavorites ? "bg-rose-100 border-rose-300 text-rose-800" : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300")}
                         >
                           <Heart className="w-3 h-3 text-rose-500" /> Favorite
                         </button>
                       </div>
+
+                      <AnimatePresence>
+                        {showHomeBlank && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: "auto" }} 
+                            exit={{ opacity: 0, height: 0 }} 
+                            className="ml-6 overflow-hidden pr-1"
+                          >
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm relative">
+                                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowHomeBlank(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                                <div className="text-center py-4">
+                                  <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No home address saved.</p>
+                                  <p className="text-[10px] text-slate-400">Save an address as 'Home' in My Rides.</p>
+                                </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <AnimatePresence>
+                        {showWorkBlank && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: "auto" }} 
+                            exit={{ opacity: 0, height: 0 }} 
+                            className="ml-6 overflow-hidden pr-1"
+                          >
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm relative">
+                                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowWorkBlank(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                                <div className="text-center py-4">
+                                  <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No work address saved.</p>
+                                  <p className="text-[10px] text-slate-400">Save an address as 'Work' in My Rides.</p>
+                                </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
                       <AnimatePresence>
                         {showFavorites && (
@@ -2119,7 +2231,8 @@ export default function PassengerBooking() {
                             exit={{ opacity: 0, height: 0 }} 
                             className="ml-6 overflow-hidden pr-1"
                           >
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2">
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
+                              <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowFavorites(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                               {favoriteAddresses && favoriteAddresses.length > 0 ? (
                                 favoriteAddresses.map((fav: any, idx: number) => (
                                   <button
@@ -2133,12 +2246,17 @@ export default function PassengerBooking() {
                                     <div className="w-8 h-8 rounded-full bg-rose-50 flex flex-shrink-0 items-center justify-center">
                                       <Heart className="w-4 h-4 text-rose-500" />
                                     </div>
-                                    <span className="font-bold text-sm text-slate-800 truncate">{fav.address}</span>
+                                    <div className="flex-1 min-w-0 pr-4">
+                                      <div className="flex items-center justify-between mb-0.5">
+                                        <span className="font-bold text-xs text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md inline-block uppercase tracking-wider">{fav.name}</span>
+                                      </div>
+                                      <span className="font-bold text-sm text-slate-800 truncate block">{fav.address}</span>
+                                    </div>
                                   </button>
                                 ))
                               ) : (
                                 <div className="text-center py-4">
-                                  <p className="text-xs text-slate-500 font-medium mb-1">No favorite addresses saved.</p>
+                                  <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No favorite addresses saved.</p>
                                   <p className="text-[10px] text-slate-400">Add them in the Saved tab.</p>
                                 </div>
                               )}
@@ -2155,11 +2273,12 @@ export default function PassengerBooking() {
                             exit={{ opacity: 0, height: 0 }} 
                             className="ml-6 overflow-hidden pr-1"
                           >
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2">
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
+                              <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowRegularJourneys(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                               {profile?.regularJourneys && profile.regularJourneys.length > 0 ? (
                                 profile.regularJourneys.map((j: any, idx: number) => (
-                                  <div key={idx} className="flex flex-col gap-2 p-2 bg-white rounded-xl border border-slate-100 shadow-sm">
-                                    <div className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1 mb-1">{j.name || "Saved Route"}</div>
+                                  <div key={idx} className="flex flex-col gap-2 p-2 bg-white rounded-xl border border-slate-100 shadow-sm relative pr-2">
+                                    <div className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1 mb-1 pr-4">{j.name || "Saved Route"}</div>
                                     <div className="flex items-center gap-2 text-xs">
                                       <MapPin className="w-3 h-3 text-emerald-500 flex-shrink-0" />
                                       <span className="font-semibold text-slate-600 truncate">{j.from}</span>
@@ -2195,7 +2314,7 @@ export default function PassengerBooking() {
                                 ))
                               ) : (
                                 <div className="text-center py-4">
-                                  <p className="text-xs text-slate-500 font-medium mb-3">No regular journeys saved yet.</p>
+                                  <p className="text-xs text-slate-500 font-medium mb-3 pt-1">No regular journeys saved yet.</p>
                                   <p className="text-[10px] text-slate-400">Save routes in My Rides as regular journeys.</p>
                                 </div>
                               )}
@@ -2296,16 +2415,16 @@ export default function PassengerBooking() {
 
                         {/* Ride Context Selector (Corporate vs Personal) */}
                         {hasCorporateAccount && (
-                          <div className="flex bg-white border border-slate-300 rounded-[8px] p-1 shadow-sm">
+                          <div className="flex bg-white border border-slate-400 rounded-[8px] p-1 shadow-sm">
                             <button
                               onClick={() => setRideContext("personal")}
-                              className={cn("flex-1 py-1.5 text-[11px] font-bold rounded-[6px] transition-all", rideContext === "personal" ? "bg-[#2563EB] text-white shadow-sm" : "hover:bg-slate-50 text-slate-500 border border-transparent")}
+                              className={cn("flex-1 py-1.5 text-[11px] font-bold rounded-[6px] transition-all", rideContext === "personal" ? "bg-[#2563EB] text-white shadow-sm" : "hover:bg-slate-50 text-slate-800 border border-transparent")}
                             >
                               Personal Ride
                             </button>
                             <button
                               onClick={() => setRideContext("business")}
-                              className={cn("flex-1 py-1.5 text-[11px] font-bold rounded-[6px] transition-all flex items-center justify-center gap-1.5", rideContext === "business" ? "bg-[#2563EB] text-white shadow-sm" : "hover:bg-slate-50 text-slate-500 border border-transparent")}
+                              className={cn("flex-1 py-1.5 text-[11px] font-bold rounded-[6px] transition-all flex items-center justify-center gap-1.5", rideContext === "business" ? "bg-[#2563EB] text-white shadow-sm" : "hover:bg-slate-50 text-slate-800 border border-transparent")}
                             >
                               <Briefcase className="w-3 h-3" /> Business Ride
                             </button>
@@ -2314,28 +2433,28 @@ export default function PassengerBooking() {
                         
                         {/* Add-Ons */}
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 flex justify-between items-center bg-white border border-slate-300 rounded-[8px] px-3 py-2.5 shadow-sm">
-                             <div className="flex items-center gap-2 text-slate-700">
+                          <div className="flex-1 flex justify-between items-center bg-white border border-slate-400 rounded-[8px] px-3 py-2.5 shadow-sm">
+                             <div className="flex items-center gap-2 text-slate-900 font-bold">
                                <Zap className="w-4 h-4" />
-                               <span className="text-[13px] font-medium">Priority</span>
+                               <span className="text-[13px]">Priority</span>
                              </div>
                              <button 
                                onClick={() => setIsPriority(!isPriority)}
-                               className={cn("w-9 h-5 rounded-full transition-colors relative", isPriority ? "bg-[#2563EB]" : "bg-slate-200")}
+                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPriority ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-slate-400")}
                              >
-                               <div className={cn("absolute top-[2px] w-4 h-4 bg-white rounded-full transition-transform", isPriority ? "right-[2px]" : "left-[2px]")} />
+                               <div className={cn("absolute top-[1.5px] w-4 h-4 bg-white rounded-full transition-transform shadow-sm", isPriority ? "right-[1.5px]" : "left-[1.5px]")} />
                              </button>
                           </div>
-                          <div className="flex-1 flex justify-between items-center bg-white border border-slate-300 rounded-[8px] px-3 py-2.5 shadow-sm">
-                             <div className="flex items-center gap-2 text-slate-700">
+                          <div className="flex-1 flex justify-between items-center bg-white border border-slate-400 rounded-[8px] px-3 py-2.5 shadow-sm">
+                             <div className="flex items-center gap-2 text-slate-900 font-bold">
                                <Dog className="w-4 h-4" />
-                               <span className="text-[13px] font-medium">Pet</span>
+                               <span className="text-[13px]">Pet</span>
                              </div>
                              <button 
                                onClick={() => setIsPetFriendly(!isPetFriendly)}
-                               className={cn("w-9 h-5 rounded-full transition-colors relative", isPetFriendly ? "bg-[#2563EB]" : "bg-slate-200")}
+                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPetFriendly ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-slate-400")}
                              >
-                               <div className={cn("absolute top-[2px] w-4 h-4 bg-white rounded-full transition-transform", isPetFriendly ? "right-[2px]" : "left-[2px]")} />
+                               <div className={cn("absolute top-[1.5px] w-4 h-4 bg-white rounded-full transition-transform shadow-sm", isPetFriendly ? "right-[1.5px]" : "left-[1.5px]")} />
                              </button>
                           </div>
                         </div>
@@ -2343,28 +2462,28 @@ export default function PassengerBooking() {
                         <AnimatePresence>
                           {(isPriority || isPetFriendly) && (
                             <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:"auto"}} exit={{opacity:0, height:0}} className="overflow-hidden">
-                              <div className="text-[10px] font-medium text-slate-600 bg-white shadow-sm p-2 rounded-[8px] text-center border border-slate-300">
-                                <span className="text-[#2563EB]">Notice:</span> Each active option adds <span className="text-slate-800 font-bold">£3.00</span> to the base fare.
+                              <div className="text-[10px] font-bold text-slate-900 bg-white shadow-sm p-2 rounded-[8px] text-center border border-slate-400">
+                                <span className="text-[#2563EB]">Notice:</span> Each active option adds <span className="font-bold">£3.00</span> to the base fare.
                               </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
                         
                         {/* Fare Summary */}
-                        <div className="bg-white shadow-sm rounded-[8px] pb-2 pt-3 px-3 border border-slate-300">
-                          <p className="text-[10px] font-bold uppercase text-slate-500 tracking-widest mb-2">Fare Breakdown</p>
-                          <div className="space-y-1 mb-2 text-[13px] text-slate-700">
+                        <div className="bg-white shadow-sm rounded-[8px] pb-2 pt-3 px-3 border border-slate-400">
+                          <p className="text-[10px] font-bold uppercase text-slate-900 tracking-widest mb-2">Fare Breakdown</p>
+                          <div className="space-y-1 mb-2 text-[13px] text-black font-medium">
                             <div className="flex justify-between"><span>Base fare:</span><span>£{(fareEstimate || 5.0).toFixed(2)}</span></div>
                             <div className="flex justify-between"><span>Vehicle ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}):</span><span>£{getComputedFare(selectedCategory).toFixed(2)}</span></div>
-                            {isPriority && <div className="flex justify-between text-[#2563EB]"><span>Priority:</span><span>+£3.00</span></div>}
-                            {isPetFriendly && <div className="flex justify-between text-[#2563EB]"><span>Pet:</span><span>+£3.00</span></div>}
-                            {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
+                            {isPriority && <div className="flex justify-between text-[#2563EB] font-bold"><span>Priority:</span><span>+£3.00</span></div>}
+                            {isPetFriendly && <div className="flex justify-between text-[#2563EB] font-bold"><span>Pet:</span><span>+£3.00</span></div>}
+                            {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600 font-bold"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
                           </div>
-                          <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-[15px] text-slate-900 border-b pb-2 mb-1">
+                          <div className="border-t border-slate-300 pt-2 flex items-center justify-between font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
                             <span>Total estimate:</span>
-                            <span>£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</span>
+                            <span className="text-[20px]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</span>
                           </div>
-                          <p className="text-[9px] text-slate-400 italic text-center pb-1">Final fare may vary based on route</p>
+                          <p className="text-[9px] text-slate-500 italic text-center pb-1 font-medium">Final fare may vary based on route</p>
                         </div>
 
                         <div>
@@ -2397,7 +2516,7 @@ export default function PassengerBooking() {
                   </AnimatePresence>
                   </>
                   )}
-                  <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full" />
+                  <div className="shrink-0 h-[calc(4.5rem+env(safe-area-inset-bottom))] w-full" />
                 </div>
               </motion.div>
             )}
@@ -2561,15 +2680,15 @@ export default function PassengerBooking() {
                   </AnimatePresence>
                 )}
 
-                <div className="flex items-start gap-3">
-                  <div className="w-[52px] h-[52px] bg-slate-100 rounded-full border border-slate-200 shadow-sm shrink-0 overflow-hidden">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-[48px] h-[48px] bg-slate-100 rounded-full border border-slate-200 shadow-sm shrink-0 overflow-hidden">
                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo?.name || "driver"}`} alt="Driver" className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0 pt-0.5">
                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-[17px] text-slate-900 leading-tight truncate">{assignedDriverInfo?.name || "Sim Driver"}</p>
-                          <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-bold text-[16px] text-slate-900 leading-tight truncate">{assignedDriverInfo?.name || "Sim Driver"}</p>
+                          <div className="flex items-center gap-1 shrink-0">
                              <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                              <span className="text-[13px] font-bold text-slate-700">{assignedDriverInfo?.rating || "4.8"}</span>
                           </div>
@@ -2577,14 +2696,14 @@ export default function PassengerBooking() {
                         <p className="text-[13px] font-medium text-slate-600 truncate mt-0.5">{assignedDriverInfo?.vehicle || "Silver Toyota"}</p>
                      </div>
                   </div>
-                  <div className="flex flex-col items-end shrink-0">
-                     <p className="text-[10px] font-black text-black uppercase tracking-widest mb-1.5">License plate</p>
-                     <div className="flex border-2 border-slate-900 rounded-[8px] overflow-hidden shadow-sm h-10">
-                        <div className="bg-blue-700 w-5 flex flex-col items-center justify-center pointer-events-none">
-                           <span className="text-[8px] text-yellow-400 font-bold leading-none">UK</span>
+                  <div className="flex flex-col items-end shrink-0 pl-1">
+                     <p className="text-[9px] font-black text-black uppercase tracking-wider mb-1.5">License plate</p>
+                     <div className="flex border-2 border-slate-900 rounded-[8px] overflow-hidden shadow-sm h-8">
+                        <div className="bg-blue-700 w-4 flex flex-col items-center justify-center pointer-events-none">
+                           <span className="text-[7px] text-yellow-400 font-bold leading-none">UK</span>
                         </div>
-                        <div className="bg-[#ffcc00] px-3 flex items-center justify-center">
-                           <p className="font-mono font-black text-slate-900 text-xl tracking-widest uppercase">{assignedDriverInfo?.plate || "SIM 123"}</p>
+                        <div className="bg-[#ffcc00] px-2 flex items-center justify-center">
+                           <p className="font-mono font-black text-slate-900 text-[15px] tracking-wider uppercase">{assignedDriverInfo?.plate || "SIM 123"}</p>
                         </div>
                      </div>
                   </div>
@@ -2599,21 +2718,65 @@ export default function PassengerBooking() {
                              {liveEtaMins ? `${liveEtaMins} min` : "Calculating..."}
                            </p>
                         </>
+                      ) : assignedDriverInfo?.requirePasscode === false ? (
+                        <>
+                           <p className="text-[13px] font-semibold text-slate-600 mb-0.5">PIN Check</p>
+                           <p className="text-[15px] font-black text-emerald-600 tracking-wider leading-none">Not Required</p>
+                        </>
                       ) : (
                         <>
-                           <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Pass Code</p>
+                           <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Passcode</p>
                            <p className="text-[17px] font-black text-slate-900 tracking-wider leading-none">{assignedDriverInfo?.code || "1234"}</p>
+                           <p className="text-[9px] font-bold uppercase text-slate-400 mt-1">Last 4 digits of<br/>phone if offline</p>
                         </>
                       )}
                    </div>
                    <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
-                      <p className="text-[17px] font-black text-slate-900 leading-none">£{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
+                      <p className="text-[17px] font-black text-slate-900 leading-none">Total: £{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
                       {(assignedDriverInfo?.tipAmount || 0) > 0 && (
-                          <p className="text-[11px] font-bold text-emerald-600 mt-1">Added £{assignedDriverInfo.tipAmount.toFixed(2)} Tip</p>
+                          <p className="text-[11px] font-bold text-slate-500 mt-1">Includes £{assignedDriverInfo.tipAmount.toFixed(2)} tip</p>
                       )}
                    </div>
                 </div>
+                
+                {assignedDriverInfo?.status === "in_progress" && (
+                    <div className="flex items-center gap-2 mt-4 overflow-x-auto no-scrollbar pb-1">
+                      <button 
+                         onClick={submitTipInline}
+                         disabled={(!selectedTip && (!customTip || parseFloat(customTip) <= 0)) || isAddingTip}
+                         className={cn("px-3 py-2 rounded-[10px] font-bold text-[15px] transition-all shrink-0 border-2", isAddingTip ? "bg-[#0a1930] text-white border-[#0a1930]" : ((selectedTip || parseFloat(customTip)) ? "border-[#0a1930] bg-white text-[#0a1930]" : "border-transparent text-slate-900 bg-transparent px-1 mr-1"))}
+                      >
+                         {(!selectedTip && (!customTip || parseFloat(customTip) <= 0)) ? "Select Tip" : "Add Tip"}
+                      </button>
+                      {[2, 3, 5].map((amount) => (
+                        <button key={amount} onClick={() => { 
+                            if (selectedTip === amount) {
+                              setSelectedTip(null);
+                            } else {
+                              setSelectedTip(amount); 
+                              setCustomTip(""); 
+                            }
+                          }}
+                          className={cn("px-4 py-2 rounded-[10px] font-bold text-[15px] transition-all shrink-0", selectedTip === amount ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930] hover:bg-slate-300")}
+                        >
+                          £{amount}
+                        </button>
+                      ))}
+                      <button onClick={() => {
+                          if (!selectedTip && parseFloat(customTip) > 0) {
+                            setCustomTip("");
+                            setSelectedTip(null);
+                          } else {
+                            setShowCustomTipKeypad(true);
+                          }
+                        }}
+                        className={cn("px-4 py-2 rounded-[10px] font-bold text-[15px] transition-all shrink-0", (!selectedTip && parseFloat(customTip) > 0) ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930] hover:bg-slate-300")}
+                      >
+                        {(!selectedTip && parseFloat(customTip) > 0) ? `£${parseFloat(customTip)}` : "Custom"}
+                      </button>
+                   </div>
+                )}
                 
                 <div className="flex gap-3 mt-4">
                   <button onClick={() => setIsChatOpen(true)} className="flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform"><MessageSquare className="w-[22px] h-[22px] text-white" /></button>
@@ -2659,74 +2822,59 @@ export default function PassengerBooking() {
                 </AnimatePresence>
 
                 <AnimatePresence>
-                  {showTipModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                      <motion.div initial={{ opacity: 0, scale: 0.9, y: 50 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 50 }} className="bg-card w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-border-main text-center relative overflow-hidden">
-                        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
-                        <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100">
-                          <Heart className="w-8 h-8 text-emerald-500 fill-emerald-500" />
+                  {showCustomTipKeypad && (
+                    <motion.div initial={{ opacity: 0, y: "100%" }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: "100%" }} className="fixed inset-0 z-[200] bg-[#f8fafc] flex flex-col pt-[env(safe-area-inset-top,20px)] pointer-events-auto">
+                      <div className="flex items-center justify-between p-4 pb-2">
+                         <div className="w-10"></div>
+                         <h2 className="text-xl font-bold text-[#0a1930] mb-0">Custom Tip</h2>
+                         <button onClick={() => setShowCustomTipKeypad(false)} className="w-10 h-10 bg-slate-200/60 rounded-full flex items-center justify-center active:scale-95 transition-transform">
+                           <X className="w-5 h-5 text-slate-800" />
+                         </button>
+                      </div>
+                      
+                      <div className="flex-1 flex flex-col px-6 pt-6 relative overflow-hidden">
+                        <div className="bg-white border text-center border-slate-200 rounded-[20px] py-10 shadow-sm mb-12">
+                           <span className="text-6xl font-black tracking-tight text-[#0a1930]">£{customTip || "0.00"}</span>
                         </div>
-                        <h3 className="text-xl font-black text-text-main mb-2">Journey almost over</h3>
-                        <p className="text-sm font-bold text-text-muted mb-2">
-                          {hasCardOnFile 
-                            ? "Your fare will be paid automatically. Want to leave a tip?" 
-                            : "Please have your phone ready to scan the driver's QR code to pay. Want to add a tip?"}
-                        </p>
-                        <p className="text-[10px] font-black uppercase text-emerald-600 mb-6 bg-emerald-50 py-1.5 px-3 rounded-md inline-block tracking-wider">
-                          100% of tips go directly to the driver
-                        </p>
                         
-                        <div className="grid grid-cols-3 gap-2 mb-4">
-                          {[2, 3, 5].map((amount) => (
-                            <button
-                              key={amount}
-                              onClick={() => { setSelectedTip(amount); setCustomTip(""); }}
-                              className={cn(
-                                "py-3 rounded-xl font-black text-sm transition-all border-2",
-                                selectedTip === amount ? "bg-emerald-50 text-emerald-600 border-emerald-500" : "bg-surface text-text-main border-border-main hover:border-emerald-200"
-                              )}
-                            >
-                              £{amount}
-                            </button>
+                        <div className="grid grid-cols-3 gap-y-6 gap-x-4 max-w-[280px] mx-auto w-full mb-10">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0, 'del'].map((key) => (
+                             <button key={key} onClick={() => {
+                                if (key === 'del') {
+                                   setCustomTip(prev => prev.slice(0, -1));
+                                   return;
+                                }
+                                const newValue = customTip + key.toString();
+                                if (parseFloat(newValue) > 50) {
+                                   toast.error("Maximum allowed tip is £50");
+                                   return;
+                                }
+                                if (newValue.includes('.')) {
+                                   const parts = newValue.split('.');
+                                   if (parts[1].length > 2) return;
+                                }
+                                setCustomTip(newValue);
+                                setSelectedTip(null);
+                             }} className="h-16 rounded-full bg-[#0a1930] text-white text-[28px] font-semibold flex items-center justify-center active:scale-90 transition-transform">
+                               {key === 'del' ? <Delete className="w-7 h-7" /> : key}
+                             </button>
                           ))}
                         </div>
                         
-                        <div className="mb-6 relative">
-                          <input
-                            type="number"
-                            value={customTip}
-                            onChange={(e) => {
-                               setCustomTip(e.target.value);
-                               setSelectedTip(null);
-                            }}
-                            placeholder="Custom amount"
-                            className="w-full bg-surface border-2 border-border-main rounded-xl py-3 pl-8 pr-4 font-bold text-text-main focus:border-emerald-500 focus:outline-none transition-colors"
-                          />
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-text-muted">£</span>
-                        </div>
-
-                        <div className="space-y-3">
-                          <button
-                            onClick={() => {
-                              const finalAmount = selectedTip || parseFloat(customTip) || 0;
-                              if (finalAmount > 0) {
-                                handleAddTip(finalAmount);
+                        <div className="mt-auto px-6 pb-8">
+                           <p className="text-center text-slate-700 font-medium text-[15px] mb-4">Your driver receives 100% of the tip.</p>
+                           <button onClick={() => {
+                              const amount = parseFloat(customTip);
+                              if (amount > 0) {
+                                setSelectedTip(null);
+                                setShowCustomTipKeypad(false);
                               }
-                            }}
-                            disabled={!selectedTip && !customTip}
-                            className="w-full py-4 bg-[#00D26A] text-black rounded-2xl font-black shadow-lg hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
-                          >
-                            Add {selectedTip || customTip ? `£${selectedTip || customTip}` : ''}
-                          </button>
-                          <button
-                            onClick={() => handleAddTip(0)}
-                            className="w-full py-3 bg-transparent text-text-muted font-bold hover:text-text-main transition-colors"
-                          >
-                            No, thank you
-                          </button>
+                           }} disabled={!customTip || parseFloat(customTip) <= 0} className="w-full py-4 rounded-[16px] bg-[#0a1930] text-white font-black text-lg shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100">
+                             Add Tip
+                           </button>
                         </div>
-                      </motion.div>
-                    </div>
+                      </div>
+                    </motion.div>
                   )}
                 </AnimatePresence>
                 <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />

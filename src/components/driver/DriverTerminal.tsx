@@ -681,6 +681,7 @@ export default function DriverTerminal() {
              driverPhone: profile?.phone || profile?.phoneNumber || "",
              vehicleInfo: profile?.vehicle || "Silver Toyota Prius",
              vehiclePlate: profile?.vehicleRegistration || profile?.plate || "WK71 BCF",
+             driverRequirePasscode: profile?.requirePasscode === true,
              acceptedAt: serverTimestamp()
            });
         });
@@ -765,6 +766,7 @@ export default function DriverTerminal() {
              driverPhone: profile?.phone || profile?.phoneNumber || "",
              vehicleInfo: profile?.vehicle || "Silver Toyota Prius",
              vehiclePlate: profile?.vehicleRegistration || profile?.plate || "WK71 BCF",
+             driverRequirePasscode: profile?.requirePasscode === true,
              acceptedAt: serverTimestamp()
            });
         });
@@ -2140,6 +2142,18 @@ export default function DriverTerminal() {
                     <p className="text-[#FFD60A] text-xs font-medium leading-relaxed">
                       <span className="font-bold">Passenger Note:</span> {activeRide.comments}
                     </p>
+                  </div>
+                )}
+                
+                {(activeRide?.requirePasscode || activeRide?.driverRequirePasscode) && activeRide?.handshakeCode && (
+                  <div className="mb-3 bg-[#00D26A]/10 border border-[#00D26A]/30 rounded-xl p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-[#00D26A] text-[10px] font-black tracking-widest uppercase mb-0.5">PIN Check Required</p>
+                      <p className="text-[#E4E4E7] text-xs font-medium">Verify this PIN with passenger</p>
+                    </div>
+                    <div className="bg-[#00D26A]/20 text-[#00D26A] font-mono font-black text-xl px-3 py-1.5 rounded-lg tracking-widest">
+                      {activeRide.handshakeCode}
+                    </div>
                   </div>
                 )}
                 

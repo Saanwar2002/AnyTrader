@@ -126,6 +126,7 @@ export default function DriverMenu({
         { icon: Repeat, label: "Ride Stacking", desc: "Receive offers during trip", color: "text-[#00D26A]", bg: "bg-white/5", type: 'toggle', action: 'toggle-stacking', active: profile?.isStackingEnabled !== false },
         { icon: MapPin, label: "Destination Mode", desc: profile?.destinationModeActive ? `Active: ${profile?.homeAddress || "Toward Home"}` : "Off", color: "text-[#AF52DE]", bg: "bg-white/5", type: 'toggle', action: 'toggle-destination-mode', active: profile?.destinationModeActive === true },
         { icon: VolumeX, label: "Mute Offer Alerts", desc: "Disable 3-sec sound ping", color: "text-[#FF9500]", bg: "bg-white/5", type: 'toggle', action: 'toggle-mute-alerts', active: profile?.muteRideOfferAlerts === true },
+        { icon: ShieldCheck, label: "Passcode Verification", desc: profile?.requirePasscode === true ? "Passenger must provide PIN (Last 4 of phone)" : "Off", color: "text-[#00D26A]", bg: "bg-white/5", type: 'toggle', action: 'toggle-passcode', active: profile?.requirePasscode === true },
       ]
     },
     {
@@ -261,6 +262,9 @@ export default function DriverMenu({
                         if (!user?.uid) return;
                         if (item.action === 'toggle-stacking') {
                           updateDoc(doc(db, "users", user.uid), { isStackingEnabled: !item.active });
+                        }
+                        if (item.action === 'toggle-passcode') {
+                          updateDoc(doc(db, "users", user.uid), { requirePasscode: !item.active });
                         }
                         if (item.action === 'toggle-destination-mode') {
                           if (!profile?.homeLat && !item.active) {

@@ -886,6 +886,7 @@ export default function Profile() {
     {
       title: "Ride Preferences",
       items: [
+        { icon: ShieldCheck, label: "Passcode Verification", path: "#passcode" },
         { icon: Accessibility, label: "Accessibility Settings", path: "#accessibility" },
         { icon: Users, label: "Ride for Someone Else", path: "#rideforself" },
         { icon: MapPin, label: "Saved Places", path: "/saved-journeys" },
@@ -2190,6 +2191,39 @@ export default function Profile() {
                                           </div>
                                        )}
                                      </div>
+                                  ) : item.path === "#passcode" ? (
+                                    <div className="p-6 md:p-8 bg-slate-50/50">
+                                      <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
+                                              <ShieldCheck className="w-6 h-6 text-emerald-600" />
+                                            </div>
+                                            <div>
+                                              <h3 className="font-bold text-slate-900 leading-tight">PIN Verification</h3>
+                                              <p className="text-xs text-slate-500 mt-1">Driver will ask for a PIN (last 4 digits of your phone number) before starting the trip.</p>
+                                            </div>
+                                          </div>
+                                          <button
+                                            onClick={async () => {
+                                              if (user?.uid) {
+                                                const newStatus = profile?.requirePasscode !== true;
+                                                await updateDoc(doc(db, "users", user.uid), { requirePasscode: newStatus });
+                                              }
+                                            }}
+                                            className={cn(
+                                              "w-14 h-8 rounded-full transition-colors relative flex-shrink-0",
+                                              profile?.requirePasscode === true ? "bg-emerald-500" : "bg-slate-200"
+                                            )}
+                                          >
+                                            <span className={cn(
+                                              "absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm",
+                                              profile?.requirePasscode === true ? "translate-x-6" : "translate-x-0"
+                                            )} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
                                   ) : (
                                     <div className="p-8 text-center bg-slate-50">
                                       <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
