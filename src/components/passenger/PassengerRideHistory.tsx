@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, arrayUnion, deleteDoc, serverTimestamp } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Car, Clock, MapPin, ChevronRight, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle, Info, Calendar, User, FileText, X, ArrowDownToLine, HelpCircle } from "lucide-react";
+import { Car, Clock, MapPin, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, XCircle, Loader2, Edit2, Bookmark, Trash2, AlertCircle, Info, Calendar, User, FileText, X, ArrowDownToLine, HelpCircle } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -17,6 +17,8 @@ export default function PassengerRideHistory() {
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "completed">(
     location.state?.tab || "active"
   );
@@ -110,13 +112,34 @@ export default function PassengerRideHistory() {
   }
 
   const filteredRides = rides.filter(ride => {
+    // 1. Filter by Status Tab
+    let statusMatch = false;
     if (activeTab === "active") {
-      return ride.status !== "completed" && ride.status !== "cancelled" && ride.status !== "draft";
+      statusMatch = ride.status !== "completed" && ride.status !== "cancelled" && ride.status !== "draft";
+    } else if (activeTab === "cancelled") {
+      statusMatch = ride.status === "cancelled" || ride.status === "draft";
+    } else {
+      statusMatch = ride.status === activeTab;
     }
-    if (activeTab === "cancelled") {
-      return ride.status === "cancelled" || ride.status === "draft";
+    if (!statusMatch) return false;
+
+    // 2. Filter by Date
+    if (dateFilter === "all" || !ride.createdAt?.toDate) return true;
+    
+    const rideDate = ride.createdAt.toDate();
+    const now = new Date();
+    
+    if (dateFilter === "today") {
+      return rideDate.toDateString() === now.toDateString();
+    } else if (dateFilter === "week") {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return rideDate >= oneWeekAgo;
+    } else if (dateFilter === "month") {
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return rideDate >= oneMonthAgo;
     }
-    return ride.status === activeTab;
+    
+    return true;
   });
 
   return (
@@ -163,6 +186,17 @@ export default function PassengerRideHistory() {
               Completed
             </button>
           </div>
+
+          <div className="flex justify-center mt-3">
+             <button onClick={() => {
+                const options: ("all" | "today" | "week" | "month")[] = ["all", "today", "week", "month"];
+                const currentIndex = options.indexOf(dateFilter);
+                setDateFilter(options[(currentIndex + 1) % options.length]);
+             }} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full text-xs font-bold transition-colors hover:bg-blue-100">
+               <Calendar className="w-3.5 h-3.5" />
+               Filter: {dateFilter === "all" ? "All Time" : dateFilter === "today" ? "Today" : dateFilter === "week" ? "Last 7 Days" : "Last 30 Days"}
+             </button>
+          </div>
         </div>
       </div>
 
@@ -181,189 +215,242 @@ export default function PassengerRideHistory() {
         ) : (
             filteredRides.map((ride, idx) => {
               const isSaved = profile?.regularJourneys?.some((j: any) => j.from === ride.pickup && j.to === ride.dropoff);
+              const isCompleted = ride.status === "completed";
+              const isExpanded = isCompleted ? !!expandedCards[ride.id] : true;
               
+              const toggleExpanded = (e?: React.MouseEvent) => {
+                if (e) e.stopPropagation();
+                if (isCompleted) {
+                  setExpandedCards(prev => ({ ...prev, [ride.id]: !prev[ride.id] }));
+                }
+              };
+
               return (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
                 key={ride.id}
-                className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 group"
+                onClick={isCompleted ? toggleExpanded : undefined}
+                className={cn("bg-white rounded-3xl border border-slate-100 shadow-sm p-4 transition-colors", isCompleted ? "cursor-pointer hover:bg-slate-50" : "")}
               >
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className={cn(
-                      "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
-                      ride.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                      ride.status === "cancelled" ? "bg-red-100 text-red-700" :
-                      "bg-blue-100 text-blue-700"
-                    )}>
-                      {ride.status}
-                    </span>
-                    <span className="text-xs font-bold text-slate-400">
-                      {ride.createdAt?.toDate ? new Date(ride.createdAt.toDate()).toLocaleDateString() : 'Pending'}
-                    </span>
-                  </div>
+                {/* Header (Always Visible or Compact Mode for Completed) */}
+                {isCompleted && !isExpanded ? (
                   <div className="flex items-center gap-3">
-                    {ride.price && (
-                      <span className="font-extrabold text-slate-900">£{parseFloat(ride.price).toFixed(2)}</span>
-                    )}
-                    {(ride.status === "cancelled" || ride.status === "draft" || ride.status === "completed") && (
-                      <div className="relative flex items-center justify-center">
-                        {confirmDeleteId === ride.id && (
-                          <div className="absolute bottom-full mb-2 right-0 whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom-right flex items-center gap-1.5 border border-amber-500/30">
-                            <span className="text-[10px]">⚠️</span> Double tap to delete
-                            <div className="absolute -bottom-1 right-3 w-2 h-2 bg-amber-400 rotate-45 border-r border-b border-amber-500/30" />
-                          </div>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirmDeleteId === ride.id) {
-                              handleDeleteRide(ride.id);
-                            } else {
-                              setConfirmDeleteId(ride.id);
-                              // reset confirm state after 2.5 sec
-                              setTimeout(() => setConfirmDeleteId(null), 2500);
-                            }
-                          }}
-                          disabled={deletingId === ride.id}
-                          className={cn(
-                            "p-1.5 rounded-full transition-colors flex items-center justify-center",
-                            confirmDeleteId === ride.id ? "bg-red-100 text-red-600 shadow-sm" : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                    <div className="flex-shrink-0 text-[11px] font-bold text-slate-700/80 leading-tight">
+                      {ride.createdAt?.toDate ? (
+                        <>
+                          <span className="block">{new Date(ride.createdAt.toDate()).toLocaleDateString()}</span>
+                          <span className="block text-[10px] text-slate-500">{new Date(ride.createdAt.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </>
+                      ) : 'N/A'}
+                    </div>
+                    <div className="flex-shrink-0">
+                      <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
+                        COMPLETED
+                      </span>
+                    </div>
+                    <div className="flex-1 text-xs font-bold text-slate-600 line-clamp-2 leading-tight">
+                      {ride.pickup?.split(',')[0]} &gt; {ride.dropoff?.split(',')[0]}
+                    </div>
+                    <div className="flex-shrink-0 text-slate-400">
+                       <ChevronDown className="w-5 h-5 pointer-events-none" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
+                        ride.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                        ride.status === "cancelled" ? "bg-red-100 text-red-700" :
+                        "bg-blue-100 text-blue-700"
+                      )}>
+                        {ride.status}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">
+                        {ride.createdAt?.toDate ? new Date(ride.createdAt.toDate()).toLocaleDateString() : 'Pending'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {ride.price && (
+                        <span className="font-extrabold text-slate-900">£{parseFloat(ride.price).toFixed(2)}</span>
+                      )}
+                      {(ride.status === "cancelled" || ride.status === "draft" || ride.status === "completed") && (
+                        <div className="relative flex items-center justify-center">
+                          {confirmDeleteId === ride.id && (
+                            <div className="absolute bottom-full mb-2 right-0 whitespace-nowrap bg-amber-400 text-slate-900 text-[11px] font-black tracking-tight py-1.5 px-3 rounded-xl shadow-lg z-10 pointer-events-none origin-bottom-right flex items-center gap-1.5 border border-amber-500/30">
+                              <span className="text-[10px]">⚠️</span> Double tap to delete
+                              <div className="absolute -bottom-1 right-3 w-2 h-2 bg-amber-400 rotate-45 border-r border-b border-amber-500/30" />
+                            </div>
                           )}
-                        >
-                          {deletingId === ride.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-4 mb-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirmDeleteId === ride.id) {
+                                handleDeleteRide(ride.id);
+                              } else {
+                                setConfirmDeleteId(ride.id);
+                                setTimeout(() => setConfirmDeleteId(null), 2500);
+                              }
+                            }}
+                            disabled={deletingId === ride.id}
+                            className={cn(
+                              "p-1.5 rounded-full transition-colors flex items-center justify-center",
+                              confirmDeleteId === ride.id ? "bg-red-100 text-red-600 shadow-sm" : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            )}
+                          >
+                            {deletingId === ride.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      )}
+                      {isCompleted && (
+                        <div className="flex-shrink-0 text-slate-400 ml-1">
+                          <ChevronUp className="w-5 h-5 pointer-events-none" />
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</p>
-                      <p className="text-sm font-bold text-slate-700 line-clamp-1">{ride.pickup}</p>
-                    </div>
-                  </div>
-
-                  <div className="w-0.5 h-4 bg-slate-200 ml-[15px] -my-2" />
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                      <MapPin className="w-4 h-4 text-emerald-500" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dropoff</p>
-                      <p className="text-sm font-bold text-slate-700 line-clamp-1">
-                        {ride.rideType === "hourly" ? `${ride.duration}h Hourly Ride` : ride.dropoff}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                {ride.driverName && (
-                  <div className="bg-slate-50 rounded-2xl p-3 flex items-center gap-3">
-                     <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName)}`} alt={ride.driverName} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
-                     <div>
-                       <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Driver</p>
-                       <p className="text-xs font-bold text-slate-700">{ride.driverName}</p>
-                     </div>
                   </div>
                 )}
-                
-                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
-                  <button
-                    onClick={() => handleSaveJourney(ride)}
-                    disabled={isSaved}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors",
-                      isSaved ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                    )}
+
+                <AnimatePresence>
+                {isExpanded && (
+                  <motion.div
+                    initial={isCompleted ? { opacity: 0, height: 0 } : false}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
                   >
-                    <Bookmark className="w-4 h-4" />
-                    {isSaved ? "Saved to Regulars" : "Save as Regular"}
-                  </button>
-                  {ride.status === "completed" && (
-                     <button
-                       onClick={() => setSelectedRideDetails(ride)}
-                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100"
-                     >
-                       <FileText className="w-4 h-4" />
-                       Show job detail
-                     </button>
-                  )}
-                </div>
-                
-                {["pending", "offered"].includes(ride.status) && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => navigate(`/book-ride?edit=${ride.id}`)}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirmCancelId === ride.id) {
-                          handleCancelRide(ride.id);
-                        } else {
-                          setConfirmCancelId(ride.id);
-                          setTimeout(() => setConfirmCancelId(null), 3000);
-                        }
-                      }}
-                      disabled={cancellingId === ride.id}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
-                    >
-                      {cancellingId === ride.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : confirmCancelId === ride.id ? (
-                        <AlertCircle className="w-4 h-4" />
-                      ) : (
-                        <XCircle className="w-4 h-4" />
-                      )}
-                      {confirmCancelId === ride.id ? "Confirm Cancel" : "Cancel"}
-                    </button>
-                  </div>
-                )}
+                  <div className="space-y-4 mb-4 mt-2">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</p>
+                        <p className="text-sm font-bold text-slate-700 line-clamp-1">{ride.pickup}</p>
+                      </div>
+                    </div>
 
-                {["accepted", "arrived", "in_progress"].includes(ride.status) && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => navigate(`/book-ride`)}
-                      className="flex-[2] flex items-center justify-center gap-2 py-2.5 bg-[#0a1930] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
-                    >
-                      <MapPin className="w-4 h-4" />
-                      Track Live Map
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirmCancelId === ride.id) {
-                          handleCancelRide(ride.id);
-                        } else {
-                          setConfirmCancelId(ride.id);
-                          setTimeout(() => setConfirmCancelId(null), 3000);
-                        }
-                      }}
-                      disabled={cancellingId === ride.id}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
-                    >
-                      {cancellingId === ride.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : confirmCancelId === ride.id ? (
-                        <AlertCircle className="w-4 h-4" />
-                      ) : (
-                        <XCircle className="w-4 h-4" />
-                      )}
-                      {confirmCancelId === ride.id ? "Confirm" : "Cancel"}
-                    </button>
+                    <div className="w-0.5 h-4 bg-slate-200 ml-[15px] -my-2" />
+
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <MapPin className="w-4 h-4 text-emerald-500" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dropoff</p>
+                        <p className="text-sm font-bold text-slate-700 line-clamp-1">
+                          {ride.rideType === "hourly" ? `${ride.duration}h Hourly Ride` : ride.dropoff}
+                        </p>
+                      </div>
+                    </div>
                   </div>
+                  
+                  {ride.driverName && (
+                    <div className="bg-slate-50 rounded-2xl p-3 flex items-center gap-3">
+                       <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName)}`} alt={ride.driverName} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
+                       <div>
+                         <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Driver</p>
+                         <p className="text-xs font-bold text-slate-700">{ride.driverName}</p>
+                       </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSaveJourney(ride); }}
+                      disabled={isSaved}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors",
+                        isSaved ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                      )}
+                    >
+                      <Bookmark className="w-4 h-4" />
+                      {isSaved ? "Saved to Regulars" : "Save as Regular"}
+                    </button>
+                    {ride.status === "completed" && (
+                       <button
+                         onClick={(e) => { e.stopPropagation(); setSelectedRideDetails(ride); }}
+                         className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100"
+                       >
+                         <FileText className="w-4 h-4" />
+                         Show job detail
+                       </button>
+                    )}
+                  </div>
+                  
+                  {["pending", "offered"].includes(ride.status) && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/book-ride?edit=${ride.id}`); }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirmCancelId === ride.id) {
+                            handleCancelRide(ride.id);
+                          } else {
+                            setConfirmCancelId(ride.id);
+                            setTimeout(() => setConfirmCancelId(null), 3000);
+                          }
+                        }}
+                        disabled={cancellingId === ride.id}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
+                      >
+                        {cancellingId === ride.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : confirmCancelId === ride.id ? (
+                          <AlertCircle className="w-4 h-4" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                        {confirmCancelId === ride.id ? "Confirm Cancel" : "Cancel"}
+                      </button>
+                    </div>
+                  )}
+
+                  {["accepted", "arrived", "in_progress"].includes(ride.status) && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/book-ride`); }}
+                        className="flex-[2] flex items-center justify-center gap-2 py-2.5 bg-[#0a1930] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        Track Live Map
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirmCancelId === ride.id) {
+                            handleCancelRide(ride.id);
+                          } else {
+                            setConfirmCancelId(ride.id);
+                            setTimeout(() => setConfirmCancelId(null), 3000);
+                          }
+                        }}
+                        disabled={cancellingId === ride.id}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
+                      >
+                        {cancellingId === ride.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : confirmCancelId === ride.id ? (
+                          <AlertCircle className="w-4 h-4" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                        {confirmCancelId === ride.id ? "Confirm" : "Cancel"}
+                      </button>
+                    </div>
+                  )}
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </motion.div>
               )
             })

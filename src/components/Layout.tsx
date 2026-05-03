@@ -1066,14 +1066,14 @@ export default function Layout() {
                 key={`nav-${idx}-${item.path}`}
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 transition-colors relative h-full flex-1 min-w-0 px-0.5",
+                  "flex flex-col items-center justify-center gap-1 transition-colors relative flex-1 min-w-0 mx-1 h-[60px] rounded-[16px] z-10",
                   isActive 
-                    ? (isDriverTerminal ? "text-white" : "text-black font-black") 
-                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-black font-bold"),
-                  item.isCta && "text-blue-600"
+                    ? (isDriverTerminal ? "text-white font-black" : "text-blue-700 font-black") 
+                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-500 font-bold hover:text-slate-900"),
+                  item.isCta && !isActive && "text-blue-600"
                 )}
               >
-                <div className="relative flex-shrink-0 mt-1">
+                <div className="relative flex-shrink-0 mt-0.5">
                   <Icon className={cn(isActive ? "w-6 h-6" : "w-5 h-5", item.isCta && "w-6 h-6")} />
                   {hasUnread && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
@@ -1082,8 +1082,9 @@ export default function Layout() {
                 <span className="text-[9px] min-[380px]:text-[10px] sm:text-[11px] font-black tracking-tight text-center leading-none truncate w-full">{item.name}</span>
                 {isActive && (
                    <motion.div 
-                     layoutId="navDot"
-                     className={cn("absolute bottom-1 w-1 h-1 rounded-full", isDriverTerminal ? "bg-white" : "bg-blue-600")}
+                     layoutId="navActiveBg"
+                     className={cn("absolute inset-0 rounded-[16px] -z-10", isDriverTerminal ? "bg-white/10" : "bg-blue-100/80")}
+                     transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                    />
                 )}
               </Link>
