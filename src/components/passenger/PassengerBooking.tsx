@@ -361,6 +361,14 @@ export default function PassengerBooking() {
 
   const [liveRouteLine, setLiveRouteLine] = useState<{lat: number, lng: number}[]>([]);
   const [liveEtaMins, setLiveEtaMins] = useState<number | null>(null);
+  const [liveEtaSeconds, setLiveEtaSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveEtaSeconds(prev => (prev && prev > 0) ? prev - 1 : prev);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch remote config
   useEffect(() => {
@@ -1710,13 +1718,16 @@ export default function PassengerBooking() {
   }, [isMapFullScreen]);
 
   useEffect(() => {
-    if (assignedDriverInfo?.status === "in_progress" && driverPos && dropoffCoords && isLoaded) {
+    const destinationCoords = assignedDriverInfo?.status === "accepted" ? pickupCoords :
+                              assignedDriverInfo?.status === "in_progress" ? dropoffCoords : null;
+
+    if ((assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "in_progress") && driverPos && destinationCoords && isLoaded) {
       const getLiveRoute = () => {
         try {
           const directionsService = new window.google.maps.DirectionsService();
           directionsService.route({
             origin: new window.google.maps.LatLng(driverPos.lat, driverPos.lng),
-            destination: new window.google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
+            destination: new window.google.maps.LatLng(destinationCoords.lat, destinationCoords.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
           }, (result, status) => {
             if (status === window.google.maps.DirectionsStatus.OK && result && result.routes[0]) {
@@ -1727,7 +1738,13 @@ export default function PassengerBooking() {
               result.routes[0].legs.forEach((leg: any) => {
                 if (leg.duration?.value) totalSecs += leg.duration.value;
               });
+              
+              if (assignedDriverInfo?.status === "accepted" && assignedDriverInfo?.stackedDriverDelay) {
+                 totalSecs += assignedDriverInfo.stackedDriverDelay * 60;
+              }
+
               setLiveEtaMins(Math.ceil(totalSecs / 60));
+              setLiveEtaSeconds(totalSecs);
             } else {
               console.warn("Live route directions failed with status:", status);
             }
@@ -1743,8 +1760,9 @@ export default function PassengerBooking() {
     } else {
       setLiveRouteLine([]);
       setLiveEtaMins(null);
+      setLiveEtaSeconds(null);
     }
-  }, [assignedDriverInfo?.status, driverPos?.lat, driverPos?.lng, dropoffCoords, isLoaded]);
+  }, [assignedDriverInfo?.status, driverPos?.lat, driverPos?.lng, dropoffCoords, pickupCoords, isLoaded]);
 
   // Handle Google Maps load errors (e.g. ApiProjectMapError)
   if (loadError || (!isLoaded && !(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY)) {
@@ -2668,9 +2686,22 @@ export default function PassengerBooking() {
             {step === "confirmed" && (
               <>
                 {assignedDriverInfo?.status === "accepted" && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[16px] px-4 py-2.5 border border-slate-200 shadow-[0_6px_16px_rgba(0,0,0,0.08)] flex items-center justify-center gap-2.5 mb-3 pointer-events-auto w-fit mx-auto z-20 mt-auto">
-                     <Car className="w-[18px] h-[18px] text-[#0a1930]" />
-                     <span className="font-bold text-[#0a1930] text-[15px]">{assignedDriverInfo.isFinishingTrip ? "Driver finishing a trip" : "Driver arriving in 4 mins"}</span>
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0a1930] rounded-[16px] px-5 py-3 border border-[#1e293b] shadow-[0_8px_20px_rgba(0,0,0,0.15)] flex flex-col items-center justify-center gap-1.5 mb-3 pointer-events-auto w-fit mx-auto z-20 mt-auto">
+                     <div className="flex items-center gap-2.5">
+                       <Car className="w-[20px] h-[20px] text-white" />
+                       <span className="font-black text-white text-[17px] tracking-wide">
+                         {(liveEtaSeconds !== null && liveEtaSeconds > 0) ? `Arriving in ${Math.floor(liveEtaSeconds / 60) > 0 ? Math.floor(liveEtaSeconds / 60) + 'm ' : ''}${liveEtaSeconds % 60}s` : 
+                          "Driver arriving soon..."}
+                       </span>
+                     </div>
+                     {(assignedDriverInfo.isFinishingTrip || assignedDriverInfo.stackedDriverDelay) && (
+                       <div className="bg-amber-400/20 px-3 py-1 rounded-full mt-0.5">
+                         <span className="text-[11px] font-bold text-amber-300 uppercase tracking-widest flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                            Dropping off another passenger
+                         </span>
+                       </div>
+                     )}
                   </motion.div>
                 )}
                 <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 border-t border-slate-200/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
@@ -2786,7 +2817,7 @@ export default function PassengerBooking() {
                         <>
                            <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Dropoff ETA</p>
                            <p className="text-[17px] font-black text-slate-900 tracking-wider leading-none">
-                             {liveEtaMins ? `${liveEtaMins} min` : "Calculating..."}
+                             {(liveEtaSeconds !== null && liveEtaSeconds > 0) ? `${Math.floor(liveEtaSeconds / 60) > 0 ? Math.floor(liveEtaSeconds / 60) + 'm ' : ''}${liveEtaSeconds % 60}s` : "Calculating..."}
                            </p>
                         </>
                       ) : assignedDriverInfo?.requirePasscode === false ? (
