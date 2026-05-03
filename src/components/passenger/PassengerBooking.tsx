@@ -257,7 +257,47 @@ export default function PassengerBooking() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
   const [rideContext, setRideContext] = useState<"personal" | "business">("personal");
-  
+
+  // Check for an existing active ride to auto-resume
+  useEffect(() => {
+    if (!user || currentRideId || editId || step === "receipt") return;
+    const checkActiveRide = async () => {
+      try {
+        const q = query(
+          collection(db, "ride_requests"),
+          where("riderId", "==", user.uid),
+          where("status", "in", ["pending", "accepted", "arrived", "in_progress"]),
+          orderBy("createdAt", "desc"),
+          limit(1)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const activeRide = snapshot.docs[0];
+          const data = activeRide.data();
+          setCurrentRideId(activeRide.id);
+
+          setPickup(data.pickup || "");
+          setDropoff(data.dropoff || "");
+          if (data.pickupLat && data.pickupLng) setPickupCoords({lat: data.pickupLat, lng: data.pickupLng});
+          if (data.dropoffLat && data.dropoffLng) setDropoffCoords({lat: data.dropoffLat, lng: data.dropoffLng});
+          if (data.stops) setStops(data.stops);
+          setSelectedCategory(data.carCategory || "standard");
+          setComments(data.comments || "");
+          if (data.fareEstimate) setFareEstimate(data.fareEstimate);
+
+          if (data.status === "pending") {
+            setStep("searching");
+          } else {
+            setStep("confirmed");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to auto-resume active ride", err);
+      }
+    };
+    checkActiveRide();
+  }, [user, currentRideId, editId, step]);
+
   // Mock settings for demonstrating corporate and card functionality
   const hasCorporateAccount = profile?.corporateAccountId ? true : true; 
   const hasCardOnFile = profile?.hasCardOnFile ? true : false;
@@ -1789,26 +1829,25 @@ export default function PassengerBooking() {
           )}
 
           {isMapFullScreen && assignedDriverInfo && (
-            <div className="absolute bottom-[env(safe-area-inset-bottom,1.5rem)] left-4 right-4 z-[210] pointer-events-none">
-              <div className="bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl rounded-[20px] p-4 flex items-center justify-between pointer-events-auto">
-                 <div className="flex items-center gap-3">
-                     <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
+            <div className="absolute bottom-[env(safe-area-inset-bottom,1.5rem)] left-6 right-6 lg:left-auto lg:right-6 lg:w-96 z-[210] pointer-events-none flex justify-center">
+              <div className="bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl rounded-[20px] p-3 flex items-center justify-between pointer-events-auto w-full max-w-[280px]">
+                 <div className="flex items-center gap-3 w-full">
+                     <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
                         <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo.name || "driver"}`} alt="Driver" className="w-full h-full object-cover rounded-full" />
                      </div>
-                     <div className="flex-1 min-w-0 pr-4">
-                        <p className="font-bold text-slate-900 text-lg truncate">{assignedDriverInfo.name || "Driver"}</p>
-                        <p className="text-[14px] font-semibold text-slate-600 truncate">{assignedDriverInfo.vehicle || "Toyota"}</p>
+                     <div className="flex-1 min-w-0 pr-2">
+                        <p className="font-bold text-slate-900 text-[14px] truncate leading-tight mb-0.5">{assignedDriverInfo.name || "Driver"}</p>
+                        <p className="text-[12px] font-semibold text-slate-600 truncate leading-tight">{assignedDriverInfo.vehicle || "Toyota"}</p>
                      </div>
-                 </div>
-                 
-                 <div className="flex flex-col items-end shrink-0">
-                     <div className="flex border-2 border-slate-900 rounded-[8px] overflow-hidden shadow-sm h-10 w-fit">
-                        <div className="bg-blue-700 w-5 flex flex-col items-center justify-center pointer-events-none">
-                           <span className="text-[8px] text-white font-bold leading-none">UK</span>
-                        </div>
-                        <div className="bg-[#ffcc00] px-3 flex items-center justify-center">
-                           <p className="font-mono font-black text-slate-900 text-[15px] tracking-widest uppercase">{assignedDriverInfo.plate || "SIM 123"}</p>
-                        </div>
+                     <div className="flex flex-col items-end shrink-0">
+                         <div className="flex border-2 border-slate-900 rounded-[6px] overflow-hidden shadow-sm h-7 w-fit">
+                            <div className="bg-blue-700 w-[14px] flex flex-col items-center justify-center pointer-events-none">
+                               <span className="text-[5px] text-white font-bold leading-none">UK</span>
+                            </div>
+                            <div className="bg-[#ffcc00] px-1.5 flex items-center justify-center">
+                               <p className="font-mono font-black text-slate-900 text-[11px] tracking-widest uppercase">{assignedDriverInfo.plate || "SIM 123"}</p>
+                            </div>
+                         </div>
                      </div>
                  </div>
               </div>
@@ -2763,11 +2802,13 @@ export default function PassengerBooking() {
                         </>
                       )}
                    </div>
-                   <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
+                   <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center text-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
                       <p className="text-[17px] font-black text-slate-900 leading-none">Total: £{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
-                      {(assignedDriverInfo?.tipAmount || 0) > 0 && (
-                          <p className="text-[11px] font-bold text-slate-500 mt-1">Includes £{assignedDriverInfo.tipAmount.toFixed(2)} tip</p>
+                      {((assignedDriverInfo?.tipAmount || 0) > 0 || isPriority) && (
+                          <p className="text-[11px] font-bold text-slate-600 mt-1 leading-tight">
+                              Includes{isPriority ? " £3.00 priority" : ""}{isPriority && (assignedDriverInfo?.tipAmount || 0) > 0 ? " & " : ""}{(assignedDriverInfo?.tipAmount || 0) > 0 ? `£${assignedDriverInfo!.tipAmount.toFixed(2)} tip` : ""}
+                          </p>
                       )}
                    </div>
                 </div>
@@ -2823,7 +2864,7 @@ export default function PassengerBooking() {
                     )}
                   </button>
                   <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
-                  <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Map</button>
+                  <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Driver</button>
                 </div>
                 
                 {assignedDriverInfo?.status !== "in_progress" && (
@@ -2936,9 +2977,14 @@ export default function PassengerBooking() {
                   </button>
                 </div>
 
-                <div className="bg-surface rounded-3xl p-5 mb-6 border border-border-main shadow-sm flex flex-col items-center">
+                <div className="bg-surface rounded-3xl p-5 mb-6 border border-border-main shadow-sm flex flex-col items-center text-center">
                   <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
                   <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
+                  {((completedRideData.tipAmount || 0) > 0 || completedRideData.isPriority) && (
+                      <p className="text-[12px] font-bold text-slate-500 mt-2 leading-tight">
+                          Includes{completedRideData.isPriority ? " £3.00 priority" : ""}{completedRideData.isPriority && (completedRideData.tipAmount || 0) > 0 ? " & " : ""}{(completedRideData.tipAmount || 0) > 0 ? `£${completedRideData.tipAmount.toFixed(2)} tip` : ""}
+                      </p>
+                  )}
                   <p className="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1 rounded-lg">Payment Successful</p>
                 </div>
 
@@ -2946,8 +2992,14 @@ export default function PassengerBooking() {
                 <div className="space-y-3 flex-1 mb-4">
                   <div className="flex justify-between text-sm font-bold text-text-muted">
                     <span>Base Fare & Distance</span>
-                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0) : (completedRideData.fareEstimate || fareConfig.baseFare)).toFixed(2)}</span>
+                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) : ((completedRideData.fareEstimate || fareConfig.baseFare) - (completedRideData.isPriority ? 3 : 0))).toFixed(2)}</span>
                   </div>
+                  {completedRideData.isPriority && (
+                    <div className="flex justify-between text-sm font-bold text-blue-600">
+                      <span>Priority Boost</span>
+                      <span>+£3.00</span>
+                    </div>
+                  )}
                   {(completedRideData.cancellationFee || 0) > 0 && (
                     <div className="flex justify-between text-sm font-bold text-danger">
                       <span>Unpaid Cancellation Fee</span>
