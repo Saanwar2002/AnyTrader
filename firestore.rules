@@ -70,23 +70,29 @@ service cloud.firestore {
       // Drivers can only list reviews that have passed the cooling-off period.
       allow read, list: if isAdmin() || (
         isSignedIn() && 
-        resource.data.driverId == request.auth.uid && 
-        resource.data.visibilityDate <= request.time
+        (resource == null || (resource.data.driverId == request.auth.uid && resource.data.visibilityDate <= request.time))
       );
       allow update: if false; // immutable by users
     }
 
     match /ride_requests/{rideId} {
-      allow get: if isSignedIn() && (resource.data.get('riderId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (
+        resource == null || 
+        resource.data.get('riderId', '') == request.auth.uid || 
+        resource.data.get('driverId', '') == request.auth.uid || 
+        resource.data.get('assignedDriverId', '') == request.auth.uid || 
+        isAdmin()
+      );
       allow create: if isSignedIn() && request.resource.data.riderId == request.auth.uid;
       allow update: if isSignedIn() && (
+        resource == null ||
         resource.data.get('riderId', '') == request.auth.uid || 
         resource.data.get('driverId', '') == request.auth.uid || 
         request.resource.data.get('driverId', '') == request.auth.uid || 
         request.resource.data.get('assignedDriverId', '') == request.auth.uid || 
         isAdmin()
       );
-      allow delete: if isSignedIn() && (resource.data.get('riderId', '') == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource == null || resource.data.get('riderId', '') == request.auth.uid || isAdmin());
       allow list: if isSignedIn();
 
       match /chat/{messageId} {
@@ -106,9 +112,9 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
       allow create: if isSignedIn();
-      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin() || (isSignedIn() && (resource == null || resource.data.userId == request.auth.uid));
     }
 
     match /sms_queue/{queueId} {
@@ -122,12 +128,12 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow read, list: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow read, list: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants || isAdmin());
       allow create: if isSignedIn() && (request.auth.uid in request.resource.data.participants || isAdmin());
-      allow update: if isSignedIn() && (request.auth.uid in resource.data.participants || isAdmin());
+      allow update: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants || isAdmin());
       
       match /messages/{messageId} {
-        allow read: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants || isAdmin());
+        allow read: if isSignedIn() && (get(/databases/$(database)/documents/conversations/$(conversationId)) == null || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants || isAdmin());
         allow create: if isSignedIn() && (request.auth.uid == request.resource.data.senderId || isAdmin());
       }
     }
@@ -149,8 +155,8 @@ service cloud.firestore {
     }
 
     match /invitations/{invitationId} {
-      allow get: if isAdmin() || (isSignedIn() && request.auth.token.email != null && resource.data.email == request.auth.token.email.lower());
-      allow list: if isAdmin() || (isSignedIn() && request.auth.token.email != null && resource.data.email == request.auth.token.email.lower());
+      allow get: if isAdmin() || (isSignedIn() && request.auth.token.email != null && (resource == null || resource.data.email == request.auth.token.email.lower()));
+      allow list: if isAdmin() || (isSignedIn() && request.auth.token.email != null && (resource == null || resource.data.email == request.auth.token.email.lower()));
       allow write: if isAdmin();
     }
 
@@ -198,12 +204,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /shop_orders/{orderId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn();
       allow update: if isAdmin();
     }
     match /assets/{assetId} {
-      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid || isAdmin());
       allow write: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
     }
     match /dispatches/{dispatchId} {
@@ -212,24 +218,24 @@ service cloud.firestore {
     }
 
     match /recurring_schedules/{scheduleId} {
-      allow read: if isSignedIn() && (resource.data.homeownerId == request.auth.uid || resource.data.tradespersonId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || resource.data.tradespersonId == request.auth.uid || isAdmin());
       allow list: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.homeownerId == request.auth.uid || request.resource.data.tradespersonId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (resource.data.homeownerId == request.auth.uid || resource.data.tradespersonId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || resource.data.tradespersonId == request.auth.uid || isAdmin());
     }
 
     // --- Home Portal (Tradesperson/Homeowner Logic) ---
     match /jobs/{jobId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.homeownerId == request.auth.uid || request.resource.data.isRecurringInstance == true || isAdmin());
-      allow update: if isSignedIn() && (resource.data.homeownerId == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn() && (resource.data.homeownerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || isAdmin());
     }
 
     match /jobs/{jobId}/quotes/{quoteId} {
       allow read, list: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.tradespersonId == request.auth.uid || request.resource.data.homeownerId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (resource.data.tradespersonId == request.auth.uid || resource.data.homeownerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource == null || resource.data.tradespersonId == request.auth.uid || resource.data.homeownerId == request.auth.uid || isAdmin());
     }
   }
 }

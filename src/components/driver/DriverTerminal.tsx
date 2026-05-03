@@ -202,7 +202,7 @@ export default function DriverTerminal() {
       const originLat = mapCenterRef.current[0];
       const originLng = mapCenterRef.current[1];
       
-      directionsService.route(
+      const routeResult: any = directionsService.route(
         {
           origin: new window.google.maps.LatLng(originLat, originLng),
           destination: new window.google.maps.LatLng(destLat, destLng),
@@ -221,6 +221,9 @@ export default function DriverTerminal() {
           }
         }
       );
+      if (routeResult && routeResult.catch) {
+        routeResult.catch((e: any) => console.warn("Caught directions promise rejection:", e));
+      }
     };
 
     if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {

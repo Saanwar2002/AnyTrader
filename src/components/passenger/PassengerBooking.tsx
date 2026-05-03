@@ -266,7 +266,7 @@ export default function PassengerBooking() {
         const q = query(
           collection(db, "ride_requests"),
           where("riderId", "==", user.uid),
-          where("status", "in", ["pending", "accepted", "arrived", "in_progress"]),
+          where("status", "in", ["pending", "offered", "accepted", "arrived", "in_progress"]),
           orderBy("createdAt", "desc"),
           limit(1)
         );
@@ -285,7 +285,7 @@ export default function PassengerBooking() {
           setComments(data.comments || "");
           if (data.fareEstimate) setFareEstimate(data.fareEstimate);
 
-          if (data.status === "pending") {
+          if (data.status === "pending" || data.status === "offered") {
             setStep("searching");
           } else {
             setStep("confirmed");
@@ -317,7 +317,7 @@ export default function PassengerBooking() {
       const unsub = onSnapshot(doc(db, "ride_requests", editId), (doc) => {
         if (doc.exists()) {
           const data = doc.data();
-          if (data.status === "pending" || data.status === "draft") {
+          if (data.status === "pending" || data.status === "draft" || data.status === "offered") {
             setPickup(data.pickup || "");
             setDropoff(data.dropoff || "");
             setComments(data.comments || "");
@@ -326,7 +326,7 @@ export default function PassengerBooking() {
             if (data.waitTolerance) setWaitTolerance(data.waitTolerance as any);
           }
         }
-      });
+      }, (err) => console.error("onSnapshot ERROR ride_requests:", err));
       return () => unsub();
     }
   }, [editId]);
@@ -376,7 +376,7 @@ export default function PassengerBooking() {
       if (doc.exists()) {
         setFareConfig(prev => ({ ...prev, ...doc.data() }));
       }
-    });
+    }, (err) => console.error("onSnapshot ERROR platform_config/rides:", err));
     return () => unsub();
   }, []);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -451,12 +451,16 @@ export default function PassengerBooking() {
             stopover: true
           }));
 
-          directionsService.route({
+          const routeReq: google.maps.DirectionsRequest = {
             origin: new google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
             destination: new google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
-            waypoints: validStops,
             travelMode: google.maps.TravelMode.DRIVING,
-          }, (result, status) => {
+          };
+          if (validStops.length > 0) {
+            routeReq.waypoints = validStops;
+          }
+
+          const routeResult: any = directionsService.route(routeReq, (result, status) => {
             if (status === google.maps.DirectionsStatus.OK && result) {
               // Draw the line
               const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
@@ -504,6 +508,9 @@ export default function PassengerBooking() {
               console.warn("Directions failed:", status);
             }
           });
+          if (routeResult && routeResult.catch) {
+            routeResult.catch((e: any) => console.warn("Caught Directions request Promise rejection", e));
+          }
         } catch (e) {
           console.error("DIRECTIONS_ROUTE error:", e);
         }
@@ -583,7 +590,7 @@ export default function PassengerBooking() {
       setDriversAvailableSoonCount(countSoon);
       setNearbyDriversLocations(locations);
       setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
-    });
+    }, (err) => console.error("onSnapshot ERROR live_tracking:", err));
     return () => unsub();
   }, [pickupCoords, isPetFriendly]);
 
@@ -609,7 +616,7 @@ export default function PassengerBooking() {
           commissionRate: Number(data.commissionRate) || 0.12,
         });
       }
-    });
+    }, (err) => console.error("onSnapshot ERROR platform_config/rides 2:", err));
     return () => unsub();
   }, []);
 
@@ -1032,7 +1039,7 @@ export default function PassengerBooking() {
           setUnreadChatCount(unread);
         }
       }
-    });
+    }, (err) => console.error("onSnapshot ERROR chat:", err));
     return () => unsub();
   }, [currentRideId, step, user, isChatOpen]);
 
@@ -1145,7 +1152,7 @@ export default function PassengerBooking() {
   const simulateDriverAccepts = async () => {
     if (!currentRideId) return;
     try {
-      await updateDoc(doc(db, "ride_requests", currentRideId), {
+      const simData = {
         status: "accepted",
         driverId: "sim-driver-123",
         driverName: "Sim Driver",
@@ -1154,7 +1161,30 @@ export default function PassengerBooking() {
         vehiclePlate: "SIM 123",
         driverRequirePasscode: false,
         acceptedAt: serverTimestamp(),
-      });
+      };
+      
+      // Force local optimistic UI update to bypass snapshot delay issues
+      setAssignedDriverInfo((prev: any) => ({
+         uid: simData.driverId, 
+         name: simData.driverName, 
+         vehicle: simData.vehicleInfo, 
+         plate: simData.vehiclePlate,
+         code: "---", 
+         requirePasscode: false,
+         phone: simData.driverPhone, 
+         status: "accepted",
+         fareEstimate: fareEstimate || 0,
+         rating: "5.0",
+         acceptedAt: Date.now(),
+         isFinishingTrip: false,
+         stackedDriverDelay: undefined
+      }));
+      setStep("confirmed");
+      triggerHaptic(ImpactStyle.Heavy);
+      playSound('success');
+      setShowDriverFoundOverlay(true);
+
+      await updateDoc(doc(db, "ride_requests", currentRideId), simData);
       if (pickupCoords) {
         await setDoc(doc(db, "live_tracking", "sim-driver-123"), {
            lat: pickupCoords.lat - 0.003,
@@ -1182,14 +1212,44 @@ export default function PassengerBooking() {
       const rideData = rideDoc.exists() ? rideDoc.data() : null;
 
       const updateData: any = { status: nextStatus };
-      if (nextStatus === "arrived") updateData.arrivedAt = serverTimestamp();
-      if (nextStatus === "in_progress") updateData.startedAt = serverTimestamp();
+      
+      // Optimistic updates
+      if (nextStatus === "arrived") {
+         updateData.arrivedAt = serverTimestamp();
+         setAssignedDriverInfo((prev: any) => prev ? { ...prev, status: "arrived", arrivedAt: Date.now() } : null);
+         triggerHaptic(ImpactStyle.Heavy);
+         playSound('notification');
+         if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]);
+         toast.success("Your driver has arrived!", { duration: 8000, position: "top-center" });
+      }
+      if (nextStatus === "in_progress") {
+         updateData.startedAt = serverTimestamp();
+         setAssignedDriverInfo((prev: any) => prev ? { ...prev, status: "in_progress", startedAt: Date.now() } : null);
+         playSound('notification');
+      }
       if (nextStatus === "completed") {
          updateData.completedAt = serverTimestamp();
+         updateData.paymentMethod = profile?.stripeCustomerId ? "stripe_auto" : "stripe_qr";
          if (rideData) {
             updateData.finalFare = (rideData.fareEstimate || fareConfig.baseFare) + (rideData.tipAmount || 0) + (rideData.cancellationFee || 0);
          }
+         
+         const completedData = {
+           status: "completed",
+           id: currentRideId,
+           ...rideData,
+           ...updateData,
+         };
+         if (updateData.completedAt) completedData.completedAt = { toMillis: () => Date.now() };
+
+         setCompletedRideData(completedData);
+         setStep("receipt"); 
+         setCurrentRideId(null); 
+         setAssignedDriverInfo(null); 
+         hasTriggeredTipModalRef.current = false;
+         setShowTipModal(false);
       }
+      
       await updateDoc(doc(db, "ride_requests", currentRideId), updateData);
     } catch(err) { console.error(err); }
   };
@@ -1534,7 +1594,7 @@ export default function PassengerBooking() {
           setShowTipModal(false);
         }
       }
-    });
+    }, (err) => console.error("onSnapshot ERROR ride config step:", err));
     const unsubTrack = onSnapshot(doc(db, "live_tracking", assignedDriverInfo?.uid || "none"), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
@@ -1725,7 +1785,7 @@ export default function PassengerBooking() {
       const getLiveRoute = () => {
         try {
           const directionsService = new window.google.maps.DirectionsService();
-          directionsService.route({
+          const routeResult: any = directionsService.route({
             origin: new window.google.maps.LatLng(driverPos.lat, driverPos.lng),
             destination: new window.google.maps.LatLng(destinationCoords.lat, destinationCoords.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
@@ -1749,6 +1809,9 @@ export default function PassengerBooking() {
               console.warn("Live route directions failed with status:", status);
             }
           });
+          if (routeResult && routeResult.catch) {
+            routeResult.catch((e: any) => console.warn("Caught Directions request Promise rejection", e));
+          }
         } catch (e) {
           console.error("DIRECTIONS_ROUTE error:", e);
         }
@@ -2568,9 +2631,23 @@ export default function PassengerBooking() {
                             {isPetFriendly && <div className="flex justify-between text-[#2563EB] font-bold"><span>Pet:</span><span>+£3.00</span></div>}
                             {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600 font-bold"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
                           </div>
-                          <div className="border-t border-slate-300 pt-2 flex items-center justify-between font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
-                            <span>Total estimate:</span>
-                            <span className="text-[20px]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</span>
+                          <div className="border-t border-slate-300 pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
+                            <div className="flex items-center justify-between">
+                              <span>Total estimate:</span>
+                              <span className="text-[20px]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Payment Method</span>
+                              {!!profile?.stripeCustomerId ? (
+                                <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm">
+                                  <span className="text-emerald-700 text-[10px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                                </div>
+                              ) : (
+                                <div className="inline-block bg-white border-2 border-orange-600 px-2 py-0.5 rounded-md shadow-sm">
+                                  <span className="text-orange-600 text-[10px] font-black uppercase tracking-wider block leading-none">QR Code</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <p className="text-[9px] text-slate-700 italic text-center pb-1 font-medium">Final fare may vary based on route</p>
                         </div>
@@ -2621,7 +2698,17 @@ export default function PassengerBooking() {
 
                 <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[16px] py-1.5 px-4 border border-[#bae6fd]/50 flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-2 mt-1">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0">Total Fare Estimate</p>
-                  <p className="text-2xl font-black text-[#0f172a] leading-tight">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
+                  <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
+                  
+                  {!!profile?.stripeCustomerId ? (
+                    <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm mb-1.5">
+                      <span className="text-emerald-700 text-[9px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                    </div>
+                  ) : (
+                    <div className="inline-block bg-white border-2 border-orange-600 px-2 py-0.5 rounded-md shadow-sm mb-1.5">
+                      <span className="text-orange-600 text-[10px] font-black uppercase tracking-wider block leading-none">QR Code</span>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="w-full max-w-[320px] relative">
@@ -2836,8 +2923,19 @@ export default function PassengerBooking() {
                    <div className="bg-slate-100/80 p-3 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center text-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
                       <p className="text-[17px] font-black text-slate-900 leading-none">Total: £{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
+                      
+                      {assignedDriverInfo?.hasCardOnFile ? (
+                        <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm mt-1.5">
+                          <span className="text-emerald-700 text-[9px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                        </div>
+                      ) : (
+                        <div className="inline-block bg-white border-2 border-orange-600 px-2 py-0.5 rounded-md shadow-sm mt-1.5">
+                          <span className="text-orange-600 text-[10px] font-black uppercase tracking-wider block leading-none">QR Code</span>
+                        </div>
+                      )}
+
                       {((assignedDriverInfo?.tipAmount || 0) > 0 || isPriority) && (
-                          <p className="text-[11px] font-bold text-slate-600 mt-1 leading-tight">
+                          <p className="text-[11px] font-bold text-slate-600 mt-1.5 leading-tight">
                               Includes{isPriority ? " £3.00 priority" : ""}{isPriority && (assignedDriverInfo?.tipAmount || 0) > 0 ? " & " : ""}{(assignedDriverInfo?.tipAmount || 0) > 0 ? `£${assignedDriverInfo!.tipAmount.toFixed(2)} tip` : ""}
                           </p>
                       )}
@@ -3011,12 +3109,34 @@ export default function PassengerBooking() {
                 <div className="bg-surface rounded-3xl p-5 mb-6 border border-border-main shadow-sm flex flex-col items-center text-center">
                   <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
                   <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
+                  <div className="flex gap-2 mt-3 items-center">
+                    <p className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-md leading-none flex items-center">
+                       <Check className="w-3.5 h-3.5 mr-1" />
+                       Successful
+                    </p>
+                    {completedRideData.paymentMethod === 'stripe_auto' || (!completedRideData.paymentMethod && completedRideData.hasCardOnFile) ? (
+                      <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-emerald-700 text-[10px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                      </div>
+                    ) : completedRideData.paymentMethod === 'stripe_qr' || (!completedRideData.paymentMethod && !completedRideData.hasCardOnFile) ? (
+                      <div className="inline-block bg-white border-2 border-orange-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-orange-600 text-[10px] font-black uppercase tracking-wider block leading-none">QR Code</span>
+                      </div>
+                    ) : completedRideData.paymentMethod === 'cash' ? (
+                      <div className="inline-block bg-white border-2 border-slate-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-slate-700 text-[10px] font-black uppercase tracking-wider block leading-none">Cash</span>
+                      </div>
+                    ) : (
+                      <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-emerald-700 text-[10px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                      </div>
+                    )}
+                  </div>
                   {((completedRideData.tipAmount || 0) > 0 || completedRideData.isPriority) && (
-                      <p className="text-[12px] font-bold text-slate-500 mt-2 leading-tight">
+                      <p className="text-[12px] font-bold text-slate-500 mt-3 leading-tight">
                           Includes{completedRideData.isPriority ? " £3.00 priority" : ""}{completedRideData.isPriority && (completedRideData.tipAmount || 0) > 0 ? " & " : ""}{(completedRideData.tipAmount || 0) > 0 ? `£${completedRideData.tipAmount.toFixed(2)} tip` : ""}
                       </p>
                   )}
-                  <p className="text-sm font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1 rounded-lg">Payment Successful</p>
                 </div>
 
                 <p className="text-[10px] font-black uppercase text-text-muted tracking-widest mb-3 border-b border-border-main pb-2">Receipt Breakdown</p>

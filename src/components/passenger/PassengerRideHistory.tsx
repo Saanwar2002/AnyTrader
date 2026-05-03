@@ -299,7 +299,7 @@ export default function PassengerRideHistory() {
                   )}
                 </div>
                 
-                {ride.status === "pending" && (
+                {["pending", "offered"].includes(ride.status) && (
                   <div className="flex items-center gap-2 mt-2">
                     <button
                       onClick={() => navigate(`/book-ride?edit=${ride.id}`)}
@@ -464,7 +464,29 @@ export default function PassengerRideHistory() {
                   <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
                     £{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) : (parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 0) + (selectedRideDetails.tipAmount || 0) + (selectedRideDetails.cancellationFee || 0))).toFixed(2)}
                   </h2>
-                  <p className="text-xs font-bold text-emerald-600 mt-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">Payment Successful</p>
+                  <div className="flex gap-2 mt-2 items-center justify-center">
+                    <p className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 flex items-center">
+                       <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                       Successful
+                    </p>
+                    {selectedRideDetails.paymentMethod === 'stripe_auto' || (!selectedRideDetails.paymentMethod && selectedRideDetails.hasCardOnFile) ? (
+                      <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-emerald-700 text-[10px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                      </div>
+                    ) : selectedRideDetails.paymentMethod === 'stripe_qr' || (!selectedRideDetails.paymentMethod && !selectedRideDetails.hasCardOnFile) ? (
+                      <div className="inline-block bg-white border-2 border-orange-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-orange-600 text-[10px] font-black uppercase tracking-wider block leading-none">QR Code</span>
+                      </div>
+                    ) : selectedRideDetails.paymentMethod === 'cash' ? (
+                      <div className="inline-block bg-white border-2 border-slate-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-slate-700 text-[10px] font-black uppercase tracking-wider block leading-none">Cash</span>
+                      </div>
+                    ) : (
+                      <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-1 rounded-md shadow-sm">
+                        <span className="text-emerald-700 text-[10px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 border-b border-slate-100 pb-2">Receipt Breakdown</p>
