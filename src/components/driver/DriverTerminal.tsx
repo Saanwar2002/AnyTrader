@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
-import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs } from "@/src/firebase";
+import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, addDoc, orderBy } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
 import DriverAnalytics from "./DriverAnalytics";
@@ -819,7 +819,46 @@ export default function DriverTerminal() {
   const [earlyCompletionReason, setEarlyCompletionReason] = useState("");
   const [isEarlyCompletion, setIsEarlyCompletion] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const lastSeenChatCountRef = useRef(0);
   const [showJobDetails, setShowJobDetails] = useState(false);
+  const [quickMessageCooldown, setQuickMessageCooldown] = useState(0);
+
+  useEffect(() => {
+    if (quickMessageCooldown > 0) {
+      const timer = setTimeout(() => setQuickMessageCooldown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [quickMessageCooldown]);
+
+  useEffect(() => {
+    if (isChatOpen) setUnreadChatCount(0);
+  }, [isChatOpen]);
+
+  useEffect(() => {
+    if (!activeRide?.id || !user || !['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) return;
+    
+    const q = query(
+      collection(db, "ride_requests", activeRide.id, "chat"),
+      orderBy("createdAt", "asc")
+    );
+    
+    const unsub = onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => doc.data());
+      const remoteMessages = messages.filter(m => m.senderId !== user.uid);
+      
+      if (isChatOpen) {
+        lastSeenChatCountRef.current = remoteMessages.length;
+        setUnreadChatCount(0);
+      } else {
+        const unread = remoteMessages.length - lastSeenChatCountRef.current;
+        if (unread > 0) {
+          setUnreadChatCount(unread);
+        }
+      }
+    });
+    return () => unsub();
+  }, [activeRide?.id, rideState, user, isChatOpen]);
 
   const [waitStartTime, setWaitStartTime] = useState<number | null>(null);
   const [elapsedWaitSeconds, setElapsedWaitSeconds] = useState(0);
@@ -1049,6 +1088,22 @@ export default function DriverTerminal() {
       });
     }
     if (navigator.vibrate) navigator.vibrate(100);
+  };
+
+  const handleSendQuickMessage = async (text: string) => {
+    if (!activeRide?.id || !user || quickMessageCooldown > 0) return;
+    try {
+      await addDoc(collection(db, "ride_requests", activeRide.id, "chat"), {
+        text,
+        senderId: user.uid,
+        createdAt: serverTimestamp()
+      });
+      setQuickMessageCooldown(120);
+      toast.success("Sent");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to send");
+    }
   };
 
   const handleStartRide = async () => {
@@ -1887,8 +1942,20 @@ export default function DriverTerminal() {
                 </div>
               </div>
 
+              {activeRide?.comments && (
+                <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
+                  <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                    <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                      {activeRide.comments}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2.5 mt-3 shrink-0 relative z-20">
+              <div className="flex flex-col gap-2.5 mt-2 shrink-0 relative z-20">
                 <button 
                   onClick={handleAcceptRide}
                   className="w-full h-12 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-black text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
@@ -2016,8 +2083,20 @@ export default function DriverTerminal() {
                 </div>
               </div>
 
+              {stackedRideOffer?.comments && (
+                <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
+                  <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                    <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                      {stackedRideOffer.comments}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2.5 mt-3 shrink-0 relative z-20">
+              <div className="flex flex-col gap-2.5 mt-2 shrink-0 relative z-20">
                 <button 
                   onClick={handleAcceptStackedRide}
                   className="w-full h-12 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-black text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
@@ -2098,12 +2177,33 @@ export default function DriverTerminal() {
                     <p className="text-[#00D26A] font-bold text-lg">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
+
+                {activeRide?.comments && (
+                  <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
+                    <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                      <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                        {activeRide.comments}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-center gap-3 mt-2">
                   <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
                     <Info className="w-5 h-5 text-white" />
                   </button>
-                  <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                    {unreadChatCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
+                          {unreadChatCount}
+                        </span>
+                      </span>
+                    )}
                   </button>
                   <button 
                     onClick={onArrivedClick}
@@ -2111,6 +2211,24 @@ export default function DriverTerminal() {
                   >
                     <MapPin className="w-4 h-4" /> MARK AS ARRIVED
                   </button>
+                </div>
+
+                <div className="flex overflow-x-auto no-scrollbar gap-2 mb-3 w-full pb-1">
+                  {["I'll be right there", "Traffic is heavy", "I'm outside"].map((msg, i) => (
+                    <button 
+                      key={i} 
+                      onClick={() => handleSendQuickMessage(msg)}
+                      disabled={quickMessageCooldown > 0}
+                      className={cn(
+                        "whitespace-nowrap px-4 py-2 border text-[12px] font-bold rounded-[10px] shadow-sm transition-transform",
+                        quickMessageCooldown > 0 
+                          ? "bg-[#1A1A1E] border-[#2C2C30] text-[#E4E4E7]/50 cursor-not-allowed" 
+                          : "bg-[#252529] border-[#333338] text-white active:scale-95"
+                      )}
+                    >
+                      {quickMessageCooldown > 0 ? `${msg} (${Math.floor(quickMessageCooldown / 60)}:${(quickMessageCooldown % 60).toString().padStart(2, '0')})` : msg}
+                    </button>
+                  ))}
                 </div>
               </>
             )}
@@ -2138,10 +2256,14 @@ export default function DriverTerminal() {
                 </div>
 
                 {activeRide?.comments && (
-                  <div className="mb-3 bg-[#FFD60A]/15 border border-[#FFD60A]/40 rounded-xl p-3">
-                    <p className="text-[#FFD60A] text-xs font-medium leading-relaxed">
-                      <span className="font-bold">Passenger Note:</span> {activeRide.comments}
-                    </p>
+                  <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
+                    <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                      <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                        {activeRide.comments}
+                      </p>
+                    </div>
                   </div>
                 )}
                 
@@ -2161,8 +2283,16 @@ export default function DriverTerminal() {
                   <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
                     <Info className="w-5 h-5 text-white" />
                   </button>
-                  <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                    {unreadChatCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
+                          {unreadChatCount}
+                        </span>
+                      </span>
+                    )}
                   </button>
                   <button 
                     onClick={handleStartRide}
@@ -2170,6 +2300,24 @@ export default function DriverTerminal() {
                   >
                     <Zap className="w-4 h-4 fill-[#0D0D0F]" /> START TRIP
                   </button>
+                </div>
+
+                <div className="flex overflow-x-auto no-scrollbar gap-2 mt-auto mb-3 w-full pb-1">
+                  {["I'm waiting outside", "Are you coming?", "Please hurry up", "Couldn't stop at location, please look around for me"].map((msg, i) => (
+                    <button 
+                      key={i} 
+                      onClick={() => handleSendQuickMessage(msg)}
+                      disabled={quickMessageCooldown > 0}
+                      className={cn(
+                        "whitespace-nowrap px-4 py-2 border text-[12px] font-bold rounded-[10px] shadow-sm transition-transform",
+                        quickMessageCooldown > 0 
+                          ? "bg-[#1A1A1E] border-[#2C2C30] text-[#E4E4E7]/50 cursor-not-allowed" 
+                          : "bg-[#252529] border-[#333338] text-white active:scale-95"
+                      )}
+                    >
+                      {quickMessageCooldown > 0 ? `${msg} (${Math.floor(quickMessageCooldown / 60)}:${(quickMessageCooldown % 60).toString().padStart(2, '0')})` : msg}
+                    </button>
+                  ))}
                 </div>
               </>
             )}
@@ -2250,8 +2398,16 @@ export default function DriverTerminal() {
                   <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
                     <Info className="w-5 h-5 text-white" />
                   </button>
-                  <button onClick={() => setIsChatOpen(true)} className="w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                    {unreadChatCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
+                          {unreadChatCount}
+                        </span>
+                      </span>
+                    )}
                   </button>
                   <button 
                     onClick={handleCompleteRideBtnClick}

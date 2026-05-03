@@ -229,6 +229,7 @@ export default function PassengerBooking() {
   const { theme, switchPortal } = usePortal();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [currentRideId, setCurrentRideId] = useState<string | null>(null);
   const [step, setStep] = useState<BookingStep>("details");
   const [isMapFullScreen, setIsMapFullScreen] = useState(false);
   const [completedRideData, setCompletedRideData] = useState<any>(null);
@@ -331,6 +332,9 @@ export default function PassengerBooking() {
     return () => unsub();
   }, []);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const lastSeenChatCountRef = useRef(0);
+
   const [showRegularJourneys, setShowRegularJourneys] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [showHomeBlank, setShowHomeBlank] = useState(false);
@@ -953,8 +957,36 @@ export default function PassengerBooking() {
     return Math.max(base * multiplier, fareConfig.minFare * multiplier);
   };
 
-  const [currentRideId, setCurrentRideId] = useState<string | null>(null);
   const searchingStartTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isChatOpen) setUnreadChatCount(0);
+  }, [isChatOpen]);
+
+  useEffect(() => {
+    if (!currentRideId || step !== "confirmed" || !user) return;
+    
+    const q = query(
+      collection(db, "ride_requests", currentRideId, "chat"),
+      orderBy("createdAt", "asc")
+    );
+    
+    const unsub = onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => doc.data());
+      const remoteMessages = messages.filter(m => m.senderId !== user.uid);
+      
+      if (isChatOpen) {
+        lastSeenChatCountRef.current = remoteMessages.length;
+        setUnreadChatCount(0);
+      } else {
+        const unread = remoteMessages.length - lastSeenChatCountRef.current;
+        if (unread > 0) {
+          setUnreadChatCount(unread);
+        }
+      }
+    });
+    return () => unsub();
+  }, [currentRideId, step, user, isChatOpen]);
 
   const handleConfirmBooking = async () => {
     triggerHaptic(ImpactStyle.Heavy);
@@ -2483,19 +2515,19 @@ export default function PassengerBooking() {
                             <span>Total estimate:</span>
                             <span className="text-[20px]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</span>
                           </div>
-                          <p className="text-[9px] text-slate-500 italic text-center pb-1 font-medium">Final fare may vary based on route</p>
+                          <p className="text-[9px] text-slate-700 italic text-center pb-1 font-medium">Final fare may vary based on route</p>
                         </div>
 
-                        <div>
+                        <div className="pt-2">
                            <div className="relative">
                              <div className="absolute top-2.5 left-3 flex items-center justify-center">
-                               <MessageSquare className="w-4 h-4 text-slate-400" />
+                               <MessageSquare className="w-4 h-4 text-amber-500" />
                              </div>
                              <input 
                                type="text"
                                value={comments}
                                onChange={(e) => setComments(e.target.value)}
-                               className="w-full bg-white border border-slate-300 rounded-[8px] pl-9 pr-3 py-2.5 text-[13px] font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#2563EB] transition-all min-w-0 shadow-sm"
+                               className="w-full bg-amber-50/80 border border-amber-200/80 rounded-[8px] pl-9 pr-3 py-2.5 text-[13px] font-medium text-slate-900 placeholder:text-amber-700/60 focus:outline-none focus:border-amber-400 focus:bg-amber-100/50 transition-all min-w-0 shadow-sm"
                                placeholder="Message to driver (e.g. Look for blue gate)"
                                maxLength={100}
                              />
@@ -2779,7 +2811,17 @@ export default function PassengerBooking() {
                 )}
                 
                 <div className="flex gap-3 mt-4">
-                  <button onClick={() => setIsChatOpen(true)} className="flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform"><MessageSquare className="w-[22px] h-[22px] text-white" /></button>
+                  <button onClick={() => setIsChatOpen(true)} className="relative flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+                    <MessageSquare className="w-[22px] h-[22px] text-white" />
+                    {unreadChatCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white items-center justify-center text-[8px] font-bold text-white shadow-sm">
+                          {unreadChatCount}
+                        </span>
+                      </span>
+                    )}
+                  </button>
                   <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
                   <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Map</button>
                 </div>
