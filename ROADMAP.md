@@ -55,3 +55,22 @@ This roadmap outlines the planned AI-powered enhancements to make the platform m
 
 ---
 *Status: Completed Phase 10. Multi-portal trust and demand ecosystem fully active.*
+
+## Phase 11: Release & Mobile App Rollout Plan (Active)
+- [ ] **Phase 11.1: Web App Publication & Live Test**: 
+  - Publish the application as a highly responsive web application.
+  - Conduct a 1-2 week live pilot test with real users.
+  - Monitor logs, errors, and system performance closely.
+- [ ] **Phase 11.2: Iterative Refinement**:
+  - Push live updates and modify features based on user and driver feedback during the testing period.
+  - Fine-tune Gemini Voice AI accuracy and edge cases.
+- [ ] **Phase 11.3: Capacitor Integration**:
+  - Once the web app stabilizes, execute the `CAPACITOR_PRECHECK.md` checklist.
+  - Wrap the web app into native iOS and Android shells using Capacitor.
+  - Integrate native device plugins (Camera, Location, Speech, Notifications).
+- [ ] **Phase 11.4: Mobile Beta Run**:
+  - Distribute the mobile app (via TestFlight / Google Play Console Internal Testing).
+  - Do a secondary 1-week mobile-specific run test to catch native hardware issues.
+- [ ] **Phase 11.5: Final Production Build**:
+  - Finalize App Store / Google Play submissions.
+  - Perform continuous post-launch monitoring and scaling.

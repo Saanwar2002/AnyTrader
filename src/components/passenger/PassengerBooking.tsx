@@ -2285,7 +2285,7 @@ export default function PassengerBooking() {
                         </>
                       ) : (
                         <>
-                          <Mic className="w-4 h-4"/> Tap to Book by Voice
+                          <Mic className="w-4 h-4"/> Tap to Book by Voice <span className="text-orange-500 ml-1 font-bold">(BETA)</span>
                         </>
                       )}
                     </button>
