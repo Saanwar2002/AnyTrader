@@ -606,7 +606,7 @@ export default function PassengerRideHistory() {
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm font-bold text-slate-500">
                     <span>Base Fare & Distance</span>
-                    <span className="text-slate-900">£{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) - (selectedRideDetails.tipAmount || 0) - (selectedRideDetails.unpaidCancellationFeesOwed || selectedRideDetails.cancellationFee || 0) - (selectedRideDetails.isPriority ? 3 : 0) - (selectedRideDetails.isPetFriendly ? 3 : 0) : (parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 5) - (selectedRideDetails.isPriority ? 3 : 0) - (selectedRideDetails.isPetFriendly ? 3 : 0))).toFixed(2)}</span>
+                    <span className="text-slate-900">£{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) - (selectedRideDetails.tipAmount || 0) - (selectedRideDetails.unpaidCancellationFeesOwed || selectedRideDetails.cancellationFee || 0) - (selectedRideDetails.isPriority ? 3 : 0) - (selectedRideDetails.isPetFriendly ? 3 : 0) - (((selectedRideDetails.paidWaitSeconds || 0) / 60) * 0.25) : (parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 5) - (selectedRideDetails.isPriority ? 3 : 0) - (selectedRideDetails.isPetFriendly ? 3 : 0) - (((selectedRideDetails.paidWaitSeconds || 0) / 60) * 0.25))).toFixed(2)}</span>
                   </div>
                   {selectedRideDetails.isPriority && (
                     <div className="flex justify-between text-sm font-bold text-blue-600">
@@ -618,6 +618,12 @@ export default function PassengerRideHistory() {
                     <div className="flex justify-between text-sm font-bold text-orange-600">
                       <span>Pet Friendly</span>
                       <span>+£3.00</span>
+                    </div>
+                  )}
+                  {((selectedRideDetails.paidWaitSeconds || 0) > 0) && (
+                    <div className="flex justify-between text-sm font-bold text-[#FF9500]">
+                      <span>Paid Wait ({Math.floor((selectedRideDetails.paidWaitSeconds || 0) / 60)}m)</span>
+                      <span>+£{(((selectedRideDetails.paidWaitSeconds || 0) / 60) * 0.25).toFixed(2)}</span>
                     </div>
                   )}
                   {((selectedRideDetails.unpaidCancellationFeesOwed || selectedRideDetails.cancellationFee || 0) > 0) && (

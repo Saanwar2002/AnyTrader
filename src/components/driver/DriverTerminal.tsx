@@ -977,7 +977,13 @@ export default function DriverTerminal() {
     if (isWaitingAtStop) {
       setIsWaitingAtStop(false);
       setAbandonmentWarningSent(false); // reset abandonment logic
-      setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
+      setAccumulatedPaidWaitSeconds(prev => {
+         const newVal = prev + currentStopWaitSeconds;
+         if (activeRide?.id && activeRide?.isReal) {
+           updateDoc(doc(db, "ride_requests", activeRide.id), { paidWaitSeconds: newVal }).catch(console.error);
+         }
+         return newVal;
+      });
       setCurrentStopWaitSeconds(0);
       setStopWaitStartTime(null);
       setWaitStopLocation(null);
@@ -1014,7 +1020,13 @@ export default function DriverTerminal() {
         // Auto-pause
         setIsWaitingAtStop(false);
         setAbandonmentWarningSent(false);
-        setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
+        setAccumulatedPaidWaitSeconds(prev => {
+            const newVal = prev + currentStopWaitSeconds;
+            if (activeRide?.id && activeRide?.isReal) {
+               updateDoc(doc(db, "ride_requests", activeRide.id), { paidWaitSeconds: newVal }).catch(console.error);
+            }
+            return newVal;
+        });
         setCurrentStopWaitSeconds(0);
         setStopWaitStartTime(null);
         setWaitStopLocation(null);
@@ -1161,7 +1173,8 @@ export default function DriverTerminal() {
     if (activeRide?.id && activeRide?.isReal) {
       await updateDoc(doc(db, "ride_requests", activeRide.id), {
         status: "in_progress",
-        startedAt: serverTimestamp()
+        startedAt: serverTimestamp(),
+        paidWaitSeconds: pickupPaidWait
       });
     }
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);

@@ -248,6 +248,7 @@ export default function PassengerBooking() {
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   const [showTipModal, setShowTipModal] = useState(false);
   const [showCustomTipKeypad, setShowCustomTipKeypad] = useState(false);
+  const [disabledQuickMessages, setDisabledQuickMessages] = useState<string[]>([]);
   const [isAddingTip, setIsAddingTip] = useState(false);
   const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [customTip, setCustomTip] = useState("");
@@ -1322,7 +1323,18 @@ export default function PassengerBooking() {
       }
       if (nextStatus === "in_progress") {
          updateData.startedAt = serverTimestamp();
-         setAssignedDriverInfo((prev: any) => prev ? { ...prev, status: "in_progress", startedAt: Date.now() } : null);
+         
+         let waitSeconds = 0;
+         if (rideData && rideData.arrivedAt) {
+            const arrivedTime = rideData.arrivedAt.seconds ? rideData.arrivedAt.seconds * 1000 : (typeof rideData.arrivedAt.toMillis === 'function' ? rideData.arrivedAt.toMillis() : rideData.arrivedAt);
+            const elapsed = Math.floor((Date.now() - arrivedTime) / 1000);
+            if (elapsed > 180) {
+               waitSeconds = elapsed - 180;
+            }
+         }
+         updateData.paidWaitSeconds = (rideData?.paidWaitSeconds || 0) + waitSeconds;
+
+         setAssignedDriverInfo((prev: any) => prev ? { ...prev, status: "in_progress", startedAt: Date.now(), paidWaitSeconds: updateData.paidWaitSeconds } : null);
          playSound('notification');
       }
       if (nextStatus === "awaiting_payment") {
@@ -1334,7 +1346,20 @@ export default function PassengerBooking() {
          updateData.completedAt = serverTimestamp();
          updateData.paymentMethod = profile?.stripeCustomerId ? "stripe_auto" : "stripe_qr";
          if (rideData) {
-            updateData.finalFare = (rideData.fareEstimate || fareConfig.baseFare) + (rideData.tipAmount || 0) + (rideData.cancellationFee || 0);
+            let waitSeconds = 0;
+            if (rideData.arrivedAt && !rideData.startedAt) {
+               // Fast forward simulation without in_progress
+               const arrivedTime = rideData.arrivedAt.seconds ? rideData.arrivedAt.seconds * 1000 : (typeof rideData.arrivedAt.toMillis === 'function' ? rideData.arrivedAt.toMillis() : rideData.arrivedAt);
+               const elapsed = Math.floor((Date.now() - arrivedTime) / 1000);
+               if (elapsed > 180) {
+                  waitSeconds = elapsed - 180;
+               }
+            }
+            const finalWaitSeconds = (rideData.paidWaitSeconds || updateData.paidWaitSeconds || 0) + waitSeconds;
+            updateData.paidWaitSeconds = finalWaitSeconds;
+            
+            const waitFare = (finalWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+            updateData.finalFare = (rideData.fareEstimate || fareConfig.baseFare) + waitFare + (rideData.tipAmount || 0) + (rideData.cancellationFee || 0);
          }
          
          const completedData = {
@@ -1492,7 +1517,7 @@ export default function PassengerBooking() {
   };
 
   const handleSendQuickMessage = async (text: string) => {
-    if (!currentRideId || !user) return;
+    if (!currentRideId || !user || disabledQuickMessages.includes(text)) return;
     try {
       await addDoc(collection(db, "ride_requests", currentRideId, "chat"), {
         text,
@@ -1500,6 +1525,11 @@ export default function PassengerBooking() {
         createdAt: serverTimestamp()
       });
       toast.success("Sent");
+      
+      setDisabledQuickMessages(prev => [...prev, text]);
+      setTimeout(() => {
+        setDisabledQuickMessages(prev => prev.filter(m => m !== text));
+      }, 120000);
     } catch (err) {
       console.error(err);
       toast.error("Failed to send");
@@ -2265,6 +2295,9 @@ export default function PassengerBooking() {
                             onFocus={() => { if (!assignedDriverInfo) setActiveField("pickup"); }} 
                             onChange={(e) => { if (!assignedDriverInfo) { setPickup(e.target.value); setActiveField("pickup"); } }} 
                           />
+                          {pickup && !assignedDriverInfo && (
+                            <button onClick={() => { setPickup(""); setPickupCoords(null); setHasModifiedRouteByUser(true); }} className="p-2 text-text-muted hover:text-text-main rounded-full shrink-0 outline-none"><X className="w-4 h-4" /></button>
+                          )}
                           <div className="pl-1.5 pr-0.5 py-1.5 border-l border-emerald-200/60 flex items-center justify-center shrink-0 h-full">
                             <button onClick={handleDetectLocation} className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg tooltip-trigger shrink-0 transition-colors">
                               {isDetecting ? (
@@ -2326,7 +2359,10 @@ export default function PassengerBooking() {
                                 setHasModifiedRouteByUser(true);
                               }} 
                             />
-                            <button onClick={() => { setStops(stops.filter((_, idx) => idx !== i)); setHasModifiedRouteByUser(true); }} className="p-2 text-text-muted hover:text-danger rounded-full shrink-0"><X className="w-4 h-4" /></button>
+                            {stop.address && (
+                              <button onClick={() => { const ns = [...stops]; ns[i].address = ""; ns[i].coords = null; setStops(ns); setHasModifiedRouteByUser(true); }} className="p-2 text-text-muted hover:text-text-main rounded-full shrink-0 outline-none"><X className="w-4 h-4" /></button>
+                            )}
+                            <button onClick={() => { setStops(stops.filter((_, idx) => idx !== i)); setHasModifiedRouteByUser(true); }} className="p-2 text-text-muted hover:text-danger rounded-full shrink-0 outline-none"><X className="w-4 h-4" /></button>
                           </div>
                         </div>
                         </div>
@@ -2376,6 +2412,9 @@ export default function PassengerBooking() {
                             onFocus={() => setActiveField("dropoff")} 
                             onChange={(e) => { setDropoff(e.target.value); setActiveField("dropoff"); }} 
                           />
+                          {dropoff && (
+                            <button onClick={() => { setDropoff(""); setDropoffCoords(null); setHasModifiedRouteByUser(true); }} className="p-2 text-text-muted hover:text-text-main rounded-full shrink-0 outline-none"><X className="w-4 h-4" /></button>
+                          )}
                           {stops.length < 3 && (
                             <div className="pl-2 pr-1 py-1 border-l border-red-200/60 flex items-center justify-center shrink-0 h-full">
                               <button onClick={() => { setStops([...stops, { address: "", coords: null }]); setHasModifiedRouteByUser(true); }} className="w-[30px] h-[34px] bg-[#FFB800] text-black hover:bg-[#E6A600] rounded-[10px] border-[1.5px] border-black flex flex-col items-center justify-center shrink-0 transition-colors shadow-sm" title="Add a stop">
@@ -2972,15 +3011,18 @@ export default function PassengerBooking() {
                 
                 {(assignedDriverInfo?.status === "arrived") && (
                   <div className="flex overflow-x-auto no-scrollbar gap-2 mb-3 w-full pb-1">
-                    {["I'm coming!", "Be there in 2 mins", "Wait for me", "I'm outside"].map((msg, i) => (
+                    {["I'm coming!", "Be there in 2 mins", "Wait for me", "I'm outside"].map((msg, i) => {
+                      const isOnCooldown = disabledQuickMessages.includes(msg);
+                      return (
                       <button 
                         key={i} 
                         onClick={() => handleSendQuickMessage(msg)}
-                        className="whitespace-nowrap px-4 py-2 bg-slate-800 border border-slate-700 text-white font-bold text-[13px] rounded-[12px] shadow-sm active:scale-95 transition-transform"
+                        disabled={isOnCooldown}
+                        className={`whitespace-nowrap px-4 py-2 ${isOnCooldown ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed opacity-60' : 'bg-slate-800 border-slate-700 text-white shadow-sm active:scale-95 transition-transform'} font-bold text-[13px] rounded-[12px]`}
                       >
-                        {msg}
+                        {msg} {isOnCooldown && "⏳"}
                       </button>
-                    ))}
+                    )})}
                   </div>
                 )}
                 
@@ -3074,7 +3116,9 @@ export default function PassengerBooking() {
                    </div>
                    <div className="bg-slate-100/80 p-2.5 rounded-[12px] border border-black flex flex-col items-center justify-center text-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
-                      <p className="text-[17px] font-black text-slate-900 leading-none">Total: £{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
+                      <p className="text-[17px] font-black text-slate-900 leading-none">
+                        Total: £{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + ((assignedDriverInfo?.paidWaitSeconds || 0) / 60) * fareConfig.waitRatePerMinute + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}
+                      </p>
                       
                       {assignedDriverInfo?.hasCardOnFile ? (
                         <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm mt-1.5">
@@ -3286,7 +3330,7 @@ export default function PassengerBooking() {
 
                 <div className="bg-surface rounded-3xl p-5 mb-6 border border-black shadow-sm flex flex-col items-center text-center">
                   <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
-                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
+                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (((completedRideData.paidWaitSeconds || 0) / 60) * fareConfig.waitRatePerMinute) + (completedRideData.tipAmount || 0) + (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
                   <div className="flex gap-2 mt-3 items-center">
                     <p className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-md leading-none flex items-center">
                        <Check className="w-3.5 h-3.5 mr-1" />
@@ -3321,7 +3365,7 @@ export default function PassengerBooking() {
                 <div className="space-y-3 flex-1 mb-4">
                   <div className="flex justify-between text-sm font-bold text-text-muted">
                     <span>Base Fare & Distance</span>
-                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) - (completedRideData.isPetFriendly ? 3 : 0) : ((completedRideData.fareEstimate || fareConfig.baseFare) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) - (completedRideData.isPetFriendly ? 3 : 0))).toFixed(2)}</span>
+                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) - (completedRideData.isPetFriendly ? 3 : 0) - (((completedRideData.paidWaitSeconds || 0) / 60) * fareConfig.waitRatePerMinute) : ((completedRideData.fareEstimate || fareConfig.baseFare) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) - (completedRideData.isPetFriendly ? 3 : 0))).toFixed(2)}</span>
                   </div>
                   {completedRideData.isPriority && (
                     <div className="flex justify-between text-sm font-bold text-blue-600">
@@ -3333,6 +3377,12 @@ export default function PassengerBooking() {
                     <div className="flex justify-between text-sm font-bold text-orange-600">
                       <span>Pet Friendly</span>
                       <span>+£3.00</span>
+                    </div>
+                  )}
+                  {((completedRideData.paidWaitSeconds || 0) > 0) && (
+                    <div className="flex justify-between text-sm font-bold text-[#FF9500]">
+                      <span>Paid Wait ({Math.floor((completedRideData.paidWaitSeconds || 0) / 60)}m)</span>
+                      <span>+£{(((completedRideData.paidWaitSeconds || 0) / 60) * fareConfig.waitRatePerMinute).toFixed(2)}</span>
                     </div>
                   )}
                   {((completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) > 0) && (
@@ -3733,6 +3783,9 @@ export default function PassengerBooking() {
                                      placeholder="Pickup location"
                                  />
                              )}
+                             {pickup && assignedDriverInfo?.status !== 'in_progress' && (
+                                 <button onClick={() => { setPickup(""); setPickupCoords(null); setHasModifiedRouteByUser(true); }} className="p-2 text-slate-400 hover:text-slate-600 rounded-full shrink-0 outline-none"><X className="w-4 h-4" /></button>
+                             )}
                          </div>
                          <AnimatePresence>
                            {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
@@ -3775,7 +3828,10 @@ export default function PassengerBooking() {
                                    className="flex-1 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3"
                                    placeholder={`Stop ${i+1}`}
                                />
-                               <button onClick={() => { setStops(stops.filter((_, idx) => idx !== i)); setHasModifiedRouteByUser(true); }} className="p-2 text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                               {stop.address && (
+                                   <button onClick={() => { const ns = [...stops]; ns[i].address = ""; ns[i].coords = null; setStops(ns); setHasModifiedRouteByUser(true); }} className="p-2 text-slate-400 hover:text-slate-600 rounded-full shrink-0 outline-none"><X className="w-4 h-4" /></button>
+                               )}
+                               <button onClick={() => { setStops(stops.filter((_, idx) => idx !== i)); setHasModifiedRouteByUser(true); }} className="p-2 text-slate-400 hover:text-red-500 outline-none"><X className="w-4 h-4" /></button>
                            </div>
                            <AnimatePresence>
                              {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
@@ -3814,6 +3870,9 @@ export default function PassengerBooking() {
                                  className="flex-1 ml-2 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3"
                                  placeholder="Destination"
                              />
+                             {dropoff && (
+                                 <button onClick={() => { setDropoff(""); setDropoffCoords(null); setHasModifiedRouteByUser(true); }} className="p-2 text-slate-400 hover:text-slate-600 rounded-full shrink-0 outline-none"><X className="w-4 h-4" /></button>
+                             )}
                          </div>
                          <AnimatePresence>
                            {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
