@@ -28,6 +28,12 @@ export default function PassengerRideHistory() {
       setActiveTab(location.state.tab);
     }
   }, [location.state]);
+
+  // Clear expanded cards when tab changes
+  useEffect(() => {
+    setExpandedCards({});
+    setSelectedRideDetails(null);
+  }, [activeTab]);
   const [selectedRideDetails, setSelectedRideDetails] = useState<any | null>(null);
 
   const handleSaveJourney = async (ride: any) => {
@@ -142,8 +148,17 @@ export default function PassengerRideHistory() {
     return true;
   });
 
+  const handleScroll = () => {
+    if (Object.values(expandedCards).some(isExpanded => isExpanded)) {
+      setExpandedCards({});
+    }
+    if (selectedRideDetails) {
+      setSelectedRideDetails(null);
+    }
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 pb-24">
+    <div className="flex-1 overflow-y-auto bg-slate-50 pb-24" onScroll={handleScroll}>
       {/* Header */}
       <div className="bg-white px-4 py-6 border-b border-slate-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
@@ -472,9 +487,20 @@ export default function PassengerRideHistory() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] sm:max-h-[85vh]"
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={0.2}
+              onDragEnd={(e, info) => {
+                if (info.offset.y > 100) {
+                  setSelectedRideDetails(null);
+                }
+              }}
+              className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] sm:max-h-[85vh] relative"
             >
-             <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50 shrink-0">
+             <div className="w-full flex justify-center pt-3 pb-1 absolute top-0 left-0 right-0 z-10 bg-slate-50/80 backdrop-blur-sm pointer-events-none">
+               <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+             </div>
+             <div className="flex items-center justify-between p-5 pt-8 border-b border-slate-100 bg-slate-50 shrink-0">
                 <div>
                    <h2 className="text-xl font-black text-slate-900">Job Details</h2>
                    <p className="text-xs font-bold text-slate-500 mt-1">{selectedRideDetails.createdAt?.toDate ? new Date(selectedRideDetails.createdAt.toDate()).toLocaleString() : 'N/A'}</p>
@@ -580,12 +606,24 @@ export default function PassengerRideHistory() {
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm font-bold text-slate-500">
                     <span>Base Fare & Distance</span>
-                    <span className="text-slate-900">£{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) - (selectedRideDetails.tipAmount || 0) - (selectedRideDetails.cancellationFee || 0) : parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 5)).toFixed(2)}</span>
+                    <span className="text-slate-900">£{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) - (selectedRideDetails.tipAmount || 0) - (selectedRideDetails.unpaidCancellationFeesOwed || selectedRideDetails.cancellationFee || 0) - (selectedRideDetails.isPriority ? 3 : 0) - (selectedRideDetails.isPetFriendly ? 3 : 0) : (parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 5) - (selectedRideDetails.isPriority ? 3 : 0) - (selectedRideDetails.isPetFriendly ? 3 : 0))).toFixed(2)}</span>
                   </div>
-                  {(selectedRideDetails.cancellationFee || 0) > 0 && (
+                  {selectedRideDetails.isPriority && (
+                    <div className="flex justify-between text-sm font-bold text-blue-600">
+                      <span>Priority Boost</span>
+                      <span>+£3.00</span>
+                    </div>
+                  )}
+                  {selectedRideDetails.isPetFriendly && (
+                    <div className="flex justify-between text-sm font-bold text-orange-600">
+                      <span>Pet Friendly</span>
+                      <span>+£3.00</span>
+                    </div>
+                  )}
+                  {((selectedRideDetails.unpaidCancellationFeesOwed || selectedRideDetails.cancellationFee || 0) > 0) && (
                     <div className="flex justify-between text-sm font-bold text-red-500">
                       <span>Unpaid Cancellation Fee</span>
-                      <span>+£{selectedRideDetails.cancellationFee.toFixed(2)}</span>
+                      <span>+£{(selectedRideDetails.unpaidCancellationFeesOwed || selectedRideDetails.cancellationFee).toFixed(2)}</span>
                     </div>
                   )}
                   {(selectedRideDetails.tipAmount || 0) > 0 && (

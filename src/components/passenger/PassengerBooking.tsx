@@ -3213,7 +3213,7 @@ export default function PassengerBooking() {
 
             {step === "receipt" && completedRideData && (
               <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] border border-border-main pointer-events-auto h-full w-full overflow-hidden relative z-[200] flex flex-col shadow-2xl">
-                <div className="flex-1 overflow-y-auto w-full p-6 no-scrollbar pb-[200px]">
+                <div className="flex-1 overflow-y-auto w-full p-6 no-scrollbar pb-[calc(6rem+env(safe-area-inset-bottom))]">
                   <div className="flex justify-between items-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
                     <Check className="w-6 h-6 text-emerald-600" />
@@ -3261,11 +3261,17 @@ export default function PassengerBooking() {
                 <div className="space-y-3 flex-1 mb-4">
                   <div className="flex justify-between text-sm font-bold text-text-muted">
                     <span>Base Fare & Distance</span>
-                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) : ((completedRideData.fareEstimate || fareConfig.baseFare) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0))).toFixed(2)}</span>
+                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) - (completedRideData.isPetFriendly ? 3 : 0) : ((completedRideData.fareEstimate || fareConfig.baseFare) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) - (completedRideData.isPetFriendly ? 3 : 0))).toFixed(2)}</span>
                   </div>
                   {completedRideData.isPriority && (
                     <div className="flex justify-between text-sm font-bold text-blue-600">
                       <span>Priority Boost</span>
+                      <span>+£3.00</span>
+                    </div>
+                  )}
+                  {completedRideData.isPetFriendly && (
+                    <div className="flex justify-between text-sm font-bold text-orange-600">
+                      <span>Pet Friendly</span>
                       <span>+£3.00</span>
                     </div>
                   )}
@@ -3376,9 +3382,7 @@ export default function PassengerBooking() {
                       <p className="text-[11px] text-emerald-600 mt-1 text-center">Your anonymous review helps us keep the community safe.</p>
                    </div>
                 )}
-                </div>
 
-                <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-white via-white to-transparent pt-12 flex pb-[calc(5.5rem+env(safe-area-inset-bottom))] z-10 pointer-events-none">
                   <button 
                     onClick={async () => {
                       if (!hasSubmittedReview) {
@@ -3402,7 +3406,7 @@ export default function PassengerBooking() {
                       navigate("/my-rides", { replace: true, state: { tab: "completed" } });
                     }}
                     disabled={isSubmittingReview}
-                    className="w-full py-4 rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform disabled:bg-slate-700 shadow-[0_4px_24px_rgba(0,0,0,0.15)] pointer-events-auto"
+                    className="w-full py-4 mt-6 rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform disabled:bg-slate-700 shadow-[0_4px_24px_rgba(0,0,0,0.15)] pointer-events-auto"
                   >
                     {isSubmittingReview ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-5 h-5 animate-spin"/> Submitting...</span> : "Done"}
                   </button>
@@ -3492,25 +3496,50 @@ export default function PassengerBooking() {
                    {/* Addresses */}
                    <div className="bg-slate-50 rounded-[20px] border border-slate-200 p-2 space-y-2">
                        {/* Pickup */}
-                       <div className={`flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 mb-1 transition-all ${assignedDriverInfo?.status === 'in_progress' ? 'opacity-70' : 'focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100'}`}>
-                           <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-white" /></div>
-                           {assignedDriverInfo?.status === 'in_progress' ? (
-                               <div className="flex-1 min-w-0 font-bold text-[15px] text-slate-800 py-3 ml-2 truncate">{pickup}</div>
-                           ) : (
-                               <input 
-                                   type="text" 
-                                   value={pickup}
-                                   onChange={(e) => { setPickup(e.target.value); setActiveField("pickup"); }}
-                                   onFocus={() => setActiveField("pickup")}
-                                   className="flex-1 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3 ml-2"
-                                   placeholder="Pickup location"
-                               />
+                       <div className="flex flex-col relative w-full">
+                         <div className={`flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 transition-all ${assignedDriverInfo?.status === 'in_progress' ? 'opacity-70' : 'focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100'}`}>
+                             <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-white" /></div>
+                             {assignedDriverInfo?.status === 'in_progress' ? (
+                                 <div className="flex-1 min-w-0 font-bold text-[15px] text-slate-800 py-3 ml-2 truncate">{pickup}</div>
+                             ) : (
+                                 <input 
+                                     type="text" 
+                                     value={pickup}
+                                     onChange={(e) => { setPickup(e.target.value); setActiveField("pickup"); }}
+                                     onFocus={() => setActiveField("pickup")}
+                                     className="flex-1 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3 ml-2"
+                                     placeholder="Pickup location"
+                                 />
+                             )}
+                         </div>
+                         <AnimatePresence>
+                           {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
+                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
+                               <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
+                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                               </div>
+                               <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
+                                 {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
+                                 {[...suggestions].map((s, idx) => (
+                                   <button key={idx} onPointerDown={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                      {s.isHistory ? 
+                                       <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                       <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
+                                      }
+                                      <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
+                                   </button>
+                                 ))}
+                               </div>
+                             </motion.div>
                            )}
+                         </AnimatePresence>
                        </div>
 
                        {/* Stops */}
                        {stops.map((stop, i) => (
-                           <div key={i} className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition-all">
+                         <div key={i} className="flex flex-col relative w-full">
+                           <div className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition-all">
                                <div className="w-6 shrink-0 flex justify-center"><div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-white" /></div>
                                <input 
                                    type="text" 
@@ -3526,50 +3555,76 @@ export default function PassengerBooking() {
                                />
                                <button onClick={() => { setStops(stops.filter((_, idx) => idx !== i)); setHasModifiedRouteByUser(true); }} className="p-2 text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
                            </div>
+                           <AnimatePresence>
+                             {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
+                               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
+                                 <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
+                                   <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                                 </div>
+                                 <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
+                                   {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
+                                   {[...suggestions].map((s, idx) => (
+                                     <button key={idx} onPointerDown={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                        {s.isHistory ? 
+                                         <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                         <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
+                                        }
+                                        <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
+                                     </button>
+                                   ))}
+                                 </div>
+                               </motion.div>
+                             )}
+                           </AnimatePresence>
+                         </div>
                        ))}
 
                        {/* Dropoff */}
-                       <div className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100 transition-all mt-1">
-                           <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 bg-red-500 rounded-sm" /></div>
-                           <input 
-                               type="text" 
-                               value={dropoff}
-                               onChange={(e) => { setDropoff(e.target.value); setActiveField("dropoff"); }}
-                               onFocus={() => setActiveField("dropoff")}
-                               className="flex-1 ml-2 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3"
-                               placeholder="Destination"
-                           />
+                       <div className="flex flex-col relative w-full mt-1">
+                         <div className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100 transition-all">
+                             <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 bg-red-500 rounded-sm" /></div>
+                             <input 
+                                 type="text" 
+                                 value={dropoff}
+                                 onChange={(e) => { setDropoff(e.target.value); setActiveField("dropoff"); }}
+                                 onFocus={() => setActiveField("dropoff")}
+                                 className="flex-1 ml-2 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3"
+                                 placeholder="Destination"
+                             />
+                         </div>
+                         <AnimatePresence>
+                           {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
+                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
+                               <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
+                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                               </div>
+                               <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
+                                 {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
+                                 {[...suggestions].map((s, idx) => (
+                                   <button key={idx} onPointerDown={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                      {s.isHistory ? 
+                                       <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                       <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
+                                      }
+                                      <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
+                                   </button>
+                                 ))}
+                               </div>
+                             </motion.div>
+                           )}
+                         </AnimatePresence>
                        </div>
                        
                        {stops.length < 3 && (
-                           <div className="px-1 pt-1">
+                           <div className="px-1 pt-1 mb-2">
                                <button onClick={() => { setStops([...stops, {address: "", coords: null}]); setHasModifiedRouteByUser(true); }} className="w-full border-2 border-dashed border-blue-200 py-2.5 flex items-center justify-center gap-1.5 text-blue-600 font-bold text-[14px] bg-blue-50/50 hover:bg-blue-100 rounded-xl transition-colors">
                                    <Plus className="w-4 h-4" /> Add Stop
                                </button>
                            </div>
                        )}
                    </div>
-
-                   {/* Render Autocomplete directly below whenever `activeField` matches one of the inputs */}
-                   <AnimatePresence>
-                   {(activeField && (activeField === "pickup" || activeField.startsWith("stop-") || activeField === "dropoff")) ? (
-                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden rounded-[20px] shadow-sm border border-slate-200 bg-white">
-                          <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
-                              {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
-                              {[...suggestions].map((s, idx) => (
-                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
-                                   {s.isHistory ? 
-                                    <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
-                                    <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
-                                   }
-                                   <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
-                                </button>
-                              ))}
-                              <button onClick={() => {setActiveField(null); setSuggestions([])}} className="w-full py-3.5 bg-slate-50 text-slate-500 font-bold text-xs uppercase tracking-wider text-center active:bg-slate-100">Close Suggestions</button>
-                          </div>
-                       </motion.div>
-                   ) : null}
-                   </AnimatePresence>
 
                    {/* Fare Display */}
                    <div className="bg-emerald-50 border border-emerald-100 rounded-[20px] p-5 flex flex-col items-center shadow-inner relative overflow-hidden">
