@@ -1206,6 +1206,15 @@ export default function Profile() {
         {/* Wavy background top effect - light blue */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[180%] h-[280px] sm:h-[320px] bg-[#bae0ff]/90 rounded-b-[100%] shadow-[0_4px_30px_rgba(186,224,255,0.4)] z-0" />
         
+        {/* Close Button Top Right */}
+        <button 
+          onClick={() => navigate("/")} 
+          className="fixed top-5 right-5 z-50 w-11 h-11 bg-white/40 hover:bg-white/70 backdrop-blur-md border border-white/50 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
+          aria-label="Close Profile"
+        >
+          <X className="w-6 h-6 text-slate-800" strokeWidth={2.5} />
+        </button>
+
         <div className="relative z-10 max-w-[420px] mx-auto pt-16 px-5">
           
           {/* Main User Card */}

@@ -186,7 +186,7 @@ function SearchingTimer() {
   const secs = (elapsed % 60).toString().padStart(2, '0');
   
   return (
-    <div className="flex flex-col items-center justify-center bg-[#f8fafc] border border-slate-200 px-6 py-3.5 rounded-[20px] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] mb-4 min-w-[140px]">
+    <div className="flex flex-col items-center justify-center bg-[#f8fafc] border border-black px-6 py-3.5 rounded-[20px] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] mb-4 min-w-[140px]">
       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.1em] mb-1.5">Time Elapsed</p>
       <p className="text-[28px] leading-none font-black text-slate-900 tracking-tight">{mins.toString().padStart(2, '0')}:{secs}</p>
     </div>
@@ -211,7 +211,7 @@ function CancelRideButton_ConfirmedPhase({ acceptedAt, onCancel }: { acceptedAt:
   const secs = (remaining % 60).toString().padStart(2, '0');
 
   return (
-    <button onClick={onCancel} className={cn("w-full py-2.5 rounded-[16px] flex flex-col items-center justify-center transition-transform active:scale-[0.98] shadow-lg", 
+    <button onClick={onCancel} className={cn("w-full py-2.5 rounded-[16px] border border-black flex flex-col items-center justify-center transition-transform active:scale-[0.98] shadow-lg", 
       isFree ? "bg-[#d32f2f] text-white shadow-red-900/10" : "bg-[#d32f2f] text-white shadow-red-900/10"
     )}>
       <span className="font-bold text-[15px] leading-tight text-white mb-0.5">Cancel Ride</span>
@@ -2546,7 +2546,7 @@ export default function PassengerBooking() {
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col bg-white rounded-[16px] border border-slate-300 mb-2 shrink-0 shadow-sm">
+                  <div className="flex flex-col bg-white rounded-[16px] border border-black mb-2 shrink-0 shadow-sm">
                     <div className="flex flex-1 items-center gap-3 p-3 overflow-hidden">
                       <button onClick={() => setDetailsView("address")} className="p-2 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors shrink-0 aspect-square flex items-center justify-center h-10 w-10 shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
                       <div className="flex flex-col flex-1 overflow-hidden relative pl-2 space-y-1.5">
@@ -2605,7 +2605,7 @@ export default function PassengerBooking() {
                                 className={cn(
                                   "flex-none min-w-[125px] snap-center flex flex-row items-center p-2 rounded-[8px] transition-all border gap-2.5", 
                                   active ? "bg-[#2563EB] text-white border-[#2563EB] shadow-md shadow-blue-500/20 scale-[1.02]" : 
-                                  isAvailable ? "bg-white text-slate-600 hover:bg-slate-50 border-slate-300 shadow-sm" : "bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed border-slate-200"
+                                  isAvailable ? "bg-white text-slate-600 hover:bg-slate-50 border-black shadow-sm" : "bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed border-black"
                                 )}
                               >
                                 <cat.icon className={cn("w-5 h-5 shrink-0 ml-1", active ? "text-white" : isAvailable ? "text-slate-500" : "text-slate-400")} />
@@ -2624,7 +2624,7 @@ export default function PassengerBooking() {
 
                         {/* Ride Context Selector (Corporate vs Personal) */}
                         {hasCorporateAccount && (
-                          <div className="flex bg-white border border-slate-400 rounded-[8px] p-1 shadow-sm">
+                          <div className="flex bg-white border border-black rounded-[8px] p-1 shadow-sm">
                             <button
                               onClick={() => setRideContext("personal")}
                               className={cn("flex-1 py-1.5 text-[11px] font-bold rounded-[6px] transition-all", rideContext === "personal" ? "bg-[#2563EB] text-white shadow-sm" : "hover:bg-slate-50 text-slate-800 border border-transparent")}
@@ -2642,26 +2642,26 @@ export default function PassengerBooking() {
                         
                         {/* Add-Ons */}
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 flex justify-between items-center bg-white border border-slate-400 rounded-[8px] px-3 py-2.5 shadow-sm">
+                          <div className="flex-1 flex justify-between items-center bg-white border border-black rounded-[8px] px-3 py-2.5 shadow-sm">
                              <div className="flex items-center gap-2 text-slate-900 font-bold">
                                <Zap className="w-4 h-4" />
                                <span className="text-[13px]">Priority</span>
                              </div>
                              <button 
                                onClick={() => setIsPriority(!isPriority)}
-                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPriority ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-slate-400")}
+                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPriority ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-black")}
                              >
                                <div className={cn("absolute top-[1.5px] w-4 h-4 bg-white rounded-full transition-transform shadow-sm", isPriority ? "right-[1.5px]" : "left-[1.5px]")} />
                              </button>
                           </div>
-                          <div className="flex-1 flex justify-between items-center bg-white border border-slate-400 rounded-[8px] px-3 py-2.5 shadow-sm">
+                          <div className="flex-1 flex justify-between items-center bg-white border border-black rounded-[8px] px-3 py-2.5 shadow-sm">
                              <div className="flex items-center gap-2 text-slate-900 font-bold">
                                <Dog className="w-4 h-4" />
                                <span className="text-[13px]">Pet</span>
                              </div>
                              <button 
                                onClick={() => setIsPetFriendly(!isPetFriendly)}
-                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPetFriendly ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-slate-400")}
+                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPetFriendly ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-black")}
                              >
                                <div className={cn("absolute top-[1.5px] w-4 h-4 bg-white rounded-full transition-transform shadow-sm", isPetFriendly ? "right-[1.5px]" : "left-[1.5px]")} />
                              </button>
@@ -2671,7 +2671,7 @@ export default function PassengerBooking() {
                         <AnimatePresence>
                           {(isPriority || isPetFriendly) && (
                             <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:"auto"}} exit={{opacity:0, height:0}} className="overflow-hidden">
-                              <div className="text-[10px] font-bold text-slate-900 bg-white shadow-sm p-2 rounded-[8px] text-center border border-slate-400">
+                              <div className="text-[10px] font-bold text-slate-900 bg-white shadow-sm p-2 rounded-[8px] text-center border border-black">
                                 <span className="text-[#2563EB]">Notice:</span> Each active option adds <span className="font-bold">£3.00</span> to the base fare.
                               </div>
                             </motion.div>
@@ -2679,7 +2679,7 @@ export default function PassengerBooking() {
                         </AnimatePresence>
                         
                         {/* Fare Summary */}
-                        <div className="bg-white shadow-sm rounded-[8px] pb-2 pt-3 px-3 border border-slate-400">
+                        <div className="bg-white shadow-sm rounded-[8px] pb-2 pt-3 px-3 border border-black">
                           <p className="text-[10px] font-bold uppercase text-slate-900 tracking-widest mb-2">Fare Breakdown</p>
                           <div className="space-y-1 mb-2 text-[13px] text-black font-medium">
                             <div className="flex justify-between"><span>Base fare:</span><span>£{(fareEstimate || 5.0).toFixed(2)}</span></div>
@@ -2718,7 +2718,7 @@ export default function PassengerBooking() {
                                type="text"
                                value={comments}
                                onChange={(e) => setComments(e.target.value)}
-                               className="w-full bg-amber-50/80 border border-amber-200/80 rounded-[8px] pl-9 pr-3 py-2.5 text-[13px] font-medium text-slate-900 placeholder:text-amber-700/60 focus:outline-none focus:border-amber-400 focus:bg-amber-100/50 transition-all min-w-0 shadow-sm"
+                               className="w-full bg-amber-50/80 border border-black rounded-[8px] pl-9 pr-3 py-2.5 text-[13px] font-medium text-slate-900 placeholder:text-amber-700/60 focus:outline-none focus:border-black focus:bg-amber-100/50 transition-all min-w-0 shadow-sm"
                                placeholder="Message to driver (e.g. Look for blue gate)"
                                maxLength={100}
                              />
@@ -2753,7 +2753,7 @@ export default function PassengerBooking() {
                 
                 <SearchingTimer />
 
-                <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[16px] py-1.5 px-4 border border-[#bae6fd]/50 flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-2 mt-1">
+                <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[16px] py-1.5 px-4 border border-black flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-2 mt-1">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0">Total Fare Estimate</p>
                   <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
                   
@@ -2793,7 +2793,7 @@ export default function PassengerBooking() {
                     )}
                   </AnimatePresence>
                   
-                  <div onClick={handleTogglePriorityClick} className="w-full mb-3 bg-gradient-to-r from-[#ffeaa7] to-[#ffd43b] rounded-[16px] py-2 px-3 shadow-[0_4px_14px_-6px_rgba(255,212,59,0.5)] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
+                  <div onClick={handleTogglePriorityClick} className="w-full mb-3 bg-gradient-to-r from-[#ffeaa7] to-[#ffd43b] rounded-[16px] py-2 px-3 shadow-[0_4px_14px_-6px_rgba(255,212,59,0.5)] border border-black relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
                     <div className="flex items-center gap-3 relative z-10 w-full">
                       <div className="p-1.5 bg-amber-600/10 rounded-full shrink-0">
                         <Zap className="w-5 h-5 text-amber-800" />
@@ -2819,10 +2819,10 @@ export default function PassengerBooking() {
                     )}
                   </AnimatePresence>
                   
-                  <button onClick={handleCancelSearching} className="flex-1 text-slate-800 font-bold text-[15px] py-4 rounded-[16px] border border-slate-300 bg-white hover:bg-slate-50 transition-colors active:scale-[0.98]">Edit</button>
-                  <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-bold text-[15px] py-4 rounded-[16px] bg-[#dcfce7] text-[#15803d] hover:bg-[#bbf7d0] transition-colors active:scale-[0.98]">Cancel</button>
+                  <button onClick={handleCancelSearching} className="flex-1 text-slate-800 font-bold text-[15px] py-4 rounded-[16px] border border-black bg-white hover:bg-slate-50 transition-colors active:scale-[0.98]">Edit</button>
+                  <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-bold text-[15px] py-4 rounded-[16px] border border-black bg-[#dcfce7] text-[#15803d] hover:bg-[#bbf7d0] transition-colors active:scale-[0.98]">Cancel</button>
                 </div>
-                {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-[320px] font-black text-[15px] py-4 rounded-[16px] bg-[#e0e7ff] text-[#4338ca] hover:bg-[#c7d2fe] active:scale-[0.98] transition-transform">Simulate Match</button>}
+                {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-[320px] font-black text-[15px] py-4 rounded-[16px] border border-black bg-[#e0e7ff] text-[#4338ca] hover:bg-[#c7d2fe] active:scale-[0.98] transition-transform">Simulate Match</button>}
                 <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />
               </motion.div>
             )}
@@ -2956,7 +2956,7 @@ export default function PassengerBooking() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mt-4">
-                   <div className="bg-slate-100/80 p-2.5 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center">
+                   <div className="bg-slate-100/80 p-2.5 rounded-[12px] border border-black flex flex-col items-center justify-center">
                       {(assignedDriverInfo?.status === "in_progress" || assignedDriverInfo?.status === "awaiting_payment") ? (
                         <>
                            <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Dropoff ETA</p>
@@ -2977,7 +2977,7 @@ export default function PassengerBooking() {
                         </>
                       )}
                    </div>
-                   <div className="bg-slate-100/80 p-2.5 rounded-[12px] border border-slate-200/50 flex flex-col items-center justify-center text-center">
+                   <div className="bg-slate-100/80 p-2.5 rounded-[12px] border border-black flex flex-col items-center justify-center text-center">
                       <p className="text-[13px] font-semibold text-slate-600 mb-0.5">Total Estimate</p>
                       <p className="text-[17px] font-black text-slate-900 leading-none">Total: £{((assignedDriverInfo?.fareEstimate || fareEstimate || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
                       
@@ -3008,7 +3008,7 @@ export default function PassengerBooking() {
                        }
                     }}
                     className={cn(
-                      "w-full py-2.5 mt-3 rounded-xl font-bold text-[15px] transition-all flex items-center justify-center gap-2",
+                      "w-full py-2.5 mt-3 rounded-xl font-bold text-[15px] transition-all flex items-center justify-center gap-2 border border-black",
                       assignedDriverInfo?.status === "awaiting_payment" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:bg-emerald-600" : "bg-slate-100 text-slate-400 border border-slate-200"
                     )}
                   >
@@ -3057,7 +3057,7 @@ export default function PassengerBooking() {
                 )}
                 
                 <div className="flex gap-3 mt-4">
-                  <button onClick={() => setIsChatOpen(true)} className="relative flex-1 py-3 bg-[#0a1930] rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+                  <button onClick={() => setIsChatOpen(true)} className="relative flex-1 py-3 bg-[#0a1930] border border-black rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform">
                     <MessageSquare className="w-[22px] h-[22px] text-white" />
                     {unreadChatCount > 0 && (
                       <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -3068,13 +3068,13 @@ export default function PassengerBooking() {
                       </span>
                     )}
                   </button>
-                  <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border-2 border-[#0a1930] rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
-                  <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Driver</button>
+                  <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border border-black rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
+                  <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] border border-black text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Driver</button>
                 </div>
                 
                 {assignedDriverInfo?.status !== "in_progress" && assignedDriverInfo?.status !== "awaiting_payment" && (
                   <div className="flex gap-3 mt-4">
-                    <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
+                    <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
                     <div className="flex-1">
                       <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
                     </div>
@@ -3082,7 +3082,7 @@ export default function PassengerBooking() {
                 )}
                 
                 <div className="text-center">
-                  <button onClick={simulateNextState} className="w-full mt-3 font-bold py-3 rounded-[16px] bg-[#e0e7ff] text-[#4338ca] active:scale-[0.98] transition-transform text-[15px]">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
+                  <button onClick={simulateNextState} className="w-full mt-3 font-bold py-3 rounded-[16px] border border-black bg-[#e0e7ff] text-[#4338ca] active:scale-[0.98] transition-transform text-[15px]">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
                 </div>
                 
                 <AnimatePresence>
@@ -3182,7 +3182,7 @@ export default function PassengerBooking() {
                   </button>
                 </div>
 
-                <div className="bg-surface rounded-3xl p-5 mb-6 border border-border-main shadow-sm flex flex-col items-center text-center">
+                <div className="bg-surface rounded-3xl p-5 mb-6 border border-black shadow-sm flex flex-col items-center text-center">
                   <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
                   <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
                   <div className="flex gap-2 mt-3 items-center">
@@ -3253,7 +3253,7 @@ export default function PassengerBooking() {
                 </div>
                 
                 {!hasSubmittedReview ? (
-                   <div className="mb-6 bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                   <div className="mb-6 bg-slate-50 rounded-2xl p-5 border border-black">
                      <p className="text-center text-sm font-black text-slate-700 mb-3">Rate your driver</p>
                      <div className="flex justify-center gap-2 mb-4">
                        {[1, 2, 3, 4, 5].map((star) => (
