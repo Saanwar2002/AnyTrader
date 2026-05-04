@@ -1647,11 +1647,12 @@ export async function callTradeBot(userMessage: string, history: {role: "user" |
 export async function processTaxiVoiceCommand(text: string, locationContext: string = "") {
   const prompt = `Extract taxi booking details from the user's voice command: "${text}". 
     - Identify the 'pickup' (where they are starting) and 'dropoff' (where they are going) locations. 
-    ${locationContext ? `- Context: ${locationContext}. Cross-reference "McDonald's in Marsh", "train station", etc. with this area to give the correct address.` : ''}
-    - Pay special attention to UK postcodes (e.g., HD1 2PT, LS1 3AB) and exact street addresses for both pickup and dropoff.
+    ${locationContext ? `- Context: ${locationContext}. Cross-reference local places (like "McDonald's in Marsh", "train station", etc.) with this area to give the correct address.` : ''}
+    - Pay special attention to UK postcodes (e.g., HD1 2PT, LS1 3AB) and exact street addresses for both pickup and dropoff. 
+    - IMPORTANT: If the pickup or dropoff is a specific point of interest, business, or public place (e.g., McDonald's, KFC, Police Station), you MUST include the name of the place in the 'pickup' or 'dropoff' string before the address (e.g., "McDonald's, 123 Main St, City"). 
+    - ALSO, if a place name is mentioned for the pickup, append "Pickup Place: [Name of Place]" to the 'comments' field so the driver knows exactly what to look for when arriving. Do not append dropoff place names to the comments.
     - If the user only says "to [Dropoff]" or "I want to go to [Dropoff]", leave 'pickup' as an empty string. Only populate 'pickup' if they explicitly mention where they want to be picked up from (e.g., "From [Pickup] to [Dropoff]" or "Pick me up at [Pickup]").
-    - Put any extra instructions, passenger count, or specific requests in 'comments'.
-    Return a JSON object with keys: pickup, dropoff, comments.`;
+    - Put any extra instructions, passenger count, or specific requests in 'comments'.`;
 
   try {
     const response = await callGemini({
@@ -1671,7 +1672,7 @@ export async function processTaxiVoiceCommand(text: string, locationContext: str
       }
     });
 
-    const textResponse = response.text;
+    const textResponse = response.text || "";
     if (!textResponse) throw new Error("Empty response from Gemini");
     return JSON.parse(textResponse);
   } catch (error) {

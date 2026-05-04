@@ -2876,10 +2876,19 @@ export default function PassengerBooking() {
                                type="text"
                                value={comments}
                                onChange={(e) => setComments(e.target.value)}
-                               className="w-full bg-amber-50/80 border border-black rounded-[8px] pl-9 pr-3 py-2.5 text-[13px] font-medium text-slate-900 placeholder:text-amber-700/60 focus:outline-none focus:border-black focus:bg-amber-100/50 transition-all min-w-0 shadow-sm"
+                               className="w-full bg-amber-50/80 border border-black rounded-[8px] pl-9 pr-8 py-2.5 text-[13px] font-medium text-slate-900 placeholder:text-amber-700/60 focus:outline-none focus:border-black focus:bg-amber-100/50 transition-all min-w-0 shadow-sm"
                                placeholder="Message to driver (e.g. Look for blue gate)"
                                maxLength={100}
                              />
+                             {comments && (
+                               <button 
+                                 onClick={() => setComments("")} 
+                                 className="absolute top-2.5 right-3 flex items-center justify-center text-amber-700/60 hover:text-amber-900 focus:outline-none"
+                                 aria-label="Clear comments"
+                               >
+                                 <X className="w-4 h-4" />
+                               </button>
+                             )}
                            </div>
                         </div>
                         
