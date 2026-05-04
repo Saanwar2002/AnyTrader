@@ -1269,7 +1269,7 @@ export default function Profile() {
                           </div>
                           <div className="flex items-center gap-3">
                              {item.rightElem}
-                             <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                             <ChevronRight className="w-5 h-5 text-black group-hover:text-black transition-colors" strokeWidth={2.5} />
                           </div>
                         </button>
                         <AnimatePresence>
@@ -2266,7 +2266,7 @@ export default function Profile() {
                             <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
                               {item.label}
                             </span>
-                            <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                            <ChevronRight className="w-6 h-6 text-black group-hover:text-black transition-colors" strokeWidth={2.5} />
                           </button>
                         );
                       } else if (item.path === "#userguide") {
@@ -2282,7 +2282,7 @@ export default function Profile() {
                             <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
                               {item.label}
                             </span>
-                            <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                            <ChevronRight className="w-6 h-6 text-black group-hover:text-black transition-colors" strokeWidth={2.5} />
                           </button>
                         );
                       } else if (item.path === "#switch_portal") {
@@ -2298,7 +2298,7 @@ export default function Profile() {
                             <span className="flex-1 font-bold text-slate-700 group-hover:text-amber-700 transition-colors text-lg">
                               {item.label}
                             </span>
-                            <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-amber-600 transition-colors" />
+                            <ChevronRight className="w-6 h-6 text-black group-hover:text-black transition-colors" strokeWidth={2.5} />
                           </button>
                         );
                       } else if (item.path?.startsWith("#") && activePortal === "anyride") {
@@ -2316,7 +2316,7 @@ export default function Profile() {
                                 {item.label}
                               </span>
                               <motion.div animate={{ rotate: isExpanded ? 180 : 0 }}>
-                                <ChevronDown className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                                <ChevronDown className="w-6 h-6 text-black group-hover:text-black transition-colors" strokeWidth={2.5} />
                               </motion.div>
                             </button>
                             <AnimatePresence>
@@ -2515,7 +2515,7 @@ export default function Profile() {
                             <span className="flex-1 font-bold text-slate-700 group-hover:text-slate-900 transition-colors text-lg">
                               {item.label}
                             </span>
-                            <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                            <ChevronRight className="w-6 h-6 text-black group-hover:text-black transition-colors" strokeWidth={2.5} />
                           </Link>
                         );
                       }

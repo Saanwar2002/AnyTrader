@@ -1252,7 +1252,7 @@ export default function PassengerBooking() {
     if (currentStatus === "accepted") nextStatus = "arrived";
     else if (currentStatus === "arrived") nextStatus = "in_progress";
     else if (currentStatus === "in_progress") {
-       nextStatus = "completed";
+       nextStatus = profile?.stripeCustomerId ? "completed" : "awaiting_payment";
     }
     else if (currentStatus === "awaiting_payment") nextStatus = "completed";
 
@@ -3009,7 +3009,7 @@ export default function PassengerBooking() {
                     }}
                     className={cn(
                       "w-full py-2.5 mt-3 rounded-xl font-bold text-[15px] transition-all flex items-center justify-center gap-2 border border-black",
-                      assignedDriverInfo?.status === "awaiting_payment" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:bg-emerald-600" : "bg-slate-100 text-slate-400 border border-slate-200"
+                      assignedDriverInfo?.status === "awaiting_payment" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:bg-emerald-600 animate-[pulse_2s_ease-in-out_infinite]" : "bg-slate-100 text-slate-400 border border-slate-200"
                     )}
                   >
                      <Zap className="w-4 h-4 fill-current" /> Pay by Card / Scan QR
@@ -3082,7 +3082,7 @@ export default function PassengerBooking() {
                 )}
                 
                 <div className="text-center">
-                  <button onClick={simulateNextState} className="w-full mt-3 font-bold py-3 rounded-[16px] border border-black bg-[#e0e7ff] text-[#4338ca] active:scale-[0.98] transition-transform text-[15px]">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : "Complete"}</button>
+                  <button onClick={simulateNextState} className="w-full mt-3 font-bold py-3 rounded-[16px] border border-black bg-[#e0e7ff] text-[#4338ca] active:scale-[0.98] transition-transform text-[15px]">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : assignedDriverInfo?.status === "awaiting_payment" ? "Payment Confirmed" : "Complete"}</button>
                 </div>
                 
                 <AnimatePresence>
