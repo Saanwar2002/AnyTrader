@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, doc, updateDoc, arrayRemove, arrayUnion } from "@/src/firebase";
 import { motion, AnimatePresence } from "motion/react";
-import { MapPin, Bookmark, Trash2, ArrowRight, Plus, Search, Heart, X, Home, Briefcase } from "lucide-react";
+import { MapPin, Bookmark, Trash2, ArrowRight, Plus, Search, Heart, Star, X, Home, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
@@ -330,7 +330,7 @@ export default function SavedJourneys() {
             {favoriteAddresses.length === 0 && !showAddFavorite ? (
               <div className="text-center py-12 bg-card rounded-3xl border border-border-main shadow-sm mt-4">
                 <div className="w-16 h-16 bg-surface rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Heart className="w-8 h-8 text-text-muted" />
+                  <Star className="w-8 h-8 text-text-muted" />
                 </div>
                 <h3 className="text-lg font-bold text-text-main">No favorites yet</h3>
                 <p className="text-sm text-text-muted mt-1 mb-6 max-w-[250px] mx-auto">
@@ -347,12 +347,12 @@ export default function SavedJourneys() {
                   className="bg-card rounded-3xl border border-border-main shadow-sm p-4 flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <Heart className="w-6 h-6 text-primary fill-primary" />
+                    <div className="w-12 h-12 rounded-2xl bg-yellow-50 flex items-center justify-center shrink-0">
+                      <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
                     </div>
                     <div className="min-w-0 pr-4">
-                      {fav.name && <p className="text-sm font-black text-text-main truncate mb-0.5">{fav.name}</p>}
-                      <p className={cn("truncate", fav.name ? "text-xs text-text-muted" : "text-sm font-bold text-text-main")}>{fav.address}</p>
+                      {fav.name && <p className="text-sm font-black text-black truncate mb-0.5">{fav.name}</p>}
+                      <p className={cn("truncate", fav.name ? "text-xs font-bold text-black" : "text-sm font-black text-black")}>{fav.address}</p>
                     </div>
                   </div>
                   <div className="relative flex items-center justify-center">
@@ -417,7 +417,7 @@ export default function SavedJourneys() {
                             onClick={() => { if (favName.trim().toLowerCase() === "home" || favName.trim().toLowerCase() === "work") setFavName(""); }} 
                             className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border", (favName.trim().toLowerCase() !== "home" && favName.trim().toLowerCase() !== "work") ? "bg-rose-600 text-white border-rose-600 shadow-sm" : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100")}
                           >
-                            <span className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5" /> Save as Favorite</span>
+                            <span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5" /> Save as Favorite</span>
                           </button>
                         </div>
                       </div>

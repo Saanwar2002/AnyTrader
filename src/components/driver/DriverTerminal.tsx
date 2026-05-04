@@ -380,6 +380,31 @@ export default function DriverTerminal() {
           setPassengerPos(null);
           setDirections(null);
           if (navigator.vibrate) navigator.vibrate([300, 200, 300]);
+        } else {
+          setActiveRide(prev => {
+             if (!prev) return prev;
+             const isModified = prev.pickupAddress !== data.pickup || prev.dropoffAddress !== data.dropoff || prev.fareEstimate !== data.fareEstimate || JSON.stringify(prev.stops) !== JSON.stringify(data.stops || []);
+             if (isModified) {
+                setTimeout(() => {
+                   toast.info("Ride Updated", { description: "The passenger has updated the journey details." });
+                   if (directionsTimeoutRef.current) clearTimeout(directionsTimeoutRef.current);
+                   directionsTimeoutRef.current = setTimeout(fetchDirections, 1000);
+                }, 500);
+             }
+             return {
+                ...prev,
+                pickupAddress: data.pickup,
+                dropoffAddress: data.dropoff,
+                pickupLat: data.pickupLat,
+                pickupLng: data.pickupLng,
+                dropoffLat: data.dropoffLat,
+                dropoffLng: data.dropoffLng,
+                stops: data.stops || [],
+                fareEstimate: data.fareEstimate || prev.fareEstimate,
+                distanceMiles: data.distanceMiles || prev.distanceMiles,
+                durationMinutes: data.durationMinutes || prev.durationMinutes
+             };
+          });
         }
         
         if (data.status === "completed" && rideState === "completed" && paymentUrl) {

@@ -4,7 +4,7 @@ import {
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, Heart,
-  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete
+  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete, Dumbbell
 } from "lucide-react";
 import RideChat from "../driver/RideChat";
 import { cn } from "@/src/lib/utils";
@@ -351,6 +351,8 @@ export default function PassengerBooking() {
   const [driversAvailableSoonCount, setDriversAvailableSoonCount] = useState<number>(0);
   const [nearbyDriversLocations, setNearbyDriversLocations] = useState<{lat: number, lng: number, id: string}[]>([]);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
+  const [showRideInfo, setShowRideInfo] = useState(false);
+  const [rideInfoTimerTick, setRideInfoTimerTick] = useState(0);
   const [assignedDriverInfo, setAssignedDriverInfo] = useState<any>(null);
   const lastSoundStatusRef = useRef<string | null>(null);
   const currentRideStatusRef = useRef<string | null>(null);
@@ -677,6 +679,10 @@ export default function PassengerBooking() {
   }, []);
 
   const [favoriteAddresses, setFavoriteAddresses] = useState<any[]>([]);
+  const [savingFavorite, setSavingFavorite] = useState<{address: string} | null>(null);
+  const [favoriteNameInput, setFavoriteNameInput] = useState("");
+  const [showFavoriteSuccess, setShowFavoriteSuccess] = useState<{name: string} | null>(null);
+
   useEffect(() => {
     if (profile?.favoriteAddresses) setFavoriteAddresses(profile.favoriteAddresses);
   }, [profile]);
@@ -699,6 +705,39 @@ export default function PassengerBooking() {
       }
     } catch (err) {
       toast.error("Failed to update favorites");
+    }
+  };
+
+  const isFavorite = useCallback((addr: string) => {
+    return favoriteAddresses.some(f => f.address === addr);
+  }, [favoriteAddresses]);
+
+  const handleStarClick = useCallback((addr: string) => {
+    if (!addr) return;
+    if (isFavorite(addr)) {
+      toggleFavorite(addr, "");
+    } else {
+      setFavoriteNameInput("");
+      setSavingFavorite({ address: addr });
+    }
+  }, [isFavorite, toggleFavorite]);
+
+  const handleSaveFavorite = async () => {
+    if (!user || !savingFavorite || !favoriteNameInput.trim()) return;
+    try {
+      const newFav = { id: Math.random().toString(36).substr(2, 9), name: favoriteNameInput.trim(), address: savingFavorite.address };
+      await updateDoc(doc(db, "users", user.uid), {
+        favoriteAddresses: arrayUnion(newFav)
+      });
+      const nameSaved = favoriteNameInput.trim();
+      setSavingFavorite(null);
+      setFavoriteNameInput("");
+      setShowFavoriteSuccess({ name: nameSaved });
+      setTimeout(() => {
+         setShowFavoriteSuccess(null);
+      }, 3000);
+    } catch (err) {
+      toast.error("Failed to save favorite");
     }
   };
 
@@ -1643,7 +1682,7 @@ export default function PassengerBooking() {
              if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]); // Distinct arrival vibration pattern
              lastSoundStatusRef.current = 'arrived';
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount } : null);
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
           toast.success("Your driver has arrived!", { duration: 8000, position: "top-center" });
         }
@@ -1652,13 +1691,16 @@ export default function PassengerBooking() {
              playSound('notification');
              lastSoundStatusRef.current = 'in_progress';
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis(), tipAmount: data.tipAmount } : null);
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis(), tipAmount: data.tipAmount, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
           setStep("confirmed");
           
           // Let's remove the automatic tip modal per user instructions.
           if (!hasTriggeredTipModalRef.current) {
             hasTriggeredTipModalRef.current = true;
           }
+        }
+        if (data.status === 'awaiting_payment') {
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "awaiting_payment", paymentUrl: data.paymentUrl, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
         }
         if (data.status === 'completed') { 
           setCompletedRideData({ ...data, id: currentRideId });
@@ -1916,6 +1958,16 @@ export default function PassengerBooking() {
       setLiveEtaSeconds(null);
     }
   }, [assignedDriverInfo?.status, dropoffCoords, pickupCoords, isLoaded]);
+
+  useEffect(() => {
+    let timer: any;
+    if (showRideInfo) {
+      timer = setTimeout(() => {
+        setShowRideInfo(false);
+      }, 10000);
+    }
+    return () => clearTimeout(timer);
+  }, [showRideInfo, rideInfoTimerTick]);
 
   // Handle Google Maps load errors (e.g. ApiProjectMapError)
   if (loadError || (!isLoaded && !(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY)) {
@@ -2422,9 +2474,9 @@ export default function PassengerBooking() {
                                 setShowWorkBlank(false);
                              }
                           }} 
-                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showFavorites ? "bg-rose-100 border-rose-300 text-rose-800" : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300")}
+                          className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showFavorites ? "bg-amber-100 border-amber-300 text-amber-800" : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300")}
                         >
-                          <Heart className="w-3 h-3 text-rose-500" /> Favorite
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" /> Favorite
                         </button>
                       </div>
 
@@ -2484,16 +2536,16 @@ export default function PassengerBooking() {
                                       selectSuggestion({ label: fav.address, lat: fav.lat, lon: fav.lng, placeId: fav.placeId });
                                       setShowFavorites(false);
                                     }}
-                                    className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:border-rose-300 transition-colors flex items-center gap-3"
+                                    className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:border-amber-300 transition-colors flex items-center gap-3"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-rose-50 flex flex-shrink-0 items-center justify-center">
-                                      <Heart className="w-4 h-4 text-rose-500" />
+                                    <div className="w-8 h-8 rounded-full bg-amber-50 flex flex-shrink-0 items-center justify-center">
+                                      <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                                     </div>
                                     <div className="flex-1 min-w-0 pr-4">
                                       <div className="flex items-center justify-between mb-0.5">
-                                        <span className="font-bold text-xs text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md inline-block uppercase tracking-wider">{fav.name}</span>
+                                        <span className="font-bold text-xs text-black uppercase tracking-wider">{fav.name}</span>
                                       </div>
-                                      <span className="font-bold text-sm text-slate-800 truncate block">{fav.address}</span>
+                                      <span className="font-bold text-sm text-black truncate block">{fav.address}</span>
                                     </div>
                                   </button>
                                 ))
@@ -2582,7 +2634,10 @@ export default function PassengerBooking() {
                 <>
                   <div className="flex flex-col bg-white rounded-[16px] border border-black mb-2 shrink-0 shadow-sm">
                     <div className="flex flex-1 items-center gap-3 p-3 overflow-hidden">
-                      <button onClick={() => setDetailsView("address")} className="p-2 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors shrink-0 aspect-square flex items-center justify-center h-10 w-10 shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
+                      <button onClick={() => setDetailsView("address")} className="p-1 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors shrink-0 aspect-square flex flex-col items-center justify-center h-10 w-10 shadow-sm">
+                        <ChevronLeft className="w-4 h-4 mb-0.5" />
+                        <span className="text-[9px] font-black text-black leading-none tracking-tight">Edit</span>
+                      </button>
                       <div className="flex flex-col flex-1 overflow-hidden relative pl-2 space-y-1.5">
                         <div className="absolute left-3 top-2.5 bottom-2.5 w-0.5 border-l-[1.5px] border-dotted border-slate-300" />
                         <div className="flex items-center gap-3 relative z-10">
@@ -2764,7 +2819,7 @@ export default function PassengerBooking() {
                            <button 
                              onClick={handleConfirmBooking} 
                              disabled={!pickup || !dropoff} 
-                             className="w-full py-3.5 bg-[#0F172A] text-white rounded-[12px] font-bold text-[16px] hover:bg-black active:scale-95 disabled:opacity-50 transition-all focus:outline-none"
+                             className="w-full py-3 bg-[#0F172A] text-white rounded-[12px] font-bold text-[15px] hover:bg-black active:scale-95 disabled:opacity-50 transition-all focus:outline-none"
                            >
                              {assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status) ? "Confirm Update" : `Confirm ${CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}`}
                            </button>
@@ -2774,7 +2829,7 @@ export default function PassengerBooking() {
                   </AnimatePresence>
                   </>
                   )}
-                  <div className="shrink-0 h-[calc(4.5rem+env(safe-area-inset-bottom))] w-full" />
+                  <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full" />
                 </div>
               </motion.div>
             )}
@@ -2884,7 +2939,12 @@ export default function PassengerBooking() {
                   </motion.div>
                 )}
                 <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 border-t border-slate-200/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
-                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4"/>
+                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-3"/>
+                <div className="flex justify-center mb-4">
+                   <button onClick={() => setShowRideInfo(true)} className="bg-blue-600 rounded-xl px-4 py-1 flex items-center justify-center font-bold text-[13px] text-white tracking-wider border border-blue-500 shadow-sm shadow-blue-500/20 active:scale-95 transition-transform uppercase">
+                      Ride Info
+                   </button>
+                </div>
                 <AnimatePresence>
                    {assignedDriverInfo?.stackedDriverDelay && assignedDriverInfo.status === "accepted" && (
                        <motion.div
@@ -3483,8 +3543,170 @@ export default function PassengerBooking() {
         </AnimatePresence>
 
         <AnimatePresence>
+          {showRideInfo && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[600] pointer-events-auto bg-black/20" onPointerDown={() => setShowRideInfo(false)}>
+              <motion.div 
+                 onPointerDown={(e) => { e.stopPropagation(); setRideInfoTimerTick(t => t + 1); }}
+                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} 
+                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                 drag="y"
+                 dragConstraints={{ top: 0, bottom: 0 }}
+                 onDragEnd={(e, info) => {
+                   if (info.offset.y > 50) setShowRideInfo(false);
+                 }}
+                 className="absolute inset-x-0 bottom-0 max-h-[85vh] bg-[#f4f7fa] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.25)] flex flex-col pointer-events-auto overflow-hidden"
+              >
+                  {/* Handle */}
+                  <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 shrink-0"/>
+                  
+                  {/* Header */}
+                  <div className="p-4 pt-3 flex items-center justify-center border-b border-slate-200 shrink-0 bg-white relative shadow-sm z-10">
+                     <h3 className="font-black text-[20px] text-[#0a1930]">
+                        Ride Info
+                     </h3>
+                     <button onClick={() => setShowRideInfo(false)} className="absolute right-4 w-8 h-8 rounded-full bg-slate-100/80 flex items-center justify-center text-[#0a1930] active:scale-95 transition-transform hover:bg-slate-200">
+                        <X className="w-4 h-4 cursor-pointer" />
+                     </button>
+                  </div>
+
+                  {/* Body Content */}
+                  <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 no-scrollbar">
+                     <div className="flex flex-col gap-1.5">
+                        <p className="font-extrabold text-[#0a1930] text-[12px] uppercase tracking-wider pl-1">Pickup</p>
+                        <div className="flex gap-3 items-center relative border-[2.5px] border-emerald-500 rounded-[10px] py-2.5 pl-3 pr-2 bg-white shadow-sm">
+                           <div className="w-5 shrink-0 flex justify-center"><MapPin className="w-5 h-5 text-emerald-500 fill-emerald-500/20" /></div>
+                           <div className="flex-1 min-w-0 pr-2">
+                              <p className="text-[#0a1930] font-medium text-[15px] leading-snug truncate">{pickup || "Current address"}</p>
+                           </div>
+                           <button onClick={() => handleStarClick(pickup)} className="p-1.5 active:scale-90 transition-transform shrink-0 cursor-pointer">
+                              <Star className={cn("w-6 h-6", isFavorite(pickup) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
+                           </button>
+                        </div>
+                     </div>
+                     {stops.map((stop, i) => (
+                        <div key={i} className="flex flex-col gap-1.5">
+                           <p className="font-extrabold text-[#0a1930] text-[12px] uppercase tracking-wider pl-1">Stop {i + 1}</p>
+                           <div className="flex gap-3 items-center relative border-[2.5px] border-amber-400 rounded-[10px] py-2.5 pl-3 pr-2 bg-white shadow-sm">
+                              <div className="w-5 shrink-0 flex justify-center"><MapPin className="w-5 h-5 text-amber-500 fill-amber-500/20" /></div>
+                              <div className="flex-1 min-w-0 pr-2">
+                                 <p className="text-[#0a1930] font-medium text-[15px] leading-snug truncate">{stop.address}</p>
+                              </div>
+                              <button onClick={() => handleStarClick(stop.address)} className="p-1.5 active:scale-90 transition-transform shrink-0 cursor-pointer">
+                                 <Star className={cn("w-6 h-6", isFavorite(stop.address) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
+                              </button>
+                           </div>
+                        </div>
+                     ))}
+                     <div className="flex flex-col gap-1.5">
+                        <p className="font-extrabold text-[#0a1930] text-[12px] uppercase tracking-wider pl-1">Dropoff</p>
+                        <div className="flex gap-3 items-center relative border-[2.5px] border-rose-600 rounded-[10px] py-2.5 pl-3 pr-2 bg-white shadow-sm">
+                           <div className="w-5 shrink-0 flex justify-center"><MapPin className="w-5 h-5 text-rose-600 fill-rose-600" /></div>
+                           <div className="flex-1 min-w-0 pr-2">
+                              <p className="text-[#0a1930] font-medium text-[15px] leading-snug truncate">{dropoff || "Destination address"}</p>
+                           </div>
+                           <button onClick={() => handleStarClick(dropoff)} className="p-1.5 active:scale-90 transition-transform shrink-0 cursor-pointer">
+                              <Star className={cn("w-6 h-6", isFavorite(dropoff) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
+                           </button>
+                        </div>
+                     </div>
+                     
+                     <div className="rounded-[16px] p-5 flex flex-col bg-white shadow-sm border border-slate-100">
+                        <p className="font-extrabold text-[#0a1930] text-[11px] uppercase tracking-wider border-b border-slate-100 pb-3 mb-3">Fare Breakdown</p>
+                        <div className="flex justify-between items-center text-[15px] mb-2">
+                           <span className="text-[#0a1930]">Base Estimate</span>
+                           <span className="text-[#0a1930]">£{(fareEstimate || 0).toFixed(2)}</span>
+                        </div>
+                        {isPriority && (
+                          <div className="flex justify-between items-center text-[15px] mb-2">
+                             <span className="text-[#0a1930] flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500"/> Priority Search</span>
+                             <span className="text-[#0a1930]">£1.50</span>
+                          </div>
+                        )}
+                        {isPetFriendly && (
+                          <div className="flex justify-between items-center text-[15px] mb-2">
+                             <span className="text-[#0a1930] flex items-center gap-1.5"><Dog className="w-3.5 h-3.5 text-orange-500"/> Pet Friendly</span>
+                             <span className="text-[#0a1930]">£2.00</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+                           <span className="font-extrabold text-[#0a1930] text-[18px]">Total Estimate</span>
+                           <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{((assignedDriverInfo?.fareEstimate || fareEstimate || 0)).toFixed(2)}</span>
+                        </div>
+                     </div>
+
+                     {comments && (
+                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                            <p className="font-black text-amber-900 text-[11px] uppercase tracking-wider mb-1 flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5"/> Note for driver</p>
+                            <p className="font-medium text-amber-800 text-[13px] italic">{comments}</p>
+                         </div>
+                     )}
+                     <div className="h-4 w-full shrink-0" />
+                  </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {savingFavorite && (
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/40 pointer-events-auto">
+                 <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-white rounded-[24px] p-6 w-full max-w-[340px] shadow-2xl flex flex-col pointer-events-auto">
+                     <h3 className="text-xl font-black text-[#0a1930] text-center mb-6 tracking-tight">Save to Favorites</h3>
+                     <input 
+                        value={favoriteNameInput}
+                        onChange={(e) => setFavoriteNameInput(e.target.value)}
+                        placeholder="e.g. Home, Work, Sarah's House"
+                        className="w-full border border-slate-300 rounded-[12px] px-4 py-3.5 text-[15px] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 mb-5 font-medium placeholder:text-slate-400"
+                     />
+                     <div className="flex flex-wrap gap-2 mb-8 justify-center">
+                        {["Home", "Work", "Gym", "Other"].map(tag => (
+                            <button key={tag} onClick={() => setFavoriteNameInput(tag)} className={cn("px-4 py-2 rounded-full text-[14px] font-bold border transition-colors flex items-center gap-1.5", favoriteNameInput === tag ? "bg-blue-100 border-blue-200 text-blue-800" : "bg-blue-50 border-blue-100 text-[#0a1930] hover:bg-blue-100")}>
+                                {tag === "Home" && <Home className="w-4 h-4" />}
+                                {tag === "Work" && <Briefcase className="w-4 h-4" />}
+                                {tag === "Gym" && <Dumbbell className="w-4 h-4" />}
+                                {tag === "Other" && <Star className="w-4 h-4" />}
+                                {tag}
+                            </button>
+                        ))}
+                     </div>
+                     <div className="flex gap-3 mt-auto">
+                        <button onClick={() => setSavingFavorite(null)} className="flex-1 py-3.5 bg-white border border-[#0a1930] rounded-[12px] font-bold text-[#0a1930] text-[15px] active:scale-95 transition-transform">Cancel</button>
+                        <button disabled={!favoriteNameInput.trim()} onClick={handleSaveFavorite} className="flex-1 py-3.5 bg-[#0a1930] border border-[#0a1930] rounded-[12px] font-bold text-white text-[15px] disabled:opacity-50 active:scale-95 transition-transform">Save Favorite</button>
+                     </div>
+                 </motion.div>
+             </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showFavoriteSuccess && (
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/40 pointer-events-auto">
+                 <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-gradient-to-b from-[#f0f7ff] to-white rounded-[32px] p-8 w-full max-w-[340px] shadow-2xl flex flex-col items-center text-center relative overflow-hidden pointer-events-auto">
+                     <div className="relative mb-6 mt-4 w-32 h-32 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-yellow-400/20 blur-2xl rounded-full" />
+                        <Star className="w-24 h-24 text-yellow-400 fill-yellow-400 relative z-10" />
+                        <div className="absolute -top-2 -left-2 w-2 h-2 bg-blue-400 rounded-full" />
+                        <div className="absolute top-2.5 right-1 w-3 h-3 bg-green-400 rounded-full" />
+                        <div className="absolute bottom-4 -right-2 w-2.5 h-2.5 bg-rose-400 rounded-full" />
+                        <div className="absolute -bottom-2 left-4 w-2 h-2 bg-yellow-400 rounded-full" />
+                     </div>
+                     
+                     <h3 className="text-[26px] font-black text-[#0a1930] mb-3 tracking-tight">Location Saved!</h3>
+                     <p className="text-[16px] text-slate-600 font-medium mb-10 leading-snug px-2">
+                         Your favorite "{showFavoriteSuccess.name}" is now available on your home screen.
+                     </p>
+                     
+                     <button onClick={() => setShowFavoriteSuccess(null)} className="w-full py-4 bg-[#0a1930] rounded-[16px] font-bold text-white text-[16px] active:scale-95 transition-transform shadow-[0_4px_14px_rgba(10,25,48,0.3)]">
+                        Done
+                     </button>
+                 </motion.div>
+             </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
           {isEditingJourney && (
-            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] pb-[env(safe-area-inset-bottom)] flex flex-col h-[90vh]">
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col max-h-[85vh]">
                 <div className="p-4 border-b border-slate-200 flex items-center justify-between shrink-0">
                     <h2 className="text-2xl font-black text-[#0a1930] tracking-tight">Edit Journey</h2>
                     <button onClick={() => setIsEditingJourney(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
@@ -3517,12 +3739,12 @@ export default function PassengerBooking() {
                              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
                                <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
-                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                                 <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                                </div>
                                <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                  {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                  {[...suggestions].map((s, idx) => (
-                                   <button key={idx} onPointerDown={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                       {s.isHistory ? 
                                        <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                        <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
@@ -3560,12 +3782,12 @@ export default function PassengerBooking() {
                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
                                  <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
-                                   <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                                   <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                                  </div>
                                  <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                    {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                    {[...suggestions].map((s, idx) => (
-                                     <button key={idx} onPointerDown={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                     <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                         {s.isHistory ? 
                                          <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                          <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
@@ -3598,12 +3820,12 @@ export default function PassengerBooking() {
                              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
                                <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
-                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
+                                 <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                                </div>
                                <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                  {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                  {[...suggestions].map((s, idx) => (
-                                   <button key={idx} onPointerDown={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                       {s.isHistory ? 
                                        <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                        <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
@@ -3657,14 +3879,14 @@ export default function PassengerBooking() {
                    </div>
                 </div>
                 
-                <div className="p-4 border-t border-slate-200 shrink-0 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                <div className="p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] border-t border-slate-200 shrink-0 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
                     <button 
                        onClick={async () => {
                            await handleConfirmBooking();
                            setIsEditingJourney(false);
                        }}
                        disabled={!dropoff}
-                       className="w-full py-4 rounded-xl bg-[#0a1930] text-white font-bold text-[16px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                       className="w-full py-3.5 rounded-[14px] bg-[#0a1930] text-white font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                        Confirm Update <ArrowRight className="w-5 h-5 opacity-70" />
                     </button>
