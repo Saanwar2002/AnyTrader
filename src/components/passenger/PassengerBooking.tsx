@@ -1994,8 +1994,8 @@ export default function PassengerBooking() {
 
           <GoogleMap
             mapContainerStyle={containerStyle}
-            center={isMapFullScreen ? (driverPos || mapCenter) : mapCenter}
-            zoom={isMapFullScreen ? 13 : 15}
+            center={mapCenter}
+            zoom={15}
             onLoad={setMap}
             options={theme === "dark" ? darkMapOptions : premiumMapOptions}
             onClick={(e) => {
@@ -3074,10 +3074,16 @@ export default function PassengerBooking() {
                 
                 {assignedDriverInfo?.status !== "in_progress" && assignedDriverInfo?.status !== "awaiting_payment" && (
                   <div className="flex gap-3 mt-4">
-                    <button onClick={() => setStep("details")} className="flex-[1.1] py-[18px] border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
+                    <button onClick={() => { setStep("details"); setDetailsView("address"); }} className="flex-[1.1] py-[18px] border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
                     <div className="flex-1">
                       <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
                     </div>
+                  </div>
+                )}
+                
+                {assignedDriverInfo?.status === "in_progress" && (
+                  <div className="mt-3">
+                    <button onClick={() => { setStep("details"); setDetailsView("address"); }} className="w-full py-2.5 border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[14px] shadow-sm active:scale-[0.98] transition-transform">Edit Journey Options</button>
                   </div>
                 )}
                 
