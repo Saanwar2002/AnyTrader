@@ -465,16 +465,16 @@ export default function PassengerRideHistory() {
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }} 
             onClick={() => setSelectedRideDetails(null)}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 sm:p-0"
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 pb-[100px] pt-4 sm:p-0"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+              className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] sm:max-h-[85vh]"
             >
-             <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+             <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50 shrink-0">
                 <div>
                    <h2 className="text-xl font-black text-slate-900">Job Details</h2>
                    <p className="text-xs font-bold text-slate-500 mt-1">{selectedRideDetails.createdAt?.toDate ? new Date(selectedRideDetails.createdAt.toDate()).toLocaleString() : 'N/A'}</p>
@@ -608,7 +608,8 @@ export default function PassengerRideHistory() {
                   </button>
                 </div>
              </div>
-             <div className="p-4 border-t border-slate-100 bg-white">
+             
+             <div className="p-4 border-t border-slate-100 bg-white shrink-0">
                 <button onClick={() => setSelectedRideDetails(null)} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-transform">Close</button>
              </div>
           </motion.div>

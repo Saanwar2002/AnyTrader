@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   MapPin, Navigation, Car, Clock, X, Check, Target, 
-  MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, Zap, History, Loader2, 
+  MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, Repeat, Shield, Plus, Heart,
   Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete
 } from "lucide-react";
@@ -283,7 +283,15 @@ export default function PassengerBooking() {
           if (data.stops) setStops(data.stops);
           setSelectedCategory(data.carCategory || "standard");
           setComments(data.comments || "");
-          if (data.fareEstimate) setFareEstimate(data.fareEstimate);
+          if (data.isPriority) setIsPriority(data.isPriority);
+          if (data.isPetFriendly) setIsPetFriendly(data.isPetFriendly);
+          if (data.baseCalc) {
+            setFareEstimate(data.baseCalc);
+          } else if (data.fareEstimate) {
+            // Backwards compat if baseCalc isn't populated
+            const extras = (data.isPriority ? 3 : 0) + (data.isPetFriendly ? 3 : 0);
+            setFareEstimate(Math.max(data.fareEstimate - extras, 5.0));
+          }
 
           if (data.status === "pending" || data.status === "offered") {
             setStep("searching");
@@ -383,10 +391,12 @@ export default function PassengerBooking() {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const lastSeenChatCountRef = useRef(0);
 
+  const [hasModifiedRouteByUser, setHasModifiedRouteByUser] = useState(false);
   const [showRegularJourneys, setShowRegularJourneys] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [showHomeBlank, setShowHomeBlank] = useState(false);
   const [showWorkBlank, setShowWorkBlank] = useState(false);
+  const [isEditingJourney, setIsEditingJourney] = useState(false);
   
   useEffect(() => {
     let timeout: NodeJS.Timeout;
@@ -488,41 +498,37 @@ export default function PassengerBooking() {
 
   // Routing and Distance Calculation (consolidated)
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
     if (pickupCoords && dropoffCoords && isLoaded) {
       const getRoute = () => {
         try {
-          const directionsService = new google.maps.DirectionsService();
+          const directionsService = new window.google.maps.DirectionsService();
           const validStops = stops.filter(s => s.coords !== null).map(s => ({
-            location: new google.maps.LatLng(s.coords!.lat, s.coords!.lng),
+            location: new window.google.maps.LatLng(s.coords!.lat, s.coords!.lng),
             stopover: true
           }));
 
           const routeReq: google.maps.DirectionsRequest = {
-            origin: new google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
-            destination: new google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
-            travelMode: google.maps.TravelMode.DRIVING,
+            origin: new window.google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
+            destination: new window.google.maps.LatLng(dropoffCoords.lat, dropoffCoords.lng),
+            travelMode: window.google.maps.TravelMode.DRIVING,
           };
           if (validStops.length > 0) {
             routeReq.waypoints = validStops;
           }
 
           const routeResult: any = directionsService.route(routeReq, (result, status) => {
-            if (status === google.maps.DirectionsStatus.OK && result) {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
               // Draw the line
               const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
               setRouteLine(path);
 
               // Fit bounds
               if (map) {
-                const bounds = new google.maps.LatLngBounds();
+                const bounds = new window.google.maps.LatLngBounds();
                 path.forEach((p: any) => bounds.extend(p));
                 map.fitBounds(bounds, { 
-                  padding: { 
-                    top: 60, 
-                    right: 50, 
-                    bottom: 60, 
-                    left: 50 
-                  } 
+                  padding: { top: 60, right: 50, bottom: 60, left: 50 } 
                 });
                 
                 // Zoom out 1-2 ticks after bounds are set to give more breathing room
@@ -537,7 +543,7 @@ export default function PassengerBooking() {
               // Calculate distance/fare
               let totalDistanceMeters = 0;
               let totalDurationSeconds = 0;
-              result.routes[0].legs.forEach(leg => {
+              result.routes[0].legs.forEach((leg: any) => {
                 if (leg.distance) totalDistanceMeters += leg.distance.value;
                 if (leg.duration) totalDurationSeconds += leg.duration.value;
               });
@@ -547,9 +553,11 @@ export default function PassengerBooking() {
               setDistanceMiles(dMiles);
               setDurationMinutes(dMins);
 
-              // Base Fare + Distance + Time
-              const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
-              setFareEstimate(Math.max(calcFare, fareConfig.minFare));
+              if (!currentRideId && !editId || hasModifiedRouteByUser) {
+                // Base Fare + Distance + Time
+                const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
+                setFareEstimate(Math.max(calcFare, fareConfig.minFare));
+              }
             } else {
               console.warn("Directions failed:", status);
             }
@@ -561,11 +569,13 @@ export default function PassengerBooking() {
           console.error("DIRECTIONS_ROUTE error:", e);
         }
       };
-      getRoute();
+      timeoutId = setTimeout(getRoute, 800);
+      return () => clearTimeout(timeoutId);
     } else {
       setRouteLine([]);
     }
-  }, [pickupCoords, dropoffCoords, stops, map, fareConfig, isLoaded]);
+  }, [pickupCoords, dropoffCoords, stops, map, fareConfig, isLoaded, currentRideId, editId, hasModifiedRouteByUser]);
+
 
   useEffect(() => {
     if (navigator.geolocation && !pickupCoords && !searchParams.get("pickup")) {
@@ -1302,6 +1312,15 @@ export default function PassengerBooking() {
          setAssignedDriverInfo(null); 
          hasTriggeredTipModalRef.current = false;
          setShowTipModal(false);
+
+         // Also clear passenger fees on simulation to mimic driver side clearing
+         if (profile?.uid) {
+           await updateDoc(doc(db, "users", profile.uid), {
+             pendingCharges: 0,
+             cancellationCount: 0,
+             abandonmentStrikes: 0
+           });
+         }
       }
       
       await updateDoc(doc(db, "ride_requests", currentRideId), updateData);
@@ -1709,6 +1728,7 @@ export default function PassengerBooking() {
 
   const selectSuggestion = async (s: {label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any}) => {
     triggerHaptic(ImpactStyle.Light);
+    setHasModifiedRouteByUser(true);
     
     const finalizeSelection = (coords: {lat: number, lng: number} | null, finalAddr: string) => {
       let currentPickup = pickup;
@@ -1834,16 +1854,25 @@ export default function PassengerBooking() {
     }
   }, [isMapFullScreen]);
 
+  const driverPosRef = useRef(driverPos);
+  
+  useEffect(() => {
+    driverPosRef.current = driverPos;
+  }, [driverPos]);
+
   useEffect(() => {
     const destinationCoords = assignedDriverInfo?.status === "accepted" ? pickupCoords :
                               assignedDriverInfo?.status === "in_progress" ? dropoffCoords : null;
 
-    if ((assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "in_progress") && driverPos && destinationCoords && isLoaded) {
+    if ((assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "in_progress") && destinationCoords && isLoaded) {
       const getLiveRoute = () => {
+        const currentDriverPos = driverPosRef.current;
+        if (!currentDriverPos) return;
+
         try {
           const directionsService = new window.google.maps.DirectionsService();
           const routeResult: any = directionsService.route({
-            origin: new window.google.maps.LatLng(driverPos.lat, driverPos.lng),
+            origin: new window.google.maps.LatLng(currentDriverPos.lat, currentDriverPos.lng),
             destination: new window.google.maps.LatLng(destinationCoords.lat, destinationCoords.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
           }, (result, status) => {
@@ -1874,15 +1903,19 @@ export default function PassengerBooking() {
         }
       };
       
-      getLiveRoute();
+      // Delay initial live route fetch slightly to avoid racing with initial load
+      const timeoutId = setTimeout(getLiveRoute, 1000);
       const interval = setInterval(getLiveRoute, 15000); // refresh every 15s
-      return () => clearInterval(interval);
+      return () => {
+         clearTimeout(timeoutId);
+         clearInterval(interval);
+      }
     } else {
       setLiveRouteLine([]);
       setLiveEtaMins(null);
       setLiveEtaSeconds(null);
     }
-  }, [assignedDriverInfo?.status, driverPos?.lat, driverPos?.lng, dropoffCoords, pickupCoords, isLoaded]);
+  }, [assignedDriverInfo?.status, dropoffCoords, pickupCoords, isLoaded]);
 
   // Handle Google Maps load errors (e.g. ApiProjectMapError)
   if (loadError || (!isLoaded && !(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY)) {
@@ -2238,9 +2271,10 @@ export default function PassengerBooking() {
                               onChange={(e) => {
                                 const ns = [...stops]; ns[i].address = e.target.value; setStops(ns);
                                 setActiveField(`stop-${i}`);
+                                setHasModifiedRouteByUser(true);
                               }} 
                             />
-                            <button onClick={() => setStops(stops.filter((_, idx) => idx !== i))} className="p-2 text-text-muted hover:text-danger rounded-full shrink-0"><X className="w-4 h-4" /></button>
+                            <button onClick={() => { setStops(stops.filter((_, idx) => idx !== i)); setHasModifiedRouteByUser(true); }} className="p-2 text-text-muted hover:text-danger rounded-full shrink-0"><X className="w-4 h-4" /></button>
                           </div>
                         </div>
                         </div>
@@ -2292,7 +2326,7 @@ export default function PassengerBooking() {
                           />
                           {stops.length < 3 && (
                             <div className="pl-2 pr-1 py-1 border-l border-red-200/60 flex items-center justify-center shrink-0 h-full">
-                              <button onClick={() => setStops([...stops, { address: "", coords: null }])} className="w-[30px] h-[34px] bg-[#FFB800] text-black hover:bg-[#E6A600] rounded-[10px] border-[1.5px] border-black flex flex-col items-center justify-center shrink-0 transition-colors shadow-sm" title="Add a stop">
+                              <button onClick={() => { setStops([...stops, { address: "", coords: null }]); setHasModifiedRouteByUser(true); }} className="w-[30px] h-[34px] bg-[#FFB800] text-black hover:bg-[#E6A600] rounded-[10px] border-[1.5px] border-black flex flex-col items-center justify-center shrink-0 transition-colors shadow-sm" title="Add a stop">
                                 <Plus className="w-3.5 h-3.5 -mb-[1px]" strokeWidth={4} />
                                 <span className="text-[9px] font-black tracking-tighter leading-none mb-0.5 ml-0.5">STP</span>
                               </button>
@@ -2686,12 +2720,13 @@ export default function PassengerBooking() {
                             <div className="flex justify-between"><span>Vehicle ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}):</span><span>£{getComputedFare(selectedCategory).toFixed(2)}</span></div>
                             {isPriority && <div className="flex justify-between text-[#2563EB] font-bold"><span>Priority:</span><span>+£3.00</span></div>}
                             {isPetFriendly && <div className="flex justify-between text-[#2563EB] font-bold"><span>Pet:</span><span>+£3.00</span></div>}
+                            {((assignedDriverInfo?.tipAmount || 0) > 0) && <div className="flex justify-between text-emerald-600 font-bold"><span>Driver Tip:</span><span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span></div>}
                             {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600 font-bold"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
                           </div>
                           <div className="border-t border-slate-300 pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
                             <div className="flex items-center justify-between">
                               <span>Total estimate:</span>
-                              <span className="text-[20px]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</span>
+                              <span className="text-[20px]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                             </div>
                             <div className="flex items-center justify-between mt-2">
                               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Payment Method</span>
@@ -2755,7 +2790,7 @@ export default function PassengerBooking() {
 
                 <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[16px] py-1.5 px-4 border border-black flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-2 mt-1">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0">Total Fare Estimate</p>
-                  <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0)).toFixed(2)}</p>
+                  <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
                   
                   {!!profile?.stripeCustomerId ? (
                     <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm mb-1.5">
@@ -3074,7 +3109,7 @@ export default function PassengerBooking() {
                 
                 {assignedDriverInfo?.status !== "in_progress" && assignedDriverInfo?.status !== "awaiting_payment" && (
                   <div className="flex gap-3 mt-4">
-                    <button onClick={() => { setStep("details"); setDetailsView("address"); }} className="flex-[1.1] py-[18px] border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
+                    <button onClick={() => { setIsEditingJourney(true); }} className="flex-[1.1] py-[18px] border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
                     <div className="flex-1">
                       <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
                     </div>
@@ -3083,7 +3118,7 @@ export default function PassengerBooking() {
                 
                 {assignedDriverInfo?.status === "in_progress" && (
                   <div className="mt-3">
-                    <button onClick={() => { setStep("details"); setDetailsView("address"); }} className="w-full py-2.5 border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[14px] shadow-sm active:scale-[0.98] transition-transform">Edit Journey Options</button>
+                    <button onClick={() => { setIsEditingJourney(true); }} className="w-full py-2.5 border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[14px] shadow-sm active:scale-[0.98] transition-transform">Edit Journey Options</button>
                   </div>
                 )}
                 
@@ -3177,8 +3212,9 @@ export default function PassengerBooking() {
             )}
 
             {step === "receipt" && completedRideData && (
-              <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] p-6 border border-border-main pointer-events-auto h-full w-full overflow-y-auto no-scrollbar relative z-[200] flex flex-col shadow-2xl">
-                <div className="flex justify-between items-center mb-6">
+              <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] border border-border-main pointer-events-auto h-full w-full overflow-hidden relative z-[200] flex flex-col shadow-2xl">
+                <div className="flex-1 overflow-y-auto w-full p-6 no-scrollbar pb-[200px]">
+                  <div className="flex justify-between items-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
                     <Check className="w-6 h-6 text-emerald-600" />
                   </div>
@@ -3190,7 +3226,7 @@ export default function PassengerBooking() {
 
                 <div className="bg-surface rounded-3xl p-5 mb-6 border border-black shadow-sm flex flex-col items-center text-center">
                   <p className="text-[10px] font-black tracking-widest uppercase text-text-muted mb-2">Total Paid</p>
-                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
+                  <h2 className="text-5xl font-black text-text-main tracking-tighter">£{completedRideData.finalFare?.toFixed(2) || ((completedRideData.fareEstimate || fareConfig.baseFare) + (completedRideData.tipAmount || 0) + (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0)).toFixed(2)}</h2>
                   <div className="flex gap-2 mt-3 items-center">
                     <p className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-md leading-none flex items-center">
                        <Check className="w-3.5 h-3.5 mr-1" />
@@ -3225,7 +3261,7 @@ export default function PassengerBooking() {
                 <div className="space-y-3 flex-1 mb-4">
                   <div className="flex justify-between text-sm font-bold text-text-muted">
                     <span>Base Fare & Distance</span>
-                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) : ((completedRideData.fareEstimate || fareConfig.baseFare) - (completedRideData.isPriority ? 3 : 0))).toFixed(2)}</span>
+                    <span className="text-text-main">£{(completedRideData.finalFare ? completedRideData.finalFare - (completedRideData.tipAmount || 0) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0) : ((completedRideData.fareEstimate || fareConfig.baseFare) - (completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) - (completedRideData.isPriority ? 3 : 0))).toFixed(2)}</span>
                   </div>
                   {completedRideData.isPriority && (
                     <div className="flex justify-between text-sm font-bold text-blue-600">
@@ -3233,10 +3269,10 @@ export default function PassengerBooking() {
                       <span>+£3.00</span>
                     </div>
                   )}
-                  {(completedRideData.cancellationFee || 0) > 0 && (
+                  {((completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee || 0) > 0) && (
                     <div className="flex justify-between text-sm font-bold text-danger">
                       <span>Unpaid Cancellation Fee</span>
-                      <span>+£{completedRideData.cancellationFee.toFixed(2)}</span>
+                      <span>+£{(completedRideData.unpaidCancellationFeesOwed || completedRideData.cancellationFee).toFixed(2)}</span>
                     </div>
                   )}
                   {(completedRideData.tipAmount || 0) > 0 && (
@@ -3259,27 +3295,27 @@ export default function PassengerBooking() {
                 </div>
                 
                 {!hasSubmittedReview ? (
-                   <div className="mb-6 bg-slate-50 rounded-2xl p-5 border border-black">
-                     <p className="text-center text-sm font-black text-slate-700 mb-3">Rate your driver</p>
-                     <div className="flex justify-center gap-2 mb-4">
+                   <div className="mb-6 bg-slate-50 rounded-xl p-3 border border-slate-200 shadow-sm mx-auto w-full max-w-[280px]">
+                     <p className="text-center text-xs font-bold text-slate-600 mb-2">Rate your driver</p>
+                     <div className="flex justify-center gap-1 mb-2">
                        {[1, 2, 3, 4, 5].map((star) => (
                          <button
                            key={star}
                            onClick={() => setRideRating(star)}
-                           className="p-2 hover:scale-110 active:scale-95 transition-transform"
+                           className="p-1 hover:scale-110 active:scale-95 transition-transform"
                          >
-                           <Star className={cn("w-9 h-9 transition-colors", star <= rideRating ? "text-amber-400 fill-amber-400" : "text-slate-300 hover:text-amber-400 fill-transparent hover:fill-amber-400")} />
+                           <Star className={cn("w-6 h-6 transition-colors", star <= rideRating ? "text-amber-400 fill-amber-400" : "text-slate-300 hover:text-amber-400 fill-transparent hover:fill-amber-400")} />
                          </button>
                        ))}
                      </div>
                      
-                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="flex flex-col gap-4 overflow-hidden">
-                         <div className="flex overflow-x-auto no-scrollbar gap-2 justify-start px-0.5 pb-1">
+                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="flex flex-col gap-3 overflow-hidden mt-2">
+                         <div className="flex overflow-x-auto no-scrollbar gap-1.5 justify-start px-0.5 pb-1">
                            {(rideRating >= 4 ? ["Smooth Navigator", "Clean Car", "Great Conversation", "Expert Route"] : ["Unclean", "Navigation Issues", "Driving Safety", "Rude", "Late"]).map((tag) => (
                               <button 
                                 key={tag} 
                                 onClick={() => setSelectedReviewTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
-                                className={cn("px-3 border-[1.5px] whitespace-nowrap flex-none py-1.5 rounded-full text-[13.5px] font-bold transition-colors shadow-sm", selectedReviewTags.includes(tag) ? (rideRating >= 4 ? "bg-[#f0f9ff] text-[#0369a1] border-[#bae6fd]" : "bg-rose-50 text-rose-700 border-rose-200") : "bg-white text-slate-600 border-slate-200")}
+                                className={cn("px-2.5 border whitespace-nowrap flex-none py-1 rounded-full text-xs font-bold transition-colors shadow-sm", selectedReviewTags.includes(tag) ? (rideRating >= 4 ? "bg-[#f0f9ff] text-[#0369a1] border-[#bae6fd]" : "bg-rose-50 text-rose-700 border-rose-200") : "bg-white text-slate-600 border-slate-200")}
                               >
                                 {tag}
                               </button>
@@ -3340,35 +3376,37 @@ export default function PassengerBooking() {
                       <p className="text-[11px] text-emerald-600 mt-1 text-center">Your anonymous review helps us keep the community safe.</p>
                    </div>
                 )}
+                </div>
 
-                <button 
-                  onClick={async () => {
-                    if (!hasSubmittedReview) {
-                      await handleSubmitReview();
-                    }
-                    setStep("details"); 
-                    setCompletedRideData(null); 
-                    setRideRating(5);
-                    setSelectedReviewTags([]);
-                    setReviewComment("");
-                    setHasSubmittedReview(false);
-                    setIsSubmittingReview(false);
-                    setPickup("");
-                    setDropoff("");
-                    setPickupCoords(null);
-                    setDropoffCoords(null);
-                    setDistanceMiles(0);
-                    setStops([]);
-                    setRouteLine([]);
-                    setLiveRouteLine([]);
-                    navigate("/my-rides", { replace: true, state: { tab: "completed" } });
-                  }}
-                  disabled={isSubmittingReview}
-                  className="w-full py-4 mt-auto rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform disabled:bg-slate-700"
-                >
-                  {isSubmittingReview ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-5 h-5 animate-spin"/> Submitting...</span> : "Done"}
-                </button>
-                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />
+                <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-white via-white to-transparent pt-12 flex pb-[calc(5.5rem+env(safe-area-inset-bottom))] z-10 pointer-events-none">
+                  <button 
+                    onClick={async () => {
+                      if (!hasSubmittedReview) {
+                        await handleSubmitReview();
+                      }
+                      setStep("details"); 
+                      setCompletedRideData(null); 
+                      setRideRating(5);
+                      setSelectedReviewTags([]);
+                      setReviewComment("");
+                      setHasSubmittedReview(false);
+                      setIsSubmittingReview(false);
+                      setPickup("");
+                      setDropoff("");
+                      setPickupCoords(null);
+                      setDropoffCoords(null);
+                      setDistanceMiles(0);
+                      setStops([]);
+                      setRouteLine([]);
+                      setLiveRouteLine([]);
+                      navigate("/my-rides", { replace: true, state: { tab: "completed" } });
+                    }}
+                    disabled={isSubmittingReview}
+                    className="w-full py-4 rounded-2xl bg-text-main text-card font-black active:scale-95 transition-transform disabled:bg-slate-700 shadow-[0_4px_24px_rgba(0,0,0,0.15)] pointer-events-auto"
+                  >
+                    {isSubmittingReview ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-5 h-5 animate-spin"/> Submitting...</span> : "Done"}
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -3436,6 +3474,146 @@ export default function PassengerBooking() {
                   Great!
                 </motion.button>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isEditingJourney && (
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] pb-[env(safe-area-inset-bottom)] flex flex-col h-[90vh]">
+                <div className="p-4 border-b border-slate-200 flex items-center justify-between shrink-0">
+                    <h2 className="text-2xl font-black text-[#0a1930] tracking-tight">Edit Journey</h2>
+                    <button onClick={() => setIsEditingJourney(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                   {/* Addresses */}
+                   <div className="bg-slate-50 rounded-[20px] border border-slate-200 p-2 space-y-2">
+                       {/* Pickup */}
+                       <div className={`flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 mb-1 transition-all ${assignedDriverInfo?.status === 'in_progress' ? 'opacity-70' : 'focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100'}`}>
+                           <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-white" /></div>
+                           {assignedDriverInfo?.status === 'in_progress' ? (
+                               <div className="flex-1 min-w-0 font-bold text-[15px] text-slate-800 py-3 ml-2 truncate">{pickup}</div>
+                           ) : (
+                               <input 
+                                   type="text" 
+                                   value={pickup}
+                                   onChange={(e) => { setPickup(e.target.value); setActiveField("pickup"); }}
+                                   onFocus={() => setActiveField("pickup")}
+                                   className="flex-1 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3 ml-2"
+                                   placeholder="Pickup location"
+                               />
+                           )}
+                       </div>
+
+                       {/* Stops */}
+                       {stops.map((stop, i) => (
+                           <div key={i} className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition-all">
+                               <div className="w-6 shrink-0 flex justify-center"><div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-white" /></div>
+                               <input 
+                                   type="text" 
+                                   value={stop.address}
+                                   onChange={(e) => {
+                                       const ns = [...stops]; ns[i].address = e.target.value; setStops(ns);
+                                       setActiveField(`stop-${i}`);
+                                       setHasModifiedRouteByUser(true);
+                                   }}
+                                   onFocus={() => setActiveField(`stop-${i}`)}
+                                   className="flex-1 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3"
+                                   placeholder={`Stop ${i+1}`}
+                               />
+                               <button onClick={() => { setStops(stops.filter((_, idx) => idx !== i)); setHasModifiedRouteByUser(true); }} className="p-2 text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                           </div>
+                       ))}
+
+                       {/* Dropoff */}
+                       <div className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100 transition-all mt-1">
+                           <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 bg-red-500 rounded-sm" /></div>
+                           <input 
+                               type="text" 
+                               value={dropoff}
+                               onChange={(e) => { setDropoff(e.target.value); setActiveField("dropoff"); }}
+                               onFocus={() => setActiveField("dropoff")}
+                               className="flex-1 ml-2 min-w-0 font-bold bg-transparent border-none focus:outline-none text-[15px] text-slate-800 py-3"
+                               placeholder="Destination"
+                           />
+                       </div>
+                       
+                       {stops.length < 3 && (
+                           <div className="px-1 pt-1">
+                               <button onClick={() => { setStops([...stops, {address: "", coords: null}]); setHasModifiedRouteByUser(true); }} className="w-full border-2 border-dashed border-blue-200 py-2.5 flex items-center justify-center gap-1.5 text-blue-600 font-bold text-[14px] bg-blue-50/50 hover:bg-blue-100 rounded-xl transition-colors">
+                                   <Plus className="w-4 h-4" /> Add Stop
+                               </button>
+                           </div>
+                       )}
+                   </div>
+
+                   {/* Render Autocomplete directly below whenever `activeField` matches one of the inputs */}
+                   <AnimatePresence>
+                   {(activeField && (activeField === "pickup" || activeField.startsWith("stop-") || activeField === "dropoff")) ? (
+                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden rounded-[20px] shadow-sm border border-slate-200 bg-white">
+                          <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
+                              {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
+                              {[...suggestions].map((s, idx) => (
+                                <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                   {s.isHistory ? 
+                                    <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                    <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
+                                   }
+                                   <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
+                                </button>
+                              ))}
+                              <button onClick={() => {setActiveField(null); setSuggestions([])}} className="w-full py-3.5 bg-slate-50 text-slate-500 font-bold text-xs uppercase tracking-wider text-center active:bg-slate-100">Close Suggestions</button>
+                          </div>
+                       </motion.div>
+                   ) : null}
+                   </AnimatePresence>
+
+                   {/* Fare Display */}
+                   <div className="bg-emerald-50 border border-emerald-100 rounded-[20px] p-5 flex flex-col items-center shadow-inner relative overflow-hidden">
+                       <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-200/40 rounded-full blur-xl pointer-events-none" />
+                       <div className="absolute -left-4 -bottom-4 w-16 h-16 bg-emerald-200/40 rounded-full blur-xl pointer-events-none" />
+                       <span className="text-emerald-700 font-bold text-[12px] uppercase tracking-widest mb-1 relative z-10">Total Estimated Fare</span>
+                       <div className="flex items-start tracking-tight relative z-10">
+                           <span className="text-emerald-900 font-black text-2xl mt-1">£</span>
+                           <span className="text-emerald-900 font-black text-5xl">{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                       </div>
+                       
+                       <div className="mt-4 w-full flex items-center justify-center gap-2 border-t border-emerald-200/50 pt-3 relative z-10">
+                          {(() => {
+                             const cat = CAR_CATEGORIES.find(c => c.id === selectedCategory);
+                             if (!cat) return null;
+                             const Icon = cat.icon;
+                             return (
+                               <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                    <Icon className="w-4 h-4 text-emerald-700" />
+                                  </div>
+                                  <div>
+                                    <span className="block text-emerald-900 font-black text-[13px]">{cat.name}</span>
+                                    <span className="block text-emerald-700 font-bold text-[11px] leading-tight opacity-80">Selected Category</span>
+                                  </div>
+                               </div>
+                             );
+                          })()}
+                       </div>
+                   </div>
+                </div>
+                
+                <div className="p-4 border-t border-slate-200 shrink-0 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                    <button 
+                       onClick={async () => {
+                           await handleConfirmBooking();
+                           setIsEditingJourney(false);
+                       }}
+                       disabled={!dropoff}
+                       className="w-full py-4 rounded-xl bg-[#0a1930] text-white font-bold text-[16px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                       Confirm Update <ArrowRight className="w-5 h-5 opacity-70" />
+                    </button>
+                </div>
             </motion.div>
           )}
         </AnimatePresence>

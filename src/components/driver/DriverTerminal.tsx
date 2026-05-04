@@ -144,6 +144,7 @@ export default function DriverTerminal() {
   // Dynamic Fare & Live Ride Tracking
   const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, timeRate: number, waitRatePerMinute: number, minFare: number, commissionRate: number, allowRiderAbandonment?: boolean}>({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12, allowRiderAbandonment: false });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
+  const externalNavWindowRef = useRef<Window | null>(null);
   const [passengerPos, setPassengerPos] = useState<{lat: number, lng: number} | null>(null);
 
   // Listen for passenger live tracking
@@ -177,6 +178,11 @@ export default function DriverTerminal() {
     } else {
       setMapCenter([mapCenterRef.current[0], mapCenterRef.current[1]]);
     }
+  };
+
+  const handleStartExternalNavigation = () => {
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${rideState === 'in_progress' ? `${activeRide?.dropoffLat || ''},${activeRide?.dropoffLng || ''}` : `${activeRide?.pickupLat || ''},${activeRide?.pickupLng || ''}`}`;
+    externalNavWindowRef.current = window.open(url, "_blank");
   };
 
   // Handle center for 'waiting' state to account for drawer height
@@ -383,10 +389,17 @@ export default function DriverTerminal() {
         }
         
         if (data.isModifiedByPassenger) {
+          // Close external navigation if open
+          if (externalNavWindowRef.current && !externalNavWindowRef.current.closed) {
+             externalNavWindowRef.current.close();
+             toast.warning("Navigation Stopped", { description: "Navigation was stopped because passenger updated the job details. Please restart navigation.", duration: 8000 });
+          }
+
           // Play loud alert notification
           playSound('notification');
           speakText("Job details updated by passenger");
           toast.info("Ride Details Updated", { description: "The passenger has updated the ride details or fare.", duration: 8000 });
+
           
           if (data.dropoffLat && data.dropoffLng && activeRide?.dropoffLat && activeRide?.dropoffLng && user?.uid) {
             const R = 6371e3;
@@ -1641,14 +1654,12 @@ export default function DriverTerminal() {
       {/* Floating Map Navigation (Left Side) - Decreased size and moved to left side corner */}
       {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
         <div className="absolute top-[32%] left-4 z-50 pointer-events-auto">
-          <a 
-            href={`https://www.google.com/maps/dir/?api=1&destination=${rideState === 'in_progress' ? `${activeRide?.dropoffLat || ''},${activeRide?.dropoffLng || ''}` : `${activeRide?.pickupLat || ''},${activeRide?.pickupLng || ''}`}`} 
-            target="_blank" 
-            rel="noreferrer" 
+          <button 
+            onClick={handleStartExternalNavigation}
             className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(0,122,255,0.4)] active:scale-95 transition-transform"
           >
             <Navigation className="w-4 h-4 text-white" />
-          </a>
+          </button>
         </div>
       )}
 
