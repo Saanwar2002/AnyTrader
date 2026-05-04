@@ -742,10 +742,13 @@ export default function PassengerBooking() {
     }
   };
 
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const toggleListening = () => {
     triggerHaptic(ImpactStyle.Light);
     
     if (isListening) {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       recognitionRef.current?.stop();
       return;
     }
@@ -763,16 +766,34 @@ export default function PassengerBooking() {
     recognition.interimResults = true;
     transcriptRef.current = "";
 
-    recognition.onstart = () => setIsListening(true);
+    const resetSilenceTimer = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        if (recognitionRef.current) recognitionRef.current.stop();
+      }, 5000);
+    };
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      resetSilenceTimer();
+    };
+    
     recognition.onend = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       setIsListening(false);
       if (transcriptRef.current.trim().length > 0) {
         processVoiceCommand(transcriptRef.current);
         transcriptRef.current = "";
       }
     };
-    recognition.onerror = () => setIsListening(false);
+    
+    recognition.onerror = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      setIsListening(false);
+    };
+    
     recognition.onresult = (event: any) => {
+      resetSilenceTimer();
       let currentTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
@@ -820,13 +841,21 @@ export default function PassengerBooking() {
     setIsAiProcessing(true);
     toast.info("AI extracting details...");
     try {
-      const result = await processTaxiVoiceCommand(text);
+      let locationContext = "";
+      if (pickup) {
+         locationContext += `The user is currently near: ${pickup}. `;
+      }
+      if (pickupCoords) {
+         locationContext += `Coordinates: ${pickupCoords.lat}, ${pickupCoords.lng}. `;
+      }
+
+      const result = await processTaxiVoiceCommand(text, locationContext);
 
       if (result.pickup) geocodeLocation(result.pickup, setPickup, setPickupCoords);
       if (result.dropoff) geocodeLocation(result.dropoff, setDropoff, setDropoffCoords);
       if (result.comments) setComments(result.comments);
       
-      toast.success("AI extraction complete.");
+      toast.success("AI extraction complete. Please review and verify the addresses.", { duration: 5000 });
     } catch (err) {
       console.error("AI Error:", err);
       toast.error("AI error. Try typing.");

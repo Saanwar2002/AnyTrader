@@ -1644,12 +1644,13 @@ export async function callTradeBot(userMessage: string, history: {role: "user" |
   }
 }
 
-export async function processTaxiVoiceCommand(text: string) {
+export async function processTaxiVoiceCommand(text: string, locationContext: string = "") {
   const prompt = `Extract taxi booking details from the user's voice command: "${text}". 
     - Identify the 'pickup' (where they are starting) and 'dropoff' (where they are going) locations. 
+    ${locationContext ? `- Context: ${locationContext}. Cross-reference "McDonald's in Marsh", "train station", etc. with this area to give the correct address.` : ''}
     - Pay special attention to UK postcodes (e.g., HD1 2PT, LS1 3AB) and exact street addresses for both pickup and dropoff.
     - If the user only says "to [Dropoff]" or "I want to go to [Dropoff]", leave 'pickup' as an empty string. Only populate 'pickup' if they explicitly mention where they want to be picked up from (e.g., "From [Pickup] to [Dropoff]" or "Pick me up at [Pickup]").
-    - Put any extra instructions in 'comments'.
+    - Put any extra instructions, passenger count, or specific requests in 'comments'.
     Return a JSON object with keys: pickup, dropoff, comments.`;
 
   try {
