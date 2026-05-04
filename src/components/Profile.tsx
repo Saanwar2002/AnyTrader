@@ -6,7 +6,7 @@ import {
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
-  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent
+  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -1042,6 +1042,262 @@ export default function Profile() {
   const currentRoleSubscriptionStatus = profile.role === "homeowner" ? profile.homeownerSubscriptionStatus : profile.subscriptionStatus;
   const currentRoleCancelAtPeriodEnd = profile.role === "homeowner" ? profile.homeownerCancelAtPeriodEnd : profile.cancelAtPeriodEnd;
   const currentRoleCurrentPeriodEnd = profile.role === "homeowner" ? profile.homeownerCurrentPeriodEnd : profile.currentPeriodEnd;
+
+  if (activePortal === "anyride" && profile.role !== "driver") {
+    const passengerGroups = [
+      {
+        title: "Account",
+        bg: "bg-white",
+        items: [
+          { icon: CreditCard, label: "Payment Methods", path: "/billing" },
+          { icon: Star, label: "Promotions & Promo Codes", path: "#promotions" }, 
+          { icon: Users, label: "Refer a Friend - Earn £5", path: "#referrals" },
+        ]
+      },
+      {
+        title: "Ride Preferences",
+        bg: "bg-white",
+        items: [
+          { icon: Accessibility, label: "Accessibility Settings", path: "#accessibility" },
+          { icon: MapPin, label: "Saved Places", path: "/saved-journeys" },
+          { icon: Lock, label: "Passcode Verification", path: "#passcode" },
+        ]
+      },
+      {
+        title: "Safety & Support",
+        bg: "bg-[#e8f4fc]", // blue tint matching screenshot
+        items: [
+           { 
+             icon: User, 
+             label: "Emergency Contacts", 
+             path: "#emergency", 
+             rightElem: (
+               <div 
+                 onClick={(e) => { e.stopPropagation(); setIsAddingEmergency(true); setExpandedMenuId("#emergency"); }} 
+                 className="text-[11px] font-black bg-blue-200/50 text-blue-900 px-3 py-1.5 rounded-full hover:bg-blue-200 transition-colors cursor-pointer"
+               >
+                 Add Contact
+               </div>
+             ) 
+           },
+           { icon: HelpCircle, label: "Help Centre", path: "#help" },
+           { icon: MessageSquare, label: "Live Chat", path: "#chat" },
+        ]
+      },
+      {
+        title: "App Settings",
+        bg: "bg-white",
+        items: [
+          { icon: Bell, label: "Notifications", path: "/notifications" },
+          { icon: Globe, label: "App Language", path: "#language" },
+          { icon: Shield, label: "Privacy & Legal", path: "#privacy" },
+        ]
+      }
+    ];
+
+    const renderPassengerMenuContent = (path: string) => {
+      switch(path) {
+        case "#passcode":
+          return (
+            <div className="p-4 bg-slate-50 border-t border-slate-100/50">
+              <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">PIN Verification</h3>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Driver will ask for a PIN (last 4 digits) before trip.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (user?.uid) {
+                        const newStatus = profile?.requirePasscode !== true;
+                        await updateDoc(doc(db, "users", user.uid), { requirePasscode: newStatus });
+                        setProfile((prev: any) => ({ ...prev, requirePasscode: newStatus }));
+                      }
+                    }}
+                    className={cn(
+                      "w-12 h-7 rounded-full transition-colors relative flex-shrink-0",
+                      profile?.requirePasscode === true ? "bg-emerald-500" : "bg-slate-200"
+                    )}
+                  >
+                    <span className={cn(
+                      "absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm",
+                      profile?.requirePasscode === true ? "translate-x-5" : "translate-x-0"
+                    )} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        case "#emergency":
+          return (
+            <div className="p-4 bg-slate-50 border-t border-black/5 rounded-b-3xl">
+              {isAddingEmergency && (
+                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input 
+                      type="text" 
+                      placeholder="Contact Name"
+                      className="p-3 bg-white border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      value={newEmergencyContact.name}
+                      onChange={(e) => setNewEmergencyContact({ ...newEmergencyContact, name: e.target.value })}
+                    />
+                    <input 
+                      type="tel" 
+                      placeholder="Phone Number"
+                      className="p-3 bg-white border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      value={newEmergencyContact.phone}
+                      onChange={(e) => setNewEmergencyContact({ ...newEmergencyContact, phone: e.target.value })}
+                    />
+                  </div>
+                  <button 
+                    onClick={handleAddEmergencyContact}
+                    disabled={isSaving || !newEmergencyContact.name || !newEmergencyContact.phone}
+                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-600/20 disabled:opacity-50"
+                  >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Save Contact"}
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-3">
+                {(profile.emergencyContacts || []).length === 0 ? (
+                  <div className="py-6 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                    <p className="text-slate-500 text-sm font-medium">No emergency contacts listed.</p>
+                  </div>
+                ) : (
+                  profile.emergencyContacts.map((contact: any, index: number) => (
+                    <div key={index} className="p-3 bg-white rounded-xl border border-slate-100 flex items-center justify-between group">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500">
+                          <Phone className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-xs">{contact.name}</p>
+                          <p className="text-[10px] text-slate-500 font-bold">{contact.phone}</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleRemoveEmergencyContact(index)}
+                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        default:
+          return (
+            <div className="p-6 text-center bg-slate-50 border-t border-black/5 rounded-b-3xl">
+              <p className="text-slate-500 font-medium text-sm">Settings coming soon.</p>
+            </div>
+          );
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-[#f3f7fb] relative font-sans overflow-x-hidden pb-12">
+        {/* Wavy background top effect - light blue */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[180%] h-[280px] sm:h-[320px] bg-[#bae0ff]/90 rounded-b-[100%] shadow-[0_4px_30px_rgba(186,224,255,0.4)] z-0" />
+        
+        <div className="relative z-10 max-w-[420px] mx-auto pt-16 px-5">
+          
+          {/* Main User Card */}
+          <div className="bg-white rounded-[2rem] pt-14 pb-6 px-6 shadow-sm border border-white/50 flex flex-col items-center mb-8 relative">
+            
+            {/* Avatar overlapping top */}
+            <div className="absolute -top-12">
+               <div className="w-[104px] h-[104px] rounded-full bg-[#8ccaf5] p-1.5 relative shadow-md">
+                 <img src={profile.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || "User")}&background=0D8ABC&color=fff`} className="w-full h-full rounded-full object-cover" />
+                 <div className="absolute bottom-1 right-2 w-5 h-5 bg-green-500 rounded-full border-[3px] border-white" />
+               </div>
+            </div>
+            
+            {/* Rating pill overlapping top right */}
+            <div className="absolute -top-4 right-2 flex items-center gap-2 bg-white px-3 py-1.5 rounded-full shadow-md border border-slate-50 z-20">
+               <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+               <div className="flex flex-col">
+                 <span className="text-[12px] font-black text-slate-800 leading-tight">{profile.rating?.toFixed(1) || "5.0"} Star</span>
+                 <span className="text-[9px] uppercase text-slate-500 font-bold tracking-tight">Rider Rating</span>
+               </div>
+            </div>
+
+            <div className="text-center mt-2">
+              <h2 className="text-2xl font-black text-[#0f172a] mb-2">{profile.name}</h2>
+              <div className="inline-flex items-center justify-center px-4 py-1 rounded-full bg-[#fdf3c7]">
+                 <span className="text-[11px] font-black text-[#926c15] tracking-wide">Gold Member</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Menu Card Sections */}
+          <div className="space-y-5">
+            {passengerGroups.map((group, idx) => (
+              <div key={idx} className="space-y-2">
+                <h3 className="px-1 text-[15px] font-black text-slate-900">{group.title}</h3>
+                <div className={cn("rounded-3xl shadow-sm overflow-hidden", group.bg)}>
+                  {group.items.map((item, i) => {
+                    const isExpanded = expandedMenuId === item.path;
+                    const isLast = i === group.items.length - 1;
+                    return (
+                      <div key={i} className={cn("flex flex-col", !isLast && "border-b border-black/[0.04]")}>
+                        <button 
+                          onClick={() => {
+                            if (item.path.startsWith('/')) navigate(item.path);
+                            else setExpandedMenuId(isExpanded ? null : item.path);
+                          }}
+                          className="w-full flex items-center justify-between p-4 hover:bg-black/[0.02] transition-colors group"
+                        >
+                          <div className="flex items-center gap-4">
+                             <item.icon className="w-5 h-5 text-[#0f172a] opacity-80" strokeWidth={2.5} />
+                             <span className="font-bold text-[#0f172a] text-[15px]">{item.label}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                             {item.rightElem}
+                             <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                          </div>
+                        </button>
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="overflow-hidden"
+                            >
+                              {renderPassengerMenuContent(item.path)}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Sign Out Button */}
+          <div className="mt-8 px-2">
+            <button 
+              onClick={handleLogout}
+              className="w-full py-4 bg-[#0b1b3d] text-white rounded-full font-bold shadow-sm shadow-[#0b1b3d]/20 hover:bg-[#152a5c] active:scale-95 transition-all text-[15px] border-b-4 border-red-800 flex justify-center"
+            >
+              Sign Out
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="account" className="max-w-2xl mx-auto pb-24 px-4">

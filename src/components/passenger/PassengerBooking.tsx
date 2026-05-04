@@ -434,6 +434,52 @@ export default function PassengerBooking() {
   const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
   const [routeLine, setRouteLine] = useState<{lat: number, lng: number}[]>([]);
 
+  // Resolve URL parameters
+  useEffect(() => {
+    if (isLoaded && window.google && window.google.maps) {
+      let resolvedPickup = false;
+      let resolvedDropoff = false;
+
+      const resolveAddresses = async () => {
+        const geocoder = new window.google.maps.Geocoder();
+        const initialPickup = searchParams.get("pickup");
+        const initialDropoff = searchParams.get("dropoff");
+
+        if (initialPickup && !pickupCoords) {
+           try {
+             const res = await geocoder.geocode({ address: initialPickup, componentRestrictions: { country: "GB" } });
+             if (res.results && res.results.length > 0) {
+               const loc = res.results[0].geometry.location;
+               setPickupCoords({ lat: loc.lat(), lng: loc.lng() });
+               resolvedPickup = true;
+             }
+           } catch(e) { console.error(e); }
+        } else if (pickupCoords) {
+           resolvedPickup = true;
+        }
+
+        if (initialDropoff && !dropoffCoords) {
+           try {
+             const res = await geocoder.geocode({ address: initialDropoff, componentRestrictions: { country: "GB" } });
+             if (res.results && res.results.length > 0) {
+               const loc = res.results[0].geometry.location;
+               setDropoffCoords({ lat: loc.lat(), lng: loc.lng() });
+               resolvedDropoff = true;
+             }
+           } catch(e) { console.error(e); }
+        } else if (dropoffCoords) {
+           resolvedDropoff = true;
+        }
+        
+        if (resolvedPickup && resolvedDropoff && initialPickup && initialDropoff && detailsView === "address") {
+           setDetailsView("vehicle");
+        }
+      };
+
+      resolveAddresses();
+    }
+  }, [isLoaded, searchParams]);
+
   useEffect(() => {
     if (mapCenter && map && step === "details") {
       map.panTo(mapCenter);
@@ -522,14 +568,14 @@ export default function PassengerBooking() {
   }, [pickupCoords, dropoffCoords, stops, map, fareConfig, isLoaded]);
 
   useEffect(() => {
-    if (navigator.geolocation && !pickupCoords) {
+    if (navigator.geolocation && !pickupCoords && !searchParams.get("pickup")) {
       navigator.geolocation.getCurrentPosition((pos) => {
         const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMapCenter(c);
         setPickupCoords(c);
       });
     }
-  }, [pickupCoords]);
+  }, [pickupCoords, searchParams]);
 
   useEffect(() => {
     if (!pickupCoords) {
@@ -1206,7 +1252,7 @@ export default function PassengerBooking() {
     if (currentStatus === "accepted") nextStatus = "arrived";
     else if (currentStatus === "arrived") nextStatus = "in_progress";
     else if (currentStatus === "in_progress") {
-       nextStatus = profile?.stripeCustomerId ? "completed" : "awaiting_payment";
+       nextStatus = "completed";
     }
     else if (currentStatus === "awaiting_payment") nextStatus = "completed";
 
@@ -1259,7 +1305,10 @@ export default function PassengerBooking() {
       }
       
       await updateDoc(doc(db, "ride_requests", currentRideId), updateData);
-    } catch(err) { console.error(err); }
+    } catch(err: any) { 
+       console.error("simulateNextState error:", err); 
+       toast.error("Error: " + err.message); 
+    }
   };
 
   const handleAbandonSearch = async () => {
