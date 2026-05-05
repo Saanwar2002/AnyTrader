@@ -1,7 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Tag, Plus, Check, Settings2, MapPin, Receipt, ShieldQuestion } from "lucide-react";
 
 export default function PricingFares() {
+  const [surgeEnabled, setSurgeEnabled] = useState(true);
+  const [surgeModel, setSurgeModel] = useState<"fixed" | "multiplier">("fixed");
+  const [surgeFixedAmount, setSurgeFixedAmount] = useState<number>(2.0);
+  const [surgeMultiplierValue, setSurgeMultiplierValue] = useState<number>(1.5);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -118,34 +123,64 @@ export default function PricingFares() {
             <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
                <ShieldQuestion className="w-4 h-4 text-indigo-400" /> Dynamic Surge
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700">Enable Auto-Surge</span>
+                <div>
+                   <span className="text-xs font-bold text-slate-700 block">Enable Auto-Surge</span>
+                   <span className="text-[10px] text-slate-500">Applies across the entire platform</span>
+                </div>
                 <div className="relative inline-block w-8 h-4 cursor-pointer">
-                   <input type="checkbox" defaultChecked className="sr-only peer" />
+                   <input type="checkbox" checked={surgeEnabled} onChange={(e) => setSurgeEnabled(e.target.checked)} className="sr-only peer" id="surge-toggle" />
                    <div className="w-8 h-4 bg-slate-200 rounded-full peer peer-checked:bg-indigo-500 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4 peer-checked:after:border-white"></div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between p-3 rounded-lg border border-indigo-100 bg-indigo-50/50">
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Highest Tier Active</div>
-                  <div className="text-[10px] text-slate-500 font-medium mt-0.5">When rider:driver &gt; 3:1</div>
+              {/* Surge Type Selector (CSS-only toggle simulation via radio groups) */}
+              <div className={`pt-4 border-t border-slate-100 transition-opacity ${!surgeEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label className="text-xs font-bold text-slate-700 block mb-3">Surge Pricing Model</label>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <label className="relative cursor-pointer">
+                    <input type="radio" name="surgeModel" value="fixed" checked={surgeModel === "fixed"} onChange={() => setSurgeModel("fixed")} className="peer sr-only" />
+                    <div className="p-3 text-center border border-slate-200 rounded-xl peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition-colors">
+                      <span className="block text-xs font-black text-slate-900 peer-checked:text-indigo-700 mb-1">Fixed Amount</span>
+                      <span className="block text-[10px] text-slate-500 font-medium">+£ per job</span>
+                    </div>
+                  </label>
+                  <label className="relative cursor-pointer">
+                    <input type="radio" name="surgeModel" value="multiplier" checked={surgeModel === "multiplier"} onChange={() => setSurgeModel("multiplier")} className="peer sr-only" />
+                    <div className="p-3 text-center border border-slate-200 rounded-xl peer-checked:border-indigo-500 peer-checked:bg-indigo-50 transition-colors">
+                      <span className="block text-xs font-black text-slate-900 peer-checked:text-indigo-700 mb-1">Multiplier</span>
+                      <span className="block text-[10px] text-slate-500 font-medium">1.x of base fare</span>
+                    </div>
+                  </label>
                 </div>
-                <div className="text-sm font-black text-indigo-600">x1.5</div>
+
+                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100 relative overflow-hidden">
+                  <div className={`flex flex-col gap-1 transition-opacity ${surgeModel !== "fixed" ? 'opacity-40' : 'opacity-100'}`}>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Fixed Surge Amount</label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400 font-medium text-sm">£</span>
+                      <input type="number" value={surgeFixedAmount} onChange={(e) => setSurgeFixedAmount(Number(e.target.value))} step="0.50" disabled={surgeModel !== "fixed"} className="w-full text-base font-black text-slate-900 border-b border-slate-200 bg-transparent focus:border-indigo-500 outline-none pb-0.5 disabled:bg-transparent" />
+                    </div>
+                  </div>
+
+                  <div className={`flex flex-col gap-1 pt-3 border-t border-slate-200/50 relative transition-opacity ${surgeModel !== "multiplier" ? 'opacity-40' : 'opacity-100'}`}>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Surge Multiplier</label>
+                    <div className="flex items-center gap-1">
+                      <input type="number" value={surgeMultiplierValue} onChange={(e) => setSurgeMultiplierValue(Number(e.target.value))} step="0.1" disabled={surgeModel !== "multiplier"} className="w-full text-base font-black text-slate-900 border-b border-slate-200 bg-transparent focus:border-indigo-500 outline-none pb-0.5 disabled:bg-transparent" />
+                      <span className="text-slate-400 font-medium text-sm">x</span>
+                    </div>
+                  </div>
+                </div>
               </div>
               
-              <div className="space-y-1">
+              <div className={`space-y-1 pt-2 transition-opacity ${!surgeEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
                  <label className="text-xs font-bold text-slate-700 flex justify-between">
                    Driver Surge Split <span className="text-slate-500">80% to Driver</span>
                  </label>
                  <input type="range" min="0" max="100" step="5" defaultValue="80" className="w-full accent-indigo-500" />
                  <p className="text-[10px] text-slate-500">Percentage of the surge overflow paid directly to the driver.</p>
               </div>
-
-              <button className="w-full mt-4 py-2 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-colors">
-                Configure Surge Tiers
-              </button>
             </div>
           </div>
           

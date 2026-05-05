@@ -154,7 +154,31 @@ export default function DriverTerminal() {
   });
 
   // Dynamic Fare & Live Ride Tracking
-  const [fareConfig, setFareConfig] = useState<{baseFare: number, distanceRate: number, timeRate: number, waitRatePerMinute: number, minFare: number, commissionRate: number, allowRiderAbandonment?: boolean}>({ baseFare: 3.5, distanceRate: 1.3, timeRate: 0.15, waitRatePerMinute: 0.25, minFare: 5.0, commissionRate: 0.12, allowRiderAbandonment: false });
+  const [fareConfig, setFareConfig] = useState<{
+    baseFare: number, 
+    distanceRate: number, 
+    timeRate: number, 
+    waitRatePerMinute: number, 
+    minFare: number, 
+    commissionRate: number, 
+    allowRiderAbandonment?: boolean,
+    surgeEnabled?: boolean,
+    surgeModel?: 'fixed' | 'multiplier',
+    surgeFixedAmount?: number,
+    surgeMultiplierValue?: number
+  }>({ 
+    baseFare: 3.5, 
+    distanceRate: 1.3, 
+    timeRate: 0.15, 
+    waitRatePerMinute: 0.25, 
+    minFare: 5.0, 
+    commissionRate: 0.12, 
+    allowRiderAbandonment: false,
+    surgeEnabled: true,
+    surgeModel: 'fixed',
+    surgeFixedAmount: 2.00,
+    surgeMultiplierValue: 1.5
+  });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
   const externalNavWindowRef = useRef<Window | null>(null);
   const [passengerPos, setPassengerPos] = useState<{lat: number, lng: number} | null>(null);
@@ -744,9 +768,20 @@ export default function DriverTerminal() {
     const simulatedTime = simulatedDist * 2.5; // Rough time
     const calcFare = Math.max(fareConfig.minFare, fareConfig.baseFare + (simulatedDist * fareConfig.distanceRate));
     
-    // Add surge for the simulation (just for UI visuals)
-    const surge = 1.4;
-    const finalFare = calcFare * surge;
+    // Apply Surge Logic based on config
+    let surgeMultiplier = 1.0;
+    let surgeFixed = 0.0;
+    let finalFare = calcFare;
+    
+    if (fareConfig.surgeEnabled) {
+      if (fareConfig.surgeModel === 'fixed') {
+        surgeFixed = fareConfig.surgeFixedAmount || 2.0;
+        finalFare = calcFare + surgeFixed;
+      } else {
+        surgeMultiplier = fareConfig.surgeMultiplierValue || 1.4;
+        finalFare = calcFare * surgeMultiplier;
+      }
+    }
     
     setActiveRide({
       id: "simulated_ride_123",
@@ -761,7 +796,9 @@ export default function DriverTerminal() {
       stops: [],
       fareEstimate: finalFare,
       baseCalc: calcFare,
-      surgeMultiplier: surge,
+      surgeMultiplier: surgeMultiplier,
+      surgeFixed: surgeFixed,
+      surgeModel: fareConfig.surgeModel,
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
       comments: "Please ring the bell, the baby is sleeping. Thanks!",
@@ -784,6 +821,21 @@ export default function DriverTerminal() {
     const simulatedTime = simulatedDist * 2.5; 
     const calcFare = Math.max(fareConfig.minFare, fareConfig.baseFare + (simulatedDist * fareConfig.distanceRate));
     
+    // Apply Surge Logic based on config
+    let surgeMultiplier = 1.0;
+    let surgeFixed = 0.0;
+    let finalFare = calcFare;
+    
+    if (fareConfig.surgeEnabled) {
+      if (fareConfig.surgeModel === 'fixed') {
+        surgeFixed = fareConfig.surgeFixedAmount || 2.0;
+        finalFare = calcFare + surgeFixed;
+      } else {
+        surgeMultiplier = fareConfig.surgeMultiplierValue || 1.4;
+        finalFare = calcFare * surgeMultiplier;
+      }
+    }
+    
     setStackedRideOffer({
       id: "simulated_stacked_ride_456",
       name: "Mike R.",
@@ -793,8 +845,11 @@ export default function DriverTerminal() {
       pickupLng: mapCenter[1] - 0.015,
       dropoffLat: mapCenter[0] - 0.025,
       dropoffLng: mapCenter[1] + 0.035,
-      fareEstimate: calcFare,
+      fareEstimate: finalFare,
       baseCalc: calcFare,
+      surgeMultiplier: surgeMultiplier,
+      surgeFixed: surgeFixed,
+      surgeModel: fareConfig.surgeModel,
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
       comments: "Waiting outside.",
@@ -1706,7 +1761,7 @@ export default function DriverTerminal() {
                   options={{
                     strokeColor: "transparent",
                     fillColor: zone.intensity === 'high' ? '#FF3B30' : '#FF9500',
-                    fillOpacity: 0.35,
+                    fillOpacity: 0.15,
                     clickable: false
                   }}
                 />
@@ -2074,7 +2129,11 @@ export default function DriverTerminal() {
                           {activeRide?.isPriority && (
                             <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
                           )}
-                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
+                          {fareConfig.surgeEnabled && (
+                            <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">
+                              🔥 {activeRide?.surgeModel === 'fixed' ? '+£' + (activeRide?.surgeFixed || '2.00') : (activeRide?.surgeMultiplier || '1.4') + 'x'}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
@@ -2215,7 +2274,11 @@ export default function DriverTerminal() {
                           {stackedRideOffer?.isPriority && (
                             <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
                           )}
-                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {stackedRideOffer?.surgeMultiplier || '1.4'}x</span>
+                          {fareConfig.surgeEnabled && (
+                            <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">
+                              🔥 {stackedRideOffer?.surgeModel === 'fixed' ? '+£' + (stackedRideOffer?.surgeFixed || '2.00') : (stackedRideOffer?.surgeMultiplier || '1.4') + 'x'}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{((stackedRideOffer?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
@@ -2840,7 +2903,12 @@ export default function DriverTerminal() {
                   {activeRide?.status === 'rider_abandoned' && (
                     <div className="flex justify-between text-xs text-[#FF3B30]"><span>Abandonment Fee:</span><span className="font-bold">+£5.00</span></div>
                   )}
-                  <div className="flex justify-between text-xs text-[#FF9500]"><span>Surge ({activeRide?.surgeMultiplier || '1.4'}x):</span><span className="font-bold">+£{((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span></div>
+                  {fareConfig.surgeEnabled && (
+                    <div className="flex justify-between text-xs text-[#FF9500]">
+                      <span>Surge ({activeRide?.surgeModel === 'fixed' ? 'Fixed' : (activeRide?.surgeMultiplier || '1.4') + 'x'}):</span>
+                      <span className="font-bold">+£{activeRide?.surgeModel === 'fixed' ? (activeRide?.surgeFixed || 2.0).toFixed(2) : ((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {(() => {
