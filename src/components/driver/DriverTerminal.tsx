@@ -25,6 +25,7 @@ type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progr
 const libraries: any[] = ['places'];
 
 const mapOptions: google.maps.MapOptions = {
+  mapId: "9218684bb5f4749f", // Needed for vector maps & heading/tilt
   disableDefaultUI: false,
   zoomControl: false,
   streetViewControl: false,
@@ -171,6 +172,19 @@ export default function DriverTerminal() {
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const [miniMapInstance, setMiniMapInstance] = useState<google.maps.Map | null>(null);
 
+  const [driverHeading, setDriverHeading] = useState<number | null>(null);
+  const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
+
+  const getBearing = (startLat: number, startLng: number, destLat: number, destLng: number) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const toDeg = (rad: number) => (rad * 180) / Math.PI;
+    const dLng = toRad(destLng - startLng);
+    const y = Math.sin(dLng) * Math.cos(toRad(destLat));
+    const x = Math.cos(toRad(startLat)) * Math.sin(toRad(destLat)) -
+              Math.sin(toRad(startLat)) * Math.cos(toRad(destLat)) * Math.cos(dLng);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  };
+
   useEffect(() => {
     mapCenterRef.current = mapCenter;
   }, [mapCenter]);
@@ -184,9 +198,20 @@ export default function DriverTerminal() {
     }
   };
 
-  const handleStartExternalNavigation = () => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${rideState === 'in_progress' ? `${activeRide?.dropoffLat || ''},${activeRide?.dropoffLng || ''}` : `${activeRide?.pickupLat || ''},${activeRide?.pickupLng || ''}`}`;
-    externalNavWindowRef.current = window.open(url, "_blank");
+  const handleToggleAutoNav = () => {
+    setIsAutoNavHeadUp(prev => {
+      const next = !prev;
+      if (!next && mapInstance && directions) {
+        // When disabling head up mode, fit to route overview
+        const bounds = directions.routes[0]?.bounds;
+        if (bounds) {
+          mapInstance.fitBounds(bounds);
+        }
+      }
+      return next;
+    });
+    triggerHaptic(ImpactStyle.Light);
+    toast.success(isAutoNavHeadUp ? "Navigation overview" : "Head-up navigation started");
   };
 
   // Handle center for 'waiting' state to account for drawer height
@@ -204,6 +229,9 @@ export default function DriverTerminal() {
   }, [rideState, activeRide?.pickupLat, activeRide?.pickupLng, mapInstance]);
 
   useEffect(() => {
+    let isInitialFitBounds = true;
+    let intervalId: NodeJS.Timeout;
+
     // Fetch route directions using Google Maps API
     const fetchDirections = (destLat: number, destLng: number) => {
       if (!window.google || !window.google.maps) return;
@@ -221,10 +249,11 @@ export default function DriverTerminal() {
         (result, status) => {
           if (status === window.google.maps.DirectionsStatus.OK) {
             setDirections(result);
-            if (mapInstance && result?.routes?.[0]?.bounds) {
+            if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
               // We fit the bounds here. Because we already set Map options `padding: { bottom: 350 }`, 
               // Google Maps will automatically shift the visual center up!
               mapInstance.fitBounds(result.routes[0].bounds);
+              isInitialFitBounds = false;
             }
           } else {
             console.warn("Directions request failed with status:", status);
@@ -236,14 +265,53 @@ export default function DriverTerminal() {
       }
     };
 
-    if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {
-      if (isLoaded) fetchDirections(activeRide.pickupLat, activeRide.pickupLng);
-    } else if (rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng) {
-      if (isLoaded) fetchDirections(activeRide.dropoffLat, activeRide.dropoffLng);
-    } else {
-      setDirections(null);
-    }
+    const updateDynamicDirections = () => {
+      if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {
+        if (isLoaded) fetchDirections(activeRide.pickupLat, activeRide.pickupLng);
+      } else if (rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng) {
+        if (isLoaded) fetchDirections(activeRide.dropoffLat, activeRide.dropoffLng);
+      } else {
+        setDirections(null);
+      }
+    };
+
+    updateDynamicDirections();
+    intervalId = setInterval(updateDynamicDirections, 15000);
+
+    return () => clearInterval(intervalId);
   }, [rideState, activeRide?.id, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, isLoaded, mapInstance]);
+
+  // Handle Map Orientation (Head Up North / Direction of Travel)
+  useEffect(() => {
+    if (!mapInstance || !isAutoNavHeadUp) {
+      if (mapInstance && !isAutoNavHeadUp) {
+        mapInstance.setHeading(0); // Reset to North up when disabled
+        mapInstance.setTilt(0);
+      }
+      return;
+    }
+
+    if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {
+      const targetBearing = driverHeading !== null ? driverHeading : getBearing(mapCenterRef.current[0], mapCenterRef.current[1], activeRide.pickupLat, activeRide.pickupLng);
+      mapInstance.setHeading(targetBearing);
+      mapInstance.setTilt(60); // 3D perspective
+      if (directions) {
+        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
+        mapInstance.setZoom(18);
+      }
+    } else if (rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng) {
+      const targetBearing = driverHeading !== null ? driverHeading : getBearing(mapCenterRef.current[0], mapCenterRef.current[1], activeRide.dropoffLat, activeRide.dropoffLng);
+      mapInstance.setHeading(targetBearing);
+      mapInstance.setTilt(60);
+      if (directions) {
+        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
+        mapInstance.setZoom(18);
+      }
+    } else {
+      mapInstance.setHeading(0);
+      mapInstance.setTilt(0);
+    }
+  }, [rideState, isAutoNavHeadUp, mapInstance, driverHeading, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, mapCenter, directions]);
 
   // Listen to Taxi Command Settings (platform_config/rides)
   useEffect(() => {
@@ -562,8 +630,11 @@ export default function DriverTerminal() {
 
     const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
-        const { latitude, longitude } = pos.coords;
+        const { latitude, longitude, heading } = pos.coords;
         setMapCenter([latitude, longitude]);
+        if (heading !== null && !isNaN(heading)) {
+          setDriverHeading(heading);
+        }
         
         // Sync to Firestore for dispatcher
         try {
@@ -1721,14 +1792,23 @@ export default function DriverTerminal() {
         )}
       </div>
 
-      {/* Floating Map Navigation (Left Side) - Decreased size and moved to left side corner */}
+      {/* Floating Map Navigation (Left Side) - Increased size for better accessibility */}
       {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
-        <div className="absolute top-[15%] left-4 z-50 pointer-events-auto">
+        <div className="absolute top-[18%] left-4 z-50 pointer-events-auto">
           <button 
-            onClick={handleStartExternalNavigation}
-            className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(0,122,255,0.4)] active:scale-95 transition-transform"
+            onClick={handleToggleAutoNav}
+            className={cn("w-16 h-16 rounded-full flex flex-col items-center justify-center shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform", isAutoNavHeadUp ? "bg-[#007AFF]" : "bg-[#1A1A1E] border-2 border-[#007AFF]")}
           >
-            <Navigation className="w-4 h-4 text-white" />
+            {isAutoNavHeadUp ? (
+              <>
+                <Navigation className="w-7 h-7 text-white mb-0.5 fill-white" />
+              </>
+            ) : (
+              <>
+                <MapPin className="w-7 h-7 text-[#007AFF] mb-0.5" />
+              </>
+            )}
+            <span className={cn("text-[10px] font-bold leading-none tracking-wider", isAutoNavHeadUp ? "text-white" : "text-[#007AFF]")}>NAV</span>
           </button>
         </div>
       )}
