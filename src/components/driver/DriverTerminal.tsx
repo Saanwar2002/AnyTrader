@@ -25,7 +25,6 @@ type RideState = 'idle' | 'incoming' | 'en_route_pickup' | 'waiting' | 'in_progr
 const libraries: any[] = ['places'];
 
 const mapOptions: google.maps.MapOptions = {
-  mapId: "9218684bb5f4749f", // Needed for vector maps & heading/tilt
   disableDefaultUI: false,
   zoomControl: false,
   streetViewControl: false,
@@ -174,6 +173,19 @@ export default function DriverTerminal() {
 
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
+  const [isAutoNavPaused, setIsAutoNavPaused] = useState(false);
+  const autoNavPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMapInteraction = () => {
+    if (!isAutoNavHeadUp) return;
+    setIsAutoNavPaused(true);
+    if (autoNavPauseTimeoutRef.current) {
+      clearTimeout(autoNavPauseTimeoutRef.current);
+    }
+    autoNavPauseTimeoutRef.current = setTimeout(() => {
+      setIsAutoNavPaused(false);
+    }, 10000); // Resume auto nav after 10s of no interaction
+  };
 
   const getBearing = (startLat: number, startLng: number, destLat: number, destLng: number) => {
     const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -283,12 +295,16 @@ export default function DriverTerminal() {
 
   // Handle Map Orientation (Head Up North / Direction of Travel)
   useEffect(() => {
-    if (!mapInstance || !isAutoNavHeadUp) {
-      if (mapInstance && !isAutoNavHeadUp) {
-        mapInstance.setHeading(0); // Reset to North up when disabled
-        mapInstance.setTilt(0);
-      }
+    if (!mapInstance) return;
+
+    if (!isAutoNavHeadUp) {
+      mapInstance.setHeading(0); // Reset to North up when disabled
+      mapInstance.setTilt(0);
       return;
+    }
+
+    if (isAutoNavPaused) {
+      return; // Do nothing if paused, leave map at whatever user set
     }
 
     if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {
@@ -297,7 +313,7 @@ export default function DriverTerminal() {
       mapInstance.setTilt(60); // 3D perspective
       if (directions) {
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(18);
+        mapInstance.setZoom(17.2);
       }
     } else if (rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng) {
       const targetBearing = driverHeading !== null ? driverHeading : getBearing(mapCenterRef.current[0], mapCenterRef.current[1], activeRide.dropoffLat, activeRide.dropoffLng);
@@ -305,13 +321,13 @@ export default function DriverTerminal() {
       mapInstance.setTilt(60);
       if (directions) {
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(18);
+        mapInstance.setZoom(17.2);
       }
     } else {
       mapInstance.setHeading(0);
       mapInstance.setTilt(0);
     }
-  }, [rideState, isAutoNavHeadUp, mapInstance, driverHeading, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, mapCenter, directions]);
+  }, [rideState, isAutoNavHeadUp, isAutoNavPaused, mapInstance, driverHeading, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, mapCenter, directions]);
 
   // Listen to Taxi Command Settings (platform_config/rides)
   useEffect(() => {
@@ -1515,7 +1531,7 @@ export default function DriverTerminal() {
       {activeTab === 'home' && (
       <>
       {/* Simulation Trigger (Dev Only) */}
-      <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[150] flex flex-col items-center gap-2 pointer-events-auto">
+      <div className="absolute top-[48px] left-4 z-[150] flex flex-col items-start gap-2 pointer-events-auto">
         <button 
           onClick={simulateIncomingRide}
           className="bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
@@ -1543,7 +1559,12 @@ export default function DriverTerminal() {
       </div>
 
       {/* 1. Map Layer (Background) */}
-      <div className="absolute inset-0 z-0 h-full w-full bg-[#1A1A1E]">
+      <div 
+        className="absolute inset-0 z-0 h-full w-full bg-[#1A1A1E]"
+        onTouchStartCapture={handleMapInteraction}
+        onWheelCapture={handleMapInteraction}
+        onMouseDownCapture={handleMapInteraction}
+      >
         {isLoaded && (
           <GoogleMap
             mapContainerStyle={{ width: '100%', height: '100%' }}
@@ -1657,7 +1678,7 @@ export default function DriverTerminal() {
                   polylineOptions: {
                     strokeColor: '#007AFF', // Google Maps style Blue
                     strokeOpacity: 0.8,
-                    strokeWeight: 6,
+                    strokeWeight: 2,
                   }
                 }}
               />
@@ -1705,7 +1726,9 @@ export default function DriverTerminal() {
         
         {/* Main Map Zoom Controls */}
         {mapInstance && (
-          <div className={cn(
+          <div 
+            onClickCapture={handleMapInteraction}
+            className={cn(
             "absolute right-4 z-[45] transition-all duration-300",
             (rideState === 'incoming' || rideState === 'review' || rideState === 'completed') ? "opacity-0 pointer-events-none" :
             rideState === 'idle' ? "bottom-[140px]" :
@@ -1792,57 +1815,30 @@ export default function DriverTerminal() {
         )}
       </div>
 
-      {/* Floating Map Navigation (Left Side) - Increased size for better accessibility */}
+      {/* Floating Map Navigation (Left Side) */}
       {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
         <div className="absolute top-[18%] left-4 z-50 pointer-events-auto">
           <button 
             onClick={handleToggleAutoNav}
-            className={cn("w-16 h-16 rounded-full flex flex-col items-center justify-center shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform", isAutoNavHeadUp ? "bg-[#007AFF]" : "bg-[#1A1A1E] border-2 border-[#007AFF]")}
+            className={cn("w-10 h-10 rounded-full flex flex-col items-center justify-center shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform", isAutoNavHeadUp ? "bg-[#007AFF]" : "bg-[#1A1A1E] border-2 border-[#007AFF]")}
           >
             {isAutoNavHeadUp ? (
               <>
-                <Navigation className="w-7 h-7 text-white mb-0.5 fill-white" />
+                <Navigation className="w-4 h-4 text-white fill-white" />
               </>
             ) : (
               <>
-                <MapPin className="w-7 h-7 text-[#007AFF] mb-0.5" />
+                <MapPin className="w-4 h-4 text-[#007AFF]" />
               </>
             )}
-            <span className={cn("text-[10px] font-bold leading-none tracking-wider", isAutoNavHeadUp ? "text-white" : "text-[#007AFF]")}>NAV</span>
           </button>
         </div>
       )}
 
-      {/* 2. Top UI: Privacy Drawer (Earning Bar & Gamification) */}
+      {/* 2. Top UI: Menu button */}
       <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
-        
         {/* Status Header (Sticky) */}
-        <div className="absolute top-12 left-4 right-4 z-40 flex items-center justify-between pointer-events-none">
-          <div className="bg-[#1A1A1E]/95 backdrop-blur-md pl-4 pr-2 py-2 flex items-center gap-2 rounded-full border border-[#2C2C30] shadow-lg pointer-events-auto">
-            <button 
-              onClick={() => setActiveTab('earnings')}
-              className="flex items-center gap-3 active:scale-95 transition-transform outline-none"
-            >
-              {isOnline ? (
-                <span className="w-2 h-2 rounded-full bg-[#00D26A] animate-pulse shadow-[0_0_5px_#00D26A]"></span>
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-[#FF3B30]"></span>
-              )}
-              <span className="text-white font-black leading-none tracking-tight">
-                 {isEarningsVisible ? `£${todayEarnings.toFixed(2)}` : '••••••'}
-              </span>
-            </button>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsEarningsVisible(!isEarningsVisible);
-              }}
-              className="p-1.5 text-[#E4E4E7] hover:text-white hover:bg-white/10 rounded-full transition-colors outline-none"
-            >
-              {isEarningsVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          
+        <div className="absolute top-12 left-4 right-4 z-40 flex items-center justify-end pointer-events-none">
           <button 
             onClick={() => setActiveTab('menu')} 
             className="w-10 h-10 bg-[#1A1A1E]/95 backdrop-blur-md rounded-full border border-[#2C2C30] text-white flex items-center justify-center shadow-lg pointer-events-auto active:scale-95 transition-transform"
@@ -1850,7 +1846,6 @@ export default function DriverTerminal() {
             <MenuIcon className="w-5 h-5" />
           </button>
         </div>
-
       </div>
 
       <div className="flex-1 pointer-events-none"></div>

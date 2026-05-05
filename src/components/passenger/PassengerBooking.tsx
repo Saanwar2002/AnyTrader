@@ -68,7 +68,6 @@ const formatAddressLines = (address: string) => {
 };
 
 const mapOptions: google.maps.MapOptions = {
-  mapId: "9218684bb5f4749f",
   disableDefaultUI: false,
   zoomControl: false,
   streetViewControl: false,
@@ -2178,7 +2177,7 @@ export default function PassengerBooking() {
             center={mapCenter}
             zoom={15}
             onLoad={setMap}
-            options={theme === "dark" ? darkMapOptions : premiumMapOptions}
+            options={premiumMapOptions}
             onClick={(e) => {
                if (e.latLng && step === "details") {
                   const lat = e.latLng.lat();
