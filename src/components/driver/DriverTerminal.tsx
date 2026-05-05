@@ -3038,7 +3038,7 @@ export default function DriverTerminal() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "w-full max-w-sm h-7 px-4 rounded-xl flex items-center justify-between border backdrop-blur-md transition-all pointer-events-auto shadow-lg",
+              "w-full max-w-sm h-8 px-4 rounded-xl flex items-center justify-between border backdrop-blur-md transition-all pointer-events-auto shadow-lg",
               isOnline 
                 ? "bg-[#064e3b]/80 border-emerald-500/30 shadow-emerald-900/20" 
                 : "bg-[#1A1A1E]/90 border-[#2C2C30]"
@@ -3046,11 +3046,11 @@ export default function DriverTerminal() {
           >
             <div className="flex items-center gap-3">
               <div className={cn("w-2 h-2 rounded-full", isOnline ? "bg-[#00D26A] animate-pulse" : "bg-[#A1A1AA]")} />
-              <span className={cn("text-[9px] font-black uppercase tracking-widest", isOnline ? "text-white" : "text-[#A1A1AA]")}>
+              <span className={cn("text-[10px] font-black uppercase tracking-widest", isOnline ? "text-white" : "text-[#A1A1AA]")}>
                 {isOnline ? "Waiting for Jobs" : "Offline"}
               </span>
             </div>
-            <span className={cn("text-[8px]", isOnline ? "font-black text-[#00D26A] drop-shadow-[0_0_2px_rgba(0,210,106,1)] brightness-150" : "font-bold text-[#A1A1AA]")}>
+            <span className={cn("text-[9px]", isOnline ? "font-black text-[#00D26A] drop-shadow-[0_0_2px_rgba(0,210,106,1)] brightness-150" : "font-bold text-[#A1A1AA]")}>
               {isOnline ? "ACTIVE" : "STANDBY"}
             </span>
           </motion.div>
