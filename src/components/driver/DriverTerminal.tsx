@@ -6,7 +6,7 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Info, Power, Zap, ChevronDown, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
+import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, addDoc, orderBy } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
@@ -870,6 +870,8 @@ export default function DriverTerminal() {
   const lastSeenChatCountRef = useRef(0);
   const [showJobDetails, setShowJobDetails] = useState(false);
   const [quickMessageCooldown, setQuickMessageCooldown] = useState(0);
+  const [isCardCollapsed, setIsCardCollapsed] = useState(false);
+  const cardCollapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (quickMessageCooldown > 0) {
@@ -881,6 +883,22 @@ export default function DriverTerminal() {
   useEffect(() => {
     if (isChatOpen) setUnreadChatCount(0);
   }, [isChatOpen]);
+
+  useEffect(() => {
+    if (['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) {
+      setIsCardCollapsed(false);
+      if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
+      cardCollapseTimeoutRef.current = setTimeout(() => {
+        setIsCardCollapsed(true);
+      }, 10000);
+    } else {
+      setIsCardCollapsed(false);
+      if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
+    }
+    return () => {
+      if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
+    }
+  }, [rideState]);
 
   useEffect(() => {
     if (!activeRide?.id || !user || !['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) return;
@@ -1878,17 +1896,17 @@ export default function DriverTerminal() {
               {/* Highlight header */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
 
-              <div className="flex items-center justify-between mb-3 shrink-0">
-                <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
-                  <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
+              <div className="flex items-center justify-between mb-2 shrink-0">
+                <h2 className="text-sm font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
+                  <span className="w-2 h-2 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
                   New Ride Request
                 </h2>
               </div>
 
-              <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-2">
+              <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-1">
                 {/* Map Section (Moved to top) */}
                 {isLoaded && activeRide?.pickupLat && activeRide?.dropoffLat && (
-                  <div className="w-full h-[180px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-3">
+                  <div className="w-full h-[140px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-2">
                     <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
                     <GoogleMap
                       mapContainerStyle={{ width: '100%', height: '100%' }}
@@ -1897,7 +1915,7 @@ export default function DriverTerminal() {
                         if (activeRide.pickupLat && activeRide.pickupLng) bounds.extend({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
                         if (activeRide.dropoffLat && activeRide.dropoffLng) bounds.extend({ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng });
                         (activeRide.stops || []).forEach((s: any) => { if (s.coords) bounds.extend(s.coords); });
-                        map.fitBounds(bounds, { top: 20, bottom: 20, left: 20, right: 20 });
+                        map.fitBounds(bounds, { top: 10, bottom: 10, left: 10, right: 10 });
                         // Apply a max zoom in case points are very close
                         const listener = window.google.maps.event.addListener(map, 'idle', () => {
                           if ((map.getZoom() || 0) > 13) map.setZoom(13); // Restrict to 13 as user mentioned
@@ -1922,84 +1940,84 @@ export default function DriverTerminal() {
                 )}
 
                 {/* Rider Details */}
-                <div className="border-t border-[#2C2C30] pt-3 pb-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-base border border-white shrink-0">
+                <div className="border-t border-[#2C2C30] pt-2 pb-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
                       {(activeRide?.name || "S")[0]}
                     </div>
                     <div className="flex-1 min-w-0 flex justify-between items-start">
                       <div>
-                        <h3 className="text-sm font-bold text-white leading-tight truncate">{activeRide?.name || "Sarah T."}</h3>
-                        <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
+                        <h3 className="text-[13px] font-bold text-white leading-tight truncate">{activeRide?.name || "Sarah T."}</h3>
+                        <p className="text-[11px] text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
                       </div>
                       {activeRide?.isRiderPlus !== false && (
-                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
+                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
                     {/* Fare Section (Moved below rider profile) */}
-                    <div className="bg-[#252529] rounded-xl p-3 relative overflow-hidden shrink-0">
+                    <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
                       <div className="flex justify-between items-end mb-1">
-                        <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
+                        <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
                           £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
-                          <span className="text-[15px] font-bold text-white/80 tracking-normal mb-1">({((activeRide?.distanceToPickupMiles || 1.2) + (activeRide?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          <span className="text-[13px] font-bold text-white/80 tracking-normal mb-0.5">({((activeRide?.distanceToPickupMiles || 1.2) + (activeRide?.distanceMiles || 22)).toFixed(1)} mi)</span>
                         </h1>
-                        <div className="flex gap-1.5 items-center">
+                        <div className="flex gap-1 items-center">
                           {activeRide?.isPriority && (
-                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
+                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
                           )}
-                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
+                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {activeRide?.surgeMultiplier || '1.4'}x</span>
                         </div>
                       </div>
-                      <p className="text-[#00D26A] text-[12px] font-bold mt-1">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                      <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
                     </div>
 
-                    <div className="flex items-center justify-between mt-2 mb-1">
-                      <div className="relative pl-5 space-y-3 flex-1">
+                    <div className="flex items-center justify-between mt-1 mb-1">
+                      <div className="relative pl-5 space-y-2 flex-1">
                         {/* Route Line indicator */}
-                        <div className="absolute left-2 top-1.5 bottom-1.5 w-[3px] bg-[#2C2C30] rounded-full"></div>
+                        <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
                         
                         <div className="relative">
-                          <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                          <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
-                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
+                          <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
+                          <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
+                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
                         </div>
 
                         {(activeRide?.stops || []).map((stop: any, idx: number) => (
-                          <div key={idx} className="relative mt-3">
-                            <div className="absolute w-3.5 h-3.5 rounded-full bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                            <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
-                            <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stop.address}</p>
+                          <div key={idx} className="relative mt-2">
+                            <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
+                            <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
+                            <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stop.address}</p>
                           </div>
                         ))}
 
-                        <div className="relative mt-3">
-                          <div className="absolute w-3.5 h-3.5 bg-[#FF3B30] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                          <p className="text-[10px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
-                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{activeRide?.distanceMiles || "22"} mi from pickup</p>
+                        <div className="relative mt-2">
+                          <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
+                          <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
+                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{activeRide?.distanceMiles || "22"} mi from pickup</p>
                         </div>
                       </div>
 
                       {/* Circular Timer Ring */}
-                      <div className="relative w-16 h-16 flex items-center justify-center shrink-0 ml-3 mr-2">
+                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0 ml-2 mr-1">
                         <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="32" cy="32" r="28" className="stroke-[#2C2C30] fill-none" strokeWidth="5" />
+                          <circle cx="24" cy="24" r="20" className="stroke-[#2C2C30] fill-none" strokeWidth="4" />
                           <motion.circle 
-                            cx="32" cy="32" r="28" 
+                            cx="24" cy="24" r="20" 
                             className={cn("fill-none", incomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
-                            strokeWidth="5" 
-                            strokeDasharray="176" 
+                            strokeWidth="4" 
+                            strokeDasharray="125.6" 
                             strokeLinecap="round"
                             initial={{ strokeDashoffset: 0 }}
-                            animate={{ strokeDashoffset: 176 - (176 * (incomingTimer / 15)) }}
+                            animate={{ strokeDashoffset: 125.6 - (125.6 * (incomingTimer / 15)) }}
                             transition={{ duration: 1, ease: 'linear' }}
                           />
                         </svg>
-                        <span className="absolute text-xl font-black text-white">{incomingTimer}</span>
+                        <span className="absolute text-lg font-black text-white">{incomingTimer}</span>
                       </div>
                     </div>
                   </div>
@@ -2007,11 +2025,11 @@ export default function DriverTerminal() {
               </div>
 
               {activeRide?.comments && (
-                <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                  <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
+                <div className="mb-2 bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
+                  <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
-                    <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                    <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                    <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
                       {activeRide.comments}
                     </p>
                   </div>
@@ -2019,16 +2037,16 @@ export default function DriverTerminal() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2.5 mt-2 shrink-0 relative z-20">
+              <div className="flex flex-col gap-2 mt-1 shrink-0 relative z-20">
                 <button 
                   onClick={handleAcceptRide}
-                  className="w-full h-12 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-black text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                  className="w-full h-11 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
                 >
                   <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
                 </button>
                 <button 
                   onClick={handleDeclineRide}
-                  className="w-full py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
+                  className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
                 >
                   Decline
                 </button>
@@ -2064,83 +2082,83 @@ export default function DriverTerminal() {
               <div className="flex-1 flex flex-col min-h-0 scrollbar-hide">
                 {/* Rider Details */}
                 <div className="pt-1 pb-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-base border border-white shrink-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
                       {(stackedRideOffer?.name || "S")[0]}
                     </div>
                     <div className="flex-1 min-w-0 flex justify-between items-start">
                       <div>
-                        <h3 className="text-sm font-bold text-white leading-tight truncate">{stackedRideOffer?.name || "Sarah T."}</h3>
-                        <p className="text-xs text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
+                        <h3 className="text-[13px] font-bold text-white leading-tight truncate">{stackedRideOffer?.name || "Sarah T."}</h3>
+                        <p className="text-[11px] text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
                       </div>
                       {stackedRideOffer?.isRiderPlus !== false && (
-                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
+                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
                     {/* Fare Section (Moved below rider profile) */}
-                    <div className="bg-[#252529] rounded-xl p-3 relative overflow-hidden shrink-0">
+                    <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
                       <div className="flex justify-between items-end mb-1">
-                        <h1 className="text-3xl leading-[1] font-black text-white flex items-end gap-3.5 shrink-0">
+                        <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
                           £{stackedRideOffer?.fareEstimate?.toFixed(2) || '38.50'}
-                          <span className="text-[15px] font-bold text-white/80 tracking-normal mb-1">({((stackedRideOffer?.distanceToPickupMiles || 1.2) + (stackedRideOffer?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          <span className="text-[13px] font-bold text-white/80 tracking-normal mb-0.5">({((stackedRideOffer?.distanceToPickupMiles || 1.2) + (stackedRideOffer?.distanceMiles || 22)).toFixed(1)} mi)</span>
                         </h1>
-                        <div className="flex gap-1.5 items-center">
+                        <div className="flex gap-1 items-center">
                           {stackedRideOffer?.isPriority && (
-                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
+                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
                           )}
-                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {stackedRideOffer?.surgeMultiplier || '1.4'}x</span>
+                          <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">🔥 {stackedRideOffer?.surgeMultiplier || '1.4'}x</span>
                         </div>
                       </div>
-                      <p className="text-[#00D26A] text-[12px] font-bold mt-1">You earn: £{((stackedRideOffer?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                      <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{((stackedRideOffer?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
                     </div>
 
-                    <div className="flex items-center justify-between mt-2 mb-1">
-                      <div className="relative pl-5 space-y-3 flex-1">
+                    <div className="flex items-center justify-between mt-1 mb-1">
+                      <div className="relative pl-5 space-y-2 flex-1">
                         {/* Route Line indicator */}
-                        <div className="absolute left-2 top-1.5 bottom-1.5 w-[3px] bg-[#2C2C30] rounded-full"></div>
+                        <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
                         
                         <div className="relative">
-                          <div className="absolute w-3.5 h-3.5 rounded-full bg-[#00D26A] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                          <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Next Pickup After Drop-off</p>
-                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stackedRideOffer?.pickupAddress || "12 Elm Street, SE15"}</p>
-                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{stackedRideOffer?.distanceToPickupMiles || "1.2"} mi from next dropoff</p>
+                          <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
+                          <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Next Pickup After Drop-off</p>
+                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stackedRideOffer?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{stackedRideOffer?.distanceToPickupMiles || "1.2"} mi from next dropoff</p>
                         </div>
 
                         {(stackedRideOffer?.stops || []).map((stop: any, idx: number) => (
-                          <div key={idx} className="relative mt-3">
-                            <div className="absolute w-3.5 h-3.5 rounded-full bg-[#FF9500] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                            <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
-                            <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stop.address}</p>
+                          <div key={idx} className="relative mt-2">
+                            <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
+                            <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
+                            <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stop.address}</p>
                           </div>
                         ))}
 
-                        <div className="relative mt-3">
-                          <div className="absolute w-3.5 h-3.5 bg-[#FF3B30] border-2 border-[#1A1A1E] -left-[23.5px] top-0.5 z-10"></div>
-                          <p className="text-[10px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
-                          <p className="text-[17px] font-bold text-white leading-tight line-clamp-2">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[12px] font-bold text-[#E4E4E7] mt-1">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
+                        <div className="relative mt-2">
+                          <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
+                          <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
+                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
                         </div>
                       </div>
 
                       {/* Circular Timer Ring */}
-                      <div className="relative w-16 h-16 flex items-center justify-center shrink-0 ml-3 mr-2">
+                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0 ml-2 mr-1">
                         <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="32" cy="32" r="28" className="stroke-[#2C2C30] fill-none" strokeWidth="5" />
+                          <circle cx="24" cy="24" r="20" className="stroke-[#2C2C30] fill-none" strokeWidth="4" />
                           <motion.circle 
-                            cx="32" cy="32" r="28" 
+                            cx="24" cy="24" r="20" 
                             className={cn("fill-none", stackedIncomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
-                            strokeWidth="5" 
-                            strokeDasharray="176" 
+                            strokeWidth="4" 
+                            strokeDasharray="125.6" 
                             strokeLinecap="round"
                             initial={{ strokeDashoffset: 0 }}
-                            animate={{ strokeDashoffset: 176 - (176 * (stackedIncomingTimer / 15)) }}
+                            animate={{ strokeDashoffset: 125.6 - (125.6 * (stackedIncomingTimer / 15)) }}
                             transition={{ duration: 1, ease: 'linear' }}
                           />
                         </svg>
-                        <span className="absolute text-xl font-black text-white">{stackedIncomingTimer}</span>
+                        <span className="absolute text-lg font-black text-white">{stackedIncomingTimer}</span>
                       </div>
                     </div>
                   </div>
@@ -2148,11 +2166,11 @@ export default function DriverTerminal() {
               </div>
 
               {stackedRideOffer?.comments && (
-                <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                  <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
+                <div className="mb-2 bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
+                  <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
-                    <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                    <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                    <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
                       {stackedRideOffer.comments}
                     </p>
                   </div>
@@ -2160,16 +2178,16 @@ export default function DriverTerminal() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2.5 mt-2 shrink-0 relative z-20">
+              <div className="flex flex-col gap-2 mt-1 shrink-0 relative z-20">
                 <button 
                   onClick={handleAcceptStackedRide}
-                  className="w-full h-12 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-black text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                  className="w-full h-11 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
                 >
                   <Check className="w-5 h-5 stroke-[3]" /> ACCEPT NEXT JOB
                 </button>
                 <button 
                   onClick={handleDeclineStackedRide}
-                  className="w-full py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
+                  className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
                 >
                   Decline
                 </button>
@@ -2220,45 +2238,66 @@ export default function DriverTerminal() {
       <AnimatePresence>
         {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && (
           <motion.div
+            layout
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] p-4 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto"
+            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-3 pt-0 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col"
           >
+            <div 
+              className="w-full h-8 flex items-center justify-center mb-0 cursor-pointer touch-none opacity-90 hover:opacity-100 transition-opacity drop-shadow-sm"
+              onClick={() => setIsCardCollapsed(!isCardCollapsed)}
+            >
+              {isCardCollapsed ? (
+                <ChevronUp className="w-7 h-7 text-[#F8F9FA]" />
+              ) : (
+                <ChevronDown className="w-7 h-7 text-[#F8F9FA]" />
+              )}
+            </div>
+
             {rideState === 'en_route_pickup' && (
               <>
-                <div className="flex justify-between items-start mb-3 relative">
+                <div className="flex justify-between items-start mb-2 relative">
                   <div>
-                    <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest mb-1">Picking up {activeRide?.name || "Sarah T."}</p>
-                    <div className="absolute left-1/2 -translate-x-1/2 -top-2">
-                      <span className="bg-[#00D26A] text-[#1A1A1E] px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap">Pick Up</span>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap">Pick Up</span>
+                      <p className="text-[9px] font-black uppercase text-[#E4E4E7] tracking-widest">Picking up {activeRide?.name || "Sarah T."}</p>
                     </div>
-                    <p className="text-[19px] font-bold text-white mb-0.5 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                    <p className="text-xl font-black text-white leading-none mt-1">3 min <span className="text-[#A1A1AA] text-base font-bold">· 1.2 mi</span></p>
+                    <p className="text-[16px] font-bold text-white mb-0 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                    <p className="text-[16px] font-black text-white leading-none mt-0.5">3 min <span className="text-[#A1A1AA] text-[14px] font-bold">· 1.2 mi</span></p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[#00D26A] font-bold text-lg">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                    <p className="text-[#00D26A] font-bold text-base">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
 
-                {activeRide?.comments && (
-                  <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
-                    <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
-                    <div>
-                      <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
-                      <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                        {activeRide.comments}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                <AnimatePresence initial={false}>
+                  {!isCardCollapsed && activeRide?.comments && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+                      animate={{ height: "auto", opacity: 1, marginBottom: 12 }}
+                      exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
+                        <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                          <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                            {activeRide.comments}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                <div className="flex justify-center gap-3 mt-2">
-                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
+                <div className="flex justify-center gap-2 mt-1">
+                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform">
                     <Info className="w-5 h-5 text-white" />
                   </button>
-                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                     {unreadChatCount > 0 && (
                       <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
@@ -2271,41 +2310,52 @@ export default function DriverTerminal() {
                   </button>
                   <button 
                     onClick={onArrivedClick}
-                    className="flex-1 h-11 bg-[#FF9500] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
+                    className="flex-1 h-10 bg-[#FF9500] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
                   >
                     <MapPin className="w-4 h-4" /> MARK AS ARRIVED
                   </button>
                 </div>
 
-                <div className="flex overflow-x-auto no-scrollbar gap-2 mb-3 w-full pb-1">
-                  {["I'll be right there", "Traffic is heavy", "I'm outside"].map((msg, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => handleSendQuickMessage(msg)}
-                      disabled={quickMessageCooldown > 0}
-                      className={cn(
-                        "whitespace-nowrap px-4 py-2 border text-[12px] font-bold rounded-[10px] shadow-sm transition-transform",
-                        quickMessageCooldown > 0 
-                          ? "bg-[#1A1A1E] border-[#2C2C30] text-[#E4E4E7]/50 cursor-not-allowed" 
-                          : "bg-[#252529] border-[#333338] text-white active:scale-95"
-                      )}
+                <AnimatePresence initial={false}>
+                  {!isCardCollapsed && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                      animate={{ height: "auto", opacity: 1, marginTop: 8 }}
+                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                      className="overflow-hidden"
                     >
-                      {quickMessageCooldown > 0 ? `${msg} (${Math.floor(quickMessageCooldown / 60)}:${(quickMessageCooldown % 60).toString().padStart(2, '0')})` : msg}
-                    </button>
-                  ))}
-                </div>
+                      <div className="flex overflow-x-auto no-scrollbar gap-2 mb-1 w-full pb-1">
+                        {["I'll be right there", "Traffic is heavy", "I'm outside"].map((msg, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => handleSendQuickMessage(msg)}
+                            disabled={quickMessageCooldown > 0}
+                            className={cn(
+                              "whitespace-nowrap px-3 py-1.5 border text-[11px] font-bold rounded-[8px] shadow-sm transition-transform",
+                              quickMessageCooldown > 0 
+                                ? "bg-[#1A1A1E] border-[#2C2C30] text-[#E4E4E7]/50 cursor-not-allowed" 
+                                : "bg-[#252529] border-[#333338] text-white active:scale-95"
+                            )}
+                          >
+                            {quickMessageCooldown > 0 ? `${msg} (${Math.floor(quickMessageCooldown / 60)}:${(quickMessageCooldown % 60).toString().padStart(2, '0')})` : msg}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </>
             )}
 
             {rideState === 'waiting' && (
               <>
-                <div className="flex justify-between items-start mb-3">
+                <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="text-[10px] font-black uppercase text-[#FF9500] tracking-widest mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Waiting for Rider</p>
-                    <p className="text-xl font-black text-white px-0.5">
+                    <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-widest mb-0.5 flex items-center gap-1"><AlertCircle className="w-2.5 h-2.5" /> Waiting for Rider</p>
+                    <p className="text-[17px] font-black text-white px-0.5">
                       {Math.floor(elapsedWaitSeconds / 60)}:{(elapsedWaitSeconds % 60).toString().padStart(2, '0')}
                     </p>
-                    <p className="text-xs font-bold mt-0.5">
+                    <p className="text-[11px] font-bold mt-0">
                       {elapsedWaitSeconds < 180 
                         ? <span className="text-[#00D26A]">Free wait: {Math.floor((180 - elapsedWaitSeconds) / 60)}:{((180 - elapsedWaitSeconds) % 60).toString().padStart(2, '0')}</span>
                         : elapsedWaitSeconds < 300
@@ -2315,39 +2365,50 @@ export default function DriverTerminal() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[#00D26A] font-bold">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                    <p className="text-[#00D26A] font-bold text-base">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
 
-                {activeRide?.comments && (
-                  <div className="mb-3 bg-[#FFD60A] border rounded-[10px] p-2.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
-                    <MessageSquare className="w-4 h-4 text-[#1A1A1E] shrink-0 mt-0.5" />
-                    <div>
-                      <span className="text-[#1A1A1E] text-[10px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
-                      <p className="text-[#1A1A1E] text-xs font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                        {activeRide.comments}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                <AnimatePresence initial={false}>
+                  {!isCardCollapsed && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+                      animate={{ height: "auto", opacity: 1, marginBottom: 12 }}
+                      exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+                      className="overflow-hidden flex flex-col gap-3"
+                    >
+                      {activeRide?.comments && (
+                        <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
+                          <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                            <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                              {activeRide.comments}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(activeRide?.requirePasscode || activeRide?.driverRequirePasscode) && activeRide?.handshakeCode && (
+                        <div className="bg-[#00D26A]/10 border border-[#00D26A]/30 rounded-[10px] p-2 flex items-center justify-between">
+                          <div>
+                            <p className="text-[#00D26A] text-[9px] font-black tracking-widest uppercase mb-0.5">PIN Check Required</p>
+                            <p className="text-[#E4E4E7] text-[11px] font-medium">Verify this PIN with passenger</p>
+                          </div>
+                          <div className="bg-[#00D26A]/20 text-[#00D26A] font-mono font-black text-lg px-2.5 py-1 rounded-lg tracking-widest">
+                            {activeRide.handshakeCode}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 
-                {(activeRide?.requirePasscode || activeRide?.driverRequirePasscode) && activeRide?.handshakeCode && (
-                  <div className="mb-3 bg-[#00D26A]/10 border border-[#00D26A]/30 rounded-xl p-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-[#00D26A] text-[10px] font-black tracking-widest uppercase mb-0.5">PIN Check Required</p>
-                      <p className="text-[#E4E4E7] text-xs font-medium">Verify this PIN with passenger</p>
-                    </div>
-                    <div className="bg-[#00D26A]/20 text-[#00D26A] font-mono font-black text-xl px-3 py-1.5 rounded-lg tracking-widest">
-                      {activeRide.handshakeCode}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex justify-center gap-3 mt-2">
-                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
+                <div className="flex justify-center gap-2 mt-1">
+                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform">
                     <Info className="w-5 h-5 text-white" />
                   </button>
-                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                     {unreadChatCount > 0 && (
                       <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
@@ -2360,55 +2421,66 @@ export default function DriverTerminal() {
                   </button>
                   <button 
                     onClick={handleStartRide}
-                    className="flex-1 h-11 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-emerald-950/20"
+                    className="flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-emerald-950/20"
                   >
                     <Zap className="w-4 h-4 fill-[#0D0D0F]" /> START TRIP
                   </button>
                 </div>
 
-                <div className="flex overflow-x-auto no-scrollbar gap-2 mt-auto mb-3 w-full pb-1">
-                  {["I'm waiting outside", "Are you coming?", "Please hurry up", "Couldn't stop at location, please look around for me"].map((msg, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => handleSendQuickMessage(msg)}
-                      disabled={quickMessageCooldown > 0}
-                      className={cn(
-                        "whitespace-nowrap px-4 py-2 border text-[12px] font-bold rounded-[10px] shadow-sm transition-transform",
-                        quickMessageCooldown > 0 
-                          ? "bg-[#1A1A1E] border-[#2C2C30] text-[#E4E4E7]/50 cursor-not-allowed" 
-                          : "bg-[#252529] border-[#333338] text-white active:scale-95"
-                      )}
+                <AnimatePresence initial={false}>
+                  {!isCardCollapsed && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                      animate={{ height: "auto", opacity: 1, marginTop: 8 }}
+                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                      className="overflow-hidden"
                     >
-                      {quickMessageCooldown > 0 ? `${msg} (${Math.floor(quickMessageCooldown / 60)}:${(quickMessageCooldown % 60).toString().padStart(2, '0')})` : msg}
-                    </button>
-                  ))}
-                </div>
+                      <div className="flex overflow-x-auto no-scrollbar gap-2 mt-auto mb-1 w-full pb-1">
+                        {["I'm waiting outside", "Are you coming?", "Please hurry up", "Couldn't stop at location, please look around for me"].map((msg, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => handleSendQuickMessage(msg)}
+                            disabled={quickMessageCooldown > 0}
+                            className={cn(
+                              "whitespace-nowrap px-3 py-1.5 border text-[11px] font-bold rounded-[8px] shadow-sm transition-transform",
+                              quickMessageCooldown > 0 
+                                ? "bg-[#1A1A1E] border-[#2C2C30] text-[#E4E4E7]/50 cursor-not-allowed" 
+                                : "bg-[#252529] border-[#333338] text-white active:scale-95"
+                            )}
+                          >
+                            {quickMessageCooldown > 0 ? `${msg} (${Math.floor(quickMessageCooldown / 60)}:${(quickMessageCooldown % 60).toString().padStart(2, '0')})` : msg}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </>
             )}
 
             {rideState === 'in_progress' && (
               <>
-                <div className="flex justify-between items-start mb-3 relative">
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1 mb-1 ${isWaitingAtStop ? 'text-[#FF9500]' : 'text-[#00D26A]'}`}>
-                      <span className={`w-2 h-2 rounded-full animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> {isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}
-                    </p>
-                    <div className="absolute left-1/2 -translate-x-1/2 -top-2">
+                <div className="flex justify-between items-start mb-2 relative">
+                  <div className="flex-1 mr-4 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
                        {activeRide?.stops?.length > 0 ? (
-                          <span className="bg-[#FF9500] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap">Multi-Stop</span>
+                          <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap">Multi-Stop</span>
                        ) : (
-                          <span className="bg-[#FF3B30] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
+                          <span className="bg-[#FF3B30] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
                        )}
+                       <p className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${isWaitingAtStop ? 'text-[#FF9500]' : 'text-[#00D26A]'}`}>
+                         <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> {isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}
+                       </p>
                     </div>
-                    <p className="text-[19px] font-bold text-[#F8F9FA] mb-0.5 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <p className="text-[16px] font-bold text-[#F8F9FA] mb-0 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                     {isWaitingAtStop ? (
-                       <p className="text-xl font-black text-[#FF9500] leading-none mt-1">Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:{((totalPaidWaitSeconds) % 60).toString().padStart(2, '0')}</p>
+                       <p className="text-[16px] font-black text-[#FF9500] leading-none mt-0.5">Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:{((totalPaidWaitSeconds) % 60).toString().padStart(2, '0')}</p>
                     ) : (
-                       <p className="text-xl font-black text-white leading-none mt-1">{activeRide?.durationMinutes || 38} min left <span className="text-[#A1A1AA] text-sm"> • {activeRide?.distanceMiles?.toFixed(1) || '14.2'} mi</span></p>
+                       <p className="text-[16px] font-black text-white leading-none mt-0.5">{activeRide?.durationMinutes || 38} min left <span className="text-[#A1A1AA] text-[14px] font-bold"> • {activeRide?.distanceMiles?.toFixed(1) || '14.2'} mi</span></p>
                     )}
                   </div>
-                  <div className="text-right flex flex-col items-end">
-                    <p className="text-[#00D26A] font-bold text-lg leading-none mb-1.5">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
+                  <div className="text-right flex flex-col items-end shrink-0">
+                    <p className="text-[#00D26A] font-bold text-base leading-none mb-1.5 mt-0.5">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
                     {activeRide?.hasCardOnFile ? (
                       <div className="inline-block bg-white border-2 border-[#00D26A] px-2 py-1 rounded-md shadow-sm mt-0.5">
                         <span className="text-[#059669] text-[9px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
@@ -2424,45 +2496,52 @@ export default function DriverTerminal() {
                   </div>
                 </div>
                 
-                {activeRide?.stops?.length > 0 && (
-                  <div className="flex flex-col gap-2 mt-3">
-                     <button onClick={handleToggleWaitAtStop} className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? 'bg-[#FF9500] text-white border-[#FF9500]/50' : 'bg-transparent text-[#FF9500] border-[#FF9500]/30'}`}>
-                       {isWaitingAtStop ? 'Resume Trip' : 'Wait at Stop'}
-                     </button>
-                     
-                     <AnimatePresence>
-                       {fareConfig.allowRiderAbandonment && isWaitingAtStop && currentStopWaitSeconds >= 300 && !abandonmentWarningSent && (
-                         <motion.button 
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            onClick={handleSendAbandonmentWarning}
-                            className="w-full py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/50 text-[#FF3B30] rounded-xl font-black text-xs uppercase tracking-wider hover:bg-[#FF3B30]/20 transition-colors"
-                         >
-                            Rider not responding?
-                         </motion.button>
-                       )}
+                <AnimatePresence initial={false}>
+                  {!isCardCollapsed && activeRide?.stops?.length > 0 && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+                      animate={{ height: "auto", opacity: 1, marginBottom: 12 }}
+                      exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+                      className="overflow-hidden flex flex-col gap-2 mt-3"
+                    >
+                       <button onClick={handleToggleWaitAtStop} className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? 'bg-[#FF9500] text-white border-[#FF9500]/50' : 'bg-transparent text-[#FF9500] border-[#FF9500]/30'}`}>
+                         {isWaitingAtStop ? 'Resume Trip' : 'Wait at Stop'}
+                       </button>
                        
-                       {fareConfig.allowRiderAbandonment && isWaitingAtStop && currentStopWaitSeconds >= 420 && abandonmentWarningSent && (
-                         <motion.button 
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            onClick={handleRiderAbandonment}
-                            className="w-full py-3 bg-[#FF3B30] text-white rounded-xl font-black text-sm uppercase tracking-wider hover:bg-[#FF3B30]/90 transition-colors shadow-lg"
-                         >
-                            End Trip Here (Rider Abandoned)
-                         </motion.button>
-                       )}
-                     </AnimatePresence>
-                  </div>
-                )}
+                       <AnimatePresence>
+                         {fareConfig.allowRiderAbandonment && isWaitingAtStop && currentStopWaitSeconds >= 300 && !abandonmentWarningSent && (
+                           <motion.button 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              onClick={handleSendAbandonmentWarning}
+                              className="w-full py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/50 text-[#FF3B30] rounded-xl font-black text-xs uppercase tracking-wider hover:bg-[#FF3B30]/20 transition-colors"
+                           >
+                              Rider not responding?
+                           </motion.button>
+                         )}
+                         
+                         {fareConfig.allowRiderAbandonment && isWaitingAtStop && currentStopWaitSeconds >= 420 && abandonmentWarningSent && (
+                           <motion.button 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              onClick={handleRiderAbandonment}
+                              className="w-full py-3 bg-[#FF3B30] text-white rounded-xl font-black text-sm uppercase tracking-wider hover:bg-[#FF3B30]/90 transition-colors shadow-lg"
+                           >
+                              End Trip Here (Rider Abandoned)
+                           </motion.button>
+                         )}
+                       </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                <div className="flex justify-center gap-2 mt-2">
-                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-11 bg-[#2C2C30] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform">
+                <div className="flex justify-center gap-2 mt-1">
+                  <button onClick={() => setShowJobDetails(true)} className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform">
                     <Info className="w-5 h-5 text-white" />
                   </button>
-                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-11 bg-[#252529] rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
+                  <button onClick={() => setIsChatOpen(true)} className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]">
                     <MessageCircle className="w-5 h-5 text-[#00D26A]" />
                     {unreadChatCount > 0 && (
                       <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
@@ -2475,7 +2554,7 @@ export default function DriverTerminal() {
                   </button>
                   <button 
                     onClick={handleCompleteRideBtnClick}
-                    className="flex-1 h-11 bg-[#FF3B30] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
+                    className="flex-1 h-10 bg-[#FF3B30] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
                   >
                     <Check className="w-4 h-4 stroke-[3]" /> COMPLETE
                   </button>

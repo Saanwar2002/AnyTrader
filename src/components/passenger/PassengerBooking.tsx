@@ -350,6 +350,7 @@ export default function PassengerBooking() {
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
   const [nearbyDriversCount, setNearbyDriversCount] = useState<number>(0);
   const [driversAvailableSoonCount, setDriversAvailableSoonCount] = useState<number>(0);
+  const [estimatedWaitEta, setEstimatedWaitEta] = useState<number | null>(null);
   const [nearbyDriversLocations, setNearbyDriversLocations] = useState<{lat: number, lng: number, id: string}[]>([]);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set(['standard']));
   const [showRideInfo, setShowRideInfo] = useState(false);
@@ -594,12 +595,14 @@ export default function PassengerBooking() {
     if (!pickupCoords) {
       setNearbyDriversCount(0);
       setDriversAvailableSoonCount(0);
+      setEstimatedWaitEta(null);
       return;
     }
     const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
     const unsub = onSnapshot(q, (snapshot) => {
       let countNow = 0;
       let countSoon = 0;
+      let minEtaMins: number | null = null;
       const cats = new Set<string>();
       const locations: {lat: number, lng: number, id: string}[] = [];
 
@@ -627,11 +630,14 @@ export default function PassengerBooking() {
 
         if (data.status === 'on_ride' && data.dropoffLat && data.dropoffLng) {
           if (data.isStackingEnabled !== false && data.isLastJob !== true) {
+            const distFromCurrentToDropoff = (data.lat && data.lng) ? calculateDistance(data.lat, data.lng, data.dropoffLat, data.dropoffLng) : 0;
             const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.dropoffLat, data.dropoffLng);
             if (distToPickup <= 3) {
                countSoon++;
                driverCategories.forEach((cat: string) => cats.add(cat));
                locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
+               const driverEta = (distFromCurrentToDropoff * 4) + 3 + (distToPickup * 4);
+               if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
             }
           }
         } else if (data.lat && data.lng && data.status !== 'on_ride') {
@@ -641,12 +647,15 @@ export default function PassengerBooking() {
                countNow++;
                driverCategories.forEach((cat: string) => cats.add(cat));
                locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
+               const driverEta = distToPickup * 4;
+               if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
             }
           }
         }
       });
       setNearbyDriversCount(countNow);
       setDriversAvailableSoonCount(countSoon);
+      setEstimatedWaitEta(minEtaMins);
       setNearbyDriversLocations(locations);
       setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
     }, (err) => console.error("onSnapshot ERROR live_tracking:", err));
@@ -749,7 +758,9 @@ export default function PassengerBooking() {
     
     if (isListening) {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      recognitionRef.current?.stop();
+      // Let the onend handler process the current transcript when it fires.
+      recognitionRef.current?.stop(); 
+      // Do not processVoiceCommand here, otherwise it may process twice because onend is called when stop() occurs.
       return;
     }
 
@@ -770,7 +781,7 @@ export default function PassengerBooking() {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => {
         if (recognitionRef.current) recognitionRef.current.stop();
-      }, 5000);
+      }, 3000); // Wait 3 seconds of silence before automatically stopping
     };
 
     recognition.onstart = () => {
@@ -787,8 +798,16 @@ export default function PassengerBooking() {
       }
     };
     
-    recognition.onerror = () => {
+    recognition.onerror = (e: any) => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (e.error === 'no-speech') {
+        // Stop on no speech if it's too long
+        setIsListening(false);
+        return;
+      }
+      if (e.error === 'aborted') {
+        return;
+      }
       setIsListening(false);
     };
     
@@ -804,7 +823,15 @@ export default function PassengerBooking() {
         transcriptRef.current += currentTranscript;
       }
     };
-    recognition.start();
+    
+    try {
+      recognition.start();
+    } catch(e: any) {
+      if (e && e.name !== 'InvalidStateError' && !e.message?.includes('already started')) {
+        console.error("Speech recognition start error:", e);
+      }
+      setIsListening(false);
+    }
   };
 
   const geocodeLocation = (address: string, setter: (val: string) => void, coordSetter: (coords: {lat: number, lng: number}) => void) => {
@@ -856,9 +883,17 @@ export default function PassengerBooking() {
       if (result.comments) setComments(result.comments);
       
       toast.success("AI extraction complete. Please review and verify the addresses.", { duration: 5000 });
-    } catch (err) {
-      console.error("AI Error:", err);
-      toast.error("AI error. Try typing.");
+    } catch (err: any) {
+      const errorMsg = err?.message || String(err);
+      if (!(errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("rate limit"))) {
+        console.error("AI Error:", err);
+      }
+      
+      if (errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("rate limit")) {
+        toast.error("Daily AI usage limit reached. Please type your address manually.", { duration: 6000 });
+      } else {
+        toast.error("AI error. Try typing.", { duration: 4000 });
+      }
     } finally {
       setIsAiProcessing(false);
     }
@@ -2734,19 +2769,20 @@ export default function PassengerBooking() {
                       >
                         {/* Driver Availability */}
                         <div className={cn(
-                          "flex items-center justify-center gap-2 px-3 py-1.5 rounded-[8px] font-bold text-xs transition-colors duration-300",
-                          nearbyDriversCount > 0 
-                            ? "bg-[#D6F5E1] text-[#1E7145]" 
-                            : driversAvailableSoonCount > 0 
-                              ? "bg-lime-100 text-lime-800"
-                              : "bg-red-100 text-red-800"
+                          "flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] font-bold text-sm transition-colors duration-300 shadow-sm",
+                          (nearbyDriversCount > 0 || driversAvailableSoonCount > 0)
+                            ? "bg-emerald-600 text-[#F8F9FA]" 
+                            : "bg-red-100 text-red-800"
                         )}>
-                          <Car className="w-4 h-4 shrink-0" />
+                          <Car className="w-[18px] h-[18px] shrink-0" />
                           <span>
                             {nearbyDriversCount === 0 && driversAvailableSoonCount === 0 && "No drivers available nearby"}
-                            {nearbyDriversCount > 0 && nearbyDriversCount <= 5 && `${nearbyDriversCount} drivers available now`}
-                            {nearbyDriversCount > 5 && "5+ drivers available now"}
-                            {nearbyDriversCount === 0 && driversAvailableSoonCount > 0 && `${driversAvailableSoonCount} drivers available soon`}
+                            {(nearbyDriversCount > 0 || driversAvailableSoonCount > 0) && (
+                              estimatedWaitEta !== null ? (
+                                estimatedWaitEta > 20 ? "Driver available in 20+ mins" :
+                                `Driver available within ${Math.max(5, Math.ceil(estimatedWaitEta / 5) * 5)} mins`
+                              ) : "Driver available soon"
+                            )}
                           </span>
                         </div>
                         

@@ -66,7 +66,7 @@ function IndexRoute() {
   }
 
   if (activePortal === "anyride") {
-    return activeRole === "driver" ? <DriverTerminal /> : <Navigate to="/book-ride" replace />;
+    return activeRole === "driver" ? <Navigate to="/driver-terminal" replace /> : <Navigate to="/book-ride" replace />;
   }
 
   // AnyTrader context

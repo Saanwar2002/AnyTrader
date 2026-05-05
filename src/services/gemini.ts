@@ -64,7 +64,10 @@ async function callGemini(params: {
     });
     return response;
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    const errorMsg = error?.message || String(error);
+    if (!(errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("rate limit"))) {
+      console.error("Gemini API Error:", error);
+    }
     throw error;
   }
 }
@@ -1675,8 +1678,11 @@ export async function processTaxiVoiceCommand(text: string, locationContext: str
     const textResponse = response.text || "";
     if (!textResponse) throw new Error("Empty response from Gemini");
     return JSON.parse(textResponse);
-  } catch (error) {
-    console.error("Gemini Taxi Voice Process Error:", error);
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    if (!(errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("rate limit"))) {
+      console.error("Gemini Taxi Voice Process Error:", error);
+    }
     throw error;
   }
 }

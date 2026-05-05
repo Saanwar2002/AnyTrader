@@ -176,8 +176,8 @@ export default function PassengerRideHistory() {
             <button
               onClick={() => setActiveTab("active")}
               className={cn(
-                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-                activeTab === "active" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all border",
+                activeTab === "active" ? "bg-white text-slate-900 shadow-sm border-black" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 border-transparent"
               )}
             >
               Active
@@ -185,8 +185,8 @@ export default function PassengerRideHistory() {
             <button
               onClick={() => setActiveTab("cancelled")}
               className={cn(
-                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-                activeTab === "cancelled" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all border",
+                activeTab === "cancelled" ? "bg-white text-slate-900 shadow-sm border-black" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 border-transparent"
               )}
             >
               Cancelled
@@ -194,8 +194,8 @@ export default function PassengerRideHistory() {
             <button
               onClick={() => setActiveTab("completed")}
               className={cn(
-                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-                activeTab === "completed" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all border",
+                activeTab === "completed" ? "bg-white text-slate-900 shadow-sm border-black" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 border-transparent"
               )}
             >
               Completed
@@ -247,7 +247,7 @@ export default function PassengerRideHistory() {
                 transition={{ delay: idx * 0.05 }}
                 key={ride.id}
                 onClick={isCompleted ? toggleExpanded : undefined}
-                className={cn("bg-white rounded-3xl border border-slate-100 shadow-sm p-4 transition-colors", isCompleted ? "cursor-pointer hover:bg-slate-50" : "")}
+                className={cn("bg-white rounded-3xl border shadow-sm p-4 transition-colors", isCompleted ? "border-black cursor-pointer hover:bg-slate-50" : "border-slate-100")}
               >
                 {/* Header (Always Visible or Compact Mode for Completed) */}
                 {isCompleted && !isExpanded ? (

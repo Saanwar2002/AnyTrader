@@ -245,17 +245,18 @@ export default function Layout() {
 
   const { activePortal, switchPortal, activeRole } = usePortal();
 
-  // Keep routing somewhat hardened to portal
+  // Keep routing somewhat hardened to portal, only trigger on location change to avoid fighting manual switches
   useEffect(() => {
     // List of exclusive AnyRide paths
     if (location.pathname === "/book-ride" || location.pathname === "/driver-terminal") {
-      if (activePortal !== "anyride") switchPortal("anyride");
+      switchPortal("anyride");
     } 
     // Example of exclusive AnyTrader paths
     else if (location.pathname === "/job-feed" || location.pathname === "/post-job") {
-      if (activePortal !== "anytrader") switchPortal("anytrader");
+      switchPortal("anytrader");
     }
-  }, [location.pathname, activePortal, switchPortal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   const homeownerNav = [
     { name: "Home", path: "/", icon: Home, isCta: false },
@@ -392,14 +393,16 @@ export default function Layout() {
                   triggerHaptic();
                   if (activePortal === "anytrader") {
                     switchPortal("anyride");
-                    if (profile?.role === "driver" || profile?.role === "fleet_driver") {
-                      navigate("/driver-terminal");
-                    } else {
-                      navigate("/book-ride");
-                    }
+                    setTimeout(() => {
+                      if (profile?.role === "driver" || profile?.role === "fleet_driver") {
+                        navigate("/driver-terminal");
+                      } else {
+                        navigate("/book-ride");
+                      }
+                    }, 50);
                   } else {
                     switchPortal("anytrader");
-                    navigate("/");
+                    setTimeout(() => navigate("/"), 50);
                   }
                 }}
                 className="flex items-center gap-3 group text-left"
@@ -1083,7 +1086,7 @@ export default function Layout() {
                 {isActive && (
                    <motion.div 
                      layoutId="navActiveBg"
-                     className={cn("absolute inset-0 rounded-[16px] -z-10", isDriverTerminal ? "bg-white/10" : "bg-blue-100/80")}
+                     className={cn("absolute inset-0 rounded-[16px] -z-10", isDriverTerminal ? "bg-white/10" : "bg-blue-100/80 border border-blue-500")}
                      transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                    />
                 )}

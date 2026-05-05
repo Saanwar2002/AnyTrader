@@ -55,7 +55,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     else if (profile.role === "ecosystem_manager") availableRoles.push("ecosystem_manager");
     else {
       availableRoles.push("customer"); // Everyone can be a customer
-      if (profile.role === "fleet_driver") availableRoles.push("driver");
+      if (profile.role === "fleet_driver" || profile.role === "driver") availableRoles.push("driver");
       if (profile.role === "tradesperson") availableRoles.push("trader");
       if (profile.subscriptionType === "business") availableRoles.push("business");
     }
@@ -68,7 +68,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     
     if (profile?.role === "admin") return "admin";
     if (profile?.role === "ecosystem_manager") return "ecosystem_manager";
-    if (profile?.role === "fleet_driver" && activePortal === "anyride") return "driver";
+    if ((profile?.role === "fleet_driver" || profile?.role === "driver") && activePortal === "anyride") return "driver";
     if (profile?.subscriptionType === "business") return "business";
     if (profile?.role === "tradesperson") return "trader";
     return "customer";
@@ -103,7 +103,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     if (profile?.role === "admin" || profile?.role === "ecosystem_manager") return;
 
     if (activePortal === "anyride") {
-       if (profile?.role === "fleet_driver") setActiveRoleState("driver");
+       if (profile?.role === "fleet_driver" || profile?.role === "driver") setActiveRoleState("driver");
        else setActiveRoleState("customer");
     } else {
        // if they switch back to anytrader and were acting as driver, put them back to default trader/business/customer
