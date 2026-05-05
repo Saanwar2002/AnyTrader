@@ -20,6 +20,7 @@ import { triggerHaptic, ImpactStyle, hideNativeKeyboard } from "@/src/lib/capaci
 // Google Maps Imports
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 import { MapZoomControls } from "../shared/MapZoomControls";
+import { fetchLiveDemandZones } from "@/src/services/surgeHeatmapService";
 
 const containerStyle = {
   width: '100%',
@@ -347,8 +348,12 @@ export default function PassengerBooking() {
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef<string>("");
   const [fareEstimate, setFareEstimate] = useState<number | null>(null);
+  const [waitWarning, setWaitWarning] = useState(false);
+  const [maxWaitTimeMins, setMaxWaitTimeMins] = useState<number>(0);
+  const [waitWarningAcknowledged, setWaitWarningAcknowledged] = useState(false);
   const [distanceMiles, setDistanceMiles] = useState<number>(0);
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
+  const [activeSurge, setActiveSurge] = useState<{multiplier: number, fee: number, isFixed: boolean}>({multiplier: 1.0, fee: 0, isFixed: true});
   const [nearbyDriversCount, setNearbyDriversCount] = useState<number>(0);
   const [driversAvailableSoonCount, setDriversAvailableSoonCount] = useState<number>(0);
   const [estimatedWaitEta, setEstimatedWaitEta] = useState<number | null>(null);
@@ -596,9 +601,38 @@ export default function PassengerBooking() {
     if (!pickupCoords) {
       setNearbyDriversCount(0);
       setDriversAvailableSoonCount(0);
-      setEstimatedWaitEta(null);
       return;
     }
+    
+    // Check if pickup is in a busy/surge zone
+    const checkZone = async () => {
+      const zones = await fetchLiveDemandZones();
+      let isBusy = false;
+      let maxWait = 0;
+      let highestMult = 1.0;
+      let highestFee = 0.0;
+      let isFixedMode = true;
+      zones.forEach(z => {
+         const dist = window.google?.maps?.geometry?.spherical?.computeDistanceBetween(
+            new window.google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
+            new window.google.maps.LatLng(z.lat, z.lng)
+         );
+         if (dist && dist <= z.radius) {
+            if (z.waitWarning) isBusy = true;
+            if (z.maxWaitTimeMins && z.maxWaitTimeMins > maxWait) maxWait = z.maxWaitTimeMins;
+            if (z.surgeMultiplier > highestMult) highestMult = z.surgeMultiplier;
+            if (z.extraFee && z.extraFee > highestFee) highestFee = z.extraFee;
+            if (z.isFixedModel !== undefined) isFixedMode = z.isFixedModel;
+         }
+      });
+      setWaitWarning(isBusy);
+      setMaxWaitTimeMins(Math.floor(maxWait));
+      setActiveSurge({multiplier: highestMult, fee: highestFee, isFixed: isFixedMode});
+    };
+    checkZone();
+    
+    // Reset ETA estimation
+    setEstimatedWaitEta(null);
     const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
     const unsub = onSnapshot(q, (snapshot) => {
       let countNow = 0;
@@ -1168,9 +1202,18 @@ export default function PassengerBooking() {
 
   const getComputedFare = (catId: string) => {
     const category = CAR_CATEGORIES.find(c => c.id === catId);
-    const multiplier = category?.multiplier || 1.0;
+    const catMultiplier = category?.multiplier || 1.0;
     const base = fareEstimate || 5.0;
-    return Math.max(base * multiplier, fareConfig.minFare * multiplier);
+    let finalFare = Math.max(base * catMultiplier, fareConfig.minFare * catMultiplier);
+    
+    // Apply Surge
+    if (activeSurge.isFixed) {
+       finalFare += activeSurge.fee;
+    } else {
+       finalFare *= activeSurge.multiplier;
+    }
+    
+    return finalFare;
   };
 
   const searchingStartTimeRef = useRef<number | null>(null);
@@ -1248,7 +1291,9 @@ export default function PassengerBooking() {
         durationMinutes: Number(durationMinutes.toFixed(0)),
         fareEstimate: getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0),
         baseCalc: fareEstimate || 5.0,
-        surgeMultiplier: 1.0, 
+        surgeMultiplier: activeSurge.multiplier, 
+        surgeModel: activeSurge.isFixed ? 'fixed' : 'multiplier',
+        surgeFixedAmount: activeSurge.fee,
         carCategory: selectedCategory,
         isPetFriendly,
         isPriority,
@@ -1722,6 +1767,45 @@ export default function PassengerBooking() {
             bestDriver = docSnap.id;
           }
        });
+
+       // QUEUE PRIORITY SYSTEM:
+       // Check if there are other pending jobs older than ours
+       if (bestDriver) {
+           const pendingQuery = query(collection(db, "ride_requests"), where("status", "==", "pending"));
+           const pendingSnaps = await getDocs(pendingQuery);
+           let shouldYield = false;
+           pendingSnaps.forEach(snap => {
+              if (snap.id !== currentRideId) {
+                 const otherData = snap.data();
+                 if (otherData.createdAt?.toMillis && rideInfo.createdAt?.toMillis) {
+                    if (otherData.createdAt.toMillis() < rideInfo.createdAt.toMillis()) {
+                       // There is an older job. Let's see if it's close enough that the driver could take it instead.
+                       const oldPickupLat = otherData.pickupLat;
+                       const oldPickupLng = otherData.pickupLng;
+                       if (oldPickupLat && oldPickupLng) {
+                           // If the older job is within 5 miles of us, we yield to give them priority
+                           const distToOther = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+                              const rLat1 = lat1 * Math.PI / 180;
+                              const rLat2 = lat2 * Math.PI / 180;
+                              return 3958.8 * 2 * Math.asin(Math.sqrt(Math.sin((lat2-lat1)*Math.PI/180/2)**2 + Math.cos(rLat1)*Math.cos(rLat2)*Math.sin((lon2-lon1)*Math.PI/180/2)**2));
+                           };
+                           const d = distToOther(pickupCoords.lat, pickupCoords.lng, oldPickupLat, oldPickupLng);
+                           if (d <= 5) {
+                               shouldYield = true;
+                           }
+                       }
+                    }
+                 }
+              }
+           });
+           
+           if (shouldYield) {
+               // We randomly wait or skip this tick so the older job gets first dibs
+               if (Math.random() < 0.7) {
+                   return; // Yield to older job 70% of the time
+               }
+           }
+       }
 
        if (bestDriver) {
           // Surge / Offer dispatch correctly matching the logic
@@ -2939,9 +3023,29 @@ export default function PassengerBooking() {
                         </div>
                         
                         <div>
+                           {waitWarning && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status)) && (
+                             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                               <div className="flex items-start gap-2">
+                                 <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                 <div>
+                                   <h4 className="text-sm font-bold text-red-900">High Demand Area</h4>
+                                   <p className="text-xs text-red-700 mt-1">Drivers are very busy in this area. You might have to wait {maxWaitTimeMins || 20}+ minutes.</p>
+                                   <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                                     <input 
+                                       type="checkbox" 
+                                       checked={waitWarningAcknowledged}
+                                       onChange={(e) => setWaitWarningAcknowledged(e.target.checked)}
+                                       className="rounded text-red-600 focus:ring-red-500"
+                                     />
+                                     <span className="text-xs font-bold text-red-900">I understand, book anyway</span>
+                                   </label>
+                                 </div>
+                               </div>
+                             </div>
+                           )}
                            <button 
                              onClick={handleConfirmBooking} 
-                             disabled={!pickup || !dropoff} 
+                             disabled={!pickup || !dropoff || (waitWarning && !waitWarningAcknowledged && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status)))} 
                              className="w-full py-3 bg-[#0F172A] text-white rounded-[12px] font-bold text-[15px] hover:bg-black active:scale-95 disabled:opacity-50 transition-all focus:outline-none"
                            >
                              {assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status) ? "Confirm Update" : `Confirm ${CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}`}

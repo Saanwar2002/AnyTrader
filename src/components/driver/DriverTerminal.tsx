@@ -117,6 +117,9 @@ export default function DriverTerminal() {
   const [acceptedStackedRideOffer, setAcceptedStackedRideOffer] = useState<any>(null);
   const [stackedIncomingTimer, setStackedIncomingTimer] = useState(0);
 
+  const [showStartJobReminder, setShowStartJobReminder] = useState(false);
+  const [hasDismissedStartJobReminder, setHasDismissedStartJobReminder] = useState(false);
+
   useEffect(() => {
     if (['incoming', 'en_route_pickup', 'waiting', 'in_progress', 'review'].includes(rideState)) {
       setPreventPortalSwitch(true);
@@ -763,6 +766,47 @@ export default function DriverTerminal() {
       setIsOnline(true);
     }
     
+    // Pick a random simulated job profile
+    const jobProfiles = [
+      {
+        id: "simulated_ride_123",
+        name: "Sarah T.",
+        passengerPhone: "+447700900077",
+        pickupAddress: "12 Elm Street, SE15",
+        dropoffAddress: "Bristol Temple Meads",
+        comments: "Please ring the bell, the baby is sleeping. Thanks!",
+        isPriority: true,
+        isRiderPlus: true,
+        stops: []
+      },
+      {
+        id: "simulated_ride_124",
+        name: "Jonathan D.",
+        passengerPhone: "+447700900088",
+        pickupAddress: "142 Longbridge Road, Ground Floor Flat, Barking, IG11",
+        dropoffAddress: "Terminal 5, London Heathrow Airport, Hounslow",
+        comments: "Large suitcase. Please call when outside.",
+        isPriority: false,
+        isRiderPlus: false,
+        stops: []
+      },
+      {
+        id: "simulated_ride_125",
+        name: "Maria S.",
+        passengerPhone: "+447700900099",
+        pickupAddress: "Victoria Station, Buckingham Palace Road entrance, SW1W",
+        dropoffAddress: "72 Oxford Street, Westminster, W1D 1AA",
+        comments: "I will be waiting near the main entrance.",
+        isPriority: true,
+        isRiderPlus: false,
+        stops: [
+          { address: "Waitrose & Partners, 16-19 Canada Square, Canary Wharf", lat: mapCenter[0] + 0.005, lng: mapCenter[1] - 0.005 }
+        ]
+      }
+    ];
+
+    const randomProfile = jobProfiles[Math.floor(Math.random() * jobProfiles.length)];
+
     // Create a dynamic simulation using real live fare configs
     const simulatedDist = Math.floor(Math.random() * 15) + 3; // 3 to 18 miles
     const simulatedTime = simulatedDist * 2.5; // Rough time
@@ -784,16 +828,11 @@ export default function DriverTerminal() {
     }
     
     setActiveRide({
-      id: "simulated_ride_123",
-      name: "Sarah T.",
-      passengerPhone: "+447700900077",
-      pickupAddress: "12 Elm Street, SE15",
-      dropoffAddress: "Bristol Temple Meads",
+      ...randomProfile,
       pickupLat: mapCenter[0] + 0.01,
       pickupLng: mapCenter[1] + 0.01,
       dropoffLat: mapCenter[0] - 0.02,
       dropoffLng: mapCenter[1] - 0.02,
-      stops: [],
       fareEstimate: finalFare,
       baseCalc: calcFare,
       surgeMultiplier: surgeMultiplier,
@@ -801,10 +840,7 @@ export default function DriverTerminal() {
       surgeModel: fareConfig.surgeModel,
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
-      comments: "Please ring the bell, the baby is sleeping. Thanks!",
-      isPriority: true,
       hasCardOnFile: Math.random() > 0.5,
-      isRiderPlus: true,
       distanceToPickupMiles: 1.2,
       isReal: false
     });
@@ -1208,6 +1244,38 @@ export default function DriverTerminal() {
       }
     }
   }, [mapCenter, isWaitingAtStop, waitStopLocation, currentStopWaitSeconds]);
+
+  // Start job reminder if driving away from pickup (>300m)
+  useEffect(() => {
+    if (rideState !== 'waiting' || hasDismissedStartJobReminder || !activeRide?.pickupLat || !activeRide?.pickupLng || !mapCenter) {
+      setShowStartJobReminder(false);
+      return;
+    }
+
+    const R = 6371e3; // Earth radius in metres
+    const lat1 = mapCenter[0] * Math.PI/180;
+    const lat2 = activeRide.pickupLat * Math.PI/180;
+    const dLat = (activeRide.pickupLat - mapCenter[0]) * Math.PI/180;
+    const dLon = (activeRide.pickupLng - mapCenter[1]) * Math.PI/180;
+
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const dist = R * c;
+
+    if (dist > 300) {
+      setShowStartJobReminder(true);
+    } else {
+      setShowStartJobReminder(false);
+    }
+  }, [rideState, mapCenter, activeRide?.pickupLat, activeRide?.pickupLng, hasDismissedStartJobReminder]);
+
+  useEffect(() => {
+    if (rideState !== 'waiting') {
+      setHasDismissedStartJobReminder(false);
+    }
+  }, [rideState]);
 
   const totalPaidWaitSeconds = accumulatedPaidWaitSeconds + currentStopWaitSeconds;
 
@@ -2045,7 +2113,7 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-5 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
           >
             {/* Same content as before */}
             <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
@@ -2101,8 +2169,26 @@ export default function DriverTerminal() {
                 )}
 
                 {/* Rider Details */}
-                <div className="border-t border-[#2C2C30] pt-2 pb-1">
-                  <div className="flex items-center gap-2 mb-2">
+                <div className="border-t border-[#2C2C30] pt-2 pb-1 relative">
+                  {/* Circular Timer Ring */}
+                  <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
+                    <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
+                      <circle cx="18" cy="18" r="14" className="stroke-[#2C2C30] fill-none" strokeWidth="3" />
+                      <motion.circle 
+                        cx="18" cy="18" r="14" 
+                        className={cn("fill-none", incomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
+                        strokeWidth="3" 
+                        strokeDasharray="88" 
+                        strokeLinecap="round"
+                        initial={{ strokeDashoffset: 0 }}
+                        animate={{ strokeDashoffset: 88 - (88 * (incomingTimer / 15)) }}
+                        transition={{ duration: 1, ease: 'linear' }}
+                      />
+                    </svg>
+                    <span className={cn("absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]", incomingTimer > 5 ? "text-[#00D26A]" : "text-[#FF3B30]")}>{incomingTimer}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 mb-2 pr-10">
                     <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
                       {(activeRide?.name || "S")[0]}
                     </div>
@@ -2112,7 +2198,7 @@ export default function DriverTerminal() {
                         <p className="text-[11px] text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
                       </div>
                       {activeRide?.isRiderPlus !== false && (
-                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
+                        <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white"><Star className="w-2.5 h-2.5 fill-black text-black" /> Rider Plus</div>
                       )}
                     </div>
                   </div>
@@ -2123,23 +2209,40 @@ export default function DriverTerminal() {
                       <div className="flex justify-between items-end mb-1">
                         <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
                           £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
-                          <span className="text-[13px] font-bold text-white/80 tracking-normal mb-0.5">({((activeRide?.distanceToPickupMiles || 1.2) + (activeRide?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          <span className="text-[13px] font-bold text-[#00E5FF] tracking-normal mb-0.5">({((activeRide?.distanceToPickupMiles || 1.2) + (activeRide?.distanceMiles || 22)).toFixed(1)} mi)</span>
                         </h1>
                         <div className="flex gap-1 items-center">
                           {activeRide?.isPriority && (
-                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
+                            <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white"><Zap className="w-2.5 h-2.5 fill-black text-black" /> Priority</div>
                           )}
                           {fareConfig.surgeEnabled && (
-                            <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">
-                              🔥 {activeRide?.surgeModel === 'fixed' ? '+£' + (activeRide?.surgeFixed || '2.00') : (activeRide?.surgeMultiplier || '1.4') + 'x'}
+                            <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
+                              <span className="text-[10px]">🔥</span> {activeRide?.surgeModel === 'fixed' ? '+£' + (activeRide?.surgeFixed || '2.00') : (activeRide?.surgeMultiplier || '1.4') + 'x'}
                             </span>
                           )}
                         </div>
                       </div>
-                      <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{((activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                      {(() => {
+                        let finalPayout = (activeRide?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate);
+                        if (fareConfig.surgeEnabled && !activeRide?.isSimulated) { // Note: simulated already bundles it in fareEstimate
+                            // Absorb surge cost for driver payout if the passenger fare didn't include it explicitly
+                            // If baseCalc exists and it roughly matches fareEstimate, it means surge wasn't applied on the passenger side
+                            // We dynamically inject it into the driver payout here.
+                            const hasNoSurgeApplied = activeRide?.baseCalc ? Math.abs(activeRide.fareEstimate - activeRide.baseCalc) < 2.0 : true;
+                            if (hasNoSurgeApplied || activeRide?.surgeMultiplier === 1.0) {
+                                if (fareConfig.surgeModel === 'fixed') {
+                                    finalPayout += (fareConfig.surgeFixedAmount || 2.0);
+                                } else {
+                                    // Multiplier style
+                                    finalPayout += ((activeRide?.fareEstimate || 38.50) * ((fareConfig.surgeMultiplierValue || 1.4) - 1.0));
+                                }
+                            }
+                        }
+                        return <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{finalPayout.toFixed(2)}</p>;
+                      })()}
                     </div>
 
-                    <div className="flex items-center justify-between mt-1 mb-1">
+                    <div className="mt-1 mb-1">
                       <div className="relative pl-5 space-y-2 flex-1">
                         {/* Route Line indicator */}
                         <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
@@ -2147,42 +2250,24 @@ export default function DriverTerminal() {
                         <div className="relative">
                           <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
-                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
+                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
                         </div>
 
                         {(activeRide?.stops || []).map((stop: any, idx: number) => (
                           <div key={idx} className="relative mt-2">
                             <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                             <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
-                            <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stop.address}</p>
+                            <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stop.address}</p>
                           </div>
                         ))}
 
                         <div className="relative mt-2">
                           <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
-                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{activeRide?.distanceMiles || "22"} mi from pickup</p>
+                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{activeRide?.distanceMiles || "22"} mi from pickup</p>
                         </div>
-                      </div>
-
-                      {/* Circular Timer Ring */}
-                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0 ml-2 mr-1">
-                        <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="24" cy="24" r="20" className="stroke-[#2C2C30] fill-none" strokeWidth="4" />
-                          <motion.circle 
-                            cx="24" cy="24" r="20" 
-                            className={cn("fill-none", incomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
-                            strokeWidth="4" 
-                            strokeDasharray="125.6" 
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{ strokeDashoffset: 125.6 - (125.6 * (incomingTimer / 15)) }}
-                            transition={{ duration: 1, ease: 'linear' }}
-                          />
-                        </svg>
-                        <span className="absolute text-lg font-black text-white">{incomingTimer}</span>
                       </div>
                     </div>
                   </div>
@@ -2190,10 +2275,10 @@ export default function DriverTerminal() {
               </div>
 
               {activeRide?.comments && (
-                <div className="mb-2 bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                  <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
+                <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
+                  <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
                   <div>
-                    <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                    <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">Passenger Note</span>
                     <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
                       {activeRide.comments}
                     </p>
@@ -2202,10 +2287,10 @@ export default function DriverTerminal() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2 mt-1 shrink-0 relative z-20">
+              <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
                 <button 
                   onClick={handleAcceptRide}
-                  className="w-full h-11 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                  className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
                 >
                   <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
                 </button>
@@ -2229,7 +2314,7 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-5 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
           >
             {/* Same content as before */}
             <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
@@ -2246,8 +2331,26 @@ export default function DriverTerminal() {
 
               <div className="flex-1 flex flex-col min-h-0 scrollbar-hide">
                 {/* Rider Details */}
-                <div className="pt-1 pb-1">
-                  <div className="flex items-center gap-2 mb-2">
+                <div className="pt-1 pb-1 relative">
+                  {/* Circular Timer Ring */}
+                  <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
+                    <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
+                      <circle cx="18" cy="18" r="14" className="stroke-[#2C2C30] fill-none" strokeWidth="3" />
+                      <motion.circle 
+                        cx="18" cy="18" r="14" 
+                        className={cn("fill-none", stackedIncomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
+                        strokeWidth="3" 
+                        strokeDasharray="88" 
+                        strokeLinecap="round"
+                        initial={{ strokeDashoffset: 0 }}
+                        animate={{ strokeDashoffset: 88 - (88 * (stackedIncomingTimer / 15)) }}
+                        transition={{ duration: 1, ease: 'linear' }}
+                      />
+                    </svg>
+                    <span className={cn("absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]", stackedIncomingTimer > 5 ? "text-[#00D26A]" : "text-[#FF3B30]")}>{stackedIncomingTimer}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 mb-2 pr-10">
                     <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
                       {(stackedRideOffer?.name || "S")[0]}
                     </div>
@@ -2257,7 +2360,7 @@ export default function DriverTerminal() {
                         <p className="text-[11px] text-[#FF9500] font-bold">⭐ 4.7 <span className="text-[#E4E4E7] font-normal">(124 trips)</span></p>
                       </div>
                       {stackedRideOffer?.isRiderPlus !== false && (
-                        <div className="bg-gradient-to-r from-amber-300 to-amber-500 text-amber-950 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 mt-0.5"><Star className="w-2.5 h-2.5 fill-amber-950" /> Rider Plus</div>
+                        <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white"><Star className="w-2.5 h-2.5 fill-black text-black" /> Rider Plus</div>
                       )}
                     </div>
                   </div>
@@ -2268,23 +2371,36 @@ export default function DriverTerminal() {
                       <div className="flex justify-between items-end mb-1">
                         <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
                           £{stackedRideOffer?.fareEstimate?.toFixed(2) || '38.50'}
-                          <span className="text-[13px] font-bold text-white/80 tracking-normal mb-0.5">({((stackedRideOffer?.distanceToPickupMiles || 1.2) + (stackedRideOffer?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          <span className="text-[13px] font-bold text-[#00E5FF] tracking-normal mb-0.5">({((stackedRideOffer?.distanceToPickupMiles || 1.2) + (stackedRideOffer?.distanceMiles || 22)).toFixed(1)} mi)</span>
                         </h1>
                         <div className="flex gap-1 items-center">
                           {stackedRideOffer?.isPriority && (
-                            <div className="bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"><Zap className="w-2.5 h-2.5 fill-amber-950" /> Priority</div>
+                            <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white"><Zap className="w-2.5 h-2.5 fill-black text-black" /> Priority</div>
                           )}
                           {fareConfig.surgeEnabled && (
-                            <span className="bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30 px-1 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap">
-                              🔥 {stackedRideOffer?.surgeModel === 'fixed' ? '+£' + (stackedRideOffer?.surgeFixed || '2.00') : (stackedRideOffer?.surgeMultiplier || '1.4') + 'x'}
+                            <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
+                              <span className="text-[10px]">🔥</span> {stackedRideOffer?.surgeModel === 'fixed' ? '+£' + (stackedRideOffer?.surgeFixed || '2.00') : (stackedRideOffer?.surgeMultiplier || '1.4') + 'x'}
                             </span>
                           )}
                         </div>
                       </div>
-                      <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{((stackedRideOffer?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate)).toFixed(2)}</p>
+                      {(() => {
+                        let finalPayout = (stackedRideOffer?.fareEstimate || 38.50) * (1 - fareConfig.commissionRate);
+                        if (fareConfig.surgeEnabled && !stackedRideOffer?.isSimulated) { 
+                            const hasNoSurgeApplied = stackedRideOffer?.baseCalc ? Math.abs(stackedRideOffer.fareEstimate - stackedRideOffer.baseCalc) < 2.0 : true;
+                            if (hasNoSurgeApplied || stackedRideOffer?.surgeMultiplier === 1.0) {
+                                if (fareConfig.surgeModel === 'fixed') {
+                                    finalPayout += (fareConfig.surgeFixedAmount || 2.0);
+                                } else {
+                                    finalPayout += ((stackedRideOffer?.fareEstimate || 38.50) * ((fareConfig.surgeMultiplierValue || 1.4) - 1.0));
+                                }
+                            }
+                        }
+                        return <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{finalPayout.toFixed(2)}</p>;
+                      })()}
                     </div>
 
-                    <div className="flex items-center justify-between mt-1 mb-1">
+                    <div className="mt-1 mb-1">
                       <div className="relative pl-5 space-y-2 flex-1">
                         {/* Route Line indicator */}
                         <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
@@ -2292,42 +2408,24 @@ export default function DriverTerminal() {
                         <div className="relative">
                           <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Next Pickup After Drop-off</p>
-                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stackedRideOffer?.pickupAddress || "12 Elm Street, SE15"}</p>
-                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{stackedRideOffer?.distanceToPickupMiles || "1.2"} mi from next dropoff</p>
+                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stackedRideOffer?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{stackedRideOffer?.distanceToPickupMiles || "1.2"} mi from next dropoff</p>
                         </div>
 
                         {(stackedRideOffer?.stops || []).map((stop: any, idx: number) => (
                           <div key={idx} className="relative mt-2">
                             <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                             <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
-                            <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stop.address}</p>
+                            <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stop.address}</p>
                           </div>
                         ))}
 
                         <div className="relative mt-2">
                           <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
-                          <p className="text-[14px] font-bold text-white leading-tight line-clamp-1">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
+                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
                         </div>
-                      </div>
-
-                      {/* Circular Timer Ring */}
-                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0 ml-2 mr-1">
-                        <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="24" cy="24" r="20" className="stroke-[#2C2C30] fill-none" strokeWidth="4" />
-                          <motion.circle 
-                            cx="24" cy="24" r="20" 
-                            className={cn("fill-none", stackedIncomingTimer > 5 ? "stroke-[#00D26A]" : "stroke-[#FF3B30]")}
-                            strokeWidth="4" 
-                            strokeDasharray="125.6" 
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{ strokeDashoffset: 125.6 - (125.6 * (stackedIncomingTimer / 15)) }}
-                            transition={{ duration: 1, ease: 'linear' }}
-                          />
-                        </svg>
-                        <span className="absolute text-lg font-black text-white">{stackedIncomingTimer}</span>
                       </div>
                     </div>
                   </div>
@@ -2335,10 +2433,10 @@ export default function DriverTerminal() {
               </div>
 
               {stackedRideOffer?.comments && (
-                <div className="mb-2 bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                  <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
+                <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
+                  <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
                   <div>
-                    <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">Passenger Note</span>
+                    <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">Passenger Note</span>
                     <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
                       {stackedRideOffer.comments}
                     </p>
@@ -2347,10 +2445,10 @@ export default function DriverTerminal() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2 mt-1 shrink-0 relative z-20">
+              <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
                 <button 
                   onClick={handleAcceptStackedRide}
-                  className="w-full h-11 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                  className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
                 >
                   <Check className="w-5 h-5 stroke-[3]" /> ACCEPT NEXT JOB
                 </button>
@@ -2412,7 +2510,7 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-5 pt-0 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col"
+            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-2 sm:px-4 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pt-0 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col"
             onTouchStartCapture={() => {
               if (['en_route_pickup', 'waiting', 'in_progress'].includes(rideState) && !isCardCollapsed) {
                 resetCardCollapseTimer();
@@ -2451,8 +2549,8 @@ export default function DriverTerminal() {
                       <span className="bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap shrink-0">Pick Up</span>
                       <p className="text-[9px] font-black uppercase text-[#E4E4E7] tracking-widest truncate">Picking up {activeRide?.name || "Sarah T."}</p>
                     </div>
-                    <p className="text-[16px] font-bold text-white mb-0 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                    <p className="text-[16px] font-black text-white leading-none mt-0.5">3 min <span className="text-[#A1A1AA] text-[14px] font-bold">· 1.2 mi</span></p>
+                    <p className="text-[15.5px] font-medium text-white mb-0 line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                    <p className="text-[16px] font-black text-white leading-none mt-0.5">3 min <span className="text-white text-[14px] font-bold">· {activeRide?.distanceToPickupMiles?.toFixed(1) || '1.2'} mi</span></p>
                   </div>
                   <div className="text-right">
                     <p className="text-[#00D26A] font-bold text-base">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
@@ -2667,11 +2765,11 @@ export default function DriverTerminal() {
                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> <span className="truncate">{isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}</span>
                        </p>
                     </div>
-                    <p className="text-[16px] font-bold text-[#F8F9FA] mb-0 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <p className="text-[15.5px] font-medium text-[#F8F9FA] mb-0 line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                     {isWaitingAtStop ? (
                        <p className="text-[16px] font-black text-[#FF9500] leading-none mt-0.5">Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:{((totalPaidWaitSeconds) % 60).toString().padStart(2, '0')}</p>
                     ) : (
-                       <p className="text-[16px] font-black text-white leading-none mt-0.5">{activeRide?.durationMinutes || 38} min left <span className="text-[#A1A1AA] text-[14px] font-bold"> • {activeRide?.distanceMiles?.toFixed(1) || '14.2'} mi</span></p>
+                       <p className="text-[16px] font-black text-white leading-none mt-0.5">{activeRide?.durationMinutes || 38} min left <span className="text-white text-[14px] font-bold"> • {activeRide?.distanceMiles?.toFixed(1) || '14.2'} mi</span></p>
                     )}
                   </div>
                   <div className="text-right flex flex-col items-end shrink-0">
@@ -3024,6 +3122,45 @@ export default function DriverTerminal() {
         
         {/* Primary Action Button moved to Menu - only map controls or status might remain here if needed */}
       </div>
+
+      {/* Start Job Reminder Modal */}
+      <AnimatePresence>
+        {showStartJobReminder && (
+          <div className="fixed inset-0 z-[250] bg-black/60 backdrop-blur-sm overflow-y-auto pointer-events-auto flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-[#1A1A1E] w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-[#333338] text-center relative pointer-events-auto">
+              <button 
+                onClick={() => setHasDismissedStartJobReminder(true)}
+                className="absolute top-4 right-4 p-2 bg-[#2A2A2E] text-white rounded-full hover:bg-slate-700 active:scale-95 transition-all focus:outline-none"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-16 h-16 bg-[#F59E0B]/20 rounded-full flex items-center justify-center mx-auto mb-4 mt-2">
+                <AlertCircle className="w-8 h-8 text-[#F59E0B]" />
+              </div>
+              <h3 className="text-xl font-black text-white px-2 mt-2 leading-tight">Start Job Reminder</h3>
+              <p className="text-slate-400 font-medium text-sm mt-3 leading-relaxed mb-6">
+                Are you sure you have picked up your passenger? You are moving away from the pickup point. Please click the <strong>"Passenger on board"</strong> button to start the job.
+              </p>
+              <button 
+                onClick={() => {
+                  setShowStartJobReminder(false);
+                  handleStartRide();
+                }}
+                className="w-full h-12 bg-[#00D26A] text-[#0D0D0F] rounded-xl font-bold active:scale-[0.98] transition-all"
+              >
+                Start Job Now
+              </button>
+              <button 
+                onClick={() => setHasDismissedStartJobReminder(true)}
+                className="w-full mt-3 h-12 bg-[#2A2A2E] text-white flex items-center justify-center rounded-xl font-bold active:scale-[0.98] transition-all"
+              >
+                Not yet
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Complete Ride Confirmation Modal */}
       <AnimatePresence>
         {showCompleteConfirm && (
