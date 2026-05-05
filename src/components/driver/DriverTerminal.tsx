@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePortal } from "../../lib/PortalContext";
@@ -6,7 +6,7 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus } from "lucide-react";
+import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus, User } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, addDoc, orderBy } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
@@ -82,7 +82,7 @@ import { fetchLiveDemandZones } from "@/src/services/surgeHeatmapService";
 
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
-  const { switchPortal } = usePortal();
+  const { switchPortal, setPreventPortalSwitch } = usePortal();
   const navigate = useNavigate();
   const [isOnline, setIsOnline] = useState(false);
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
@@ -116,6 +116,15 @@ export default function DriverTerminal() {
   const [stackedRideOffer, setStackedRideOffer] = useState<any>(null);
   const [acceptedStackedRideOffer, setAcceptedStackedRideOffer] = useState<any>(null);
   const [stackedIncomingTimer, setStackedIncomingTimer] = useState(0);
+
+  useEffect(() => {
+    if (['incoming', 'en_route_pickup', 'waiting', 'in_progress', 'review'].includes(rideState)) {
+      setPreventPortalSwitch(true);
+    } else {
+      setPreventPortalSwitch(false);
+    }
+    return () => setPreventPortalSwitch(false);
+  }, [rideState, setPreventPortalSwitch]);
 
   // Rating State
   const [passengerRating, setPassengerRating] = useState(5);
@@ -973,13 +982,17 @@ export default function DriverTerminal() {
     if (isChatOpen) setUnreadChatCount(0);
   }, [isChatOpen]);
 
+  const resetCardCollapseTimer = useCallback(() => {
+    if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
+    cardCollapseTimeoutRef.current = setTimeout(() => {
+      setIsCardCollapsed(true);
+    }, 10000);
+  }, []);
+
   useEffect(() => {
     if (['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) {
       setIsCardCollapsed(false);
-      if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
-      cardCollapseTimeoutRef.current = setTimeout(() => {
-        setIsCardCollapsed(true);
-      }, 10000);
+      resetCardCollapseTimer();
     } else {
       setIsCardCollapsed(false);
       if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
@@ -987,7 +1000,7 @@ export default function DriverTerminal() {
     return () => {
       if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
     }
-  }, [rideState]);
+  }, [rideState, resetCardCollapseTimer]);
 
   useEffect(() => {
     if (!activeRide?.id || !user || !['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) return;
@@ -2337,10 +2350,28 @@ export default function DriverTerminal() {
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-5 pt-0 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col"
+            onTouchStartCapture={() => {
+              if (['en_route_pickup', 'waiting', 'in_progress'].includes(rideState) && !isCardCollapsed) {
+                resetCardCollapseTimer();
+              }
+            }}
+            onMouseDownCapture={() => {
+              if (['en_route_pickup', 'waiting', 'in_progress'].includes(rideState) && !isCardCollapsed) {
+                resetCardCollapseTimer();
+              }
+            }}
           >
             <div 
               className="w-full h-8 flex items-center justify-center mb-0 cursor-pointer touch-none opacity-90 hover:opacity-100 transition-opacity drop-shadow-sm"
-              onClick={() => setIsCardCollapsed(!isCardCollapsed)}
+              onClick={() => {
+                const nextState = !isCardCollapsed;
+                setIsCardCollapsed(nextState);
+                if (!nextState && ['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) {
+                  resetCardCollapseTimer();
+                } else if (nextState) {
+                  if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
+                }
+              }}
             >
               {isCardCollapsed ? (
                 <ChevronUp className="w-7 h-7 text-[#F8F9FA]" />
@@ -2442,8 +2473,8 @@ export default function DriverTerminal() {
 
             {rideState === 'waiting' && (
               <>
-                <div className="flex justify-between items-start mb-2">
-                  <div>
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex-1">
                     <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-widest mb-0.5 flex items-center gap-1"><AlertCircle className="w-2.5 h-2.5" /> Waiting for Rider</p>
                     <p className="text-[17px] font-black text-white px-0.5">
                       {Math.floor(elapsedWaitSeconds / 60)}:{(elapsedWaitSeconds % 60).toString().padStart(2, '0')}
@@ -2457,7 +2488,15 @@ export default function DriverTerminal() {
                       }
                     </p>
                   </div>
-                  <div className="text-right">
+                  
+                  <div className="flex-[1.5] flex justify-center px-1">
+                    <div className="bg-[#FF9500]/10 border border-[#FF9500]/30 px-3 py-1.5 rounded flex items-center gap-1.5 overflow-hidden w-full justify-center">
+                       <User className="w-3.5 h-3.5 text-[#FF9500] shrink-0" />
+                       <span className="text-white font-black text-xs uppercase tracking-wider truncate">{activeRide?.name || "Sarah T."}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 text-right">
                     <p className="text-[#00D26A] font-bold text-base">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>

@@ -8,7 +8,7 @@ import { triggerHaptic } from "@/src/lib/capacitor";
 import { db, collection, query, where, onSnapshot } from "@/src/firebase";
 
 export default function PlatformSwitcher() {
-  const { activePortal, switchPortal } = usePortal();
+  const { activePortal, switchPortal, preventPortalSwitch } = usePortal();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +38,7 @@ export default function PlatformSwitcher() {
   }, [user, activePortal]);
 
   const handleSwitch = () => {
+    if (preventPortalSwitch) return;
     triggerHaptic();
     
     if (activePortal === "anytrader") {
@@ -51,6 +52,7 @@ export default function PlatformSwitcher() {
   };
 
   const startPress = () => {
+    if (preventPortalSwitch) return;
     triggerHaptic();
     setIsPressing(true);
     setShowHint(false);
@@ -76,7 +78,7 @@ export default function PlatformSwitcher() {
 
   const isAnyTrader = activePortal === "anytrader";
 
-  if (isAnyTrader) {
+  if (isAnyTrader || preventPortalSwitch) {
     return null;
   }
 

@@ -13,6 +13,8 @@ interface PortalContextType {
   availableRoles: ActiveRoleType[];
   theme: ThemeType;
   setTheme: (theme: ThemeType) => void;
+  preventPortalSwitch: boolean;
+  setPreventPortalSwitch: (prevent: boolean) => void;
 }
 
 const PortalContext = createContext<PortalContextType | undefined>(undefined);
@@ -35,6 +37,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const saved = localStorage.getItem("anyride_theme") as ThemeType;
     return saved || "light";
   });
+
+  const [preventPortalSwitch, setPreventPortalSwitch] = useState<boolean>(false);
 
   const setTheme = (newTheme: ThemeType) => {
     setThemeState(newTheme);
@@ -124,7 +128,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <PortalContext.Provider value={{ activePortal, switchPortal, activeRole, setActiveRole, availableRoles, theme, setTheme }}>
+    <PortalContext.Provider value={{ activePortal, switchPortal, activeRole, setActiveRole, availableRoles, theme, setTheme, preventPortalSwitch, setPreventPortalSwitch }}>
       {children}
     </PortalContext.Provider>
   );
