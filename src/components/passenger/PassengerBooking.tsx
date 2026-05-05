@@ -19,6 +19,7 @@ import { triggerHaptic, ImpactStyle, hideNativeKeyboard } from "@/src/lib/capaci
 
 // Google Maps Imports
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView } from "@react-google-maps/api";
+import { MapZoomControls } from "../shared/MapZoomControls";
 
 const containerStyle = {
   width: '100%',
@@ -68,7 +69,7 @@ const formatAddressLines = (address: string) => {
 
 const mapOptions: google.maps.MapOptions = {
   disableDefaultUI: false,
-  zoomControl: true,
+  zoomControl: false,
   streetViewControl: false,
   mapTypeControl: false,
   fullscreenControl: false,
@@ -2281,6 +2282,15 @@ export default function PassengerBooking() {
                routeLine.length > 0 && <PolylineF path={routeLine} options={{ strokeColor: '#2563eb', strokeOpacity: 0.8, strokeWeight: 5 }} />
             )}
           </GoogleMap>
+          
+          {map && (
+             <div className={cn(
+               "absolute right-4 z-[50] transition-all duration-300",
+               isMapFullScreen ? "bottom-[120px]" : "bottom-4"
+             )}>
+               <MapZoomControls mapInstance={map} />
+             </div>
+          )}
        </div>
 
        {/* Chat Component */}

@@ -6,7 +6,7 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat } from "lucide-react";
+import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, addDoc, orderBy } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
@@ -16,6 +16,7 @@ import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
 import DriverDocuments from "./DriverDocuments";
 import DriverJobs from "./DriverJobs";
+import { MapZoomControls } from "../shared/MapZoomControls";
 import RideChat from "./RideChat";
 import { MessageCircle } from "lucide-react";
 
@@ -25,7 +26,7 @@ const libraries: any[] = ['places'];
 
 const mapOptions: google.maps.MapOptions = {
   disableDefaultUI: false,
-  zoomControl: true,
+  zoomControl: false,
   streetViewControl: false,
   mapTypeControl: false,
   fullscreenControl: false,
@@ -41,6 +42,8 @@ const mapOptions: google.maps.MapOptions = {
     }
   ]
 };
+
+// Custom Zoom Controls (Imported from shared)
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
@@ -166,6 +169,7 @@ export default function DriverTerminal() {
 
   const mapCenterRef = useRef(mapCenter);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+  const [miniMapInstance, setMiniMapInstance] = useState<google.maps.Map | null>(null);
 
   useEffect(() => {
     mapCenterRef.current = mapCenter;
@@ -387,8 +391,6 @@ export default function DriverTerminal() {
              if (isModified) {
                 setTimeout(() => {
                    toast.info("Ride Updated", { description: "The passenger has updated the journey details." });
-                   if (directionsTimeoutRef.current) clearTimeout(directionsTimeoutRef.current);
-                   directionsTimeoutRef.current = setTimeout(fetchDirections, 1000);
                 }, 500);
              }
              return {
@@ -1437,7 +1439,7 @@ export default function DriverTerminal() {
   };
 
   return (
-    <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans -mx-4 -mt-6 min-h-0"> {/* Full bleed container */}
+    <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans min-h-0"> {/* Full bleed container */}
       
       {activeTab === 'home' && (
       <>
@@ -1630,6 +1632,18 @@ export default function DriverTerminal() {
           </GoogleMap>
         )}
         
+        {/* Main Map Zoom Controls */}
+        {mapInstance && (
+          <div className={cn(
+            "absolute right-4 z-[45] transition-all duration-300",
+            (rideState === 'incoming' || rideState === 'review' || rideState === 'completed') ? "opacity-0 pointer-events-none" :
+            rideState === 'idle' ? "bottom-[140px]" :
+            isCardCollapsed ? "bottom-[280px]" : "bottom-[420px]"
+          )}>
+            <MapZoomControls mapInstance={mapInstance} />
+          </div>
+        )}
+
         {/* Lighter, softer gradient overlays to preserve map visibility */}
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
         <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
@@ -1649,7 +1663,7 @@ export default function DriverTerminal() {
       )}
 
       {/* Floating Map Controls & SOS */}
-      <div className="absolute top-[32%] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
+      <div className="absolute top-[15%] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
         <button 
           onClick={() => setIsEmergencyVisible(!isEmergencyVisible)}
           className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -1709,7 +1723,7 @@ export default function DriverTerminal() {
 
       {/* Floating Map Navigation (Left Side) - Decreased size and moved to left side corner */}
       {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
-        <div className="absolute top-[32%] left-4 z-50 pointer-events-auto">
+        <div className="absolute top-[15%] left-4 z-50 pointer-events-auto">
           <button 
             onClick={handleStartExternalNavigation}
             className="w-8 h-8 bg-[#007AFF] rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(0,122,255,0.4)] active:scale-95 transition-transform"
@@ -1888,7 +1902,7 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-3 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-5 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
           >
             {/* Same content as before */}
             <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
@@ -1911,6 +1925,7 @@ export default function DriverTerminal() {
                     <GoogleMap
                       mapContainerStyle={{ width: '100%', height: '100%' }}
                       onLoad={(map) => {
+                        setMiniMapInstance(map);
                         const bounds = new window.google.maps.LatLngBounds();
                         if (activeRide.pickupLat && activeRide.pickupLng) bounds.extend({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
                         if (activeRide.dropoffLat && activeRide.dropoffLng) bounds.extend({ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng });
@@ -1936,6 +1951,9 @@ export default function DriverTerminal() {
                         </React.Fragment>
                       ))}
                     </GoogleMap>
+                    {miniMapInstance && (
+                      <MapZoomControls mapInstance={miniMapInstance} className="absolute bottom-2 right-2 z-20" />
+                    )}
                   </div>
                 )}
 
@@ -2064,7 +2082,7 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-3 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-5 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
           >
             {/* Same content as before */}
             <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
@@ -2243,7 +2261,7 @@ export default function DriverTerminal() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-3 pt-0 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col"
+            className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-5 pt-0 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col"
           >
             <div 
               className="w-full h-8 flex items-center justify-center mb-0 cursor-pointer touch-none opacity-90 hover:opacity-100 transition-opacity drop-shadow-sm"
@@ -2259,10 +2277,10 @@ export default function DriverTerminal() {
             {rideState === 'en_route_pickup' && (
               <>
                 <div className="flex justify-between items-start mb-2 relative">
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap">Pick Up</span>
-                      <p className="text-[9px] font-black uppercase text-[#E4E4E7] tracking-widest">Picking up {activeRide?.name || "Sarah T."}</p>
+                  <div className="flex-1 mr-2 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
+                      <span className="bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap shrink-0">Pick Up</span>
+                      <p className="text-[9px] font-black uppercase text-[#E4E4E7] tracking-widest truncate">Picking up {activeRide?.name || "Sarah T."}</p>
                     </div>
                     <p className="text-[16px] font-bold text-white mb-0 line-clamp-1">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
                     <p className="text-[16px] font-black text-white leading-none mt-0.5">3 min <span className="text-[#A1A1AA] text-[14px] font-bold">· 1.2 mi</span></p>
@@ -2461,15 +2479,15 @@ export default function DriverTerminal() {
             {rideState === 'in_progress' && (
               <>
                 <div className="flex justify-between items-start mb-2 relative">
-                  <div className="flex-1 mr-4 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex-1 mr-2 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
                        {activeRide?.stops?.length > 0 ? (
-                          <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap">Multi-Stop</span>
+                          <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0">Multi-Stop</span>
                        ) : (
-                          <span className="bg-[#FF3B30] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap">Drop Off</span>
+                          <span className="bg-[#FF3B30] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap shrink-0">Drop Off</span>
                        )}
-                       <p className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${isWaitingAtStop ? 'text-[#FF9500]' : 'text-[#00D26A]'}`}>
-                         <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> {isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}
+                       <p className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 truncate ${isWaitingAtStop ? 'text-[#FF9500]' : 'text-[#00D26A]'}`}>
+                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> <span className="truncate">{isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}</span>
                        </p>
                     </div>
                     <p className="text-[16px] font-bold text-[#F8F9FA] mb-0 line-clamp-1">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
