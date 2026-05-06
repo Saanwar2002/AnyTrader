@@ -2362,7 +2362,7 @@ export default function DriverTerminal() {
                                 }
                             }
                         }
-                        return <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{finalPayout.toFixed(2)}</p>;
+                        return <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">You earn: £{finalPayout.toFixed(2)}</p>;
                       })()}
                     </div>
 
@@ -2520,7 +2520,7 @@ export default function DriverTerminal() {
                                 }
                             }
                         }
-                        return <p className="text-[#00D26A] text-[11px] font-bold mt-0.5">You earn: £{finalPayout.toFixed(2)}</p>;
+                        return <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">You earn: £{finalPayout.toFixed(2)}</p>;
                       })()}
                     </div>
 
@@ -2624,7 +2624,7 @@ export default function DriverTerminal() {
               </div>
               <div className="flex items-center gap-2 pt-2 border-t border-[#333338]">
                 <span className="text-[#A1A1AA] font-bold w-[72px]">Total Fare</span>
-                <span className="text-[#00D26A] font-black text-xl">£{activeRide?.fareEstimate?.toFixed(2) || '0.00'}</span>
+                <span className="text-[#00D26A] font-black text-2xl">£{activeRide?.fareEstimate?.toFixed(2) || '0.00'}</span>
               </div>
             </div>
           </motion.div>
@@ -2683,7 +2683,7 @@ export default function DriverTerminal() {
                     <p className="text-[16px] font-black text-white leading-none mt-0.5">3 min <span className="text-white text-[14px] font-bold">· {activeRide?.distanceToPickupMiles?.toFixed(1) || '1.2'} mi</span></p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[#00D26A] font-bold text-base">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                    <p className="text-[#00D26A] font-black text-xl">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
 
@@ -2788,7 +2788,7 @@ export default function DriverTerminal() {
                   </div>
 
                   <div className="flex-1 text-right">
-                    <p className="text-[#00D26A] font-bold text-base">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
+                    <p className="text-[#00D26A] font-black text-xl">£{activeRide?.fareEstimate?.toFixed(2) || '38.50'}</p>
                   </div>
                 </div>
 
@@ -2909,7 +2909,7 @@ export default function DriverTerminal() {
                     )}
                   </div>
                   <div className="text-right flex flex-col items-end shrink-0">
-                    <p className="text-[#00D26A] font-bold text-base leading-none mb-1.5 mt-0.5">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
+                    <p className="text-[#00D26A] font-black text-xl leading-none mb-1.5 mt-0.5">£{((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute)).toFixed(2)}</p>
                     {activeRide?.hasCardOnFile ? (
                       <div className="inline-block bg-white border-2 border-[#00D26A] px-2 py-1 rounded-md shadow-sm mt-0.5">
                         <span className="text-[#059669] text-[9px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
@@ -3128,7 +3128,7 @@ export default function DriverTerminal() {
                 ) : null}
                 <div className="mt-4 bg-[#00D26A]/10 border border-[#00D26A]/20 py-2.5 px-4 rounded-xl inline-block w-full">
                   <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-wider mb-0.5">You Earned</p>
-                  <p className="text-2xl font-black text-[#00D26A]">
+                  <p className="text-3xl font-black text-[#00D26A]">
                     £{((activeRide?.finalFare ? (activeRide.finalFare - (activeRide.tipAmount || 0)) : ((activeRide?.fareEstimate || 38.50) + ((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute))) * (1 - fareConfig.commissionRate) + (activeRide?.tipAmount || 0)).toFixed(2)}
                   </p>
                 </div>
