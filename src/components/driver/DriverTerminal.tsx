@@ -6,7 +6,7 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus, User, Compass } from "lucide-react";
+import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus, User, Compass, AlertTriangle, Car, HardHat, MinusCircle, Camera, MapPinOff, PhoneCall } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, addDoc, orderBy } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
@@ -154,8 +154,69 @@ export default function DriverTerminal() {
   // Stats Card state
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
   const [isEarningsVisible, setIsEarningsVisible] = useState(false);
-  const [isEmergencyVisible, setIsEmergencyVisible] = useState(false);
+  const [showHazardModal, setShowHazardModal] = useState(false);
+  const [reportingHazardType, setReportingHazardType] = useState<string | null>(null);
+  const [hazardCountdown, setHazardCountdown] = useState<number>(0);
+  const [activeHazards, setActiveHazards] = useState<any[]>([]);
   const [todayEarnings, setTodayEarnings] = useState(0);
+
+  // Fetch active hazards
+  useEffect(() => {
+    if (!user) return;
+    const today = new Date();
+    // Only display hazards not yet expired
+    const q = query(
+      collection(db, "reported_hazards"),
+      where("expiresAt", ">", today)
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const results: any[] = [];
+      snapshot.forEach(doc => {
+         const data = doc.data();
+         results.push({ id: doc.id, ...data });
+      });
+      setActiveHazards(results);
+    }, (error) => {
+      console.error("Error in active hazards listener:", error);
+    });
+    return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (reportingHazardType) {
+      if (hazardCountdown > 0) {
+        timer = setTimeout(() => setHazardCountdown(c => c - 1), 1000);
+      } else {
+        reportHazard(reportingHazardType);
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [reportingHazardType, hazardCountdown]);
+
+  const reportHazard = async (type: string) => {
+    setReportingHazardType(null);
+    setShowHazardModal(false);
+    if (!user || !mapCenter) return;
+    
+    // Add 2 hours expiration
+    const expiry = new Date();
+    expiry.setHours(expiry.getHours() + 2);
+
+    try {
+      await addDoc(collection(db, "reported_hazards"), {
+        type,
+        lat: mapCenter[0],
+        lng: mapCenter[1],
+        reporterId: user.uid,
+        createdAt: serverTimestamp(),
+        expiresAt: expiry
+      });
+      toast.success(`${type} reported on your route.`);
+    } catch (e) {
+      console.error("Failed to report hazard", e);
+    }
+  };
 
   // Auto-close stats after 5 seconds
   useEffect(() => {
@@ -1937,6 +1998,53 @@ export default function DriverTerminal() {
               />
             )}
 
+            {!!activeRide && directions?.routes?.[0]?.overview_path && activeHazards.map((hazard) => {
+              const path = directions.routes[0].overview_path;
+              let isOnRoute = false;
+              for (let i = 0; i < path.length; i++) {
+                 const point = path[i];
+                 const pLat = typeof point.lat === 'function' ? point.lat() : point.lat as unknown as number;
+                 const pLng = typeof point.lng === 'function' ? point.lng() : point.lng as unknown as number;
+                 const diffLat = pLat - hazard.lat;
+                 const diffLng = (pLng - hazard.lng) * Math.cos(pLat * Math.PI / 180);
+                 const dist = Math.sqrt(Math.pow(diffLat, 2) + Math.pow(diffLng, 2)) * 111320;
+                 if (dist < 150) { // 150 meters tolerance to the route path
+                    isOnRoute = true;
+                    break;
+                 }
+              }
+              if (!isOnRoute) return null;
+
+              let HazardIcon = AlertTriangle;
+              
+              if (hazard.type === "Traffic") { HazardIcon = Car; }
+              else if (hazard.type === "Construction") { HazardIcon = HardHat; }
+              else if (hazard.type === "Road Closure") { HazardIcon = MinusCircle; }
+              else if (hazard.type === "Speed Trap") { HazardIcon = Camera; }
+              else if (hazard.type === "Incorrect Route") { HazardIcon = MapPinOff; }
+
+              // Changed background to yellow and text to black
+              const textColor = "text-black";
+              const iconBg = "bg-[#FFCC00]";
+              const borderColor = "border-[#E5B800]";
+
+              return (
+                  <OverlayViewF key={hazard.id} position={{ lat: hazard.lat, lng: hazard.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                    <div className="absolute translate-y-[-100%] translate-x-[-100%] ml-[20px] pointer-events-none flex flex-col justify-end items-center z-10 w-max pb-2">
+                      <div className={cn("bg-[#FFCC00] border px-3 py-1.5 rounded-xl shadow-md relative flex items-center justify-center mb-1", borderColor)}>
+                        <span className={cn("font-black text-[11px] uppercase tracking-wider", textColor)}>{hazard.type}</span>
+                        <div className={cn("absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#FFCC00] border-b border-r rotate-45", borderColor)}></div>
+                      </div>
+                    </div>
+                    <div className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                       <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-[2px]", iconBg, borderColor)}>
+                         <HazardIcon className={cn("w-4 h-4", textColor)} />
+                       </div>
+                    </div>
+                  </OverlayViewF>
+              );
+            })}
+
             {/* AI Predictive Surge Heatmap */}
             {showPredictiveSurge && !activeRide && demandZones.map((zone, idx) => (
               <React.Fragment key={`surge-${idx}`}>
@@ -2012,45 +2120,18 @@ export default function DriverTerminal() {
       {/* Floating Map Controls & SOS */}
       <div className="absolute top-[15%] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
         <button 
-          onClick={() => setIsEmergencyVisible(!isEmergencyVisible)}
+          onClick={() => setShowHazardModal(true)}
           className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
         >
-          <Zap className={cn("w-4 h-4", isEmergencyVisible ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
+          <Zap className={cn("w-4 h-4", showHazardModal ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
         </button>
 
-        <AnimatePresence>
-          {isEmergencyVisible && (
-            <motion.div 
-              initial={{ opacity: 0, x: 20, height: 0, overflow: 'hidden' }}
-              animate={{ opacity: 1, x: 0, height: 'auto', overflow: 'visible' }}
-              exit={{ opacity: 0, x: 20, height: 0, overflow: 'hidden' }}
-              transition={{ duration: 0.2 }}
-              className="flex flex-col items-end gap-3 pb-2"
-            >
-              <div className="flex flex-col items-end">
-                <button 
-                  onClick={() => {
-                    if (navigator.vibrate) navigator.vibrate([100, 30, 100, 30, 500]);
-                    alert("EMERGENCY SOS: Dispatch has been alerted to your high-accuracy location. Recorded audio and video ingestion starting...");
-                  }}
-                  className="w-12 h-12 bg-[#FF3B30] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,59,48,0.4)] active:scale-95 transition-transform border border-red-400/20"
-                >
-                  <AlertCircle className="w-6 h-6 text-white" />
-                </button>
-                <div className="mt-1.5 px-2 py-0.5 bg-[#FF3B30]/10 backdrop-blur-md border border-red-500/20 rounded-full shadow-sm mb-1">
-                  <span className="text-[8px] font-black uppercase text-[#FF3B30] tracking-widest leading-none">SOS</span>
-                </div>
-              </div>
-
-              <button 
-                onClick={handleCenterOnMe}
-                className="w-10 h-10 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform mr-1"
-              >
-                <Target className="w-4 h-4 text-[#E4E4E7]" />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <button 
+          onClick={handleCenterOnMe}
+          className="w-10 h-10 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
+        >
+          <Target className="w-4 h-4 text-[#E4E4E7]" />
+        </button>
         
         {isOnline && !activeRide && (
           <button 
@@ -3461,6 +3542,107 @@ export default function DriverTerminal() {
           </motion.div>
         </div>
       )}
+
+      {/* Hazard Report Modal */}
+      <AnimatePresence>
+        {showHazardModal && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0D0D0F]/80 backdrop-blur-sm"
+          >
+            <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative">
+              <button 
+                onClick={() => {
+                   setShowHazardModal(false);
+                   setReportingHazardType(null);
+                   setHazardCountdown(0);
+                }}
+                className="absolute top-5 left-5 w-8 h-8 flex items-center justify-center text-[#1A1A1E] hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 stroke-[3]" />
+              </button>
+
+              <div className="flex justify-between items-center mb-8 pl-10">
+                <h3 className="text-[22px] font-medium text-[#1A1A1E] tracking-tight mx-auto -ml-2">Report road issue</h3>
+                <button className="w-6 h-6 flex items-center justify-center text-[#1A1A1E] border-[1.5px] border-[#1A1A1E] rounded-full">
+                  <span className="font-bold text-[13px]">?</span>
+                </button>
+              </div>
+
+              {/* Grid of Hazards */}
+              <div className="grid grid-cols-3 gap-y-8 gap-x-2">
+                 {[
+                   { label: "Accident", type: "Accident", icon: AlertTriangle, bg: "bg-[#E0F2FE]", color: "text-[#EA580C]" },
+                   { label: "Traffic", type: "Traffic", icon: Car, bg: "bg-[#FEF9C3]", color: "text-[#CA8A04]" },
+                   { label: "Construction", type: "Construction", icon: HardHat, bg: "bg-[#FFF7ED]", color: "text-[#F97316]" },
+                   { label: "Road Closure", type: "Road Closure", icon: MinusCircle, bg: "bg-[#FEE2E2]", color: "text-[#DC2626]" },
+                   { label: "Speed Trap", type: "Speed Trap", icon: Camera, bg: "bg-[#DBEAFE]", color: "text-[#3B82F6]" },
+                   { label: "Incorrect Route", type: "Incorrect Route", icon: MapPinOff, bg: "bg-[#F1F5F9]", color: "text-[#475569]" },
+                 ].map((item, i) => {
+                   const isReporting = reportingHazardType === item.type;
+                   const isOtherReporting = reportingHazardType && reportingHazardType !== item.type;
+                   
+                   return (
+                     <div 
+                       key={i} 
+                       className={cn("flex flex-col items-center gap-2 cursor-pointer transition-opacity", isOtherReporting ? "opacity-30 pointer-events-none" : "")}
+                       onClick={() => {
+                          if (hazardCountdown > 0 && reportingHazardType === item.type) {
+                             // Cancel
+                             setReportingHazardType(null);
+                             setHazardCountdown(0);
+                          } else if (hazardCountdown === 0) {
+                             setReportingHazardType(item.type);
+                             setHazardCountdown(3);
+                          }
+                       }}
+                     >
+                       <div className={cn("w-[72px] h-[72px] rounded-3xl flex items-center justify-center transition-all relative overflow-hidden", item.bg, isReporting ? "scale-105" : "hover:scale-105")}>
+                          {isReporting && (
+                             <motion.div 
+                               initial={{ height: 0 }}
+                               animate={{ height: "100%" }}
+                               transition={{ duration: 3, ease: "linear" }}
+                               className="absolute bottom-0 left-0 right-0 bg-[#1E3A8A] opacity-20"
+                             />
+                          )}
+                          <item.icon className={cn("w-8 h-8 relative z-10", item.color)} strokeWidth={2.5} />
+                       </div>
+                       <div className="text-center h-10 flex flex-col justify-start mt-1">
+                         <span className="text-[14px] text-[#475569] leading-tight font-medium">
+                           {item.label}
+                         </span>
+                         {isReporting && (
+                            <>
+                              <span className="text-[12px] font-bold text-[#1E3A8A] leading-tight block mt-1">Reporting in {hazardCountdown}s...</span>
+                              <span className="text-[11px] text-[#64748B] leading-tight block mt-0.5">Tap to cancel</span>
+                            </>
+                         )}
+                       </div>
+                     </div>
+                   );
+                 })}
+              </div>
+
+              {/* SOS Button at the bottom */}
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                 <button 
+                   onClick={() => {
+                     window.location.href = "tel:999";
+                     setShowHazardModal(false);
+                   }}
+                   className="w-full flex items-center justify-center gap-3 bg-[#FEF2F2] text-[#DC2626] py-3.5 rounded-2xl border border-[#FECACA] active:scale-[0.98] transition-transform"
+                 >
+                   <PhoneCall className="w-5 h-5 fill-current" />
+                   <span className="font-bold tracking-wide">EMERGENCY SOS (999)</span>
+                 </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
