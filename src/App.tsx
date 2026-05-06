@@ -50,7 +50,7 @@ import DriverInbox from "./components/driver/DriverInbox";
 import PassengerRideHistory from "./components/passenger/PassengerRideHistory";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
-import CorporatePortal from "./components/anyride/CorporatePortal";
+import CorporatePortal from "./components/anyroller/CorporatePortal";
 import AdReport from "./components/AdReport";
 import TraderAdStudio from "./components/TraderAdStudio";
 
@@ -65,7 +65,7 @@ function IndexRoute() {
     return <Navigate to="/ecosystem" replace />;
   }
 
-  if (activePortal === "anyride") {
+  if (activePortal === "anyroller") {
     return activeRole === "driver" ? <Navigate to="/driver-terminal" replace /> : <Navigate to="/book-ride" replace />;
   }
 
@@ -204,7 +204,7 @@ export default function App() {
                 <Route path="job/:id" element={<JobDetails />} />
                 <Route path="job/:id/timeline" element={<JobTimeline />} />
                 
-                {/* AnyRide specific routes inside Layout */}
+                {/* AnyRoller specific routes inside Layout */}
                 <Route path="driver-terminal" element={<DriverTerminal />} />
                 <Route path="book-ride" element={<PassengerBooking />} />
                 <Route path="my-rides" element={<PassengerRideHistory />} />

@@ -22,7 +22,7 @@ export default function PlatformSwitcher() {
   useEffect(() => {
     if (!user || activePortal === 'anytrader') return;
     
-    // When on AnyRide we want to alert them about quotes on AnyTrader
+    // When on AnyRoller we want to alert them about quotes on AnyTrader
     const q = query(
       collection(db, "notifications"),
       where("userId", "==", user.uid),
@@ -42,7 +42,7 @@ export default function PlatformSwitcher() {
     triggerHaptic();
     
     if (activePortal === "anytrader") {
-      switchPortal("anyride");
+      switchPortal("anyroller");
       // Use setTimeout so PortalContext can update activeRole first to avoid routing flicker
       setTimeout(() => navigate("/", { replace: true }), 50);
     } else {

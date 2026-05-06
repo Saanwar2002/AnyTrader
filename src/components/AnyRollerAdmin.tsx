@@ -6,34 +6,34 @@ import {
   Megaphone, Gift, Link, Database, Lock, Search, Bell, Award
 } from "lucide-react";
 import RidesCommandCenter from "./RidesCommandCenter";
-import AnyRideDashboard from "./anyride/AnyRideDashboard";
-import RideHistory from "./anyride/RideHistory";
-import ScheduledRides from "./anyride/ScheduledRides";
-import PaymentsRevenue from "./anyride/PaymentsRevenue";
-import PricingFares from "./anyride/PricingFares";
-import VehicleManagement from "./anyride/VehicleManagement";
-import PrioritySettings from "./anyride/PrioritySettings";
-import DispatchEngine from "./anyride/DispatchEngine";
-import ZonesGeofences from "./anyride/ZonesGeofences";
-import LiveMap from "./anyride/LiveMap";
-import SubscriptionManager from "./anyride/SubscriptionManager";
+import AnyRollerDashboard from "./anyroller/AnyRollerDashboard";
+import RideHistory from "./anyroller/RideHistory";
+import ScheduledRides from "./anyroller/ScheduledRides";
+import PaymentsRevenue from "./anyroller/PaymentsRevenue";
+import PricingFares from "./anyroller/PricingFares";
+import VehicleManagement from "./anyroller/VehicleManagement";
+import PrioritySettings from "./anyroller/PrioritySettings";
+import DispatchEngine from "./anyroller/DispatchEngine";
+import ZonesGeofences from "./anyroller/ZonesGeofences";
+import LiveMap from "./anyroller/LiveMap";
+import SubscriptionManager from "./anyroller/SubscriptionManager";
 
-import DriversList from "./anyride/DriversList";
-import RidersList from "./anyride/RidersList";
-import DocumentCompliance from "./anyride/DocumentCompliance";
-import SOSManager from "./anyride/SOSManager";
+import DriversList from "./anyroller/DriversList";
+import RidersList from "./anyroller/RidersList";
+import DocumentCompliance from "./anyroller/DocumentCompliance";
+import SOSManager from "./anyroller/SOSManager";
 
-import SupportTickets from "./anyride/SupportTickets";
-import RatingsReviews from "./anyride/RatingsReviews";
-import BroadcastMessaging from "./anyride/BroadcastMessaging";
-import Promotions from "./anyride/Promotions";
-import Referrals from "./anyride/Referrals";
+import SupportTickets from "./anyroller/SupportTickets";
+import RatingsReviews from "./anyroller/RatingsReviews";
+import BroadcastMessaging from "./anyroller/BroadcastMessaging";
+import Promotions from "./anyroller/Promotions";
+import Referrals from "./anyroller/Referrals";
 
-import Analytics from "./anyride/Analytics";
-import AnyTraderIntegration from "./anyride/AnyTraderIntegration";
-import AdminUsers from "./anyride/AdminUsers";
-import AuditLog from "./anyride/AuditLog";
-import GlobalSettings from "./anyride/GlobalSettings";
+import Analytics from "./anyroller/Analytics";
+import AnyTraderIntegration from "./anyroller/AnyTraderIntegration";
+import AdminUsers from "./anyroller/AdminUsers";
+import AuditLog from "./anyroller/AuditLog";
+import GlobalSettings from "./anyroller/GlobalSettings";
 import AdminTierManager from "./AdminTierManager";
 
 const SIDEBAR_ITEMS = [
@@ -72,7 +72,7 @@ const SIDEBAR_ITEMS = [
   { id: "settings", label: "Settings", icon: Settings, category: "System" }
 ];
 
-export default function AnyRideAdmin() {
+export default function AnyRollerAdmin() {
   const [activeScreen, setActiveScreen] = useState("dashboard");
 
   return (
@@ -82,7 +82,7 @@ export default function AnyRideAdmin() {
         <div className="p-6">
           <h1 className="text-xl font-black text-white flex items-center gap-2">
             <Car className="w-6 h-6 text-emerald-500" />
-            AnyRide
+            AnyRoller
             <span className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block -mt-1">Command Center</span>
           </h1>
         </div>
@@ -140,7 +140,7 @@ export default function AnyRideAdmin() {
         {/* Dynamic Screen Content */}
         <div className="flex-1 overflow-y-auto p-6">
            {activeScreen === "dashboard" ? (
-             <AnyRideDashboard />
+             <AnyRollerDashboard />
            ) : activeScreen === "live_map" ? (
              <LiveMap />
            ) : activeScreen === "active_rides" ? (

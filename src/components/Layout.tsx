@@ -247,9 +247,9 @@ export default function Layout() {
 
   // Keep routing somewhat hardened to portal, only trigger on location change to avoid fighting manual switches
   useEffect(() => {
-    // List of exclusive AnyRide paths
+    // List of exclusive AnyRoller paths
     if (location.pathname === "/book-ride" || location.pathname === "/driver-terminal") {
-      switchPortal("anyride");
+      switchPortal("anyroller");
     } 
     // Example of exclusive AnyTrader paths
     else if (location.pathname === "/job-feed" || location.pathname === "/post-job") {
@@ -318,7 +318,7 @@ export default function Layout() {
     navItems = adminNav;
   } else if (activeRole === "ecosystem_manager") {
     navItems = ecosystemNav;
-  } else if (activePortal === "anyride") {
+  } else if (activePortal === "anyroller") {
     navItems = activeRole === "driver" ? driverNav : passengerNav;
   } else {
     if (activeRole === "business") {
@@ -331,9 +331,9 @@ export default function Layout() {
   }
 
   // Hide the sidebars if on map
-  const isMapUX = (activePortal === "anyride" && activeRole === "customer");
+  const isMapUX = (activePortal === "anyroller" && activeRole === "customer");
   
-  const isDriverTerminal = activeRole === "driver" && activePortal === "anyride";
+  const isDriverTerminal = activeRole === "driver" && activePortal === "anyroller";
 
   return (
     <div className={cn("min-h-screen flex flex-col", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
@@ -373,11 +373,11 @@ export default function Layout() {
       <CrossPortalBanner />
 
       {/* Header */}
-      {!isDriverTerminal && activePortal !== 'anyride' && (
+      {!isDriverTerminal && activePortal !== 'anyroller' && (
       <header className="bg-slate-50/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
-              {activePortal === "anyride" && (
+              {activePortal === "anyroller" && (
                 <button 
                   onClick={() => {
                     triggerHaptic();
@@ -392,7 +392,7 @@ export default function Layout() {
                 onClick={() => {
                   triggerHaptic();
                   if (activePortal === "anytrader") {
-                    switchPortal("anyride");
+                    switchPortal("anyroller");
                     setTimeout(() => {
                       if (profile?.role === "driver" || profile?.role === "fleet_driver") {
                         navigate("/driver-terminal");
@@ -415,7 +415,7 @@ export default function Layout() {
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
                     </div>
                     <div className="hidden sm:block">
-                      <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRide</span>
+                      <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRoller</span>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
                     </div>
                   </>
@@ -434,7 +434,7 @@ export default function Layout() {
               </button>
 
               {/* Desktop Navigation */}
-              {activePortal !== 'anyride' && (
+              {activePortal !== 'anyroller' && (
                 <nav className="hidden md:flex items-center gap-1 ml-2">
                   {navItems.map((item) => {
                     const Icon = item.icon;
@@ -585,7 +585,7 @@ export default function Layout() {
             )}
 
               {/* Quick Actions (Plus & Schedule) */}
-              {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "admin" || profile?.role === "ecosystem_manager") && activePortal !== "anyride" && (
+              {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "admin" || profile?.role === "ecosystem_manager") && activePortal !== "anyroller" && (
                 <>
                   <div className="relative" ref={quickActionsRef}>
                      <button 
@@ -715,12 +715,12 @@ export default function Layout() {
         </div>
       )}
 
-      {(!isDriverTerminal && activePortal !== 'anyride') && <RoleTabBar />}
+      {(!isDriverTerminal && activePortal !== 'anyroller') && <RoleTabBar />}
 
       {/* Main Content */}
       <main className={cn(
         "flex-1 w-full relative min-h-0",
-        isDriverTerminal ? "p-0 flex flex-col overflow-hidden" : (activePortal === 'anyride' ? "p-0 flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
+        isDriverTerminal ? "p-0 flex flex-col overflow-hidden" : (activePortal === 'anyroller' ? "p-0 flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
       )}>
         <Outlet />
       </main>

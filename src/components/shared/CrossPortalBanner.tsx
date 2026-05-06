@@ -89,7 +89,7 @@ export default function CrossPortalBanner() {
     return (
       <button 
         onClick={() => {
-          switchPortal('anyride');
+          switchPortal('anyroller');
           navigate('/my-rides');
         }}
         className="w-full bg-[#00D26A] text-[#0D0D0F] px-4 py-3 flex items-center justify-center gap-3 shadow-lg z-[60] sticky top-0 active:scale-[0.98] transition-all border-b border-[#00D26A]/80 cursor-pointer"
@@ -102,8 +102,8 @@ export default function CrossPortalBanner() {
     );
   }
 
-  // When on AnyRide but there is an active job
-  if (activePortal === 'anyride' && activeJob) {
+  // When on AnyRoller but there is an active job
+  if (activePortal === 'anyroller' && activeJob) {
     return (
       <button 
         onClick={() => {

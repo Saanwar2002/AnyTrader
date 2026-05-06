@@ -153,7 +153,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                 },
                 homeowners: {
                   tiers: {
-                    rider_plus: { price: 9.99, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "Premium privileges for AnyRide passengers.", features: ["Priority Matching during peak hours", "10% discount on every journey", "Exclusive Rider Plus badge"], color: "bg-amber-50 border-amber-200" },
+                    rider_plus: { price: 9.99, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "Premium privileges for AnyRoller passengers.", features: ["Priority Matching during peak hours", "10% discount on every journey", "Exclusive Rider Plus badge"], color: "bg-amber-50 border-amber-200" },
                     business: { price: 49.99, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "B2B Corporate Billing and Multi-Account", features: ["Monthly Invoicing", "Team Access", "Dedicated Support"], color: "bg-blue-50 border-blue-200" }
                   }
                 }

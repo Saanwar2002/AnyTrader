@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "../components/AuthProvider";
 
-type PortalType = "anytrader" | "anyride";
+type PortalType = "anytrader" | "anyroller";
 type ActiveRoleType = "customer" | "trader" | "business" | "admin" | "driver" | "ecosystem_manager";
-type ThemeType = "light" | "dark" | "anyride";
+type ThemeType = "light" | "dark" | "anyroller";
 
 interface PortalContextType {
   activePortal: PortalType;
@@ -22,19 +22,19 @@ const PortalContext = createContext<PortalContextType | undefined>(undefined);
 export function PortalProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
   
-  // Default to anyride if fleet_driver, otherwise anytrader
-  const defaultPortal = profile?.role === "fleet_driver" ? "anyride" : "anytrader";
+  // Default to anyroller if fleet_driver, otherwise anytrader
+  const defaultPortal = profile?.role === "fleet_driver" ? "anyroller" : "anytrader";
   
   const [activePortal, setActivePortal] = useState<PortalType>(() => {
     const saved = localStorage.getItem("anytrader_active_portal");
-    if (saved === "anytrader" || saved === "anyride") {
+    if (saved === "anytrader" || saved === "anyroller") {
       return saved;
     }
     return defaultPortal;
   });
 
   const [theme, setThemeState] = useState<ThemeType>(() => {
-    const saved = localStorage.getItem("anyride_theme") as ThemeType;
+    const saved = localStorage.getItem("anyroller_theme") as ThemeType;
     return saved || "light";
   });
 
@@ -42,14 +42,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (newTheme: ThemeType) => {
     setThemeState(newTheme);
-    localStorage.setItem("anyride_theme", newTheme);
+    localStorage.setItem("anyroller_theme", newTheme);
   };
 
   useEffect(() => {
     // Apply theme to body
-    document.body.classList.remove("theme-dark", "theme-anyride");
+    document.body.classList.remove("theme-dark", "theme-anyroller");
     if (theme === "dark") document.body.classList.add("theme-dark");
-    if (theme === "anyride") document.body.classList.add("theme-anyride");
+    if (theme === "anyroller") document.body.classList.add("theme-anyroller");
   }, [theme]);
 
   // Calculate user's available roles based on profile
@@ -72,7 +72,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     
     if (profile?.role === "admin") return "admin";
     if (profile?.role === "ecosystem_manager") return "ecosystem_manager";
-    if ((profile?.role === "fleet_driver" || profile?.role === "driver") && activePortal === "anyride") return "driver";
+    if ((profile?.role === "fleet_driver" || profile?.role === "driver") && activePortal === "anyroller") return "driver";
     if (profile?.subscriptionType === "business") return "business";
     if (profile?.role === "tradesperson") return "trader";
     return "customer";
@@ -88,7 +88,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("anytrader_active_role", activeRole);
   }, [activeRole]);
 
-  // Sync role if portal switches to anyride (force driver or customer)
+  // Sync role if portal switches to anyroller (force driver or customer)
   useEffect(() => {
     // Force activeRole update when profile becomes available
     if (profile) {
@@ -106,7 +106,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
     if (profile?.role === "admin" || profile?.role === "ecosystem_manager") return;
 
-    if (activePortal === "anyride") {
+    if (activePortal === "anyroller") {
        if (profile?.role === "fleet_driver" || profile?.role === "driver") setActiveRoleState("driver");
        else setActiveRoleState("customer");
     } else {

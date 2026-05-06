@@ -1,4 +1,4 @@
-# AnyRide Driver Mobile UI — Complete Spec
+# AnyRoller Driver Mobile UI — Complete Spec
 "Beat Uber on transparency. Beat Bolt on intelligence. Beat both with AnyTrader."
 
 ## Design Philosophy

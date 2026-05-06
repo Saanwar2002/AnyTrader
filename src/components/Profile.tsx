@@ -6,7 +6,7 @@ import {
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
-  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe
+  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -958,7 +958,7 @@ export default function Profile() {
     }
   ];
 
-  const menuGroups = activePortal === "anyride" 
+  const menuGroups = activePortal === "anyroller" 
     ? passengerMenuGroups 
     : (profile.role === "tradesperson" ? tradespersonMenuGroups : homeownerMenuGroups);
 
@@ -1043,7 +1043,7 @@ export default function Profile() {
   const currentRoleCancelAtPeriodEnd = profile.role === "homeowner" ? profile.homeownerCancelAtPeriodEnd : profile.cancelAtPeriodEnd;
   const currentRoleCurrentPeriodEnd = profile.role === "homeowner" ? profile.homeownerCurrentPeriodEnd : profile.currentPeriodEnd;
 
-  if (activePortal === "anyride" && profile.role !== "driver") {
+  if (activePortal === "anyroller" && profile.role !== "driver") {
     const passengerGroups = [
       {
         title: "Account",
@@ -1346,7 +1346,7 @@ export default function Profile() {
                 <Star className="w-6 h-6 outline-amber-900 fill-amber-200" />
                 Rider Plus
               </h3>
-              <p className="text-sm font-bold text-amber-900/80 mt-1">Unlock the ultimate AnyRide experience.</p>
+              <p className="text-sm font-bold text-amber-900/80 mt-1">Unlock the ultimate AnyRoller experience.</p>
             </div>
             {profile.tierId === "rider_plus" && (
                <div className="px-3 py-1.5 bg-amber-950 text-amber-300 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
@@ -1384,7 +1384,7 @@ export default function Profile() {
                     name: "rider_plus", 
                     price: 9.99, 
                     limitPeriod: "monthly", 
-                    description: "Premium privileges for AnyRide passengers." 
+                    description: "Premium privileges for AnyRoller passengers." 
                   });
                 }}
                 className="w-full py-4 bg-amber-950 text-amber-300 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-amber-900 transition-colors shadow-xl active:scale-95 flex justify-center items-center gap-2"
@@ -1620,7 +1620,7 @@ export default function Profile() {
                 </div>
               </div>
             )}
-            {activePortal === "anyride" && profile.role !== "driver" && (
+            {activePortal === "anyroller" && profile.role !== "driver" && (
               <div className="flex justify-center mt-3 mb-6">
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 rounded-2xl border border-slate-200 shadow-sm">
                   <Star className="w-5 h-5 text-slate-800 fill-slate-800" />
@@ -2301,7 +2301,7 @@ export default function Profile() {
                             <ChevronRight className="w-6 h-6 text-black group-hover:text-black transition-colors" strokeWidth={2.5} />
                           </button>
                         );
-                      } else if (item.path?.startsWith("#") && activePortal === "anyride") {
+                      } else if (item.path?.startsWith("#") && activePortal === "anyroller") {
                         const isExpanded = expandedMenuId === item.path;
                         return (
                           <div key={index} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
@@ -2328,6 +2328,104 @@ export default function Profile() {
                                   className="border-t border-slate-100"
                                 >
                                   {item.path === "#payments" ? (
+                                    profile.role === "tradesperson" || profile.role === "business" ? (
+                                      <div className="p-6 md:p-8 bg-slate-50/50 space-y-8">
+                                        {/* Receiving Section */}
+                                        <div>
+                                          <div className="flex items-center gap-3 mb-4">
+                                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                              <PoundSterling className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-slate-900">AnyTrader Payouts (Receiving)</h3>
+                                          </div>
+                                          <p className="text-sm text-slate-500 mb-2">Connect your bank account securely via Stripe to receive payouts for your AnyTrader jobs.</p>
+                                          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-xl mb-4 font-medium flex items-start gap-2">
+                                            <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                                            <p><strong>Note:</strong> AnyTrader and AnyRoller are independent platforms. If you are also an AnyRoller taxi driver, you must set up a separate Stripe account inside your Driver Terminal to receive taxi fares.</p>
+                                          </div>
+                                          
+                                          {profile?.stripeConnectId ? (
+                                             <div className="bg-white border text-left border-emerald-200 rounded-2xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
+                                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                                <div className="flex items-center gap-4 relative z-10">
+                                                  <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center shadow-sm border border-slate-100">
+                                                    <Building className="w-6 h-6 text-slate-400" />
+                                                  </div>
+                                                  <div>
+                                                    <h4 className="text-sm font-bold text-slate-900">Stripe Connected Account</h4>
+                                                    <p className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Check className="w-3 h-3" /> Active & Receiving Payouts</p>
+                                                  </div>
+                                                </div>
+                                                <button onClick={() => window.open("https://connect.stripe.com/express/dashboard", "_blank")} className="relative z-10 text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors border border-blue-200 bg-white shadow-sm">
+                                                  Stripe Dashboard
+                                                </button>
+                                             </div>
+                                          ) : (
+                                             <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center">
+                                               <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-blue-100">
+                                                 <PoundSterling className="w-5 h-5 text-blue-600" />
+                                               </div>
+                                               <h3 className="text-sm font-bold text-slate-900 mb-1">Set up AnyTrader Payouts</h3>
+                                               <p className="text-xs text-slate-500 mb-4">Connect with Stripe to receive secure payouts directly to your bank account.</p>
+                                               <button 
+                                                 onClick={() => {
+                                                   alert("Redirecting to Stripe Connect onboarding...");
+                                                 }}
+                                                 className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all"
+                                               >
+                                                 Set up Payouts
+                                               </button>
+                                             </div>
+                                          )}
+                                        </div>
+
+                                        {/* Paying Out Section */}
+                                        <div className="pt-8 border-t border-slate-200">
+                                          <div className="flex items-center gap-3 mb-4">
+                                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                                              <CreditCard className="w-5 h-5 text-slate-600" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-slate-900">My Payment Method (Paying Out)</h3>
+                                          </div>
+                                          <p className="text-sm text-slate-500 mb-4">Add a card to securely pay other tradespeople for projects. This card can also be used to automatically pay for your AnyRoller taxi journeys.</p>
+                                          
+                                          {profile?.stripeCustomerId ? (
+                                             <div className="bg-white border text-left border-blue-200 rounded-2xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
+                                               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                               <div className="flex items-center gap-4 relative z-10">
+                                                 <div className="w-12 h-8 rounded bg-slate-800 text-white flex items-center justify-center font-black text-xs tracking-widest shadow-sm">
+                                                   VISA
+                                                 </div>
+                                                 <div>
+                                                   <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• 4242</h4>
+                                                   <p className="text-xs text-slate-500">Expires 12/28</p>
+                                                 </div>
+                                               </div>
+                                               <button className="relative z-10 text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
+                                                 Remove Card
+                                               </button>
+                                             </div>
+                                          ) : (
+                                             <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center">
+                                               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
+                                                 <CreditCard className="w-5 h-5 text-slate-400" />
+                                               </div>
+                                               <h3 className="text-sm font-bold text-slate-900 mb-1">No payment method added</h3>
+                                               <p className="text-xs text-slate-500 mb-4">Add a credit or debit card securely via Stripe.</p>
+                                               
+                                               <button 
+                                                 onClick={() => {
+                                                   alert("Stripe Checkout Modal would open here to securely tokenize card.");
+                                                 }}
+                                                 className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all"
+                                               >
+                                                 Add Credit or Debit Card
+                                               </button>
+                                             </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : (
                                     <div className="p-6 md:p-8 bg-slate-50/50">
                                       {/* How it Works Banner */}
                                       <details className="bg-blue-50/50 border border-blue-100 rounded-2xl mb-8 group [&_summary::-webkit-details-marker]:hidden">
@@ -2351,7 +2449,7 @@ export default function Profile() {
                                             Zero Data Stored Locally
                                           </div>
                                           <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-blue-100/50">
-                                            <strong>Security Note:</strong> AnyRide does not store or process your credit card details on our servers. 
+                                            <strong>Security Note:</strong> AnyRoller does not store or process your credit card details on our servers. 
                                             Your confidential data is transmitted directly to <strong>Stripe's PCI-compliant vault</strong>. 
                                             We only hold a secure token used exclusively to charge you for completed journeys.
                                           </p>
@@ -2396,6 +2494,7 @@ export default function Profile() {
                                         </div>
                                       )}
                                     </div>
+                                    )
                                   ) : item.path === "#business" ? (
                                      <div className="p-6 md:p-8 bg-slate-50/50">
                                        {profile.corporateAccountId ? (
@@ -2426,7 +2525,7 @@ export default function Profile() {
                                               <Briefcase className="w-8 h-8 text-slate-400" />
                                             </div>
                                             <h3 className="text-xl font-bold text-slate-900 mb-1">Set up a Business Profile</h3>
-                                            <p className="text-sm text-slate-500 mb-6">Add a business email to keep work rides and receipts separate. If your company uses AnyRide Corporate, this will link your account.</p>
+                                            <p className="text-sm text-slate-500 mb-6">Add a business email to keep work rides and receipts separate. If your company uses AnyRoller Corporate, this will link your account.</p>
                                             
                                             <div className="flex flex-col sm:flex-row items-center gap-3 max-w-lg mx-auto">
                                               <div className="relative flex-1 w-full">
@@ -2445,12 +2544,12 @@ export default function Profile() {
                                             </div>
                                             
                                             <div className="mt-8 pt-6 border-t border-slate-100 inline-block w-full">
-                                              <p className="text-xs text-slate-500 mb-3">Does your company need an AnyRide Corporate account?</p>
+                                              <p className="text-xs text-slate-500 mb-3">Does your company need an AnyRoller Corporate account?</p>
                                               <button 
                                                 onClick={() => window.location.href = '/corporate'}
                                                 className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
                                               >
-                                                Learn about AnyRide Corporate &rarr;
+                                                Learn about AnyRoller Corporate &rarr;
                                               </button>
                                             </div>
                                           </div>
@@ -2709,7 +2808,7 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Payment Methods (AnyRide Rider Only) */}
+        {/* Payment Methods (AnyRoller Rider Only) */}
 
       {/* Verification Center (Tradespeople only) */}
       {profile.role === "tradesperson" && (

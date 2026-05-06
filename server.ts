@@ -1458,7 +1458,7 @@ Description: ${description}`;
       if (!apiKey) return res.status(500).json({ error: "AI not configured" });
 
       const client = new GoogleGenAI({ apiKey });
-      const prompt = `You are an AI assistant for a taxi/ride-hailing platform (AnyRide). 
+      const prompt = `You are an AI assistant for a taxi/ride-hailing platform (AnyRoller). 
 The user is a driver looking at their analytics hub.
 Analyze their stats: ${JSON.stringify(driverStats)}
 Give ONE short, highly actionable, encouraging tip (under 15 words) about when or where they should drive next to maximize earnings, or how to improve their rating/acceptance.

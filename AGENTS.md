@@ -7,14 +7,14 @@
 
 ## Current Status
 - **Last Updated**: 2026-05-02
-- **Working State**: Application is fully functional with a live Driver Terminal, AnyRide Master Admin, and robust Post-Ride Driver Review engine.
+- **Working State**: Application is fully functional with a live Driver Terminal, AnyRoller Master Admin, and robust Post-Ride Driver Review engine.
 - **Key Features Implemented**:
   - **Extensive Service Catalog**: 76 major categories and 797 subcategories.
   - AnyTrader Rides Integration: Unified auth/role mapping.
   - **Live Driver Terminal**: High-accuracy GPS tracking, session lifecycle timers, and a persistent status HUD.
   - **Direct-to-Driver QR Payments**: Fully integrated Stripe Connect split-payment system. Drivers represent a QR code for instant scan-to-pay transactions with automatic 12% platform commission deduction.
   - **Mobile-Adaptive UI**: Collapsible privacy drawers and touch-optimized map controls.
-  - **AnyRide Master Admin**: Complete portal for managing rides, drivers, financials, dispatch rules, and safety/compliance.
+  - **AnyRoller Master Admin**: Complete portal for managing rides, drivers, financials, dispatch rules, and safety/compliance.
   - **Post-Ride Reviews**: 5-star Rating system integrated with "cooling-off" period mechanisms, quick action tags, and live Master Admin escalations for poor safety ratings.
 
 ## Active Task

@@ -1,9 +1,9 @@
-# AnyRide Command Center - Implementation Checklist
+# AnyRoller Command Center - Implementation Checklist
 
 ## Phase 1: Architecture & Navigation
-- [x] Create `MasterAdminLayout` (Portal Switcher bridging AnyTrader, AnyRide, and Super Admin).
-- [x] Detach AnyRide features from the legacy `AnyTraderAdmin` dashboard.
-- [x] Set up AnyRide Sidebar Navigation (Sidebar component with tabs for all AnyRide sections).
+- [x] Create `MasterAdminLayout` (Portal Switcher bridging AnyTrader, AnyRoller, and Super Admin).
+- [x] Detach AnyRoller features from the legacy `AnyTraderAdmin` dashboard.
+- [x] Set up AnyRoller Sidebar Navigation (Sidebar component with tabs for all AnyRoller sections).
 
 ## Phase 2: Core Operational Dashboards
 - [x] **Screen 1: Dashboard** - Live Status, KPIs, active alerts, volume charts.

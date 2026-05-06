@@ -57,7 +57,7 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 
 ## 🚀 The Super App Strategy: Phase 1-4 Architecture (Completed April 20, 2026)
 *   **The Mission:** Transition the monolithic application into a "Super App" model featuring Two Portals (Home Services & Rides) managed under one unified account and database structure. 
-*   **The Global Context Switcher:** Introduction of the `PortalContext` and a floating, draggable `PlatformSwitcher` widget to hot-swap navigation layouts based on `activePortal` ('anytrader' vs 'anyride') without losing state or forcing re-authentication. The legacy "MagicBubble" was deleted.
+*   **The Global Context Switcher:** Introduction of the `PortalContext` and a floating, draggable `PlatformSwitcher` widget to hot-swap navigation layouts based on `activePortal` ('anytrader' vs 'anyroller') without losing state or forcing re-authentication. The legacy "MagicBubble" was deleted.
 *   **Role Based Tabbing:** Introduction of a Sticky Header that detects when a user is both a "Homeowner" and "Tradesperson" and strictly segments logic away from the primary dashboards to reduce noise and confusion.
 *   **The Entitlements Engine:** Replacing hardcoded tier IDs with a centralized logic core (`entitlements.ts`) to validate dynamically: Lead Fee Discounts (0-50%), Commission Rates (8-15%), and Feature Gates (Quote Limits, Access Delays) based on the user's Subscription Tier (PAYG vs. Pro vs. Elite vs. Enterprise).
 *   **Monetization Preservation:** Existing localized upsells (e.g., £5 Emergency Boosts, Priority Offers toggles) were organically preserved and operate side-by-side with the new Entitlements Engine to preserve custom Stripe Checkouts.
@@ -287,9 +287,9 @@ The prefix is determined by the user's primary registration role:
     *   *Geometry-Driven Map Panning:* Redesigned `MapController` offset logic in `PassengerBooking.tsx`. To compensate for the bottom UI sheet, the camera uses `L.point(x, y + window.innerHeight * 0.25)` to dynamically shove the map focal point South, effectively pushing the targeted UI Pin comfortably upwards into the visible viewport overhead. 
     *   *Intermediate Stops Engine:* Implemented full Multi-Leg routing. Sandwitched an inline "Add Stop" button (`bg-green-100` styling) allowing up to 3 intermediate waypoints. 
     *   *Routing Polylines:* Fully integrated with OSRM. Any stops appended to the state trigger a multi-coordinate array rebuild and force a live visual recalculation of the blue routing polyline snaking across the Map container. 
-## 🚕 Phase 12: AnyRide Master Admin & Driver Dashboard Revamp (Completed April 25, 2026)
+## 🚕 Phase 12: AnyRoller Master Admin & Driver Dashboard Revamp (Completed April 25, 2026)
 *   **The Mission:** Complete the transition of driver/rider backend management into the unified Ecosystem Admin portal, and revamp the Driver Terminal's Earnings Hub into a live system.
-*   **Master Portal Switcher:** Seamlessly embedded `AnyRideAdmin.tsx` alongside `AnyTraderAdmin.tsx` and the `Super Admin` inside a single React container (`MasterAdminLayout.tsx`). Ensures identical top-headers and unified session persistence.
+*   **Master Portal Switcher:** Seamlessly embedded `AnyRollerAdmin.tsx` alongside `AnyTraderAdmin.tsx` and the `Super Admin` inside a single React container (`MasterAdminLayout.tsx`). Ensures identical top-headers and unified session persistence.
 *   **Core Operational Dashboards:** Deployed real-time live map monitors (`LiveMap.tsx`), scheduling logic panels (`ScheduledRides.tsx`), and extensive active fleet dispatches (`DispatchEngine.tsx`).
 *   **Financial & Pricing Control:** Centralized variable configurations like Peak Surge algorithms, Base Fares, Vehicle classes, and Surcharge mappings via robust Admin UI inputs (`PricingFares`, `PrioritySettings`).
 *   **Safety & Compliance OS:** Built the definitive safety toolkit. Deployed a red-alert `SOSManager` to monitor critical incidents and audio ingestions. Formalized `DocumentCompliance` for tracking MOT/DBS expiration.
@@ -308,18 +308,18 @@ The prefix is determined by the user's primary registration role:
     *   *Taxi Admin Command Center:* When adding or updating features in the Driver Terminal/Passenger apps, always ensure the Taxi Admin Panel (`/admin` -> Transport) is updated if necessary to reflect these new features, data types, or statuses (e.g. tracking `pendingPlatformFees`, resolving driver metric reports).
 
 ## 🏢 Phase 13: Unified Admin Subsystems (Completed April 25, 2026)
-- All admin modules (Super Admin, AnyTrader, AnyRide, Ecosystem) are now fully wired to the backend.
+- All admin modules (Super Admin, AnyTrader, AnyRoller, Ecosystem) are now fully wired to the backend.
 - Replaced all hardcoded state in core lists with `onSnapshot` Firebase listeners.
 - **Super Admin**: Merged inside `MasterAdminLayout.tsx` and tracks global users, drivers, traders, jobs, and rides concurrently.
-- **AnyRide Modules**: Wired up `SupportTickets`, `AuditLog`, `Dashboard`, `LiveMap`, `DriversList`, `ScheduledRides`, `RidersList`, `RideHistory`, and `AdminUsers`.
+- **AnyRoller Modules**: Wired up `SupportTickets`, `AuditLog`, `Dashboard`, `LiveMap`, `DriversList`, `ScheduledRides`, `RidersList`, `RideHistory`, and `AdminUsers`.
 - **Ecosystem Admin**: Integrated Partners, Campaigns, and Leads.
 
 ## 🌉 Phase 14: Cross-Portal Persistent Navigation (Completed April 25, 2026)
 *   **The Mission:** Ensure users engaged in dual-portal activities (e.g. driving a taxi while a plumber is en-route to their home, or booking a ride while receiving trade quotes) never lose track of active sessions.
 *   **CrossPortalBanner:** Built a persistent, non-dismissible banner (`CrossPortalBanner.tsx`) injected directly into the core `Layout.tsx`. 
     *   *Logic:* It uses `usePortal` to check the current environment, and runs background `onSnapshot` listeners on both `jobs` and `ride_requests`.
-    *   *Behavior:* If a user is on AnyTrader but has an active ride, a vibrant green "Ride in Progress" banner anchors the top of the screen (click-to-jump). If a user is on AnyRide but has an active trade job, a blue "Trader en route" banner appears.
-*   **Quote Motivation Badge:** Enhanced the floating `PlatformSwitcher` widget. It now queries `notifications` for unread quote alerts and appends a `red pulse` dot and a tooltip bubble (e.g., "📋 2 new quotes") specifically when the user is waiting on the AnyRide side, creating a powerful ecosystem-retention loop.
+    *   *Behavior:* If a user is on AnyTrader but has an active ride, a vibrant green "Ride in Progress" banner anchors the top of the screen (click-to-jump). If a user is on AnyRoller but has an active trade job, a blue "Trader en route" banner appears.
+*   **Quote Motivation Badge:** Enhanced the floating `PlatformSwitcher` widget. It now queries `notifications` for unread quote alerts and appends a `red pulse` dot and a tooltip bubble (e.g., "📋 2 new quotes") specifically when the user is waiting on the AnyRoller side, creating a powerful ecosystem-retention loop.
 *   **Driver Nudge Delay:** Implemented a time delay logic in `RideChat` where the driver is only allowed to send an SMS nudge to the passenger after they've been waiting at the pickup location for more than 3 minutes (180 seconds). This prevents drivers from spamming passengers immediately upon arrival during the grace period.
 *   **Priority Job Lead Notifications:** Rewrote the job notification dispatcher (`notificationService.ts`) to programmatically calculate push lead delivery times. Traders holding a tier with Priority advantages ("Gold", "Premium", "Platinum Enterprise", "Business Professional") receive instant `visibleAt` access to new posts, whereas standard accounts are dynamically time-delayed by 30 minutes, guaranteeing ecosystem ROI for paying users. Emergency jobs bypass this rule constraint.
 

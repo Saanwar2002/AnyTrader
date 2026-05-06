@@ -74,7 +74,7 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
        await setDoc(smsRef, {
          toUserId: passengerId,
          rideId: rideId,
-         message: `AnyRide: Your driver ${user?.displayName || ""} has sent you a message. Please check the app.`,
+         message: `AnyRoller: Your driver ${user?.displayName || ""} has sent you a message. Please check the app.`,
          status: "pending",
          createdAt: serverTimestamp()
        });

@@ -943,7 +943,7 @@ export default function DriverTerminal() {
         isPriority: true,
         isRiderPlus: false,
         stops: [
-          { address: "Waitrose & Partners, 16-19 Canada Square, Canary Wharf", lat: mapCenter[0] + 0.005, lng: mapCenter[1] - 0.005 }
+          { address: "Waitrose & Partners, 16-19 Canada Square, Canary Wharf", coords: { lat: mapCenter[0] + 0.005, lng: mapCenter[1] - 0.005 } }
         ]
       }
     ];
@@ -1885,10 +1885,10 @@ export default function DriverTerminal() {
               directions
                 ? undefined
                 : rideState === 'waiting'
-                  ? 15
+                  ? 14
                   : (rideState === 'en_route_pickup' || rideState === 'in_progress') 
                     ? 13 
-                    : 15 // Default driver location zoom level when idle
+                    : 14 // Default driver location zoom level when idle
             }
             onLoad={map => setMapInstance(map)}
             options={{

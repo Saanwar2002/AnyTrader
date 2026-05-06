@@ -3589,7 +3589,7 @@ export default function PassengerBooking() {
                   <div className="border-t border-dashed border-border-main my-4 pt-4 flex justify-between">
                     <div>
                       <p className="text-xs font-bold text-text-muted text-left mb-1">Driver</p>
-                      <p className="text-sm font-black text-text-main text-left">{completedRideData.driverName || "AnyRide Driver"}</p>
+                      <p className="text-sm font-black text-text-main text-left">{completedRideData.driverName || "AnyRoller Driver"}</p>
                     </div>
                     <div>
                       <p className="text-xs font-bold text-text-muted text-right mb-1">Date</p>

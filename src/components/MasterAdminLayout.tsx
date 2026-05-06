@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import AnyTraderAdmin from "./AnyTraderAdmin";
-import AnyRideAdmin from "./AnyRideAdmin";
+import AnyRollerAdmin from "./AnyRollerAdmin";
 import { useAuth } from "./AuthProvider";
 import { Building2, Car, Shield, LogOut, Users, Activity, PoundSterling, Briefcase } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -11,8 +11,8 @@ import { collection, onSnapshot, query, where, getDocs } from "firebase/firestor
 export default function MasterAdminLayout() {
   const { profile } = useAuth();
   
-  // Tabs: 'super_admin', 'anytrader', 'anyride'
-  const [activePortal, setActivePortal] = useState<"super_admin" | "anytrader" | "anyride">("anytrader");
+  // Tabs: 'super_admin', 'anytrader', 'anyroller'
+  const [activePortal, setActivePortal] = useState<"super_admin" | "anytrader" | "anyroller">("anytrader");
 
   const [metrics, setMetrics] = useState({
     totalUsers: 0,
@@ -98,13 +98,13 @@ export default function MasterAdminLayout() {
               <span className="hidden sm:inline">AnyTrader Control</span>
             </button>
             <button
-              onClick={() => setActivePortal("anyride")}
+              onClick={() => setActivePortal("anyroller")}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
-                activePortal === "anyride" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                activePortal === "anyroller" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               }`}
             >
               <Car className="w-4 h-4" />
-              <span className="hidden sm:inline">AnyRide Control</span>
+              <span className="hidden sm:inline">AnyRoller Control</span>
             </button>
           </div>
         </div>
@@ -132,7 +132,7 @@ export default function MasterAdminLayout() {
               <div className="max-w-7xl mx-auto space-y-8">
                 <div>
                   <h2 className="text-3xl font-black text-slate-900 tracking-tight">Super Admin Overview</h2>
-                  <p className="text-slate-500 font-medium mt-1">Cross-platform metrics for AnyTrader and AnyRide.</p>
+                  <p className="text-slate-500 font-medium mt-1">Cross-platform metrics for AnyTrader and AnyRoller.</p>
                 </div>
 
                 {loadingMetrics ? (
@@ -161,7 +161,7 @@ export default function MasterAdminLayout() {
 
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-1">AnyRide Drivers</p>
+                        <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-1">AnyRoller Drivers</p>
                         <p className="text-4xl font-black text-emerald-600">{metrics.totalDrivers}</p>
                       </div>
                       <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
@@ -214,14 +214,14 @@ export default function MasterAdminLayout() {
               <AnyTraderAdmin />
             </motion.div>
           )}
-          {activePortal === "anyride" && (
+          {activePortal === "anyroller" && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col h-full bg-slate-50"
             >
-              <AnyRideAdmin />
+              <AnyRollerAdmin />
             </motion.div>
           )}
       </div>

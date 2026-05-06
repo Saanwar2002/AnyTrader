@@ -15,7 +15,7 @@ export default function RoleTabBar() {
 
   // Which roles apply to the current active portal?
   const portalRoles = availableRoles.filter(role => {
-    if (activePortal === "anyride") {
+    if (activePortal === "anyroller") {
       return role === "customer" || role === "driver";
     } else {
       return role === "customer" || role === "trader" || role === "business";
@@ -36,7 +36,7 @@ export default function RoleTabBar() {
 
   const getLabel = (role: string) => {
     switch(role) {
-      case "customer": return activePortal === "anyride" ? "As Rider" : "As Homeowner";
+      case "customer": return activePortal === "anyroller" ? "As Rider" : "As Homeowner";
       case "trader": return "As Tradesperson";
       case "business": return "As Business";
       case "driver": return "As Driver";
