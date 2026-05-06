@@ -2488,6 +2488,12 @@ export default function DriverTerminal() {
                 <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Pickup</span>
                 <span className="text-white flex-1 leading-tight font-medium">{activeRide?.pickupAddress || "Pickup Location"}</span>
               </div>
+              {(activeRide?.stops || []).map((stop: any, idx: number) => (
+                <div key={`stop-modal-${idx}`} className="flex items-start gap-2">
+                  <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Stop {idx + 1}</span>
+                  <span className="text-white flex-1 leading-tight font-medium">{stop.address}</span>
+                </div>
+              ))}
               <div className="flex items-start gap-2">
                 <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Drop-off</span>
                 <span className="text-white flex-1 leading-tight font-medium">{activeRide?.dropoffAddress || "Drop-off Location"}</span>
