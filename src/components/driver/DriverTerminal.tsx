@@ -282,6 +282,15 @@ export default function DriverTerminal() {
     toast.success(isAutoNavHeadUp ? "Navigation overview" : "Head-up navigation started");
   };
 
+  useEffect(() => {
+    if (!isAutoNavHeadUp) {
+      const timer = setTimeout(() => {
+        setIsAutoNavHeadUp(true);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [isAutoNavHeadUp]);
+
   const handleStartExternalNavigation = () => {
     if (!activeRide) return;
 
@@ -2365,7 +2374,7 @@ export default function DriverTerminal() {
                         <div className="relative">
                           <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
-                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
                           <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
                         </div>
 
@@ -2373,14 +2382,14 @@ export default function DriverTerminal() {
                           <div key={idx} className="relative mt-2">
                             <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                             <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
-                            <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stop.address}</p>
+                            <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{stop.address}</p>
                           </div>
                         ))}
 
                         <div className="relative mt-2">
                           <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
-                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
                           <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{activeRide?.distanceMiles || "22"} mi from pickup</p>
                         </div>
                       </div>
@@ -2523,7 +2532,7 @@ export default function DriverTerminal() {
                         <div className="relative">
                           <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Next Pickup After Drop-off</p>
-                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stackedRideOffer?.pickupAddress || "12 Elm Street, SE15"}</p>
+                          <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{stackedRideOffer?.pickupAddress || "12 Elm Street, SE15"}</p>
                           <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{stackedRideOffer?.distanceToPickupMiles || "1.2"} mi from next dropoff</p>
                         </div>
 
@@ -2531,14 +2540,14 @@ export default function DriverTerminal() {
                           <div key={idx} className="relative mt-2">
                             <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                             <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">Stop {idx + 1}</p>
-                            <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stop.address}</p>
+                            <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{stop.address}</p>
                           </div>
                         ))}
 
                         <div className="relative mt-2">
                           <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
-                          <p className="text-[14.5px] font-medium text-white leading-tight line-clamp-2">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
+                          <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
                           <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
                         </div>
                       </div>
@@ -2601,17 +2610,17 @@ export default function DriverTerminal() {
               </div>
               <div className="flex items-start gap-2">
                 <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Pickup</span>
-                <span className="text-white flex-1 leading-tight font-medium">{activeRide?.pickupAddress || "Pickup Location"}</span>
+                <span className="text-white drop-shadow-sm flex-1 leading-tight font-semibold text-[16px]">{activeRide?.pickupAddress || "Pickup Location"}</span>
               </div>
               {(activeRide?.stops || []).map((stop: any, idx: number) => (
                 <div key={`stop-modal-${idx}`} className="flex items-start gap-2">
                   <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Stop {idx + 1}</span>
-                  <span className="text-white flex-1 leading-tight font-medium">{stop.address}</span>
+                  <span className="text-white drop-shadow-sm flex-1 leading-tight font-semibold text-[16px]">{stop.address}</span>
                 </div>
               ))}
               <div className="flex items-start gap-2">
                 <span className="text-[#A1A1AA] font-bold w-[72px] mt-0.5">Drop-off</span>
-                <span className="text-white flex-1 leading-tight font-medium">{activeRide?.dropoffAddress || "Drop-off Location"}</span>
+                <span className="text-white drop-shadow-sm flex-1 leading-tight font-semibold text-[16px]">{activeRide?.dropoffAddress || "Drop-off Location"}</span>
               </div>
               <div className="flex items-center gap-2 pt-2 border-t border-[#333338]">
                 <span className="text-[#A1A1AA] font-bold w-[72px]">Total Fare</span>
@@ -2670,7 +2679,7 @@ export default function DriverTerminal() {
                       <span className="bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap shrink-0">Pick Up</span>
                       <p className="text-[9px] font-black uppercase text-[#E4E4E7] tracking-widest truncate">Picking up {activeRide?.name || "Sarah T."}</p>
                     </div>
-                    <p className="text-[15.5px] font-medium text-white mb-0 line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
+                    <p className="text-[17px] font-semibold text-white drop-shadow-sm mb-0 line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
                     <p className="text-[16px] font-black text-white leading-none mt-0.5">3 min <span className="text-white text-[14px] font-bold">· {activeRide?.distanceToPickupMiles?.toFixed(1) || '1.2'} mi</span></p>
                   </div>
                   <div className="text-right">
@@ -2888,7 +2897,7 @@ export default function DriverTerminal() {
                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> <span className="truncate">{isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}</span>
                        </p>
                     </div>
-                    <p className="text-[15.5px] font-medium text-[#F8F9FA] mb-0 line-clamp-2">
+                    <p className="text-[17px] font-semibold text-white drop-shadow-sm mb-0 line-clamp-2">
                        {currentLegIndex < (activeRide?.stops?.length || 0) 
                          ? activeRide.stops[currentLegIndex].address 
                          : (activeRide?.dropoffAddress || "Bristol Temple Meads")}
@@ -3235,6 +3244,23 @@ export default function DriverTerminal() {
 
                   setRideState('idle');
                   setIsOnline(profile?.isLastJob ? false : true);
+                  
+                  if (activeRide && !activeRide.isReal && user) {
+                    try {
+                      await addDoc(collection(db, "ride_requests"), {
+                         ...activeRide,
+                         status: activeRide.status === "rider_abandoned" ? "rider_abandoned" : "completed",
+                         paymentMethod: activeRide.paymentMethod || "stripe_auto",
+                         finalFare: activeRide.finalFare || ((activeRide.fareEstimate || 38.5) + (activeRide.tipAmount || 0)),
+                         driverId: user.uid,
+                         assignedDriverId: user.uid,
+                         createdAt: serverTimestamp(),
+                         completedAt: serverTimestamp()
+                      });
+                    } catch (e) {
+                      console.error("Failed to save simulated ride", e);
+                    }
+                  }
                   
                   if (profile?.isLastJob && user) {
                     toast.success("Shift Ended", { description: "You are now offline." });
