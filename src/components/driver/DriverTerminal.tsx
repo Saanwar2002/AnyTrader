@@ -1885,10 +1885,10 @@ export default function DriverTerminal() {
               directions
                 ? undefined
                 : rideState === 'waiting'
-                  ? 14
+                  ? 13
                   : (rideState === 'en_route_pickup' || rideState === 'in_progress') 
                     ? 13 
-                    : 14 // Default driver location zoom level when idle
+                    : 13 // Default driver location zoom level when idle
             }
             onLoad={map => setMapInstance(map)}
             options={{
@@ -1989,8 +1989,8 @@ export default function DriverTerminal() {
                   preserveViewport: true,
                   polylineOptions: {
                     strokeColor: '#007AFF', // Google Maps style Blue
-                    strokeOpacity: 0.8,
-                    strokeWeight: 2,
+                    strokeOpacity: 0.5,
+                    strokeWeight: 4,
                   }
                 }}
               />
@@ -2123,28 +2123,6 @@ export default function DriverTerminal() {
         >
           <Zap className={cn("w-4 h-4", showHazardModal ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
         </button>
-
-        <button 
-          onClick={handleCenterOnMe}
-          className="w-10 h-10 bg-[#1A1A1E]/80 backdrop-blur-md border border-[#2C2C30] rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
-        >
-          <Target className="w-4 h-4 text-[#E4E4E7]" />
-        </button>
-        
-        {isOnline && !activeRide && (
-          <button 
-            onClick={() => setShowPredictiveSurge(!showPredictiveSurge)}
-            className={cn(
-              "w-10 h-10 mt-2 backdrop-blur-md border rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-all overflow-hidden relative",
-              showPredictiveSurge ? "bg-[#FF3B30]/20 border-[#FF3B30]/50" : "bg-[#1A1A1E]/80 border-[#2C2C30]"
-            )}
-          >
-            {showPredictiveSurge && (
-               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,59,48,0.4)0%,transparent_70%)] animate-pulse" />
-            )}
-            <TrendingUp className={cn("w-4 h-4 relative z-10", showPredictiveSurge ? "text-[#FF3B30]" : "text-[#E4E4E7]")} />
-          </button>
-        )}
       </div>
 
       {/* Floating Map Navigation (Left Side) */}
