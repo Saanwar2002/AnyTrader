@@ -6,7 +6,7 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
-import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus, User } from "lucide-react";
+import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus, User, Compass } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
 import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, addDoc, orderBy } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
@@ -80,6 +80,20 @@ const premiumMapOptions: google.maps.MapOptions = {
 
 import { fetchLiveDemandZones } from "@/src/services/surgeHeatmapService";
 
+const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371e3;
+  const p1 = lat1 * Math.PI/180;
+  const p2 = lat2 * Math.PI/180;
+  const dp = (lat2-lat1) * Math.PI/180;
+  const dl = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(dp/2) * Math.sin(dp/2) +
+            Math.cos(p1) * Math.cos(p2) *
+            Math.sin(dl/2) * Math.sin(dl/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
   const { switchPortal, setPreventPortalSwitch } = usePortal();
@@ -93,6 +107,10 @@ export default function DriverTerminal() {
   
   // Storage for directions
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+
+  const [currentLegIndex, setCurrentLegIndex] = useState(0);
+  const [showLeaveStopReminder, setShowLeaveStopReminder] = useState(false);
+  const [hasReachedCurrentStop, setHasReachedCurrentStop] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -163,6 +181,7 @@ export default function DriverTerminal() {
     timeRate: number, 
     waitRatePerMinute: number, 
     minFare: number, 
+    priorityFee: number,
     commissionRate: number, 
     allowRiderAbandonment?: boolean,
     surgeEnabled?: boolean,
@@ -175,6 +194,7 @@ export default function DriverTerminal() {
     timeRate: 0.15, 
     waitRatePerMinute: 0.25, 
     minFare: 5.0, 
+    priorityFee: 3.0,
     commissionRate: 0.12, 
     allowRiderAbandonment: false,
     surgeEnabled: true,
@@ -262,6 +282,33 @@ export default function DriverTerminal() {
     toast.success(isAutoNavHeadUp ? "Navigation overview" : "Head-up navigation started");
   };
 
+  const handleStartExternalNavigation = () => {
+    if (!activeRide) return;
+
+    let url = "https://www.google.com/maps/dir/?api=1";
+    
+    if (rideState === 'en_route_pickup') {
+      url += `&destination=${activeRide.pickupLat},${activeRide.pickupLng}`;
+    } else if (rideState === 'in_progress') {
+      url += `&destination=${activeRide.dropoffLat},${activeRide.dropoffLng}`;
+      // Add waypoints if there are stops and we haven't passed them
+      if (activeRide.stops && activeRide.stops.length > 0 && currentLegIndex < activeRide.stops.length) {
+        const remainingStops = activeRide.stops.slice(currentLegIndex);
+        const waypoints = remainingStops.map((stop: any) => stop.coords ? `${stop.coords.lat},${stop.coords.lng}` : '').filter(Boolean).join('|');
+        if (waypoints) {
+          url += `&waypoints=${waypoints}`;
+        }
+      }
+    } else {
+      return;
+    }
+    
+    url += "&travelmode=driving";
+    
+    externalNavWindowRef.current = window.open(url, '_blank');
+    toast.success("Starting navigation...");
+  };
+
   // Handle center for 'waiting' state to account for drawer height
   useEffect(() => {
     if (mapInstance && rideState === 'waiting' && activeRide?.pickupLat && activeRide?.pickupLng) {
@@ -317,7 +364,18 @@ export default function DriverTerminal() {
       if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {
         if (isLoaded) fetchDirections(activeRide.pickupLat, activeRide.pickupLng);
       } else if (rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng) {
-        if (isLoaded) fetchDirections(activeRide.dropoffLat, activeRide.dropoffLng);
+        let destLat = activeRide.dropoffLat;
+        let destLng = activeRide.dropoffLng;
+        
+        if (activeRide.stops && activeRide.stops.length > 0 && currentLegIndex < activeRide.stops.length) {
+           const currentStop = activeRide.stops[currentLegIndex];
+           if (currentStop?.coords) {
+             destLat = currentStop.coords.lat;
+             destLng = currentStop.coords.lng;
+           }
+        }
+        
+        if (isLoaded) fetchDirections(destLat, destLng);
       } else {
         setDirections(null);
       }
@@ -327,7 +385,7 @@ export default function DriverTerminal() {
     intervalId = setInterval(updateDynamicDirections, 15000);
 
     return () => clearInterval(intervalId);
-  }, [rideState, activeRide?.id, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, isLoaded, mapInstance]);
+  }, [rideState, activeRide?.id, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, isLoaded, mapInstance, currentLegIndex]);
 
   // Handle Map Orientation (Head Up North / Direction of Travel)
   useEffect(() => {
@@ -352,7 +410,18 @@ export default function DriverTerminal() {
         mapInstance.setZoom(17.2);
       }
     } else if (rideState === 'in_progress' && activeRide?.dropoffLat && activeRide?.dropoffLng) {
-      const targetBearing = driverHeading !== null ? driverHeading : getBearing(mapCenterRef.current[0], mapCenterRef.current[1], activeRide.dropoffLat, activeRide.dropoffLng);
+      let targetLat = activeRide.dropoffLat;
+      let targetLng = activeRide.dropoffLng;
+      
+      if (activeRide.stops && activeRide.stops.length > 0 && currentLegIndex < activeRide.stops.length) {
+         const currentStop = activeRide.stops[currentLegIndex];
+         if (currentStop?.coords) {
+           targetLat = currentStop.coords.lat;
+           targetLng = currentStop.coords.lng;
+         }
+      }
+      
+      const targetBearing = driverHeading !== null ? driverHeading : getBearing(mapCenterRef.current[0], mapCenterRef.current[1], targetLat, targetLng);
       mapInstance.setHeading(targetBearing);
       mapInstance.setTilt(60);
       if (directions) {
@@ -363,22 +432,28 @@ export default function DriverTerminal() {
       mapInstance.setHeading(0);
       mapInstance.setTilt(0);
     }
-  }, [rideState, isAutoNavHeadUp, isAutoNavPaused, mapInstance, driverHeading, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, mapCenter, directions]);
+  }, [rideState, isAutoNavHeadUp, isAutoNavPaused, mapInstance, driverHeading, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, mapCenter, directions, currentLegIndex]);
 
   // Listen to Taxi Command Settings (platform_config/rides)
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "platform_config", "rides"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setFareConfig({
+        setFareConfig(prev => ({
+          ...prev,
           baseFare: Number(data.baseFare) || 3.5,
           distanceRate: Number(data.distanceRate) || 1.3,
           timeRate: Number(data.timeRate) || 0.15,
           waitRatePerMinute: Number(data.waitRatePerMinute) || 0.25,
           minFare: Number(data.minFare) || 5.0,
-          commissionRate: data.commission ? Number(data.commission) / 100 : 0.12,
+          priorityFee: Number(data.priorityFee) || 3.0,
+          commissionRate: data.commissionRate !== undefined ? Number(data.commissionRate) : 0.12,
           allowRiderAbandonment: data.allowRiderAbandonment || false,
-        });
+          surgeEnabled: data.surgeEnabled !== undefined ? data.surgeEnabled : prev.surgeEnabled,
+          surgeModel: data.surgeModel || prev.surgeModel,
+          surgeFixedAmount: data.surgeFixedAmount ? Number(data.surgeFixedAmount) : prev.surgeFixedAmount,
+          surgeMultiplierValue: data.surgeMultiplierValue ? Number(data.surgeMultiplierValue) : prev.surgeMultiplierValue
+        }));
       }
     }, (error) => {
       console.error("Firestore Rides Config Error:", error);
@@ -827,6 +902,9 @@ export default function DriverTerminal() {
       }
     }
     
+    const priorityFeeAmount = randomProfile.isPriority ? fareConfig.priorityFee : 0;
+    finalFare += priorityFeeAmount;
+    
     setActiveRide({
       ...randomProfile,
       pickupLat: mapCenter[0] + 0.01,
@@ -1252,17 +1330,7 @@ export default function DriverTerminal() {
       return;
     }
 
-    const R = 6371e3; // Earth radius in metres
-    const lat1 = mapCenter[0] * Math.PI/180;
-    const lat2 = activeRide.pickupLat * Math.PI/180;
-    const dLat = (activeRide.pickupLat - mapCenter[0]) * Math.PI/180;
-    const dLon = (activeRide.pickupLng - mapCenter[1]) * Math.PI/180;
-
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1) * Math.cos(lat2) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const dist = R * c;
+    const dist = getDistanceInMeters(mapCenter[0], mapCenter[1], activeRide.pickupLat, activeRide.pickupLng);
 
     if (dist > 300) {
       setShowStartJobReminder(true);
@@ -1270,6 +1338,36 @@ export default function DriverTerminal() {
       setShowStartJobReminder(false);
     }
   }, [rideState, mapCenter, activeRide?.pickupLat, activeRide?.pickupLng, hasDismissedStartJobReminder]);
+
+  // Leave stop reminder if driving away from a stop (>300m) without pressing Go Next
+  useEffect(() => {
+    if (rideState !== 'in_progress' || !activeRide || !mapCenter) return;
+
+    if (currentLegIndex >= (activeRide.stops?.length || 0)) {
+       // It's driving to drop-off. We don't need "Go to next" reminder for drop-off.
+       return;
+    }
+
+    const currentStop = activeRide.stops[currentLegIndex];
+    if (!currentStop?.coords?.lat || !currentStop?.coords?.lng) return;
+
+    const dist = getDistanceInMeters(mapCenter[0], mapCenter[1], currentStop.coords.lat, currentStop.coords.lng);
+
+    if (dist <= 200) {
+       // Driver has reached the stop!
+       if (!hasReachedCurrentStop) {
+         setHasReachedCurrentStop(true);
+       }
+       if (showLeaveStopReminder) {
+         setShowLeaveStopReminder(false);
+       }
+    } else if (dist > 300 && hasReachedCurrentStop) {
+       // Driver was at the stop, now left, but hasn't pressed Go to Next
+       if (!showLeaveStopReminder) {
+         setShowLeaveStopReminder(true);
+       }
+    }
+  }, [rideState, activeRide, mapCenter, currentLegIndex, hasReachedCurrentStop, showLeaveStopReminder]);
 
   useEffect(() => {
     if (rideState !== 'waiting') {
@@ -1410,6 +1508,10 @@ export default function DriverTerminal() {
 
   const handleStartRide = async () => {
     setRideState('in_progress');
+    setCurrentLegIndex(0);
+    setHasReachedCurrentStop(false);
+    setShowLeaveStopReminder(false);
+    setIsWaitingAtStop(false); // just in case
     const pickupPaidWait = Math.max(0, elapsedWaitSeconds - 180);
     setAccumulatedPaidWaitSeconds(pickupPaidWait);
 
@@ -1423,20 +1525,6 @@ export default function DriverTerminal() {
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
   };
 
-  const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371e3;
-    const p1 = lat1 * Math.PI/180;
-    const p2 = lat2 * Math.PI/180;
-    const dp = (lat2-lat1) * Math.PI/180;
-    const dl = (lon2-lon1) * Math.PI/180;
-
-    const a = Math.sin(dp/2) * Math.sin(dp/2) +
-              Math.cos(p1) * Math.cos(p2) *
-              Math.sin(dl/2) * Math.sin(dl/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
   const handleCompleteRideBtnClick = () => {
     let dist = 1000;
     if (activeRide && activeRide.dropoffLat && activeRide.dropoffLng) {
@@ -1446,6 +1534,22 @@ export default function DriverTerminal() {
     setIsEarlyCompletion(dist > 300);
     setEarlyCompletionReason("");
     setShowCompleteConfirm(true);
+  };
+
+  const handleGoToNextLeg = () => {
+    if (isWaitingAtStop) {
+      // Safety: turn off waiting if they forgot
+      setIsWaitingAtStop(false);
+      setAbandonmentWarningSent(false);
+      setAccumulatedPaidWaitSeconds(prev => prev + currentStopWaitSeconds);
+      setCurrentStopWaitSeconds(0);
+      setStopWaitStartTime(null);
+    }
+    
+    setCurrentLegIndex(prev => prev + 1);
+    setHasReachedCurrentStop(false);
+    setShowLeaveStopReminder(false);
+    toast.success("Navigating to next location", { duration: 3000 });
   };
 
   const handleCompleteRideConfirmed = async () => {
@@ -1762,29 +1866,33 @@ export default function DriverTerminal() {
               // If we wanted to hide stops as they are completed, we'd need a 'completedStops' count,
               // but since we don't have that yet, show all stops + dropoff, OR just the dropoff if no stops.
               // Wait, if we want to show ONLY ONE card, and we have stops...
-              // In this app, stops are just an array. We don't have state for "currently driving to stop 1".
-              // So for now, we'll render all remaining stops, or just dropoff. Let's render all stops and dropoff during in_progress, since we can't tell which one is the current destination. Note: User said "either yellow if STOP or Red if Drop off. Other cards should disappear", but since we lack "current leg" tracking, I will just show them all in_progress. Wait! I can show the stops and drop off, they are all relevant to the in_progress leg. 
-              // Wait, user said "only one card should be visible". Without current leg tracking, what should I do?
-              // The user just wants it not to look cluttered. Let's just show stops yellow and dropoff red.
+              // We only show the card and marker for the currently active leg to avoid clutter.
+              const isDropoffLeg = currentLegIndex >= (activeRide?.stops?.length || 0);
+              
+              if (!isDropoffLeg) {
+                const stop = activeRide.stops[currentLegIndex];
+                if (!stop || !stop.coords) return null;
+                return (
+                  <React.Fragment>
+                    <MarkerF position={{ lat: stop.coords.lat, lng: stop.coords.lng }} />
+                    <OverlayViewF position={{ lat: stop.coords.lat, lng: stop.coords.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                      <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
+                        <div className="bg-[#FEF08A] border border-[#EAB308] p-2.5 rounded-xl shadow-lg relative">
+                          <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#713F12] mb-0.5">Stop {currentLegIndex + 1}</div>
+                          <div className="font-bold text-[11px] text-[#451A03] leading-tight whitespace-normal text-left">
+                            {stop.address || "Stop Location"}
+                          </div>
+                          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-[#FEF08A] border-b border-r border-[#EAB308] rotate-45 shadow-[2px_2px_2px_rgba(0,0,0,0.05)]"></div>
+                        </div>
+                      </div>
+                    </OverlayViewF>
+                  </React.Fragment>
+                );
+              }
+              
+              // Dropoff leg
               return (
                 <>
-                  {(activeRide?.stops || []).map((stop: any, index: number) => stop.coords && (
-                    <React.Fragment key={index}>
-                      <MarkerF position={{ lat: stop.coords.lat, lng: stop.coords.lng }} />
-                      <OverlayViewF position={{ lat: stop.coords.lat, lng: stop.coords.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                        <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
-                          <div className="bg-[#FEF08A] border border-[#EAB308] p-2.5 rounded-xl shadow-lg relative">
-                            <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#713F12] mb-0.5">Stop {index + 1}</div>
-                            <div className="font-bold text-[11px] text-[#451A03] leading-tight whitespace-normal text-left">
-                              {stop.address || "Stop Location"}
-                            </div>
-                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-[#FEF08A] border-b border-r border-[#EAB308] rotate-45 shadow-[2px_2px_2px_rgba(0,0,0,0.05)]"></div>
-                          </div>
-                        </div>
-                      </OverlayViewF>
-                    </React.Fragment>
-                  ))}
-                  
                   {activeRide?.dropoffLat && activeRide?.dropoffLng && (
                     <>
                       <MarkerF position={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }} />
@@ -1953,7 +2061,7 @@ export default function DriverTerminal() {
 
       {/* Floating Map Navigation (Left Side) */}
       {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
-        <div className="absolute top-[18%] left-4 z-50 pointer-events-auto">
+        <div className="absolute top-[18%] left-4 z-50 pointer-events-auto flex flex-col gap-3">
           <button 
             onClick={handleToggleAutoNav}
             className={cn("w-10 h-10 rounded-full flex flex-col items-center justify-center shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform", isAutoNavHeadUp ? "bg-[#007AFF]" : "bg-[#1A1A1E] border-2 border-[#007AFF]")}
@@ -1967,6 +2075,13 @@ export default function DriverTerminal() {
                 <MapPin className="w-4 h-4 text-[#007AFF]" />
               </>
             )}
+          </button>
+
+          <button 
+            onClick={handleStartExternalNavigation}
+            className="w-10 h-10 rounded-full flex flex-col items-center justify-center bg-[#00D26A] shadow-[0_6px_16px_rgba(0,210,106,0.4)] active:scale-95 transition-transform"
+          >
+            <Compass className="w-5 h-5 text-[#1A1A1E]" />
           </button>
         </div>
       )}
@@ -2762,8 +2877,10 @@ export default function DriverTerminal() {
                 <div className="flex justify-between items-start mb-2 relative">
                   <div className="flex-1 mr-2 min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
-                       {activeRide?.stops?.length > 0 ? (
-                          <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0">Multi-Stop</span>
+                       {currentLegIndex < (activeRide?.stops?.length || 0) ? (
+                          <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0">Stop {currentLegIndex + 1}</span>
+                       ) : activeRide?.stops?.length > 0 ? (
+                          <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0">Drop Off</span>
                        ) : (
                           <span className="bg-[#FF3B30] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap shrink-0">Drop Off</span>
                        )}
@@ -2771,7 +2888,11 @@ export default function DriverTerminal() {
                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse ${isWaitingAtStop ? 'bg-[#FF9500]' : 'bg-[#00D26A]'}`}></span> <span className="truncate">{isWaitingAtStop ? 'WAITING AT STOP' : 'Trip in Progress'}</span>
                        </p>
                     </div>
-                    <p className="text-[15.5px] font-medium text-[#F8F9FA] mb-0 line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
+                    <p className="text-[15.5px] font-medium text-[#F8F9FA] mb-0 line-clamp-2">
+                       {currentLegIndex < (activeRide?.stops?.length || 0) 
+                         ? activeRide.stops[currentLegIndex].address 
+                         : (activeRide?.dropoffAddress || "Bristol Temple Meads")}
+                    </p>
                     {isWaitingAtStop ? (
                        <p className="text-[16px] font-black text-[#FF9500] leading-none mt-0.5">Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:{((totalPaidWaitSeconds) % 60).toString().padStart(2, '0')}</p>
                     ) : (
@@ -2851,12 +2972,21 @@ export default function DriverTerminal() {
                       </span>
                     )}
                   </button>
-                  <button 
-                    onClick={handleCompleteRideBtnClick}
-                    className="flex-1 h-10 bg-[#FF3B30] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
-                  >
-                    <Check className="w-4 h-4 stroke-[3]" /> COMPLETE
-                  </button>
+                  {currentLegIndex < (activeRide?.stops?.length || 0) ? (
+                    <button 
+                      onClick={handleGoToNextLeg}
+                      className="flex-1 h-10 bg-[#FF9500] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-[#FF9500]/30"
+                    >
+                      GO NEXT
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleCompleteRideBtnClick}
+                      className="flex-1 h-10 bg-[#FF3B30] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
+                    >
+                      <Check className="w-4 h-4 stroke-[3]" /> COMPLETE
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -3004,13 +3134,16 @@ export default function DriverTerminal() {
                   {totalPaidWaitSeconds > 0 && (
                     <div className="flex justify-between text-xs text-[#FF9500]"><span>Paid Wait ({Math.floor(totalPaidWaitSeconds / 60)}m):</span><span className="font-bold">+£{((totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute).toFixed(2)}</span></div>
                   )}
+                  {activeRide?.isPriority && (
+                    <div className="flex justify-between text-xs text-[#00E5FF]"><span>Priority Booking:</span><span className="font-bold">+£{fareConfig.priorityFee.toFixed(2)}</span></div>
+                  )}
                   {activeRide?.status === 'rider_abandoned' && (
                     <div className="flex justify-between text-xs text-[#FF3B30]"><span>Abandonment Fee:</span><span className="font-bold">+£5.00</span></div>
                   )}
                   {fareConfig.surgeEnabled && (
                     <div className="flex justify-between text-xs text-[#FF9500]">
                       <span>Surge ({activeRide?.surgeModel === 'fixed' ? 'Fixed' : (activeRide?.surgeMultiplier || '1.4') + 'x'}):</span>
-                      <span className="font-bold">+£{activeRide?.surgeModel === 'fixed' ? (activeRide?.surgeFixed || 2.0).toFixed(2) : ((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30)).toFixed(2)}</span>
+                      <span className="font-bold">+£{activeRide?.surgeModel === 'fixed' ? (activeRide?.surgeFixed || 2.0).toFixed(2) : ((activeRide?.fareEstimate || 38.50) - (activeRide?.baseCalc || 30) - (activeRide?.isPriority ? fareConfig.priorityFee : 0)).toFixed(2)}</span>
                     </div>
                   )}
                 </div>
@@ -3161,6 +3294,41 @@ export default function DriverTerminal() {
                 className="w-full mt-3 h-12 bg-[#2A2A2E] text-white flex items-center justify-center rounded-xl font-bold active:scale-[0.98] transition-all"
               >
                 Not yet
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Leave Stop Reminder Modal */}
+      <AnimatePresence>
+        {showLeaveStopReminder && (
+          <div className="fixed inset-0 z-[250] bg-black/60 backdrop-blur-sm overflow-y-auto pointer-events-auto flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-[#1A1A1E] w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-[#333338] text-center relative pointer-events-auto">
+              <button 
+                onClick={() => setShowLeaveStopReminder(false)}
+                className="absolute top-4 right-4 p-2 bg-[#2A2A2E] text-white rounded-full hover:bg-slate-700 active:scale-95 transition-all focus:outline-none"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-16 h-16 bg-[#F59E0B]/20 rounded-full flex items-center justify-center mx-auto mb-4 mt-2">
+                <AlertCircle className="w-8 h-8 text-[#F59E0B]" />
+              </div>
+              <h3 className="text-xl font-black text-white px-2 mt-2 leading-tight">Proceed to Next Leg?</h3>
+              <p className="text-slate-400 font-medium text-sm mt-3 leading-relaxed mb-6">
+                You appear to be moving away from the stop location. Please click <strong>"Go to Next"</strong> if you are ready to navigate to the next destination.
+              </p>
+              <button 
+                onClick={() => handleGoToNextLeg()}
+                className="w-full h-12 bg-[#FF9500] text-white rounded-xl font-bold active:scale-[0.98] transition-all"
+              >
+                Go to Next
+              </button>
+              <button 
+                onClick={() => setShowLeaveStopReminder(false)}
+                className="w-full mt-3 h-12 bg-[#2A2A2E] text-white flex items-center justify-center rounded-xl font-bold active:scale-[0.98] transition-all"
+              >
+                Dismiss
               </button>
             </motion.div>
           </div>
