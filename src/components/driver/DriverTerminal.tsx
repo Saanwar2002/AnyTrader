@@ -398,35 +398,26 @@ export default function DriverTerminal() {
     let intervalId: NodeJS.Timeout;
 
     // Fetch route directions using Google Maps API
-    const fetchDirections = (destLat: number, destLng: number) => {
+    const fetchDirections = async (destLat: number, destLng: number) => {
       if (!window.google || !window.google.maps) return;
       const directionsService = new window.google.maps.DirectionsService();
       
       const originLat = mapCenterRef.current[0];
       const originLng = mapCenterRef.current[1];
       
-      const routeResult: any = directionsService.route(
-        {
+      try {
+        const result = await directionsService.route({
           origin: new window.google.maps.LatLng(originLat, originLng),
           destination: new window.google.maps.LatLng(destLat, destLng),
           travelMode: window.google.maps.TravelMode.DRIVING
-        },
-        (result, status) => {
-          if (status === window.google.maps.DirectionsStatus.OK) {
-            setDirections(result);
-            if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
-              // We fit the bounds here. Because we already set Map options `padding: { bottom: 350 }`, 
-              // Google Maps will automatically shift the visual center up!
-              mapInstance.fitBounds(result.routes[0].bounds);
-              isInitialFitBounds = false;
-            }
-          } else {
-            console.warn("Directions request failed with status:", status);
-          }
+        });
+        setDirections(result);
+        if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
+          mapInstance.fitBounds(result.routes[0].bounds);
+          isInitialFitBounds = false;
         }
-      );
-      if (routeResult && routeResult.catch) {
-        routeResult.catch((e: any) => console.warn("Caught directions promise rejection:", e));
+      } catch (e) {
+        // Silently catch directions API errors (e.g. UNKNOWN_ERROR, MAX_WAYPOINTS_EXCEEDED, ZERO_RESULTS)
       }
     };
 
@@ -499,8 +490,15 @@ export default function DriverTerminal() {
         mapInstance.setZoom(17.2);
       }
     } else {
-      mapInstance.setHeading(0);
-      mapInstance.setTilt(0);
+      if (driverHeading !== null && driverHeading !== undefined) {
+        mapInstance.setHeading(driverHeading);
+        mapInstance.setTilt(60);
+        mapInstance.setZoom(17.2);
+        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
+      } else {
+        mapInstance.setHeading(0);
+        mapInstance.setTilt(0);
+      }
     }
   }, [rideState, isAutoNavHeadUp, isAutoNavPaused, mapInstance, driverHeading, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, mapCenter, directions, currentLegIndex]);
 
@@ -2030,7 +2028,7 @@ export default function DriverTerminal() {
 
               return (
                   <OverlayViewF key={hazard.id} position={{ lat: hazard.lat, lng: hazard.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                    <div className="absolute translate-y-[-100%] translate-x-[-100%] ml-[20px] pointer-events-none flex flex-col justify-end items-center z-10 w-max pb-2">
+                    <div className="absolute -translate-x-1/2 -translate-y-[100%] pointer-events-none flex flex-col justify-end items-center z-10 w-max pb-[22px]">
                       <div className={cn("bg-[#FFCC00] border px-3 py-1.5 rounded-xl shadow-md relative flex items-center justify-center mb-1", borderColor)}>
                         <span className={cn("font-black text-[11px] uppercase tracking-wider", textColor)}>{hazard.type}</span>
                         <div className={cn("absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#FFCC00] border-b border-r rotate-45", borderColor)}></div>
@@ -2153,25 +2151,17 @@ export default function DriverTerminal() {
       {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
         <div className="absolute top-[18%] left-4 z-50 pointer-events-auto flex flex-col gap-3">
           <button 
-            onClick={handleToggleAutoNav}
-            className={cn("w-10 h-10 rounded-full flex flex-col items-center justify-center shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform", isAutoNavHeadUp ? "bg-[#007AFF]" : "bg-[#1A1A1E] border-2 border-[#007AFF]")}
+            onClick={handleStartExternalNavigation}
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-[#007AFF] shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform"
           >
-            {isAutoNavHeadUp ? (
-              <>
-                <Navigation className="w-4 h-4 text-white fill-white" />
-              </>
-            ) : (
-              <>
-                <MapPin className="w-4 h-4 text-[#007AFF]" />
-              </>
-            )}
+            <Navigation className="w-5 h-5 text-white fill-white" />
           </button>
 
           <button 
-            onClick={handleStartExternalNavigation}
-            className="w-10 h-10 rounded-full flex flex-col items-center justify-center bg-[#00D26A] shadow-[0_6px_16px_rgba(0,210,106,0.4)] active:scale-95 transition-transform"
+            onClick={handleToggleAutoNav}
+            className={cn("w-10 h-10 rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(0,210,106,0.4)] active:scale-95 transition-transform", isAutoNavHeadUp ? "bg-[#00D26A]" : "bg-[#1A1A1E] border-2 border-[#00D26A]")}
           >
-            <Compass className="w-5 h-5 text-[#1A1A1E]" />
+            <Compass className={cn("w-5 h-5", isAutoNavHeadUp ? "text-[#1A1A1E]" : "text-[#00D26A]")} />
           </button>
         </div>
       )}
