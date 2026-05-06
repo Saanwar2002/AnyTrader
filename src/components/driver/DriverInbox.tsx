@@ -6,7 +6,7 @@ import { cn } from "@/src/lib/utils";
 type FilterType = 'all' | 'rides' | 'alerts' | 'anytrader';
 
 export default function DriverInbox({ onClose }: { onClose?: () => void }) {
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [filter, setFilter] = useState<FilterType>('rides');
 
   const mockMessages = [
     { id: 1, type: 'alerts', title: 'MOT Expires in 14 Days', desc: 'Book a mechanic now to avoid suspension.', time: '2h ago', icon: ShieldAlert, color: 'text-[#FF3B30]', bg: 'bg-[#FF3B30]/10', unread: true },
