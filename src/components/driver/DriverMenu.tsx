@@ -102,8 +102,8 @@ export default function DriverMenu({
       title: "Navigation & Earnings",
       items: [
         { id: "analytics", icon: BarChart3, label: "Analytics", desc: "Performance & trends", color: "text-[#00D26A]", bg: "bg-[#00D26A]/10" },
-        { icon: Clock, label: "Availability Hours", desc: "Set schedule & see demand", color: "text-[#007AFF]", bg: "bg-[#007AFF]/10" },
-        { icon: MapPin, label: "My Zones", desc: "Preferred driving areas", color: "text-[#E4E4E7]", bg: "bg-white/5" },
+        { id: "availability", icon: Clock, label: "Availability Hours", desc: "Set schedule & see demand", color: "text-[#007AFF]", bg: "bg-[#007AFF]/10" },
+        { id: "zones", icon: MapPin, label: "My Zones", desc: "Preferred driving areas", color: "text-[#E4E4E7]", bg: "bg-white/5" },
       ]
     },
     {

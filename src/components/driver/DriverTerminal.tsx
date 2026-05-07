@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
 import { Navigation, Info, Power, Zap, ChevronDown, ChevronUp, Check, X, Phone, MessageSquare, AlertCircle, MapPin, Grid, Inbox, Menu as MenuIcon, PoundSterling, Star, Target, TrendingUp, Calendar, Clock, Eye, EyeOff, Hammer, Repeat, Plus, Minus, User, Compass, AlertTriangle, Car, HardHat, MinusCircle, Camera, MapPinOff, PhoneCall } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView, DirectionsRenderer, CircleF } from "@react-google-maps/api";
-import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, addDoc, orderBy } from "@/src/firebase";
+import { db, doc, onSnapshot, collection, query, where, updateDoc, setDoc, serverTimestamp, deleteField, increment, runTransaction, getDocs, getDoc, addDoc, orderBy } from "@/src/firebase";
 import { playSound, speakText } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
 import DriverAnalytics from "./DriverAnalytics";
@@ -16,6 +16,8 @@ import DriverInbox from "./DriverInbox";
 import DriverMenu from "./DriverMenu";
 import DriverDocuments from "./DriverDocuments";
 import DriverJobs from "./DriverJobs";
+import DriverZones from "./DriverZones";
+import DriverAvailability from "./DriverAvailability";
 import { MapZoomControls } from "../shared/MapZoomControls";
 import RideChat from "./RideChat";
 import { MessageCircle } from "lucide-react";
@@ -248,20 +250,17 @@ export default function DriverTerminal() {
     surgeEnabled?: boolean,
     surgeModel?: 'fixed' | 'multiplier',
     surgeFixedAmount?: number,
-    surgeMultiplierValue?: number
+    surgeMultiplierValue?: number,
+    maxDailyDriverHours?: number
   }>({ 
     baseFare: 3.5, 
-    distanceRate: 1.3, 
-    timeRate: 0.15, 
-    waitRatePerMinute: 0.25, 
-    minFare: 5.0, 
-    priorityFee: 3.0,
-    commissionRate: 0.12, 
-    allowRiderAbandonment: false,
-    surgeEnabled: true,
-    surgeModel: 'fixed',
-    surgeFixedAmount: 2.00,
-    surgeMultiplierValue: 1.5
+    distanceRate: 1.3,
+    timeRate: 0.15,
+    waitRatePerMinute: 0.25,
+    minFare: 5,
+    priorityFee: 2.5,
+    commissionRate: 0.12,
+    maxDailyDriverHours: 12
   });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
   const externalNavWindowRef = useRef<Window | null>(null);
@@ -287,6 +286,8 @@ export default function DriverTerminal() {
   const mapCenterRef = useRef(mapCenter);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const [miniMapInstance, setMiniMapInstance] = useState<google.maps.Map | null>(null);
+  const [mapHeading, setMapHeading] = useState(0);
+  const [mapTilt, setMapTilt] = useState(0);
 
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
@@ -453,8 +454,8 @@ export default function DriverTerminal() {
     if (!mapInstance) return;
 
     if (!isAutoNavHeadUp) {
-      mapInstance.setHeading(0); // Reset to North up when disabled
-      mapInstance.setTilt(0);
+      setMapHeading(0); // Reset to North up when disabled
+      setMapTilt(0);
       return;
     }
 
@@ -463,9 +464,17 @@ export default function DriverTerminal() {
     }
 
     if (rideState === 'en_route_pickup' && activeRide?.pickupLat && activeRide?.pickupLng) {
-      const targetBearing = driverHeading !== null ? driverHeading : getBearing(mapCenterRef.current[0], mapCenterRef.current[1], activeRide.pickupLat, activeRide.pickupLng);
-      mapInstance.setHeading(targetBearing);
-      mapInstance.setTilt(60); // 3D perspective
+      let targetBearing = driverHeading;
+      if (targetBearing === null) {
+        if (directions && directions.routes && directions.routes[0] && directions.routes[0].overview_path.length > 1) {
+          const path = directions.routes[0].overview_path;
+          targetBearing = getBearing(path[0].lat(), path[0].lng(), path[1].lat(), path[1].lng());
+        } else {
+          targetBearing = getBearing(mapCenterRef.current[0], mapCenterRef.current[1], activeRide.pickupLat, activeRide.pickupLng);
+        }
+      }
+      setMapHeading(targetBearing);
+      setMapTilt(60); // 3D perspective
       if (directions) {
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         mapInstance.setZoom(17.2);
@@ -482,22 +491,38 @@ export default function DriverTerminal() {
          }
       }
       
-      const targetBearing = driverHeading !== null ? driverHeading : getBearing(mapCenterRef.current[0], mapCenterRef.current[1], targetLat, targetLng);
-      mapInstance.setHeading(targetBearing);
-      mapInstance.setTilt(60);
+      let targetBearing = driverHeading;
+      if (targetBearing === null) {
+        // Try getting path bearing from directions
+        if (directions && directions.routes && directions.routes[0]) {
+           const leg = directions.routes[0].legs[currentLegIndex] || directions.routes[0].legs[0];
+           if (leg && leg.steps.length > 0) {
+              const p1 = leg.steps[0].start_location;
+              const p2 = leg.steps[0].end_location;
+              targetBearing = getBearing(p1.lat(), p1.lng(), p2.lat(), p2.lng());
+           } else {
+              targetBearing = getBearing(mapCenterRef.current[0], mapCenterRef.current[1], targetLat, targetLng);
+           }
+        } else {
+           targetBearing = getBearing(mapCenterRef.current[0], mapCenterRef.current[1], targetLat, targetLng);
+        }
+      }
+      
+      setMapHeading(targetBearing);
+      setMapTilt(60);
       if (directions) {
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         mapInstance.setZoom(17.2);
       }
     } else {
       if (driverHeading !== null && driverHeading !== undefined) {
-        mapInstance.setHeading(driverHeading);
-        mapInstance.setTilt(60);
+        setMapHeading(driverHeading);
+        setMapTilt(60);
         mapInstance.setZoom(17.2);
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
       } else {
-        mapInstance.setHeading(0);
-        mapInstance.setTilt(0);
+        setMapHeading(0);
+        setMapTilt(0);
       }
     }
   }, [rideState, isAutoNavHeadUp, isAutoNavPaused, mapInstance, driverHeading, activeRide?.pickupLat, activeRide?.pickupLng, activeRide?.dropoffLat, activeRide?.dropoffLng, mapCenter, directions, currentLegIndex]);
@@ -782,9 +807,22 @@ export default function DriverTerminal() {
     return () => clearInterval(interval);
   }, [stackedRideOffer, rideState, stackedIncomingTimer, profile?.muteRideOfferAlerts]);
 
-  const handleToggleOnline = () => {
+  const handleToggleOnline = async () => {
     if (rideState !== 'idle') return; // Cannot toggle while riding
     
+    if (!isOnline && user) {
+      // Check limits before going online
+      const mDoc = await getDoc(doc(db, "driver_metrics", user.uid));
+      if (mDoc.exists()) {
+        const secs = mDoc.data().onlineSecondsToday || 0;
+        const max = fareConfig.maxDailyDriverHours || 12;
+        if ((secs / 3600) >= max) {
+           toast.error("Safety Limit Reached", { description: `You cannot go online. You have reached your daily maximum of ${max} hours.` });
+           return;
+        }
+      }
+    }
+
     const newStatus = !isOnline;
     setIsOnline(newStatus);
     setActiveTab('home');
@@ -814,6 +852,36 @@ export default function DriverTerminal() {
         const mins = diffMin % 60;
         setOnlineDurationText(`${hrs}h ${mins}m`);
       }
+
+      // Sync online time to Firestore every 60 seconds (6 ticks)
+      if (Math.floor(diffMs / 1000) % 60 < 10) {
+         const today = new Date().toISOString().split('T')[0];
+         if (user) {
+            updateDoc(doc(db, "driver_metrics", user.uid), {
+               date: today,
+               onlineSecondsToday: increment(60)
+            }).then(() => {
+               // Verify limits
+               getDoc(doc(db, "driver_metrics", user.uid)).then(metricsDoc => {
+                  if (metricsDoc.exists()) {
+                     const secs = metricsDoc.data().onlineSecondsToday || 0;
+                     if ((secs / 3600) >= (fareConfig.maxDailyDriverHours || 12)) {
+                        toast.error("Safety Limit Reached", { description: `You have reached the maximum allowed driving time of ${fareConfig.maxDailyDriverHours || 12} hours.` });
+                        setIsOnline(false);
+                        updateDoc(doc(db, "live_tracking", user.uid), { isOnline: false }).catch(console.error);
+                     }
+                  }
+               });
+            }).catch(() => {
+               // Fallback: create if not exists
+               setDoc(doc(db, "driver_metrics", user.uid), {
+                  date: today,
+                  onlineSecondsToday: 60,
+                  dailyEarnings: 0
+               }, { merge: true });
+            });
+         }
+      }
     }, 10000); // Check every 10 seconds
 
     return () => clearInterval(interval);
@@ -823,13 +891,24 @@ export default function DriverTerminal() {
   useEffect(() => {
     if (!isOnline || !user) return;
 
-    const watchId = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const { latitude, longitude, heading } = pos.coords;
-        setMapCenter([latitude, longitude]);
-        if (heading !== null && !isNaN(heading)) {
-          setDriverHeading(heading);
-        }
+      const watchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const { latitude, longitude, heading } = pos.coords;
+          
+          if (heading !== null && !isNaN(heading)) {
+            setDriverHeading(heading);
+          } else if (mapCenterRef.current) {
+            const prevLat = mapCenterRef.current[0];
+            const prevLng = mapCenterRef.current[1];
+            // Only update heading if moved a minimum distance to avoid jitter
+            // 0.0001 degrees is ~11 meters
+            const dist = Math.sqrt(Math.pow(latitude - prevLat, 2) + Math.pow(longitude - prevLng, 2));
+            if (dist > 0.00005) {
+              setDriverHeading(getBearing(prevLat, prevLng, latitude, longitude));
+            }
+          }
+          
+          setMapCenter([latitude, longitude]);
         
         // Sync to Firestore for dispatcher
         try {
@@ -983,7 +1062,7 @@ export default function DriverTerminal() {
       baseCalc: calcFare,
       surgeMultiplier: surgeMultiplier,
       surgeFixed: surgeFixed,
-      surgeModel: fareConfig.surgeModel,
+      surgeModel: fareConfig.surgeModel || 'multiplier',
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
       hasCardOnFile: Math.random() > 0.5,
@@ -1031,7 +1110,7 @@ export default function DriverTerminal() {
       baseCalc: calcFare,
       surgeMultiplier: surgeMultiplier,
       surgeFixed: surgeFixed,
-      surgeModel: fareConfig.surgeModel,
+      surgeModel: fareConfig.surgeModel || 'multiplier',
       distanceMiles: simulatedDist,
       durationMinutes: simulatedTime,
       comments: "Waiting outside.",
@@ -1178,7 +1257,7 @@ export default function DriverTerminal() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTabParam = searchParams.get("tab") || "home";
   
-  const [activeTab, setActiveTabState] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents' | 'jobs' | 'analytics'>(currentTabParam as any);
+  const [activeTab, setActiveTabState] = useState<'home' | 'earnings' | 'inbox' | 'menu' | 'documents' | 'jobs' | 'analytics' | 'zones' | 'availability'>(currentTabParam as any);
 
   useEffect(() => {
     setActiveTabState((searchParams.get("tab") as any) || "home");
@@ -1900,6 +1979,8 @@ export default function DriverTerminal() {
                 right: 20
               }
             }}
+            heading={mapHeading}
+            tilt={mapTilt}
           >
             {isOnline && (
               <OverlayViewF position={{ lat: mapCenter[0], lng: mapCenter[1] }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
@@ -3296,7 +3377,7 @@ export default function DriverTerminal() {
                   
                   if (activeRide && !activeRide.isReal && user) {
                     try {
-                      await addDoc(collection(db, "ride_requests"), {
+                      const ridePayload = {
                          ...activeRide,
                          status: activeRide.status === "rider_abandoned" ? "rider_abandoned" : "completed",
                          paymentMethod: activeRide.paymentMethod || "stripe_auto",
@@ -3305,7 +3386,11 @@ export default function DriverTerminal() {
                          assignedDriverId: user.uid,
                          createdAt: serverTimestamp(),
                          completedAt: serverTimestamp()
-                      });
+                      };
+                      const cleanPayload = Object.fromEntries(
+                        Object.entries(ridePayload).filter(([_, v]) => v !== undefined)
+                      );
+                      await addDoc(collection(db, "ride_requests"), cleanPayload);
                     } catch (e) {
                       console.error("Failed to save simulated ride", e);
                     }
@@ -3468,6 +3553,8 @@ export default function DriverTerminal() {
       {activeTab === 'analytics' && <DriverAnalytics onClose={() => setActiveTab('menu')} />}
       {activeTab === 'inbox' && <DriverInbox onClose={() => setActiveTab('home')} />}
       {activeTab === 'jobs' && <DriverJobs onClose={() => setActiveTab('home')} />}
+      {activeTab === 'zones' && <DriverZones onClose={() => setActiveTab('menu')} />}
+      {activeTab === 'availability' && <DriverAvailability onClose={() => setActiveTab('menu')} />}
       {activeTab === 'menu' && (
         <DriverMenu 
           onNavigate={(tab) => setActiveTab(tab as any)} 

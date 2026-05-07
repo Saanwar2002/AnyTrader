@@ -573,10 +573,17 @@ export default function PassengerBooking() {
             }
           });
           if (routeResult && routeResult.catch) {
-            routeResult.catch((e: any) => console.warn("Caught Directions request Promise rejection", e));
+            routeResult.catch((e: any) => {
+              if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR')) {
+                 console.warn("Caught Directions request Promise rejection", e);
+              }
+            });
           }
-        } catch (e) {
-          console.error("DIRECTIONS_ROUTE error:", e);
+        } catch (e: any) {
+          const errStr = String(e);
+          if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR') && !errStr.includes('UNKNOWN_ERROR')) {
+            console.error("DIRECTIONS_ROUTE error:", e);
+          }
         }
       };
       timeoutId = setTimeout(getRoute, 800);
@@ -2117,10 +2124,17 @@ export default function PassengerBooking() {
             }
           });
           if (routeResult && routeResult.catch) {
-            routeResult.catch((e: any) => console.warn("Caught Directions request Promise rejection", e));
+            routeResult.catch((e: any) => {
+              if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR')) {
+                 console.warn("Caught Live Directions request Promise rejection", e);
+              }
+            });
           }
-        } catch (e) {
-          console.error("DIRECTIONS_ROUTE error:", e);
+        } catch (e: any) {
+          const errStr = String(e);
+          if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR') && !errStr.includes('UNKNOWN_ERROR')) {
+            console.error("LIVE DIRECTIONS_ROUTE error:", e);
+          }
         }
       };
       

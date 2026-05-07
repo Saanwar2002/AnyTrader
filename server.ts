@@ -269,6 +269,11 @@ const startMatchingSystem = async () => {
       
       // 3. AnyTrader Rides Dispatch Logic (Fairness Engine)
       try {
+        const platformRidesConfigDoc = await db.collection("platform_config").doc("rides").get();
+        const maxDailyDriverHours = platformRidesConfigDoc.exists && platformRidesConfigDoc.data()!.maxDailyDriverHours 
+          ? platformRidesConfigDoc.data()!.maxDailyDriverHours 
+          : 12;
+
         const pendingRidesSnapshot = await db.collection("ride_requests")
           .where("status", "==", "pending")
           .get();
@@ -277,6 +282,8 @@ const startMatchingSystem = async () => {
           const ride = rideDoc.data();
           const pickupLat = ride.pickupLat; 
           const pickupLng = ride.pickupLng;
+          const dropoffLat = ride.dropoffLat;
+          const dropoffLng = ride.dropoffLng;
           
           if (pickupLat && pickupLng) {
             // Find ALL online drivers
@@ -301,11 +308,46 @@ const startMatchingSystem = async () => {
               if (!trackingDoc.exists) continue;
               const dL = trackingDoc.data()!;
 
-              // 2. Get Performance Metrics
+              // 2. Get Performance Metrics & User Preferences
               const metricsRef = db.collection("driver_metrics").doc(driverId);
               let metrics: any = { dailyEarnings: 0, lastAssignmentAt: new Date(0).toISOString() };
               const mDoc = await metricsRef.get();
               if (mDoc.exists) metrics = mDoc.data()!;
+
+              const userDoc = await db.collection("users").doc(driverId).get();
+              const userData = userDoc.exists ? userDoc.data()! : {};
+
+              // --- MAX HOURS CHECK ---
+              if (metrics.onlineSecondsToday && (metrics.onlineSecondsToday / 3600) >= maxDailyDriverHours) {
+                  continue; // Skip driver, exceeded daily hours
+              }
+
+              // --- ZONES CHECK ---
+              if (userData.zoneEnabled && userData.zoneMaxDistance && userData.homeLat && userData.homeLng) {
+                 const R = 3959; // Radius of Earth in miles
+                 const toRad = (value: number) => value * Math.PI / 180;
+                 // Function to calc miles distance
+                 const calcDist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+                    const dLat = toRad(lat2 - lat1);
+                    const dLon = toRad(lon2 - lon1);
+                    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+                              Math.sin(dLon/2) * Math.sin(dLon/2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    return R * c;
+                 };
+                 
+                 const distPickup = calcDist(userData.homeLat, userData.homeLng, pickupLat, pickupLng);
+                 // Only check dropoff distance if we have dropoff coordinates
+                 let distDropoff = 0;
+                 if (dropoffLat && dropoffLng) {
+                     distDropoff = calcDist(userData.homeLat, userData.homeLng, dropoffLat, dropoffLng);
+                 }
+                 
+                 if (distPickup > userData.zoneMaxDistance || (dropoffLat && distDropoff > userData.zoneMaxDistance)) {
+                     continue; // Driver configured bounds exceeded, skip this driver
+                 }
+              }
 
               // Calculate Haversine distance (approximate simple version)
               const latDiff = Math.abs(dL.lat - pickupLat);
@@ -916,6 +958,49 @@ async function startServer() {
     }
   });
   
+  app.post("/api/driver/stripe-payout/:driverId", async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      const { amount } = req.body; // Optional amount
+
+      if (!db) return res.status(500).json({ error: "Database not connected" });
+
+      const driverDoc = await db.collection("users").doc(driverId).get();
+      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
+
+      const stripeAccountId = driverDoc.data()?.stripeAccountId;
+      if (!stripeAccountId) return res.status(400).json({ error: "No Stripe account connected" });
+
+      const stripe = getStripe();
+
+      // Get available balance first
+      const balance = await stripe.balance.retrieve({
+        stripeAccount: stripeAccountId,
+      });
+
+      const available = balance.available.find(b => b.currency === 'gbp')?.amount || 0;
+
+      if (available <= 0) {
+        return res.status(400).json({ error: "No available balance for payout" });
+      }
+
+      // Create a payout
+      const payoutAmount = amount ? amount * 100 : available; // Default to full available balance
+      
+      const payout = await stripe.payouts.create({
+        amount: payoutAmount,
+        currency: 'gbp',
+      }, {
+        stripeAccount: stripeAccountId,
+      });
+
+      res.json({ success: true, payout });
+    } catch (error: any) {
+      console.error("Stripe Payout Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/api/driver/stripe-balance/:driverId", async (req, res) => {
     try {
       const { driverId } = req.params;
