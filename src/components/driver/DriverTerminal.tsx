@@ -2468,7 +2468,10 @@ export default function DriverTerminal() {
                       <div className="flex justify-between items-end mb-1">
                         <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
                           £{activeRide?.fareEstimate?.toFixed(2) || '38.50'}
-                          <span className="text-[13px] font-bold text-[#00E5FF] tracking-normal mb-0.5">({((activeRide?.distanceToPickupMiles || 1.2) + (activeRide?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          <div className="flex flex-col items-center justify-end leading-none mb-0.5">
+                            <span className="text-[15px] font-black text-yellow-400">{activeRide?.distanceToPickupMiles || 1.2} + {activeRide?.distanceMiles || 22}</span>
+                            <span className="text-[16px] font-bold text-yellow-400">({((activeRide?.distanceToPickupMiles || 1.2) + (activeRide?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          </div>
                         </h1>
                         <div className="flex gap-1 items-center">
                           {activeRide?.isPriority && (
@@ -2510,7 +2513,7 @@ export default function DriverTerminal() {
                           <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">Pickup</p>
                           <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{activeRide?.pickupAddress || "12 Elm Street, SE15"}</p>
-                          <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
+                          <p className="text-[15px] font-bold text-yellow-400 mt-0.5">{activeRide?.distanceToPickupMiles || "1.2"} mi from you</p>
                         </div>
 
                         {(activeRide?.stops || []).map((stop: any, idx: number) => (
@@ -2525,7 +2528,7 @@ export default function DriverTerminal() {
                           <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
                           <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{activeRide?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{activeRide?.distanceMiles || "22"} mi from pickup</p>
+                          <p className="text-[15px] font-bold text-yellow-400 mt-0.5">{activeRide?.distanceMiles || "22"} mi from pickup</p>
                         </div>
                       </div>
                     </div>
@@ -2630,7 +2633,10 @@ export default function DriverTerminal() {
                       <div className="flex justify-between items-end mb-1">
                         <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
                           £{stackedRideOffer?.fareEstimate?.toFixed(2) || '38.50'}
-                          <span className="text-[13px] font-bold text-[#00E5FF] tracking-normal mb-0.5">({((stackedRideOffer?.distanceToPickupMiles || 1.2) + (stackedRideOffer?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          <div className="flex flex-col items-center justify-end leading-none mb-0.5">
+                            <span className="text-[15px] font-black text-yellow-400">{stackedRideOffer?.distanceToPickupMiles || 1.2} + {stackedRideOffer?.distanceMiles || 22}</span>
+                            <span className="text-[16px] font-bold text-yellow-400">({((stackedRideOffer?.distanceToPickupMiles || 1.2) + (stackedRideOffer?.distanceMiles || 22)).toFixed(1)} mi)</span>
+                          </div>
                         </h1>
                         <div className="flex gap-1 items-center">
                           {stackedRideOffer?.isPriority && (
@@ -2683,7 +2689,7 @@ export default function DriverTerminal() {
                           <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
                           <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">Drop-off</p>
                           <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">{stackedRideOffer?.dropoffAddress || "Bristol Temple Meads"}</p>
-                          <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
+                          <p className="text-[15px] font-bold text-yellow-400 mt-0.5">{stackedRideOffer?.distanceMiles || "22"} mi from pickup</p>
                         </div>
                       </div>
                     </div>
