@@ -101,7 +101,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
         limit(50)
       );
       const snap = await getDocs(q);
-      setFullTrips(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setFullTrips(snap.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     } catch (e) {
       console.error("Error fetching full history:", e);
     } finally {
@@ -187,32 +187,12 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
       },
     );
 
-    // 1. Listen to Driver Metrics from Firestore (for Today)
-    const unsubMetrics = onSnapshot(
-      doc(db, "driver_metrics", user.uid),
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          const today = new Date().toISOString().split("T")[0];
-
-          // Only count if it's for today
-          if (data.date === today) {
-            setMetrics((prev) => ({
-              ...prev,
-              today: {
-                earnings: data.dailyEarnings || 0,
-                jobs: data.jobsDoneToday || 0,
-                goal: 200,
-              },
-            }));
-          }
-        }
-      },
-    );
-
-    // Fetch historical trips to calculate week and month earnings manually
+    // Fetch historical trips to calculate today, week and month earnings manually
     const fetchHistoricalMetrics = async () => {
       try {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
         const monthStart = new Date();
         monthStart.setDate(1);
         monthStart.setHours(0, 0, 0, 0);
@@ -229,10 +209,12 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
         const hq = query(
           collection(db, "ride_requests"),
           where("driverId", "==", user.uid),
-          where("status", "==", "completed"),
+          where("status", "in", ["completed", "rider_abandoned"]),
         );
         const snapshot = await getDocs(hq);
 
+        let todayEarnings = 0;
+        let todayJobs = 0;
         let monthEarnings = 0;
         let monthJobs = 0;
         let weekEarnings = 0;
@@ -249,14 +231,26 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
             data.completedAt?.toDate() || data.createdAt?.toDate();
           if (!createdAt) return;
 
-          const fare = data.finalFare || 0;
+          // Compute exact Net Earnings matching DriverJobs
+          const grossFare = data.fareEstimate || data.finalFare || 0;
+          const tip = data.tipAmount || 0;
+          let netFare = 0;
+          if (data.finalFare) {
+             netFare = (data.finalFare - tip) * 0.88 + tip;
+          } else {
+             netFare = data.driverEarnings || (grossFare * 0.88) + tip;
+          }
 
+          if (createdAt >= todayStart) {
+            todayEarnings += netFare;
+            todayJobs++;
+          }
           if (createdAt >= monthStart) {
-            monthEarnings += fare;
+            monthEarnings += netFare;
             monthJobs++;
           }
           if (createdAt >= weekStart) {
-            weekEarnings += fare;
+            weekEarnings += netFare;
             weekJobs++;
           }
 
@@ -264,7 +258,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           const dLabel = createdAt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
           const dRank = new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate()).getTime();
           if (!dailyGroups[dLabel]) dailyGroups[dLabel] = { total: 0, jobs: 0, rank: dRank };
-          dailyGroups[dLabel].total += fare;
+          dailyGroups[dLabel].total += netFare;
           dailyGroups[dLabel].jobs++;
 
           // 1. Weekly Grouping
@@ -279,14 +273,14 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           const wRank = wStart.getTime();
 
           if (!weekGroups[wLabel]) weekGroups[wLabel] = { total: 0, jobs: 0, rank: wRank };
-          weekGroups[wLabel].total += fare;
+          weekGroups[wLabel].total += netFare;
           weekGroups[wLabel].jobs++;
 
           // 2. Monthly Grouping
           const mLabel = createdAt.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
           const mRank = createdAt.getFullYear() * 100 + createdAt.getMonth();
           if (!monthGroups[mLabel]) monthGroups[mLabel] = { total: 0, jobs: 0, rank: mRank };
-          monthGroups[mLabel].total += fare;
+          monthGroups[mLabel].total += netFare;
           monthGroups[mLabel].jobs++;
 
           // 3. Yearly Grouping
@@ -305,7 +299,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           }
           
           if (!yearGroups[yLabel]) yearGroups[yLabel] = { total: 0, jobs: 0, rank: yFiscalYearId };
-          yearGroups[yLabel].total += fare;
+          yearGroups[yLabel].total += netFare;
           yearGroups[yLabel].jobs++;
         });
 
@@ -334,6 +328,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
 
         setMetrics((prev) => ({
           ...prev,
+          today: { ...prev.today, earnings: todayEarnings, jobs: todayJobs },
           month: { ...prev.month, earnings: monthEarnings, jobs: monthJobs },
           week: { ...prev.week, earnings: weekEarnings, jobs: weekJobs },
         }));
@@ -346,14 +341,14 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
     const q = query(
       collection(db, "ride_requests"),
       where("driverId", "==", user.uid),
-      where("status", "==", "completed"),
+      where("status", "in", ["completed", "rider_abandoned"]),
       orderBy("completedAt", "desc"),
       limit(3),
     );
     const unsubTrips = onSnapshot(
       q,
       (snap) => {
-        setRecentTrips(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        setRecentTrips(snap.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
         // Refresh historical metrics on new trip completion
         fetchHistoricalMetrics();
       },
@@ -380,7 +375,6 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
     return () => {
       unsubGlobalTiers();
       unsubConfig();
-      unsubMetrics();
       unsubTrips();
     };
   }, [user]);
@@ -443,7 +437,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
         <h1 className="text-2xl font-black tracking-tight">Analytics Hub</h1>
         <div className="flex items-center gap-2">
           <div className="bg-[#1A1A1E] rounded-full p-1 flex">
-            {(["today", "week"] as const).map((p) => (
+            {(["today", "week", "month"] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
@@ -526,7 +520,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           <div>
             <div className="flex justify-between items-start mb-1">
               <p className="text-[8px] font-black uppercase text-[#E4E4E7] tracking-[0.1em]">
-                {period === 'today' ? "Today's Net" : "Week's Net"}
+                {period === 'today' ? "Today's Net" : period === 'week' ? "Week's Net" : "Month's Net"}
               </p>
               <div className="bg-[#00D26A]/10 border border-[#00D26A]/20 px-1 py-0.5 rounded flex items-center">
                 <TrendingUp className="w-2.5 h-2.5 text-[#00D26A] mr-0.5" />

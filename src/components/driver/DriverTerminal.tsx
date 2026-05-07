@@ -991,7 +991,7 @@ export default function DriverTerminal() {
     // Pick a random simulated job profile
     const jobProfiles = [
       {
-        id: "simulated_ride_123",
+        id: "simulated_ride_" + Math.floor(Math.random() * 1000000),
         name: "Sarah T.",
         passengerPhone: "+447700900077",
         pickupAddress: "12 Elm Street, SE15",
@@ -1002,7 +1002,7 @@ export default function DriverTerminal() {
         stops: []
       },
       {
-        id: "simulated_ride_124",
+        id: "simulated_ride_" + Math.floor(Math.random() * 1000000),
         name: "Jonathan D.",
         passengerPhone: "+447700900088",
         pickupAddress: "142 Longbridge Road, Ground Floor Flat, Barking, IG11",
@@ -1013,7 +1013,7 @@ export default function DriverTerminal() {
         stops: []
       },
       {
-        id: "simulated_ride_125",
+        id: "simulated_ride_" + Math.floor(Math.random() * 1000000),
         name: "Maria S.",
         passengerPhone: "+447700900099",
         pickupAddress: "Victoria Station, Buckingham Palace Road entrance, SW1W",
@@ -1903,6 +1903,11 @@ export default function DriverTerminal() {
         console.error("Failed to record cash payment:", err);
       }
     } else {
+      setActiveRide(prev => prev ? { 
+        ...prev, 
+        paymentMethod: 'cash', 
+        finalFare: ((prev.fareEstimate || 0) + (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute) + (prev.tipAmount || 0)
+      } : null);
       toast.warning("Demo: Cash Trip Recorded", {
         description: `${(fareConfig.commissionRate * 100).toFixed(0)}% platform fee added to pending balance.`
       });

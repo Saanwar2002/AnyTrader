@@ -22,7 +22,7 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
     );
 
     const unsub = onSnapshot(q, (snapshot) => {
-      setJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setJobs(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       setLoading(false);
     });
 
@@ -34,22 +34,29 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
   const filteredJobs = completedJobs.filter(job => {
     if (filter === 'all') return true;
     
-    if (!job.createdAt?.seconds) return true;
+    if (!job.createdAt?.seconds && !job.completedAt?.seconds) return true;
     
-    const jobDate = new Date(job.createdAt.seconds * 1000);
+    const jobDate = new Date((job.completedAt?.seconds || job.createdAt?.seconds) * 1000);
     const now = new Date();
     
     if (filter === 'today') {
-      return jobDate.toDateString() === now.toDateString();
+      return jobDate.getDate() === now.getDate() && 
+             jobDate.getMonth() === now.getMonth() && 
+             jobDate.getFullYear() === now.getFullYear();
     }
     
     if (filter === 'week') {
-      const msInWeek = 7 * 24 * 60 * 60 * 1000;
-      return (now.getTime() - jobDate.getTime()) < msInWeek;
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (weekStart.getDay() === 0 ? -6 : 1));
+      weekStart.setHours(0, 0, 0, 0);
+      return jobDate >= weekStart;
     }
     
     if (filter === 'month') {
-      return jobDate.getMonth() === now.getMonth() && jobDate.getFullYear() === now.getFullYear();
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      return jobDate >= monthStart;
     }
     
     return true;
