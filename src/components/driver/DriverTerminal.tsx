@@ -1807,7 +1807,8 @@ export default function DriverTerminal() {
         // Update driver earnings in auth profile 
         await updateDoc(doc(db, "users", user.uid), {
           totalEarnings: increment(totalFare),
-          jobsCompleted: increment(1)
+          jobsCompleted: increment(1),
+          totalBusinessMileage: increment((activeRide?.distanceToPickupMiles || 0) + (activeRide?.distanceMiles || 0))
         });
 
       } catch (err) {
@@ -1882,7 +1883,8 @@ export default function DriverTerminal() {
         }
 
         await updateDoc(doc(db, "users", user.uid), {
-          pendingPlatformFees: increment(platformFee)
+          pendingPlatformFees: increment(platformFee),
+          totalBusinessMileage: increment((activeRide?.distanceToPickupMiles || 0) + (activeRide?.distanceMiles || 0))
         });
 
         // Update driver metrics

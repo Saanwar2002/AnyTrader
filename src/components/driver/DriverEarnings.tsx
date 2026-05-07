@@ -45,9 +45,11 @@ import {
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
+import DriverExpenses from "./DriverExpenses";
 
 export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
   const { user, profile } = useAuth();
+  const [mainTab, setMainTab] = useState<"earnings" | "expenses">("earnings");
   const [fareConfig, setFareConfig] = useState<{
     baseFare: number;
     distanceRate: number;
@@ -432,31 +434,54 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-6 font-sans pb-24 min-h-0">
-      {/* Header */}
+      {/* Header Tabs */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-black tracking-tight">Analytics Hub</h1>
-        <div className="flex items-center gap-2">
-          <div className="bg-[#1A1A1E] rounded-full p-1 flex">
+        <div className="flex gap-4">
+          <button
+            onClick={() => setMainTab("earnings")}
+            className={cn(
+              "text-2xl font-black tracking-tight transition-colors",
+              mainTab === "earnings" ? "text-white" : "text-white/30 hover:text-white/60"
+            )}
+          >
+            Earnings
+          </button>
+          <button
+            onClick={() => setMainTab("expenses")}
+            className={cn(
+              "text-2xl font-black tracking-tight transition-colors flex items-center gap-2",
+              mainTab === "expenses" ? "text-white" : "text-white/30 hover:text-white/60"
+            )}
+          >
+            Expenses
+          </button>
+        </div>
+        
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center bg-[#1A1A1E] rounded-full border border-[#2C2C30] text-[#A1A1AA] hover:text-white transition-colors shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {mainTab === "earnings" ? (
+        <>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="bg-[#1A1A1E] rounded-full p-1 flex w-fit">
             {(["today", "week", "month"] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest leading-none ${period === p ? "bg-[#252529] text-[#00D26A] shadow-sm" : "text-[#E4E4E7]"}`}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest leading-none ${period === p ? "bg-[#252529] text-[#00D26A] shadow-sm" : "text-[#A1A1AA]"}`}
               >
                 {p}
               </button>
             ))}
           </div>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center bg-[#1A1A1E] rounded-full border border-[#2C2C30] text-[#A1A1AA] hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
         </div>
-      </div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
         {/* Stripe Balance Card */}
@@ -499,7 +524,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                onClick={handleWithdrawal}
                disabled={isWithdrawing || stripeBalance.available <= 0}
                className={cn(
-                 "bg-white text-black px-3 py-1.5 rounded-[0.5rem] text-[9px] font-black uppercase tracking-wider active:scale-95 transition-all",
+                 "bg-white text-black px-2 py-1 rounded-[0.5rem] text-[8px] font-black uppercase tracking-wider active:scale-95 transition-all",
                  (isWithdrawing || stripeBalance.available <= 0) && "opacity-50 cursor-not-allowed"
                )}
             >
@@ -953,6 +978,10 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           </motion.div>
         )}
       </AnimatePresence>
+        </>
+      ) : (
+        <DriverExpenses onClose={onClose} />
+      )}
     </div>
   );
 }

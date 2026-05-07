@@ -155,6 +155,12 @@ service cloud.firestore {
       allow write: if isOwner(driverId) || isAdmin();
     }
 
+    match /driver_expenses/{expenseId} {
+      allow read, list: if isSignedIn() && (resource == null || resource.data.driverId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.driverId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource == null || resource.data.driverId == request.auth.uid || isAdmin());
+    }
+
     match /audit_logs/{logId} {
       allow read: if isAdmin();
       allow create: if isSignedIn();

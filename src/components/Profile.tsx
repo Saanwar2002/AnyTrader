@@ -2282,7 +2282,7 @@ export default function Profile() {
                             <ChevronRight className="w-5 h-5 text-black group-hover:text-black transition-colors shrink-0" />
                           </button>
                         );
-                      } else if (item.path?.startsWith("#") && activePortal === "anyroller") {
+                      } else if (item.path?.startsWith("#")) {
                         const isExpanded = expandedMenuId === item.path;
                         return (
                           <div key={index} className="border-b border border-black last:border-0 overflow-hidden transition-all">
@@ -2422,17 +2422,16 @@ export default function Profile() {
                                         
                                         <div className="p-4 pt-1 border-t border-blue-100/30">
                                           <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                                            Add your card securely once. At the end of every trip, we automatically process the payment transparently. 
-                                            You no longer need to scan QR codes or pay cash. 
+                                            Add your card securely once to pay tradespeople for home repairs or projects. This card will also be used to automatically process payments for your AnyRoller taxi journeys. 
                                           </p>
                                           <div className="flex items-center gap-1.5 text-[10px] uppercase font-black tracking-wider text-slate-400 bg-white inline-flex px-2 py-1 rounded-md border border-black shadow-sm">
                                             <Shield className="w-3 h-3 text-emerald-500" />
                                             Zero Data Stored Locally
                                           </div>
                                           <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-blue-100/50">
-                                            <strong>Security Note:</strong> AnyRoller does not store or process your credit card details on our servers. 
+                                            <strong>Security Note:</strong> We do not store or process your credit card details on our servers. 
                                             Your confidential data is transmitted directly to <strong>Stripe's PCI-compliant vault</strong>. 
-                                            We only hold a secure token used exclusively to charge you for completed journeys.
+                                            We only hold a secure token used exclusively to charge you for completed work or journeys.
                                           </p>
                                         </div>
                                       </details>
@@ -2461,7 +2460,7 @@ export default function Profile() {
                                               <CreditCard className="w-5 h-5 text-slate-400" />
                                             </div>
                                             <h3 className="text-sm font-bold text-slate-900 mb-1">No payment method added</h3>
-                                            <p className="text-xs text-slate-500 mb-4">Add a card for fast, seamless automated payments at drop-off.</p>
+                                            <p className="text-xs text-slate-500 mb-4">Add a card to quickly and securely pay for home repairs or taxi rides.</p>
                                             
                                             <button 
                                               onClick={() => {

@@ -715,6 +715,21 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "partnerId", "userId", "status", "createdAt"]
+    },
+    "DriverExpense": {
+      "title": "DriverExpense",
+      "description": "An expense logged by a driver.",
+      "type": "object",
+      "properties": {
+        "driverId": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "notes": { "type": "string" },
+        "receiptImage": { "type": "string", "format": "uri" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["driverId", "amount", "category", "date", "createdAt"]
     }
   },
   "firestore": {
@@ -834,6 +849,10 @@
     "/driver_metrics/{driverId}": {
       "schema": "DriverMetrics",
       "description": "Driver performance metrics for fairness."
+    },
+    "/driver_expenses/{expenseId}": {
+      "schema": "DriverExpense",
+      "description": "Expenses tracked by the driver."
     }
   }
 }
