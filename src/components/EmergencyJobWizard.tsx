@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate } from "lucide-react";
+import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { lookupPostcode } from "@/src/services/postcodeService";
@@ -35,10 +35,14 @@ export default function EmergencyJobWizard() {
   const [error, setError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isBoosted, setIsBoosted] = useState(false);
+  const [isEmergencyBoost, setIsEmergencyBoost] = useState(false);
+  const [isInstantMatch, setIsInstantMatch] = useState(false);
+  const [showBoostInfo, setShowBoostInfo] = useState<"emergency" | "instant" | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [platformConfig, setPlatformConfig] = useState<any>(null);
 
   const [addressSuggestions, setAddressSuggestions] = useState<Array<{label: string, placeId: string, placePrediction: any}>>([]);
   const [addressSuggestionTimeout, setAddressSuggestionTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -51,6 +55,17 @@ export default function EmergencyJobWizard() {
     libraries,
     version: "weekly"
   });
+
+  React.useEffect(() => {
+    import("@/src/firebase").then(({ onSnapshot, doc, db }) => {
+      const unsub = onSnapshot(doc(db, "platform_config", "global"), (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          setPlatformConfig(docSnapshot.data());
+        }
+      });
+      return () => unsub();
+    });
+  }, []);
 
   React.useEffect(() => {
     if (!user) return;
@@ -150,7 +165,7 @@ export default function EmergencyJobWizard() {
       setError("Please fill in all fields to post your emergency job.");
       return;
     }
-    if (isBoosted) {
+    if (isEmergencyBoost || isInstantMatch) {
       setShowCheckout(true);
     } else {
       handleSubmit(false);
@@ -158,7 +173,7 @@ export default function EmergencyJobWizard() {
   };
 
   // Modifies handleSubmit to return the job ID so we can pass it to Stripe
-  const handleSubmit = async (paidBoost: boolean): Promise<string | void> => {
+  const handleSubmit = async (isPaidOption: boolean): Promise<string | void> => {
     if (!user) return;
     
     setError("");
@@ -181,7 +196,7 @@ export default function EmergencyJobWizard() {
       }
 
       // 4 hours if boosted, 2 hours if free
-      const expiryHours = paidBoost ? 4 : 2;
+      const expiryHours = isPaidOption ? 4 : 2;
       const boostExpiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString();
 
       let jobStatus = "posted";
@@ -198,6 +213,8 @@ export default function EmergencyJobWizard() {
           securityAlert = "Potential duplicate account detected";
         }
       }
+
+      const currentBoostTier = isPaidOption ? (isInstantMatch ? "instant_match" : "emergency_boost") : null;
 
       // Create the document with a specific ID
       const jobRef = doc(collection(db, "jobs"));
@@ -221,7 +238,8 @@ export default function EmergencyJobWizard() {
         exclusiveUntil: new Date(Date.now() + 5 * 60000),
         paymentPreference: "negotiable",
         quoteScope: "complete_package",
-        isBoosted: paidBoost,
+        isBoosted: isPaidOption,
+        boostTier: currentBoostTier,
         boostExpiresAt,
         retryCount: 0
       });
@@ -233,7 +251,7 @@ export default function EmergencyJobWizard() {
         formData.category,
         formData.postcode,
         "emergency",
-        paidBoost
+        isPaidOption
       );
       
       try {
@@ -251,7 +269,7 @@ export default function EmergencyJobWizard() {
         console.error("Failed to send urgent SMS:", smsErr);
       }
       
-      if (!paidBoost) {
+      if (!isPaidOption) {
         navigate("/my-jobs");
       }
       return jobRef.id;
@@ -304,10 +322,13 @@ export default function EmergencyJobWizard() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white min-h-screen p-4 pb-48">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Emergency Job</h1>
-        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full"><X className="w-6 h-6" /></button>
+    <div className="max-w-2xl mx-auto bg-red-50/20 min-h-screen p-4 pb-48 border-x border-red-50">
+      <div className="flex items-center justify-between mb-6 bg-red-50 p-4 rounded-2xl border border-red-100">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-6 h-6 text-red-600" />
+          <h1 className="text-xl font-bold text-slate-900">Emergency Job</h1>
+        </div>
+        <button onClick={() => navigate(-1)} className="p-2 bg-white hover:bg-slate-100 rounded-full border border-red-100 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
       </div>
 
       {step === 2 && (
@@ -648,45 +669,101 @@ export default function EmergencyJobWizard() {
             onChange={(e) => setFormData({...formData, mobileNumber: e.target.value})}
           />
 
-          {/* Boost Toggle */}
-          <div 
-            className={cn(
-              "p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-4",
-              isBoosted ? "border-red-500 bg-red-50/50" : "border-slate-200 hover:border-slate-300"
-            )}
-            onClick={() => setIsBoosted(!isBoosted)}
-          >
-            <div className={cn(
-              "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors",
-              isBoosted ? "border-red-500 bg-red-500" : "border-slate-300"
-            )}>
-              {isBoosted && <div className="w-2 h-2 bg-white rounded-full" />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-bold text-slate-900">Boost this Emergency</h3>
-                <span className="bg-red-100 text-red-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">£5</span>
-              </div>
-              <p className="text-sm text-slate-600">
-                Pin your job to the top of all local tradespeople's feeds and send them an instant high-priority alert.
-              </p>
-            </div>
-          </div>
-          
-          <div className="fixed bottom-4 left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-red-100 rounded-2xl z-40 shadow-2xl space-y-3">
-            {isBoosted && (
-              <div className="flex items-center justify-between px-2">
-                <span className="text-xs font-bold text-slate-500 uppercase">Emergency Boost Fee</span>
-                <span className="text-lg font-black text-red-600">£5.00</span>
-              </div>
-            )}
-            <button 
-              onClick={handleInitialSubmit}
-              className="w-full p-4 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-600/20 active:scale-95 transition-transform"
+          {/* Premium Job Upgrades */}
+          {platformConfig?.premiumJobUpgradesEnabled !== false && (
+            <div className="space-y-3 pt-4 border-t border-red-100">
+              <h3 className="text-lg font-extrabold text-black mt-2 mb-2">Premium Upgrades (Optional)</h3>
+              
+              <div className={cn(
+                "relative p-3 rounded-lg border-2 transition-all cursor-pointer flex items-start gap-3",
+                isEmergencyBoost ? "border-red-500 bg-red-50/50 shadow-sm shadow-red-500/10" : "border-slate-300 hover:border-slate-400 bg-white"
+              )}
+            onClick={() => setIsEmergencyBoost(!isEmergencyBoost)}
             >
-              {isBoosted ? "Pay £5 & Post Emergency Job" : "Post Emergency Job Now"}
-            </button>
+               <div className={cn(
+                "w-5 h-5 rounded-full border-2 flex shrink-0 mt-0.5 transition-colors items-center justify-center",
+                isEmergencyBoost ? "border-red-500 bg-red-500" : "border-slate-300"
+              )}>
+                {isEmergencyBoost && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+              </div>
+              <div className="flex-1 pr-6">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h4 className="text-base font-extrabold text-black">Emergency Boost <span className="text-red-600 font-black ml-1">£5</span></h4>
+                </div>
+                <p className="text-xs text-black font-semibold line-clamp-2">Pin your job to the top of all local tradespeople's feeds and send them an instant push notification alert.</p>
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); setShowBoostInfo('emergency'); }}
+                className="absolute top-2.5 right-2.5 text-slate-500 hover:text-red-500 transition-colors"
+                type="button"
+              >
+                <Info className="w-5 h-5 fill-slate-100" />
+              </button>
+            </div>
+
+            <div className={cn(
+              "relative p-3 rounded-lg border-2 transition-all cursor-pointer flex items-start gap-3",
+              isInstantMatch ? "border-amber-500 bg-amber-50/50 shadow-sm shadow-amber-500/10" : "border-slate-300 hover:border-slate-400 bg-white"
+            )}
+            onClick={() => setIsInstantMatch(!isInstantMatch)}
+            >
+               <div className={cn(
+                "w-5 h-5 shrink-0 rounded-full border-2 flex mt-0.5 transition-colors items-center justify-center",
+                isInstantMatch ? "border-amber-500 bg-amber-500" : "border-slate-300"
+              )}>
+                {isInstantMatch && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+              </div>
+              <div className="flex-1 pr-6">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">£2.99</span></h4>
+                </div>
+                <p className="text-xs text-black font-semibold line-clamp-2">Get matched with a top-rated, fully vetted professional immediately. Guaranteed availability and priority routing.</p>
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); setShowBoostInfo('instant'); }}
+                className="absolute top-2.5 right-2.5 text-slate-500 hover:text-amber-500 transition-colors"
+                type="button"
+              >
+                <Info className="w-5 h-5 fill-slate-100" />
+              </button>
+            </div>
+
+            {(isEmergencyBoost || isInstantMatch) && (
+              <div className="bg-white p-3 rounded-lg border border-slate-300 text-xs text-black flex items-start gap-2 shadow-sm font-semibold">
+                 <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                 <span>You have selected {(isEmergencyBoost && isInstantMatch) ? "both Premium Upgrades" : (isEmergencyBoost ? "the Emergency Boost" : "the Instant Match")}. By continuing, you agree to pay the additional charges upon job posting.</span>
+              </div>
+            )}
+            
+            <div className="mt-4 p-4 bg-white border border-red-100 rounded-xl shadow-sm space-y-3">
+              {(isEmergencyBoost || isInstantMatch) && (
+                <div className="flex items-center justify-between px-2">
+                  <span className="text-xs font-extrabold text-black uppercase">Total Fee</span>
+                  <span className="text-lg font-black text-red-600">
+                    £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? 2.99 : 0)).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              <button 
+                onClick={handleInitialSubmit}
+                className="w-full p-3.5 bg-red-600 text-white font-extrabold rounded-xl shadow-md shadow-red-600/20 active:scale-95 transition-transform"
+              >
+                {(isEmergencyBoost || isInstantMatch) ? "Pay & Post Emergency Job" : "Post Emergency Job Now"}
+              </button>
+            </div>
           </div>
+          )}
+
+          {!(platformConfig?.premiumJobUpgradesEnabled !== false) && (
+            <div className="mt-4 p-4 bg-white border border-red-100 rounded-xl shadow-sm space-y-3">
+              <button 
+                onClick={handleInitialSubmit}
+                className="w-full p-3.5 bg-red-600 text-white font-extrabold rounded-xl shadow-md shadow-red-600/20 active:scale-95 transition-transform"
+              >
+                Post Emergency Job Now
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -723,11 +800,15 @@ export default function EmergencyJobWizard() {
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase">Selected Plan</p>
-                    <p className="text-lg font-black text-slate-900">Emergency Boost</p>
+                    <p className="text-lg font-black text-slate-900">
+                      {(isEmergencyBoost && isInstantMatch) ? "Emergency Boost + Instant Match" : (isEmergencyBoost ? "Emergency Boost" : "Instant Match")}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-slate-500 uppercase">One-time</p>
-                    <p className="text-xl font-black text-red-600">£5.00</p>
+                    <p className="text-xl font-black text-red-600">
+                      £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? 2.99 : 0)).toFixed(2)}
+                    </p>
                   </div>
                 </div>
 
@@ -753,6 +834,79 @@ export default function EmergencyJobWizard() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Premium Info Modal */}
+      <AnimatePresence>
+        {showBoostInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowBoostInfo(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-white rounded-3xl p-6 max-w-[400px] w-full shadow-2xl relative overflow-hidden flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-6">
+                 <div className={cn(
+                   "w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner",
+                   showBoostInfo === 'emergency' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                 )}>
+                   {showBoostInfo === 'emergency' ? <Zap className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
+                 </div>
+                 <button onClick={() => setShowBoostInfo(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
+                    <X className="w-5 h-5" />
+                 </button>
+              </div>
+              
+              <div className="space-y-4 flex-1">
+                <h3 className="text-2xl font-black text-slate-900 leading-tight">
+                  {showBoostInfo === 'emergency' ? "Emergency Boost" : "Instant Match"}
+                </h3>
+                <p className="text-slate-600 text-sm leading-relaxed">
+                  {showBoostInfo === 'emergency' ? 
+                   "Jump the queue! The Emergency Boost (£5) pins your job listing to the top of all local tradespeople's feeds and sends them an immediate push notification alert, bypassing normal delays." : 
+                   "Get peace of mind instantly! For £2.99, our Instant Match directly secures a top-rated, fully vetted professional for your job. They will contact you immediately to arrange the visit without you having to review quotes, guaranteeing reliability."
+                  }
+                </p>
+                
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-6 space-y-2">
+                   <h4 className="font-bold text-xs uppercase tracking-widest text-slate-400">Why choose this?</h4>
+                   <ul className="space-y-2">
+                     {showBoostInfo === 'emergency' ? (
+                       <>
+                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5" /> Increases quotes by 300%</li>
+                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5" /> Highlighted in red in the feed</li>
+                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5" /> Ideal for urgent needs</li>
+                       </>
+                     ) : (
+                       <>
+                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Skip the wait and quotes</li>
+                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Only Platinum-level pros</li>
+                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Platform Guarantee covered</li>
+                       </>
+                     )}
+                   </ul>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowBoostInfo(null)}
+                className={cn(
+                  "mt-6 w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 text-white shadow-lg",
+                  showBoostInfo === 'emergency' ? "bg-red-600 shadow-red-600/20 hover:bg-red-700" : "bg-amber-500 shadow-amber-500/20 hover:bg-amber-600"
+                )}
+              >
+                Got it
+              </button>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

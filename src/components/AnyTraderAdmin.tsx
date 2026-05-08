@@ -4294,6 +4294,29 @@ export default function AnyTraderAdmin() {
 
                   {/* Advertising Configuration */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <Zap className="w-4 h-4" /> Premium User Features
+                      </h4>
+                      <button 
+                        onClick={() => setTempConfig({ ...tempConfig, premiumJobUpgradesEnabled: !tempConfig.premiumJobUpgradesEnabled })}
+                        className={cn(
+                          "w-12 h-6 rounded-full relative transition-all",
+                          tempConfig.premiumJobUpgradesEnabled ? "bg-blue-600" : "bg-slate-200"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                          tempConfig.premiumJobUpgradesEnabled ? "right-1" : "left-1"
+                        )} />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Enable premium paid job upgrades (Emergency Boost & Instant Match) for regular users during job posting.
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                       <Tag className="w-4 h-4" /> Advertising Settings
                     </h4>
