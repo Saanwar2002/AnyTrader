@@ -47,6 +47,7 @@
             "provider": { "type": "string" },
             "policyNumber": { "type": "string" },
             "expiryDate": { "type": "string", "format": "date" },
+            "notifyRenew": { "type": "boolean", "description": "Consent to send renewal reminders" },
             "verified": { "type": "boolean" },
             "verifiedAt": { "type": "string", "format": "date-time" }
           }
@@ -587,6 +588,12 @@
         "trackingUrl": { "type": "string", "format": "uri" },
         "commissionRate": { "type": "number" },
         "status": { "type": "string", "enum": ["active", "inactive"] },
+        "rating": { "type": "number", "description": "Average AnyRoller driver rating" },
+        "totalDrivers": { "type": "integer", "description": "Number of AnyRoller drivers using this partner" },
+        "startingPrice": { "type": "string", "description": "e.g., from £38/week" },
+        "benefits": { "type": "array", "items": { "type": "string" } },
+        "highlight": { "type": "string", "description": "e.g., Exclusive: 10% off for AnyRoller drivers" },
+        "tier": { "type": "string", "enum": ["basic", "featured", "exclusive"], "description": "Marketplace ranking tier" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "category", "status", "createdAt"]

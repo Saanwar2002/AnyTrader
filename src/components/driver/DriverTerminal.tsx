@@ -3564,7 +3564,7 @@ export default function DriverTerminal() {
       {/* Render Other Tabs */}
       {activeTab === 'earnings' && <DriverEarnings onClose={() => setActiveTab('home')} />}
       {activeTab === 'analytics' && <DriverAnalytics onClose={() => setActiveTab('menu')} />}
-      {activeTab === 'inbox' && <DriverInbox onClose={() => setActiveTab('home')} />}
+      {activeTab === 'inbox' && <DriverInbox onClose={() => setActiveTab('home')} onNavigate={(tab) => setActiveTab(tab)} />}
       {activeTab === 'jobs' && <DriverJobs onClose={() => setActiveTab('home')} />}
       {activeTab === 'zones' && <DriverZones onClose={() => setActiveTab('menu')} />}
       {activeTab === 'availability' && <DriverAvailability onClose={() => setActiveTab('menu')} />}

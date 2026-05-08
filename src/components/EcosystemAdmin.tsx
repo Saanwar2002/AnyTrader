@@ -95,6 +95,8 @@ export default function EcosystemAdmin() {
   const handleSavePartner = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const benefitsStr = formData.get("benefits")?.toString() || "";
+    
     const data = {
       name: formData.get("name"),
       category: formData.get("category"),
@@ -102,6 +104,12 @@ export default function EcosystemAdmin() {
       trackingUrl: formData.get("trackingUrl"),
       commissionRate: Number(formData.get("commissionRate")),
       status: formData.get("status"),
+      rating: Number(formData.get("rating") || 0),
+      totalDrivers: Number(formData.get("totalDrivers") || 0),
+      startingPrice: formData.get("startingPrice") || "",
+      benefits: benefitsStr.split(',').map(s => s.trim()).filter(s => s.length > 0),
+      highlight: formData.get("highlight") || "",
+      tier: formData.get("tier") || "basic",
       updatedAt: serverTimestamp()
     };
 
@@ -676,10 +684,49 @@ export default function EcosystemAdmin() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tracking URL</label>
                     <input name="trackingUrl" defaultValue={editingItem?.trackingUrl} required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                   </div>
+                  
+                  {/* Rating, Total Drivers */}
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rating</label>
+                      <input name="rating" type="number" step="0.1" defaultValue={editingItem?.rating} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Total Drivers</label>
+                      <input name="totalDrivers" type="number" defaultValue={editingItem?.totalDrivers} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    </div>
+                  </div>
+
+                  {/* Starting Price, Highlight */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starting Price (Text)</label>
+                      <input name="startingPrice" defaultValue={editingItem?.startingPrice} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Highlight (e.g. Exclusive)</label>
+                      <input name="highlight" defaultValue={editingItem?.highlight} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    </div>
+                  </div>
+
+                  {/* Benefits */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Benefits (Comma Separated)</label>
+                    <input name="benefits" defaultValue={editingItem?.benefits?.join(", ")} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Commission (%)</label>
                       <input name="commissionRate" type="number" defaultValue={editingItem?.commissionRate} required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tier</label>
+                      <select name="tier" defaultValue={editingItem?.tier || "basic"} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                        <option value="basic">Basic</option>
+                        <option value="featured">Featured</option>
+                        <option value="exclusive">Exclusive</option>
+                      </select>
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>

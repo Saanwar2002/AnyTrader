@@ -1,8 +1,39 @@
-import React from "react";
-import { ChevronLeft, ShieldCheck, AlertTriangle, XCircle, ArrowRight, Wrench } from "lucide-react";
+import React, { useState } from "react";
+import { ChevronLeft, ShieldCheck, AlertTriangle, XCircle, ArrowRight, Wrench, Shield } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import InsuranceMarketplace from "./InsuranceMarketplace";
+import { useAuth } from "../AuthProvider";
 
 export default function DriverDocuments({ onBack }: { onBack: () => void }) {
+  const { profile } = useAuth();
+  const [showMarketplace, setShowMarketplace] = useState(false);
+
+  // Derive insurance expiry and status from profile if available, otherwise fallback
+  const insuranceExpiryDate = profile?.insurance?.expiryDate 
+    ? new Date(profile.insurance.expiryDate) 
+    : new Date(Date.now() + 25 * 24 * 60 * 60 * 1000); // Default to 25 days from now for demo
+  
+  const daysUntilExpiry = Math.ceil((insuranceExpiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  let insStatus = "valid";
+  let insColor = "text-[#00D26A]";
+  let insBg = "bg-[#00D26A]/10";
+  let insExpiryText = `Expires ${insuranceExpiryDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  let insAction = undefined;
+
+  if (daysUntilExpiry <= 0) {
+    insStatus = "missing";
+    insColor = "text-[#FF3B30]";
+    insBg = "bg-[#FF3B30]/10";
+    insExpiryText = "Expired";
+    insAction = "Renew Now";
+  } else if (daysUntilExpiry <= 28) {
+    insStatus = "expiring";
+    insColor = "text-[#FF9500]";
+    insBg = "bg-[#FF9500]/10";
+    insExpiryText = `Expires in ${daysUntilExpiry} Days`;
+    insAction = "Compare Quotes";
+  }
+
   const documents = [
     {
       id: "dvla_license",
@@ -25,11 +56,13 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
     {
       id: "insurance",
       name: "Hire & Reward Insurance",
-      status: "valid",
-      expiry: "Expires 22 Nov 2024",
-      color: "text-[#00D26A]",
-      bg: "bg-[#00D26A]/10",
-      icon: ShieldCheck
+      status: insStatus,
+      expiry: insExpiryText,
+      color: insColor,
+      bg: insBg,
+      icon: Shield,
+      action: insAction,
+      originalProvider: profile?.insurance?.provider || "Zego"
     },
     {
       id: "mot",
@@ -53,6 +86,10 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
     }
   ];
 
+  if (showMarketplace) {
+    return <InsuranceMarketplace onBack={() => setShowMarketplace(false)} currentProvider={profile?.insurance?.provider || "Zego"} daysUntilExpiry={daysUntilExpiry} />;
+  }
+
   return (
       <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto font-sans pb-24 absolute inset-0 z-50">
         <div className="sticky top-0 bg-[#0D0D0F]/90 backdrop-blur-xl z-20 px-4 py-4 flex items-center gap-3 border-b border-[#2C2C30]">
@@ -73,6 +110,26 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
               <img src="https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=150&q=80" alt="Toyota Prius" className="w-16 h-16 object-cover rounded-xl border border-[#2C2C30]" />
            </div>
 
+           {/* Alerts Section (Optional Layer 2 logic) */}
+           {daysUntilExpiry <= 28 && daysUntilExpiry > 0 && (
+              <div 
+                className="bg-gradient-to-r from-[#FF9500]/20 to-[#FF9500]/5 border border-[#FF9500]/30 rounded-2xl p-4 mb-6 cursor-pointer active:scale-95 transition-transform shadow-[0_0_20px_rgba(255,149,0,0.1)] relative overflow-hidden"
+                onClick={() => setShowMarketplace(true)}
+              >
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#FF9500]/20 blur-3xl rounded-full" />
+                 <div className="flex items-start gap-3 relative z-10">
+                    <Shield className="w-6 h-6 text-[#FF9500] shrink-0 mt-0.5" />
+                    <div>
+                       <h3 className="font-bold text-white mb-1 tracking-tight">Insurance expires in {daysUntilExpiry} days</h3>
+                       <p className="text-xs text-[#E4E4E7] font-medium leading-relaxed mb-3">Compare quotes now from our partners so you don't lose access to AnyRoller trips.</p>
+                       <button className="text-[11px] font-black text-[#0D0D0F] bg-[#FF9500] hover:bg-[#FF9500]/90 px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-sm">
+                          View Deals
+                       </button>
+                    </div>
+                 </div>
+              </div>
+           )}
+
            {/* Documents List */}
            <div className="space-y-3 mb-6">
               <div className="flex items-center justify-between px-2 mb-2">
@@ -89,17 +146,24 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
                              <Icon className={cn("w-5 h-5", doc.color)} />
                           </div>
                           <div className="flex-1 min-w-0">
-                             <h4 className="text-sm font-bold text-white tracking-tight truncate">{doc.name}</h4>
+                             <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-white tracking-tight truncate">{doc.name}</h4>
+                                {doc.id === 'insurance' && <span className="text-[9px] font-bold text-[#A1A1AA] uppercase px-1.5 py-0.5 bg-[#252529] rounded">{doc.originalProvider}</span>}
+                             </div>
                              <p className={cn("text-xs font-bold mt-0.5 truncate", doc.status === 'valid' ? "text-[#A1A1AA] font-medium" : doc.color)}>{doc.expiry}</p>
                           </div>
                           {doc.action && (
-                             <button className={cn("px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ml-2 shrink-0 border active:scale-95 transition-transform", doc.status === 'expiring' ? "bg-[#FF9500] text-[#0D0D0F] border-transparent" : "bg-[#FF3B30] text-white border-transparent")}>
+                             <button 
+                               onClick={() => {
+                                 if (doc.id === 'insurance') setShowMarketplace(true);
+                               }}
+                               className={cn("px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ml-2 shrink-0 border active:scale-95 transition-transform", doc.status === 'expiring' ? "bg-[#FF9500] text-[#0D0D0F] border-transparent" : "bg-[#FF3B30] text-white border-transparent")}>
                                 {doc.action}
                              </button>
                           )}
                        </div>
 
-                       {/* Cross-Sell AnyTrader Widget inside the MOT document if expiring */}
+                       {/* Cross-Sell AnyTrader Widget */}
                        {doc.id === 'mot' && doc.status === 'expiring' && (
                           <div className="mt-4 pt-4 border-t border-[#333338]">
                              <div className="bg-gradient-to-r from-[#FF9500]/10 to-transparent p-3.5 rounded-xl border border-[#FF9500]/20 flex items-start gap-3">

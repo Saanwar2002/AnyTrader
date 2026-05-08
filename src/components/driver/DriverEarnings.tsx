@@ -46,6 +46,7 @@ import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import DriverExpenses from "./DriverExpenses";
+import DriverFullTripHistory from "./DriverFullTripHistory";
 
 export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
   const { user, profile } = useAuth();
@@ -901,81 +902,11 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
         )}
 
         {showFullTripHistory && (
-          <motion.div
-            initial={{ opacity: 0, y: "100%" }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: "100%" }}
-            transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-            className="fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col pt-16"
-          >
-            <div className="flex-1 overflow-y-auto px-4 pb-24">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Full History</h2>
-                  <p className="text-[#A1A1AA] text-xs font-bold uppercase tracking-wider mt-1">Recently completed jobs</p>
-                </div>
-                <button
-                  onClick={() => setShowFullTripHistory(false)}
-                  className="w-10 h-10 bg-[#1A1A1E] rounded-full flex items-center justify-center border border-[#2C2C30] active:scale-95 transition-all text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {loadingFullTrips ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <Loader2 className="w-8 h-8 text-[#00D26A] animate-spin mb-4" />
-                  <p className="text-sm text-[#A1A1AA] font-medium">Loading history...</p>
-                </div>
-              ) : fullTrips.length === 0 ? (
-                <div className="text-center py-12 bg-[#1A1A1E]/50 rounded-3xl border border-dashed border-[#2C2C30]">
-                  <History className="w-10 h-10 text-[#2C2C30] mx-auto mb-3" />
-                  <p className="text-sm text-[#E4E4E7] font-bold">No trips found.</p>
-                  <p className="text-xs text-[#A1A1AA] font-medium mt-1">Your completed trips will appear here.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {fullTrips.map((trip) => (
-                    <div
-                      key={trip.id}
-                      className="bg-[#1A1A1E] border border-[#2C2C30] p-4 rounded-3xl flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-[#252529] flex items-center justify-center">
-                          <Car className="w-5 h-5 text-[#E4E4E7]" />
-                        </div>
-                        <div className="max-w-[150px]">
-                          <p className="text-sm font-bold text-white truncate">
-                            {trip.dropoffAddress?.split(",")[0] || "Unknown"}
-                          </p>
-                          <p className="text-[10px] text-[#A1A1AA] font-bold uppercase mt-0.5">
-                            {trip.rideType || "Standard"} •{" "}
-                            {new Date(
-                              trip.completedAt?.seconds * 1000 || trip.createdAt?.seconds * 1000 || Date.now()
-                            ).toLocaleDateString([], { month: "short", day: "numeric" })}{" "}
-                            {new Date(
-                              trip.completedAt?.seconds * 1000 || trip.createdAt?.seconds * 1000 || Date.now()
-                            ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-[#00D26A]">
-                          £{(trip.fareEstimate || 0).toFixed(2)}
-                        </p>
-                        <div className="flex items-center gap-1 justify-end mt-0.5">
-                          <ShieldCheck className="w-2.5 h-2.5 text-[#00D26A]" />
-                          <span className="text-[9px] font-black text-[#00D26A] uppercase">
-                            Paid
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
+          <DriverFullTripHistory 
+             trips={fullTrips} 
+             onClose={() => setShowFullTripHistory(false)} 
+             loading={loadingFullTrips} 
+          />
         )}
       </AnimatePresence>
         </>
