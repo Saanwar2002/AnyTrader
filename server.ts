@@ -841,7 +841,35 @@ async function startServer() {
       }
 
       // Real Stripe Flow
-      const session = await stripe.checkout.sessions.create({
+      let customerId: string | undefined;
+      if (userId && db) {
+        try {
+          const userDoc = await db.collection("users").doc(userId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData?.stripeCustomerId) {
+              customerId = userData.stripeCustomerId;
+            } else if (userData?.email) {
+              const customer = await stripe.customers.create({
+                email: userData.email,
+                metadata: { firebaseUid: userId }
+              });
+              customerId = customer.id;
+              await db.collection("users").doc(userId).set({ stripeCustomerId: customerId }, { merge: true });
+            } else {
+              const customer = await stripe.customers.create({
+                metadata: { firebaseUid: userId }
+              });
+              customerId = customer.id;
+              await db.collection("users").doc(userId).set({ stripeCustomerId: customerId }, { merge: true });
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to sync Stripe customer:", e);
+        }
+      }
+
+      const sessionOptions: any = {
         mode: mode as any,
         payment_method_types: ['card'],
         line_items: [
@@ -857,7 +885,18 @@ async function startServer() {
            tierName: tierName || "",
            ...metadata
         }
-      });
+      };
+
+      if (customerId) {
+        sessionOptions.customer = customerId;
+        if (mode === 'payment') {
+          sessionOptions.saved_payment_method_options = {
+            payment_method_save: "enabled",
+          };
+        }
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionOptions);
 
       res.json({ url: session.url });
     } catch (error: any) {

@@ -299,7 +299,7 @@ export default function MyJobs() {
                         job.status === "completed" ? "bg-slate-100 text-slate-600" :
                         "bg-red-50 text-red-600"
                       )}>
-                        {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace("_", " ")}
+                        {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace(/_/g, " ")}
                       </span>
                     </div>
                   </div>
@@ -372,16 +372,30 @@ export default function MyJobs() {
                       
                       <div className="relative flex items-center gap-1">
                         {(job.status === "cancelled" || job.status === "completed") && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(job.id);
-                            }}
-                            disabled={isProcessing === job.id}
-                            className="p-2 hover:bg-red-50 rounded-xl text-slate-400 hover:text-red-500 transition-colors"
-                          >
-                            {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-                          </button>
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRepost(job);
+                              }}
+                              disabled={isProcessing === job.id}
+                              className="p-2 hover:bg-blue-50 rounded-xl text-slate-400 hover:text-blue-500 transition-colors"
+                              title="Repost Job"
+                            >
+                              {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <RotateCcw className="w-5 h-5" />}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(job.id);
+                              }}
+                              disabled={isProcessing === job.id}
+                              className="p-2 hover:bg-red-50 rounded-xl text-slate-400 hover:text-red-500 transition-colors"
+                              title="Delete Job"
+                            >
+                              {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                            </button>
+                          </>
                         )}
                         <button 
                           onClick={(e) => {
@@ -414,7 +428,7 @@ export default function MyJobs() {
                                   Edit Job
                                 </button>
                                 
-                                {(job.status === "posted" || job.status === "accepted") && (
+                                {(job.status === "posted" || job.status === "accepted" || job.status === "pending_admin_review") && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();

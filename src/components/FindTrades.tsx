@@ -461,10 +461,10 @@ export default function FindTrades() {
                       setSearchQuery("");
                     }}
                     className={cn(
-                      "flex flex-col items-center gap-2 p-3 bg-white rounded-2xl border transition-all group shadow-sm hover:shadow-md relative",
+                      "flex flex-col items-center gap-2 p-3 bg-white rounded-2xl border-2 transition-all group shadow-sm hover:shadow-md relative",
                       selectedCategory === cat.name 
                         ? "border-orange-500 ring-1 ring-orange-500" 
-                        : "border-slate-100 hover:border-blue-100"
+                        : "border-black hover:border-slate-800"
                     )}
                   >
                     {categoryCounts[cat.name] > 0 && (
@@ -495,7 +495,7 @@ export default function FindTrades() {
                   <Link 
                     key={tp.uid} 
                     to={`/profile/${tp.uid}`}
-                    className="flex-shrink-0 w-24 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow text-center"
+                    className="flex-shrink-0 w-24 bg-white p-2 rounded-2xl border-2 border-black shadow-sm hover:shadow-md transition-shadow text-center"
                   >
                     <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center text-white font-bold text-lg mx-auto mb-2">
                       {tp.avatarUrl ? (
@@ -522,7 +522,7 @@ export default function FindTrades() {
                 <button
                   key={item.label}
                   onClick={() => setSearchQuery(item.query)}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-2"
+                  className="px-4 py-2 bg-white border-2 border-black rounded-xl text-xs font-bold text-slate-900 hover:bg-slate-50 transition-all flex items-center gap-2"
                 >
                   <Search className="w-3 h-3" />
                   {item.label}
@@ -544,7 +544,7 @@ export default function FindTrades() {
                 <Link 
                   key={tp.uid} 
                   to={`/profile/${tp.uid}`}
-                  className="flex-shrink-0 w-28 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow text-center"
+                  className="flex-shrink-0 w-28 bg-white p-3 rounded-2xl border-2 border-black shadow-sm hover:shadow-md transition-shadow text-center"
                 >
                   <div className="relative mb-2 mx-auto">
                     <div className="w-14 h-14 bg-slate-800 rounded-2xl flex items-center justify-center text-white font-bold text-xl mx-auto">
@@ -631,7 +631,7 @@ export default function FindTrades() {
             animate={{ opacity: 1, scale: 1 }}
             key={tp.uid}
             onClick={() => setSelectedTraderPreview(tp)}
-            className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col relative cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group"
+            className="bg-white rounded-3xl border-2 border-black shadow-sm overflow-hidden flex flex-col relative cursor-pointer hover:border-slate-800 hover:shadow-md transition-all group"
           >
             <div className="p-4">
               <div className="flex gap-4">
