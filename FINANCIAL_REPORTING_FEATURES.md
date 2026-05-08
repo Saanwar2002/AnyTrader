@@ -20,10 +20,15 @@ This document outlines the logic, features, and UI/UX enhancements implemented f
 - **Extra Income:** Handles additional items like tips or priority booking fees where the provider takes 100%.
 - **Net Earnings:** Correctly calculates and displays the exact amount the provider takes home for tax and accounting purposes.
 
-### 4. Subscription Monetization Gate (Premium Feature)
-- **Monetization:** Generating and downloading unlimited CSV reports for accountants is gated behind a premium subscription (e.g., £10/year).
-- **UX Prompts:** If a user tries to export without an active subscription, a smooth, inline prompt appears explaining the feature's value.
-- **Payment Portal Overlay:** Clicking to subscribe opens a modal overlay directly within the interface to handle the transaction. Upon success, it updates the user's Firestore profile (e.g., `subscriptions.earningsReportExport = true`) and sets an expiration date.
+### 4. Unified Subscription Monetization Gate (AnyRoller Pro)
+- **Monetization:** Generating and downloading unlimited CSV reports for accountants is gated behind a unified premium subscription ("AnyRoller Pro" - £10/year).
+- **UX Prompts:** The UI emphasizes that paying this single fee unlocks *all* premium features across the AnyRoller profile (CSV Reports, Analytics, Tax Tools), not just the current action.
+- **Payment Portal Overlay & Payment Routing:**
+  - Clicking to subscribe opens a modal overlay directly within the interface listing the full value proposition (Included Features: CSV, Analytics, Tax Tools).
+  - **Payment Problem Solved:** Since drivers typically only have Stripe Connect set up to *receive* payouts (not *make* payments), the portal dynamically checks their available Stripe balance. The funds reside in their Stripe account, not with the platform.
+  - **Option 1 (Seamless):** If they have >= £10 in their Stripe Connect Balance, they can choose to "Pay from Earnings". The UI includes explicit authorization text stating: "You authorize AnyRoller to securely deduct £10.00 from your connected Stripe account balance."
+  - **Option 2 (Fallback):** If they have insufficient earnings, the UI falls back to "Pay with Saved Card", which securely routes the payment through the main AnyTrader side of their account, utilizing the payment method they already have on file for general services.
+  - Upon success, it updates the user's Firestore profile (e.g., `subscriptions.earningsReportExport = true`) and sets an expiration date covering the whole AnyRoller profile.
 
 ## Adaptation Notes for AnyTrader (Traders, Landlords, etc.)
 

@@ -408,8 +408,8 @@ export default function DriverExpenses({ onClose }: { onClose?: () => void }) {
               </div>
             </div>
             
-            <div className="w-full grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
-               {["Fuel", "Maintenance", "Insurance", "Other"].map(cat => {
+            <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mt-4">
+               {["Fuel", "Maintenance", "Insurance", "Tolls", "Other"].map(cat => {
                  const amnt = chartData.find(d => d.name === cat)?.value || 0;
                  return (
                    <div key={cat} className="flex flex-col p-2 bg-[#252529] rounded-xl border border-[#2C2C30]" style={{ borderColor: `${CATEGORY_COLORS[cat]}40` }}>

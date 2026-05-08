@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
-import { Clock, Car, ChevronDown, ChevronUp, CheckCircle2, Navigation, PoundSterling, X, MapPin, Zap } from "lucide-react";
+import { Clock, Car, ChevronDown, ChevronUp, CheckCircle2, Navigation, PoundSterling, X, MapPin, Zap, Search } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function DriverJobs({ onClose }: { onClose?: () => void }) {
@@ -108,32 +108,38 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
       </div>
       
       {/* Date Filters */}
-      <div className="flex gap-2 mb-4 text-sm font-bold">
-        <select 
-          className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#4B505C] appearance-none"
-          value={filterDay}
-          onChange={(e) => setFilterDay(e.target.value)}
-        >
-          {days.map(d => <option key={d} value={d}>{d === "--" ? "Day" : d}</option>)}
-        </select>
-        <select 
-          className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#4B505C] appearance-none"
-          value={filterMonth}
-          onChange={(e) => setFilterMonth(e.target.value)}
-        >
-          {months.map(m => <option key={m} value={m}>{m === "--" ? "Month" : m}</option>)}
-        </select>
-        <select 
-          className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#4B505C] appearance-none"
-          value={filterYear}
-          onChange={(e) => setFilterYear(e.target.value)}
-        >
-          {years.map(y => <option key={y} value={y}>{y === "----" ? "Year" : y}</option>)}
-        </select>
+      <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-2xl p-4 mb-6 mt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Search className="w-4 h-4 text-[#A1A1AA]" />
+          <p className="text-xs font-bold text-white uppercase tracking-wider">Search by Date</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <select 
+            className="bg-[#0D0D0F] border border-[#2C2C30] text-white text-sm rounded-xl px-3 py-2 outline-none"
+            value={filterDay}
+            onChange={(e) => setFilterDay(e.target.value)}
+          >
+            {days.map(d => <option key={d} value={d}>{d === "--" ? "Day" : d}</option>)}
+          </select>
+          <select 
+            className="bg-[#0D0D0F] border border-[#2C2C30] text-white text-sm rounded-xl px-3 py-2 outline-none"
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+          >
+            {months.map(m => <option key={m} value={m}>{m === "--" ? "Month" : m}</option>)}
+          </select>
+          <select 
+            className="bg-[#0D0D0F] border border-[#2C2C30] text-white text-sm rounded-xl px-3 py-2 outline-none"
+            value={filterYear}
+            onChange={(e) => setFilterYear(e.target.value)}
+          >
+            {years.map(y => <option key={y} value={y}>{y === "----" ? "Year" : y}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex overflow-x-auto gap-2 mb-6 pb-2 scrollbar-hide">
+      <div className="flex overflow-x-auto gap-2 mb-8 pb-2 scrollbar-hide">
         {[
           { id: 'today', label: 'Today' },
           { id: 'week', label: 'This Week' },

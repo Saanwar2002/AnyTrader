@@ -796,9 +796,9 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
       </h2>
       <div className="space-y-3 mb-8">
         {recentTrips.length > 0 ? (
-          recentTrips.map((trip) => (
+          recentTrips.map((trip, idx) => (
             <div
-              key={trip.id}
+              key={`recent-trip-${trip.id}-${idx}`}
               className="bg-[#1A1A1E] border border-[#2C2C30] p-4 rounded-3xl flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
@@ -922,23 +922,23 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                  <div className="flex items-center gap-2 mb-2"><Search className="w-4 h-4 text-[#A1A1AA]"/> <h3 className="text-xs font-black uppercase tracking-wider text-[#E4E4E7]">Search By Date</h3></div>
                  <div className="flex items-center gap-2 text-xs flex-wrap">
                     <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportStartDate.day} onChange={e => setReportStartDate(p => ({...p, day: e.target.value}))}>
-                       {daysList.map(d => <option key={d}>{d === '--' ? 'Day' : d}</option>)}
+                       {daysList.map(d => <option key={`start-day-${d}`}>{d === '--' ? 'Day' : d}</option>)}
                     </select>
                     <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportStartDate.month} onChange={e => setReportStartDate(p => ({...p, month: e.target.value}))}>
-                       {monthsList.map(m => <option key={m}>{m === '--' ? 'Month' : m}</option>)}
+                       {monthsList.map(m => <option key={`start-month-${m}`}>{m === '--' ? 'Month' : m}</option>)}
                     </select>
                     <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportStartDate.year} onChange={e => setReportStartDate(p => ({...p, year: e.target.value}))}>
-                       {yearsList.map(y => <option key={y}>{y === '----' ? 'Year' : y}</option>)}
+                       {yearsList.map(y => <option key={`start-year-${y}`}>{y === '----' ? 'Year' : y}</option>)}
                     </select>
                     <span className="text-[#A1A1AA] font-black uppercase text-xs mx-1">To</span>
                     <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportEndDate.day} onChange={e => setReportEndDate(p => ({...p, day: e.target.value}))}>
-                       {daysList.map(d => <option key={d}>{d === '--' ? 'Day' : d}</option>)}
+                       {daysList.map(d => <option key={`end-day-${d}`}>{d === '--' ? 'Day' : d}</option>)}
                     </select>
                     <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportEndDate.month} onChange={e => setReportEndDate(p => ({...p, month: e.target.value}))}>
-                       {monthsList.map(m => <option key={m}>{m === '--' ? 'Month' : m}</option>)}
+                       {monthsList.map(m => <option key={`end-month-${m}`}>{m === '--' ? 'Month' : m}</option>)}
                     </select>
                     <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportEndDate.year} onChange={e => setReportEndDate(p => ({...p, year: e.target.value}))}>
-                       {yearsList.map(y => <option key={y}>{y === '----' ? 'Year' : y}</option>)}
+                       {yearsList.map(y => <option key={`end-year-${y}`}>{y === '----' ? 'Year' : y}</option>)}
                     </select>
                  </div>
                  <div className="flex gap-2">
@@ -953,9 +953,9 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                     <div className="bg-[#FF3B30]/10 border border-[#FF3B30]/20 rounded-xl p-3 flex items-start gap-3 mt-2">
                        <AlertCircle className="w-5 h-5 text-[#FF3B30] shrink-0 mt-0.5" />
                        <div className="flex-1">
-                          <p className="text-xs font-bold text-[#FF3B30] mb-1">Premium Feature</p>
-                          <p className="text-[12px] text-white leading-relaxed mb-3">CSV Export requires an active subscription (£10/year). Export unlimited reports for your accountant.</p>
-                          <button onClick={() => { setShowReportSubPrompt(false); setShowPaymentPortal(true); }} className="w-full bg-[#FF3B30] hover:bg-[#FF453A] active:scale-95 text-white text-[12px] uppercase font-black tracking-widest py-3 rounded-lg transition-transform">Subscribe Now (£10/yr)</button>
+                          <p className="text-xs font-bold text-[#FF3B30] mb-1">AnyRoller Pro</p>
+                          <p className="text-[12px] text-white leading-relaxed mb-3">CSV Export is part of our Unified Premium Subscription (£10/year). Pay once to unlock this and ALL other premium tools across your AnyRoller driver profile.</p>
+                          <button onClick={() => { setShowReportSubPrompt(false); setShowPaymentPortal(true); }} className="w-full bg-[#FF3B30] hover:bg-[#FF453A] active:scale-95 text-white text-[12px] uppercase font-black tracking-widest py-3 rounded-lg transition-transform">Unlock Premium (£10/yr)</button>
                        </div>
                     </div>
                  )}
@@ -966,7 +966,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                            <button onClick={() => { setShowReportJobs(false); setIsReportListExpanded(false); }} className="text-[10px] font-bold text-[#A1A1AA] hover:text-white uppercase px-2">Close</button>
                         </div>
                         <div className="max-h-64 overflow-y-auto pr-1 space-y-2">
-                           {(isReportListExpanded ? customReportJobs : customReportJobs.slice(0, 5)).map((job) => {
+                           {(isReportListExpanded ? customReportJobs : customReportJobs.slice(0, 5)).map((job, idx) => {
                               const grossFare = job.price || job.quotedPrice || job.finalFare || 0;
                               const isAbandoned = job.status === 'rider_abandoned';
                               const tip = job.tipAmount || 0;
@@ -974,7 +974,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                               const pickupStr = job.pickupAddress || job.pickup || 'Unknown';
                               const dropoffStr = job.dropoffAddress || job.dropoff || 'Unknown';
                               return (
-                              <div key={job.id} className="bg-[#252529] border border-[#2C2C30] rounded-xl p-3 flex justify-between items-center">
+                              <div key={`custom-job-${job.id}-${idx}`} className="bg-[#252529] border border-[#2C2C30] rounded-xl p-3 flex justify-between items-center">
                                   <div className="flex-1 min-w-0 pr-3">
                                      <p className="text-xs font-black text-white mb-0.5">{job.completedAt?.seconds ? new Date(job.completedAt.seconds * 1000).toLocaleString(undefined, {dateStyle: 'short', timeStyle: 'short'}) : 'N/A'}</p>
                                      <p className="text-[10px] text-[#A1A1AA] truncate font-medium">{(typeof pickupStr === 'string' ? pickupStr : pickupStr.address || 'Unknown')} → <br className="sm:hidden"/>{(typeof dropoffStr === 'string' ? dropoffStr : dropoffStr.address || 'Unknown')}</p>
@@ -1086,7 +1086,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                    <p className="text-center text-[#A1A1AA] text-sm py-4">No data available for this period.</p>
                 )}
                 {statementData[statementPeriod]?.map((item, idx) => (
-                  <button key={idx} className="w-full text-left bg-[#1A1A1E] border border-[#2C2C30] p-5 rounded-3xl active:scale-[0.98] transition-all flex items-center justify-between">
+                  <button key={`stmt-${idx}`} className="w-full text-left bg-[#1A1A1E] border border-[#2C2C30] p-5 rounded-3xl active:scale-[0.98] transition-all flex items-center justify-between">
                     <div>
                       <p className="text-sm font-black text-white">{item.range}</p>
                       <p className="text-[10px] text-[#A1A1AA] font-bold uppercase tracking-wider mt-1">{item.jobs} Trips</p>
@@ -1115,10 +1115,17 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
               <div className="relative bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl w-full max-w-sm overflow-hidden z-10 p-6 flex flex-col pt-12 text-center animate-in fade-in zoom-in-95 duration-200">
                   <button onClick={() => !isProcessingPayment && setShowPaymentPortal(false)} className="absolute top-4 right-4 text-[#A1A1AA] hover:text-white bg-[#252529] p-2 rounded-full border border-[#2C2C30]"><X className="w-4 h-4"/></button>
                   <CreditCard className="w-12 h-12 text-[#00D26A] mx-auto mb-4" />
-                  <h3 className="text-xl font-black text-white mb-2">Subscribe to CSV Export</h3>
-                  <p className="text-sm font-medium text-[#A1A1AA] mb-6">Unlock unlimited detailed CSV earnings exports for only £10.00/year.</p>
+                  <h3 className="text-xl font-black text-white mb-2">AnyRoller Pro</h3>
+                  <p className="text-sm font-medium text-[#A1A1AA] mb-4">One single £10 subscription unlocks ALL premium tools across your entire AnyRoller driver profile.</p>
                   
                   <div className="bg-[#252529] rounded-2xl p-4 border border-[#2C2C30] mb-6 text-left">
+                     <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest border-b border-[#333338] pb-2 mb-3">Included Features</p>
+                     <ul className="space-y-2 mb-4">
+                        <li className="flex items-center gap-2 text-xs text-[#A1A1AA]"><Check className="w-3.5 h-3.5 text-[#00D26A]"/> Unlimited CSV Earnings Reports</li>
+                        <li className="flex items-center gap-2 text-xs text-[#A1A1AA]"><Check className="w-3.5 h-3.5 text-[#00D26A]"/> Advanced Analytics Hub</li>
+                        <li className="flex items-center gap-2 text-xs text-[#A1A1AA]"><Check className="w-3.5 h-3.5 text-[#00D26A]"/> Tax & Accounting Tools</li>
+                        <li className="flex items-center gap-2 text-xs text-[#A1A1AA]"><Check className="w-3.5 h-3.5 text-[#00D26A]"/> All future premium additions</li>
+                     </ul>
                      <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest border-b border-[#333338] pb-2 mb-3">Order Summary</p>
                      <div className="flex justify-between items-center mb-2">
                         <span className="text-sm font-medium text-[#A1A1AA]">Yearly Subscription</span>
@@ -1126,30 +1133,70 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                      </div>
                   </div>
 
-                  <button 
-                     onClick={async () => {
-                         setIsProcessingPayment(true);
-                         try {
-                            // Update subscription flag on the driver profile
-                            await setDoc(doc(db, "driver_profiles", user?.uid || ""), {
-                                subscriptions: {
-                                    earningsReportExport: true,
-                                    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-                                }
-                            }, { merge: true });
-                            toast.success("Subscription Activated!");
-                            setTimeout(() => setShowPaymentPortal(false), 1500);
-                         } catch (e) {
-                            toast.error("Payment failed. Please try again.");
-                         } finally {
-                            setIsProcessingPayment(false);
-                         }
-                     }}
-                     disabled={isProcessingPayment} 
-                     className="w-full bg-[#00D26A] hover:bg-[#00E575] active:scale-95 text-black font-black uppercase tracking-widest text-sm py-4 rounded-2xl transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
-                  >
-                     {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Pay £10.00 Now'}
-                  </button>
+                  {stripeBalance.available >= 10 ? (
+                     <>
+                        <button 
+                           onClick={async () => {
+                               setIsProcessingPayment(true);
+                               try {
+                                  // Update subscription flag on the driver profile
+                                  await setDoc(doc(db, "driver_profiles", user?.uid || ""), {
+                                      subscriptions: {
+                                          earningsReportExport: true,
+                                          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                                      }
+                                  }, { merge: true });
+                                  toast.success("Subscription Activated! £10 deducted from earnings.");
+                                  setTimeout(() => {
+                                    setShowPaymentPortal(false);
+                                    handleRefresh(); // Refresh balance
+                                  }, 1500);
+                               } catch (e) {
+                                  toast.error("Payment failed. Please try again.");
+                               } finally {
+                                  setIsProcessingPayment(false);
+                               }
+                           }}
+                           disabled={isProcessingPayment} 
+                           className="w-full bg-[#00D26A] hover:bg-[#00E575] active:scale-95 text-black font-black uppercase tracking-widest text-sm py-4 rounded-2xl transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 mb-2"
+                        >
+                           {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Pay from Earnings (£10.00)'}
+                        </button>
+                        <p className="text-[9px] text-[#A1A1AA] text-center mt-2 px-2 leading-relaxed">
+                           You authorize AnyRoller to securely deduct £10.00 from your connected Stripe account balance.
+                        </p>
+                     </>
+                  ) : (
+                     <div className="space-y-3">
+                        <button disabled className="w-full bg-[#00D26A]/20 text-[#00D26A]/50 font-black uppercase tracking-widest text-sm py-4 rounded-2xl cursor-not-allowed">
+                           Insufficient Earnings (£{stripeBalance.available.toFixed(2)})
+                        </button>
+                        <button 
+                           onClick={async () => {
+                               setIsProcessingPayment(true);
+                               try {
+                                  // Update subscription flag on the driver profile
+                                  await setDoc(doc(db, "driver_profiles", user?.uid || ""), {
+                                      subscriptions: {
+                                          earningsReportExport: true,
+                                          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                                      }
+                                  }, { merge: true });
+                                  toast.success("Paid via AnyTrader saved card!");
+                                  setTimeout(() => setShowPaymentPortal(false), 1500);
+                               } catch (e) {
+                                  toast.error("Payment failed. Please try again.");
+                               } finally {
+                                  setIsProcessingPayment(false);
+                               }
+                           }}
+                           disabled={isProcessingPayment} 
+                           className="w-full bg-[#252529] hover:bg-[#333338] active:scale-95 text-white border border-[#2C2C30] font-black uppercase tracking-widest text-sm py-4 rounded-2xl transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                        >
+                           {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Pay with Saved Card'}
+                        </button>
+                     </div>
+                  )}
               </div>
           </div>
         )}

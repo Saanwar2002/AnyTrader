@@ -78,15 +78,15 @@ export default function DriverFullTripHistory({ trips, onClose, loading }: FullT
            <div className="grid grid-cols-3 gap-2">
               <select value={selectedDay} onChange={e => setSelectedDay(e.target.value)} className="bg-[#0D0D0F] border border-[#2C2C30] text-white text-sm rounded-xl px-3 py-2 outline-none">
                  <option value="All">Day</option>
-                 {days.filter(d => d !== "All").map(d => <option key={d} value={d}>{d}</option>)}
+                 {days.filter(d => d !== "All").map(d => <option key={`full-day-${d}`} value={d}>{d}</option>)}
               </select>
               <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="bg-[#0D0D0F] border border-[#2C2C30] text-white text-sm rounded-xl px-3 py-2 outline-none">
                  <option value="All">Month</option>
-                 {months.filter(m => m !== "All").map(m => <option key={m} value={m}>{m}</option>)}
+                 {months.filter(m => m !== "All").map(m => <option key={`full-month-${m}`} value={m}>{m}</option>)}
               </select>
               <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="bg-[#0D0D0F] border border-[#2C2C30] text-white text-sm rounded-xl px-3 py-2 outline-none">
                  <option value="All">Year</option>
-                 {years.filter(y => y !== "All").map(y => <option key={y} value={y}>{y}</option>)}
+                 {years.filter(y => y !== "All").map(y => <option key={`full-year-${y}`} value={y}>{y}</option>)}
               </select>
            </div>
         </div>
@@ -114,7 +114,7 @@ export default function DriverFullTripHistory({ trips, onClose, loading }: FullT
 
               return (
                 <div
-                  key={trip.id}
+                  key={`fulltrip-${trip.id}`}
                   className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl overflow-hidden transition-all"
                 >
                   {/* Top Header - Always visible */}
@@ -171,7 +171,7 @@ export default function DriverFullTripHistory({ trips, onClose, loading }: FullT
                               </div>
 
                               {trip.stops && trip.stops.length > 0 && trip.stops.map((stop: any, idx: number) => (
-                                <div key={idx} className="relative">
+                                <div key={`fulltrip-stop-${idx}`} className="relative">
                                   <div className="absolute -left-[26px] top-0.5 w-4 h-4 bg-[#FF9500] rounded-full border-[3px] border-[#1A1A1E]" />
                                   <p className="text-xs font-bold text-[#A1A1AA] uppercase">Stop {idx + 1}</p>
                                   <p className="text-sm text-white font-medium">{stop.address || stop}</p>
