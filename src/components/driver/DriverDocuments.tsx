@@ -1,12 +1,15 @@
-import React, { useState } from "react";
-import { ChevronLeft, ShieldCheck, AlertTriangle, XCircle, ArrowRight, Wrench, Shield } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { ChevronLeft, ShieldCheck, AlertTriangle, XCircle, ArrowRight, Wrench, Shield, Upload, FileSignature } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import InsuranceMarketplace from "./InsuranceMarketplace";
 import { useAuth } from "../AuthProvider";
+import { db, doc, updateDoc, arrayUnion, getDoc } from "@/src/firebase";
 
 export default function DriverDocuments({ onBack }: { onBack: () => void }) {
   const { profile } = useAuth();
   const [showMarketplace, setShowMarketplace] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingDocType, setUploadingDocType] = useState<string | null>(null);
 
   // Derive insurance expiry and status from profile if available, otherwise fallback
   const insuranceExpiryDate = profile?.insurance?.expiryDate 
@@ -34,57 +37,142 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
     insAction = "Compare Quotes";
   }
 
-  const documents = [
-    {
-      id: "dvla_license",
-      name: "DVLA Driving License",
-      status: "valid",
-      expiry: "Expires 12 Oct 2028",
-      color: "text-[#00D26A]",
-      bg: "bg-[#00D26A]/10",
-      icon: ShieldCheck
-    },
-    {
-      id: "phv_license",
-      name: "Private Hire License",
-      status: "valid",
-      expiry: "Expires 05 May 2025",
-      color: "text-[#00D26A]",
-      bg: "bg-[#00D26A]/10",
-      icon: ShieldCheck
-    },
-    {
-      id: "insurance",
-      name: "Hire & Reward Insurance",
-      status: insStatus,
-      expiry: insExpiryText,
-      color: insColor,
-      bg: insBg,
-      icon: Shield,
-      action: insAction,
-      originalProvider: profile?.insurance?.provider || "Zego"
-    },
-    {
-      id: "mot",
-      name: "MOT Certificate",
-      status: "expiring",
-      expiry: "Expires in 14 Days",
-      color: "text-[#FF9500]",
-      bg: "bg-[#FF9500]/10",
-      icon: AlertTriangle,
-      action: "Renew"
-    },
-    {
-      id: "logbook",
-      name: "V5C Logbook",
-      status: "missing",
-      expiry: "Upload required",
-      color: "text-[#FF3B30]",
-      bg: "bg-[#FF3B30]/10",
-      icon: XCircle,
-      action: "Upload"
-    }
+  const baseDocuments = [
+    { id: "dvla_license", name: "DVLA Driving License", fallbackExpiry: "Expires 12 Oct 2028" },
+    { id: "phv_license", name: "Private Hire License", fallbackExpiry: "Expires 05 May 2025" },
+    { id: "insurance", name: "Hire & Reward Insurance", fallbackExpiry: insExpiryText, originalProvider: profile?.insurance?.provider || "Zego" },
+    { id: "mot", name: "MOT Certificate", fallbackExpiry: "Expires in 14 Days" },
+    { id: "logbook", name: "V5C Logbook", fallbackExpiry: "Upload required" }
   ];
+
+  const verificationDocs = profile?.verificationDocs || [];
+
+  const documents = baseDocuments.map(baseDoc => {
+    const uploadedDoc = verificationDocs.find((d: any) => d.type === baseDoc.id);
+
+    if (uploadedDoc) {
+      if (uploadedDoc.status === 'pending') {
+        return {
+          ...baseDoc,
+          status: 'pending',
+          expiry: 'Verification in progress',
+          color: 'text-[#FF9500]',
+          bg: 'bg-[#FF9500]/10',
+          icon: FileSignature,
+          action: 'Pending'
+        };
+      }
+      if (uploadedDoc.status === 'rejected') {
+        return {
+          ...baseDoc,
+          status: 'missing',
+          expiry: `Rejected: ${uploadedDoc.rejectionReason}`,
+          color: 'text-[#FF3B30]',
+          bg: 'bg-[#FF3B30]/10',
+          icon: XCircle,
+          action: 'Re-Upload'
+        };
+      }
+      if (uploadedDoc.status === 'approved') {
+        return {
+          ...baseDoc,
+          status: 'valid',
+          expiry: uploadedDoc.expiryDate ? `Expires ${new Date(uploadedDoc.expiryDate).toLocaleDateString()}` : baseDoc.fallbackExpiry,
+          color: 'text-[#00D26A]',
+          bg: 'bg-[#00D26A]/10',
+          icon: ShieldCheck,
+          action: baseDoc.id === 'insurance' && daysUntilExpiry <= 28 ? 'Compare Quotes' : undefined
+        };
+      }
+    }
+
+    // Default missing/expiring logic if no doc
+    if (baseDoc.id === 'mot' || baseDoc.id === 'insurance') {
+      return {
+        ...baseDoc,
+        status: 'expiring',
+        expiry: baseDoc.fallbackExpiry,
+        color: 'text-[#FF9500]',
+        bg: 'bg-[#FF9500]/10',
+        icon: AlertTriangle,
+        action: 'Renew/Upload'
+      }
+    }
+
+    if (baseDoc.id === 'logbook') {
+        return {
+            ...baseDoc,
+            status: 'missing',
+            expiry: 'Upload required',
+            color: 'text-[#FF3B30]',
+            bg: 'bg-[#FF3B30]/10',
+            icon: XCircle,
+            action: 'Upload'
+        }
+    }
+
+    // Default valid
+    return {
+      ...baseDoc,
+      status: 'valid',
+      expiry: baseDoc.fallbackExpiry,
+      color: 'text-[#00D26A]',
+      bg: 'bg-[#00D26A]/10',
+      icon: ShieldCheck,
+      action: undefined
+    };
+  });
+
+  const handleActionClick = (docType: string, currentAction?: string) => {
+    if (currentAction === 'Pending') return;
+    if (docType === 'insurance' && currentAction === 'Compare Quotes') {
+       setShowMarketplace(true);
+       return;
+    }
+    setUploadingDocType(docType);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingDocType || !profile?.uid) return;
+
+    try {
+      const userRef = doc(db, 'users', profile.uid);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) return;
+
+      const userData = userSnap.data();
+      let currentDocs = userData.verificationDocs || [];
+      
+      // Remove any existing doc of this type
+      currentDocs = currentDocs.filter((d: any) => d.type !== uploadingDocType);
+
+      // Add new pending doc
+      const expiry = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const newDoc = {
+        type: uploadingDocType,
+        status: 'pending',
+        fileUrl: `https://fake-url.com/${file.name}`,
+        expiryDate: expiry,
+        rejectionReason: null
+      };
+
+      currentDocs.push(newDoc);
+
+      await updateDoc(userRef, {
+        verificationDocs: currentDocs
+      });
+
+      alert(`Uploaded ${file.name} for verification.`);
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setUploadingDocType(null);
+    }
+  };
 
   if (showMarketplace) {
     return <InsuranceMarketplace onBack={() => setShowMarketplace(false)} currentProvider={profile?.insurance?.provider || "Zego"} daysUntilExpiry={daysUntilExpiry} />;
@@ -92,6 +180,13 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
 
   return (
       <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto font-sans pb-24 absolute inset-0 z-50">
+        <input 
+            type="file" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            accept="image/*,.pdf" 
+        />
         <div className="sticky top-0 bg-[#0D0D0F]/90 backdrop-blur-xl z-20 px-4 py-4 flex items-center gap-3 border-b border-[#2C2C30]">
            <button onClick={onBack} className="w-10 h-10 bg-[#1A1A1E] border border-[#2C2C30] rounded-xl flex items-center justify-center text-[#E4E4E7] active:text-white transition-colors group">
              <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
@@ -134,30 +229,43 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
            <div className="space-y-3 mb-6">
               <div className="flex items-center justify-between px-2 mb-2">
                 <h3 className="text-xs font-black uppercase text-[#A1A1AA] tracking-widest">Required Documents</h3>
-                <span className="text-[10px] font-black text-[#FF3B30] bg-[#FF3B30]/10 px-2 py-0.5 rounded-full uppercase tracking-wider border border-[#FF3B30]/20">1 Action</span>
+                <span className="text-[10px] font-black text-[#FF3B30] bg-[#FF3B30]/10 px-2 py-0.5 rounded-full uppercase tracking-wider border border-[#FF3B30]/20">Uploads Checked</span>
               </div>
 
               {documents.map((doc) => {
                  const Icon = doc.icon;
                  return (
-                    <div key={doc.id} className={cn("bg-[#1A1A1E] border rounded-2xl p-4 transition-colors", doc.status === 'expiring' ? "border-[#FF9500]/50 shadow-[0_0_15px_rgba(255,149,0,0.05)]" : doc.status === 'missing' ? "border-[#FF3B30]/50" : "border-[#2C2C30]")}>
+                    <div 
+                       key={doc.id} 
+                       onClick={() => {
+                          if (doc.status === 'valid' && doc.id !== 'insurance') handleActionClick(doc.id, 'Update');
+                       }}
+                       className={cn("bg-[#1A1A1E] border rounded-2xl p-4 transition-colors", 
+                          doc.status === 'expiring' ? "border-[#FF9500]/50 shadow-[0_0_15px_rgba(255,149,0,0.05)]" : 
+                          doc.status === 'missing' ? "border-[#FF3B30]/50" : 
+                          doc.status === 'pending' ? "border-[#FF9500]/50" : "border-[#2C2C30]",
+                          doc.status === 'valid' && doc.id !== 'insurance' ? "cursor-pointer hover:border-[#333338]" : ""
+                       )}>
                        <div className="flex items-center gap-4">
                           <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", doc.bg)}>
                              <Icon className={cn("w-5 h-5", doc.color)} />
                           </div>
                           <div className="flex-1 min-w-0">
                              <div className="flex items-center gap-2">
-                                <h4 className="text-sm font-bold text-white tracking-tight truncate">{doc.name}</h4>
-                                {doc.id === 'insurance' && <span className="text-[9px] font-bold text-[#A1A1AA] uppercase px-1.5 py-0.5 bg-[#252529] rounded">{doc.originalProvider}</span>}
+                                <h4 className="text-sm font-bold text-white tracking-tight break-words">{doc.name}</h4>
+                                {doc.id === 'insurance' && <span className="text-[9px] font-bold text-[#A1A1AA] uppercase px-1.5 py-0.5 bg-[#252529] rounded break-words">{doc.originalProvider}</span>}
                              </div>
-                             <p className={cn("text-xs font-bold mt-0.5 truncate", doc.status === 'valid' ? "text-[#A1A1AA] font-medium" : doc.color)}>{doc.expiry}</p>
+                             <p className={cn("text-xs font-bold mt-0.5 break-words", doc.status === 'valid' ? "text-[#A1A1AA] font-medium" : doc.color)}>{doc.expiry}</p>
                           </div>
                           {doc.action && (
                              <button 
-                               onClick={() => {
-                                 if (doc.id === 'insurance') setShowMarketplace(true);
-                               }}
-                               className={cn("px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ml-2 shrink-0 border active:scale-95 transition-transform", doc.status === 'expiring' ? "bg-[#FF9500] text-[#0D0D0F] border-transparent" : "bg-[#FF3B30] text-white border-transparent")}>
+                               disabled={doc.action === 'Pending'}
+                               onClick={() => handleActionClick(doc.id, doc.action)}
+                               className={cn("px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ml-2 shrink-0 border active:scale-95 transition-transform flex items-center gap-1", 
+                                  doc.status === 'expiring' ? "bg-[#FF9500] text-[#0D0D0F] border-transparent" : 
+                                  doc.status === 'pending' ? "bg-transparent text-[#FF9500] border-[#FF9500] opacity-50 cursor-not-allowed" :
+                                  "bg-[#FF3B30] text-white border-transparent")}>
+                                {doc.action === 'Renew/Upload' || doc.action === 'Upload' || doc.action === 'Re-Upload' ? <Upload className="w-3 h-3" /> : null}
                                 {doc.action}
                              </button>
                           )}

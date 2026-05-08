@@ -11,9 +11,16 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [isListExpanded, setIsListExpanded] = useState(false);
+
+  // Custom date filter states
+  const [filterDay, setFilterDay] = useState("--");
+  const [filterMonth, setFilterMonth] = useState("--");
+  const [filterYear, setFilterYear] = useState("----");
 
   useEffect(() => {
     if (!user) return;
+
 
     const q = query(
       collection(db, "ride_requests"),
@@ -29,15 +36,28 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
     return () => unsub();
   }, [user]);
 
+  // Reset list expansion when filters change
+  useEffect(() => {
+    setIsListExpanded(false);
+  }, [filter, filterDay, filterMonth, filterYear]);
+
   const completedJobs = jobs.filter(j => j.status === "completed" || j.status === 'rider_abandoned');
 
   const filteredJobs = completedJobs.filter(job => {
-    if (filter === 'all') return true;
-    
     if (!job.createdAt?.seconds && !job.completedAt?.seconds) return true;
     
     const jobDate = new Date((job.completedAt?.seconds || job.createdAt?.seconds) * 1000);
     const now = new Date();
+
+    // If custom date filters are set, they override the tab filter
+    if (filterDay !== "--" || filterMonth !== "--" || filterYear !== "----") {
+      const dayMatch = filterDay === "--" || jobDate.getDate().toString().padStart(2, '0') === filterDay;
+      const monthMatch = filterMonth === "--" || (jobDate.getMonth() + 1).toString().padStart(2, '0') === filterMonth;
+      const yearMatch = filterYear === "----" || jobDate.getFullYear().toString() === filterYear;
+      return dayMatch && monthMatch && yearMatch;
+    }
+    
+    if (filter === 'all') return true;
     
     if (filter === 'today') {
       return jobDate.getDate() === now.getDate() && 
@@ -62,6 +82,13 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
     return true;
   });
 
+  const currentYear = new Date().getFullYear();
+  const years = ["----", ...Array.from({length: 5}, (_, i) => (currentYear - i).toString())];
+  const months = ["--", "01","02","03","04","05","06","07","08","09","10","11","12"];
+  const days = ["--", ...Array.from({length: 31}, (_, i) => (i + 1).toString().padStart(2, '0'))];
+
+  const jobsToDisplay = isListExpanded ? filteredJobs : filteredJobs.slice(0, 4);
+
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-6 font-sans pb-24 min-h-0">
       <div className="flex justify-between items-center mb-6">
@@ -80,6 +107,31 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
       
+      {/* Date Filters */}
+      <div className="flex gap-2 mb-4 text-sm font-bold">
+        <select 
+          className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#4B505C] appearance-none"
+          value={filterDay}
+          onChange={(e) => setFilterDay(e.target.value)}
+        >
+          {days.map(d => <option key={d} value={d}>{d === "--" ? "Day" : d}</option>)}
+        </select>
+        <select 
+          className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#4B505C] appearance-none"
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(e.target.value)}
+        >
+          {months.map(m => <option key={m} value={m}>{m === "--" ? "Month" : m}</option>)}
+        </select>
+        <select 
+          className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#4B505C] appearance-none"
+          value={filterYear}
+          onChange={(e) => setFilterYear(e.target.value)}
+        >
+          {years.map(y => <option key={y} value={y}>{y === "----" ? "Year" : y}</option>)}
+        </select>
+      </div>
+
       {/* Filters */}
       <div className="flex overflow-x-auto gap-2 mb-6 pb-2 scrollbar-hide">
         {[
@@ -90,9 +142,14 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
         ].map(f => (
           <button
             key={f.id}
-            onClick={() => setFilter(f.id as any)}
+            onClick={() => {
+              setFilter(f.id as any);
+              setFilterDay("--");
+              setFilterMonth("--");
+              setFilterYear("----");
+            }}
             className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-colors border ${
-              filter === f.id 
+              filter === f.id && filterDay === "--" && filterMonth === "--" && filterYear === "----"
                 ? 'bg-white text-black border-white' 
                 : 'bg-[#1A1A1E] text-[#A1A1AA] border-[#2C2C30] hover:bg-[#2C2C30] hover:text-white'
             }`}
@@ -107,7 +164,8 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
       ) : (
         <div className="space-y-3">
           {filteredJobs.length > 0 ? (
-            filteredJobs.map((job) => {
+            <>
+              {jobsToDisplay.map((job) => {
               const date = job.createdAt?.seconds 
                 ? new Date(job.createdAt.seconds * 1000).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
                 : 'Recent';
@@ -275,7 +333,28 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
                   </AnimatePresence>
                 </div>
               );
-            })
+            })}
+            
+            {!isListExpanded && filteredJobs.length > 4 && (
+              <button 
+                onClick={() => setIsListExpanded(true)}
+                className="w-full flex items-center justify-center gap-2 bg-[#1A1A1E] border border-[#2C2C30] hover:bg-[#2C2C30] rounded-2xl py-4 transition-colors mt-4 text-[#A1A1AA] hover:text-white"
+              >
+                <span className="text-xs font-black uppercase tracking-widest">Show all {filteredJobs.length} past jobs</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            )}
+            
+            {isListExpanded && filteredJobs.length > 4 && (
+              <button 
+                onClick={() => setIsListExpanded(false)}
+                className="w-full flex items-center justify-center gap-2 bg-[#1A1A1E] border border-[#2C2C30] hover:bg-[#2C2C30] rounded-2xl py-4 transition-colors mt-4 text-[#A1A1AA] hover:text-white"
+              >
+                <span className="text-xs font-black uppercase tracking-widest">Collapse Job List</span>
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            )}
+            </>
           ) : (
              <div className="bg-[#1A1A1E] rounded-3xl p-8 border border-[#2C2C30] text-center border-dashed mt-8">
                <Car className="w-12 h-12 text-[#333338] mx-auto mb-4" />
