@@ -74,27 +74,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Connection Test
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. ");
-    } else {
-      console.error("Firestore initialization error:", error);
-    }
-  }
-  
-  // Test Storage connection
-  try {
-    const testRef = ref(storage, 'test-connection');
-    console.log("Firebase Storage initialized:", storage.app.options.storageBucket);
-  } catch (error) {
-    console.error("Firebase Storage initialization error:", error);
-  }
-}
-testConnection();
+
 
 export const sendNotification = async (userId: string, title: string, message: string, type: "quote" | "message" | "status" | "system", link?: string) => {
   try {

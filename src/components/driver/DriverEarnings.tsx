@@ -29,6 +29,11 @@ import {
   X,
   Edit2,
   Check,
+  Search,
+  Download,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   db,
@@ -85,10 +90,115 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
     yearly: [] as { range: string; total: number; jobs: number; rank: number }[],
   });
 
+  const [reportStartDate, setReportStartDate] = useState({ day: '--', month: '--', year: '----' });
+  const [reportEndDate, setReportEndDate] = useState({ day: '--', month: '--', year: '----' });
+  const [customReportJobs, setCustomReportJobs] = useState<any[]>([]);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showReportJobs, setShowReportJobs] = useState(false);
+  const [showReportSubPrompt, setShowReportSubPrompt] = useState(false);
+  const [isReportListExpanded, setIsReportListExpanded] = useState(false);
+  const [showPaymentPortal, setShowPaymentPortal] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  const currentYear = new Date().getFullYear();
+  const yearsList = ["----", ...Array.from({length: 5}, (_, i) => (currentYear - i).toString())];
+  const monthsList = ["--", "01","02","03","04","05","06","07","08","09","10","11","12"];
+  const daysList = ["--", ...Array.from({length: 31}, (_, i) => (i + 1).toString().padStart(2, '0'))];
+
+
 
   const handleEditGoal = () => {
     setEditingGoalValue(metrics[period].goal.toString());
     setIsEditingGoal(true);
+  };
+
+  const handleGenerateReport = async () => {
+    if (!user) return;
+    if (reportStartDate.year === '----' || reportEndDate.year === '----' || reportStartDate.month === '--' || reportEndDate.month === '--' || reportStartDate.day === '--' || reportEndDate.day === '--') {
+       toast.error("Please select both start and end dates.");
+       return;
+    }
+    
+    setIsGeneratingReport(true);
+    setCustomReportJobs([]);
+    setShowReportJobs(true);
+    setIsReportListExpanded(false);
+
+    try {
+       const start = new Date(parseInt(reportStartDate.year), parseInt(reportStartDate.month) - 1, parseInt(reportStartDate.day), 0, 0, 0);
+       const end = new Date(parseInt(reportEndDate.year), parseInt(reportEndDate.month) - 1, parseInt(reportEndDate.day), 23, 59, 59);
+
+       const q = query(
+          collection(db, "ride_requests"),
+          where("driverId", "==", user.uid),
+          where("status", "==", "completed"),
+          orderBy("completedAt", "desc")
+       );
+       
+       const snap = await getDocs(q);
+       const allCompleted = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+       
+       const filtered = allCompleted.filter((job: any) => {
+          if (!job.completedAt?.seconds) return false;
+          const dt = new Date(job.completedAt.seconds * 1000);
+          return dt >= start && dt <= end;
+       });
+
+       setCustomReportJobs(filtered);
+    } catch (e) {
+       console.error("Failed to generate report:", e);
+       toast.error("Failed to generate report");
+    } finally {
+       setIsGeneratingReport(false);
+    }
+  };
+
+  const handleDownloadCSV = () => {
+     // Check for subscription - £10 a year feature
+     if (!profile?.subscriptions?.earningsReportExport) {
+        setShowReportSubPrompt(true);
+        return;
+     }
+     
+     if (customReportJobs.length === 0) {
+        toast.error("No jobs to export.");
+        return;
+     }
+
+     const csvRows = [];
+     // Header
+     csvRows.push(["Date", "Time", "Customer", "Pickup", "Dropoff", "Distance (mi)", "Earned (£)", "Gross (£)"].join(','));
+     
+     for (const job of customReportJobs) {
+        const dt = job.completedAt?.seconds ? new Date(job.completedAt.seconds * 1000) : new Date();
+        const dateStr = dt.toLocaleDateString();
+        const timeStr = dt.toLocaleTimeString();
+
+        const grossFare = job.price || job.quotedPrice || job.finalFare || 0;
+        const isAbandoned = job.status === 'rider_abandoned';
+        const tip = job.tipAmount || 0;
+        const driverEarned = job.driverEarnings || (job.finalFare ? (job.finalFare - tip) * 0.88 + tip : (isAbandoned ? 5 : grossFare * 0.88 + tip));
+        
+        const earnings = driverEarned.toFixed(2);
+        const gross = grossFare.toFixed(2);
+        const distance = job.distanceMiles?.toFixed(1) || (job.distanceInfo?.value ? (job.distanceInfo.value / 1609.34).toFixed(1) : "0.0");
+        
+        const pickupStr = job.pickupAddress || job.pickup || '';
+        const dropoffStr = job.dropoffAddress || job.dropoff || '';
+        const pickup = `"${(typeof pickupStr === 'string' ? pickupStr : pickupStr.address || '').replace(/"/g, '""')}"`;
+        const dropoff = `"${(typeof dropoffStr === 'string' ? dropoffStr : dropoffStr.address || '').replace(/"/g, '""')}"`;
+        const customer = `"${(job.riderName || 'Unknown').replace(/"/g, '""')}"`;
+        
+        csvRows.push([dateStr, timeStr, customer, pickup, dropoff, distance, earnings, gross].join(','));
+     }
+     
+     const csvString = csvRows.join('\n');
+     const blob = new Blob([csvString], { type: 'text/csv' });
+     const url = window.URL.createObjectURL(blob);
+     const a = document.createElement('a');
+     a.setAttribute('href', url);
+     a.setAttribute('download', `Earnings_Report_${reportStartDate.year}${reportStartDate.month}${reportStartDate.day}_to_${reportEndDate.year}${reportEndDate.month}${reportEndDate.day}.csv`);
+     a.click();
   };
 
   const handleOpenFullHistory = async () => {
@@ -807,6 +917,97 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                 ))}
               </div>
               
+              {/* Date Filter & Report Generator */}
+              <div className="bg-[#1A1A1E] p-4 rounded-2xl border border-[#2C2C30] mb-6 space-y-3">
+                 <div className="flex items-center gap-2 mb-2"><Search className="w-4 h-4 text-[#A1A1AA]"/> <h3 className="text-xs font-black uppercase tracking-wider text-[#E4E4E7]">Search By Date</h3></div>
+                 <div className="flex items-center gap-2 text-xs flex-wrap">
+                    <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportStartDate.day} onChange={e => setReportStartDate(p => ({...p, day: e.target.value}))}>
+                       {daysList.map(d => <option key={d}>{d === '--' ? 'Day' : d}</option>)}
+                    </select>
+                    <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportStartDate.month} onChange={e => setReportStartDate(p => ({...p, month: e.target.value}))}>
+                       {monthsList.map(m => <option key={m}>{m === '--' ? 'Month' : m}</option>)}
+                    </select>
+                    <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportStartDate.year} onChange={e => setReportStartDate(p => ({...p, year: e.target.value}))}>
+                       {yearsList.map(y => <option key={y}>{y === '----' ? 'Year' : y}</option>)}
+                    </select>
+                    <span className="text-[#A1A1AA] font-black uppercase text-xs mx-1">To</span>
+                    <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportEndDate.day} onChange={e => setReportEndDate(p => ({...p, day: e.target.value}))}>
+                       {daysList.map(d => <option key={d}>{d === '--' ? 'Day' : d}</option>)}
+                    </select>
+                    <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportEndDate.month} onChange={e => setReportEndDate(p => ({...p, month: e.target.value}))}>
+                       {monthsList.map(m => <option key={m}>{m === '--' ? 'Month' : m}</option>)}
+                    </select>
+                    <select className="bg-[#0D0D0F] border border-[#2C2C30] rounded-xl px-2 py-1.5 text-[#A1A1AA] focus:outline-none focus:border-[#00D26A]" value={reportEndDate.year} onChange={e => setReportEndDate(p => ({...p, year: e.target.value}))}>
+                       {yearsList.map(y => <option key={y}>{y === '----' ? 'Year' : y}</option>)}
+                    </select>
+                 </div>
+                 <div className="flex gap-2">
+                    <button onClick={handleGenerateReport} disabled={isGeneratingReport} className="flex-1 bg-[#2C2C30] hover:bg-[#333338] active:scale-95 text-white text-[10px] font-black uppercase tracking-widest py-2.5 rounded-xl transition-all">
+                       {isGeneratingReport ? 'Generating...' : 'Generate Report'}
+                    </button>
+                    <button onClick={handleDownloadCSV} className="flex items-center gap-2 bg-[#00D26A]/20 hover:bg-[#00D26A] active:scale-95 hover:text-black text-[#00D26A] text-[10px] font-black uppercase tracking-widest py-2.5 px-4 rounded-xl transition-all">
+                       <Download className="w-4 h-4"/> CSV
+                    </button>
+                 </div>
+                 {showReportSubPrompt && (
+                    <div className="bg-[#FF3B30]/10 border border-[#FF3B30]/20 rounded-xl p-3 flex items-start gap-3 mt-2">
+                       <AlertCircle className="w-5 h-5 text-[#FF3B30] shrink-0 mt-0.5" />
+                       <div className="flex-1">
+                          <p className="text-xs font-bold text-[#FF3B30] mb-1">Premium Feature</p>
+                          <p className="text-[12px] text-white leading-relaxed mb-3">CSV Export requires an active subscription (£10/year). Export unlimited reports for your accountant.</p>
+                          <button onClick={() => { setShowReportSubPrompt(false); setShowPaymentPortal(true); }} className="w-full bg-[#FF3B30] hover:bg-[#FF453A] active:scale-95 text-white text-[12px] uppercase font-black tracking-widest py-3 rounded-lg transition-transform">Subscribe Now (£10/yr)</button>
+                       </div>
+                    </div>
+                 )}
+                 {showReportJobs && customReportJobs.length > 0 && (
+                    <div className="mt-4 border-t border-[#2C2C30] pt-4">
+                        <div className="flex items-center justify-between mb-3 px-1">
+                           <p className="text-[10px] font-black text-[#00D26A] uppercase">{customReportJobs.length} Jobs Found</p>
+                           <button onClick={() => { setShowReportJobs(false); setIsReportListExpanded(false); }} className="text-[10px] font-bold text-[#A1A1AA] hover:text-white uppercase px-2">Close</button>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto pr-1 space-y-2">
+                           {(isReportListExpanded ? customReportJobs : customReportJobs.slice(0, 5)).map((job) => {
+                              const grossFare = job.price || job.quotedPrice || job.finalFare || 0;
+                              const isAbandoned = job.status === 'rider_abandoned';
+                              const tip = job.tipAmount || 0;
+                              const driverEarned = job.driverEarnings || (job.finalFare ? (job.finalFare - tip) * 0.88 + tip : (isAbandoned ? 5 : grossFare * 0.88 + tip));
+                              const pickupStr = job.pickupAddress || job.pickup || 'Unknown';
+                              const dropoffStr = job.dropoffAddress || job.dropoff || 'Unknown';
+                              return (
+                              <div key={job.id} className="bg-[#252529] border border-[#2C2C30] rounded-xl p-3 flex justify-between items-center">
+                                  <div className="flex-1 min-w-0 pr-3">
+                                     <p className="text-xs font-black text-white mb-0.5">{job.completedAt?.seconds ? new Date(job.completedAt.seconds * 1000).toLocaleString(undefined, {dateStyle: 'short', timeStyle: 'short'}) : 'N/A'}</p>
+                                     <p className="text-[10px] text-[#A1A1AA] truncate font-medium">{(typeof pickupStr === 'string' ? pickupStr : pickupStr.address || 'Unknown')} → <br className="sm:hidden"/>{(typeof dropoffStr === 'string' ? dropoffStr : dropoffStr.address || 'Unknown')}</p>
+                                  </div>
+                                  <p className="text-sm font-black text-[#00D26A] shrink-0">£{driverEarned.toFixed(2)}</p>
+                              </div>
+                           )})}
+
+                           {!isReportListExpanded && customReportJobs.length > 5 && (
+                             <button
+                               onClick={() => setIsReportListExpanded(true)}
+                               className="w-full text-center text-[10px] font-bold text-[#A1A1AA] hover:text-white uppercase tracking-wider py-3 bg-[#252529] hover:bg-[#333338] transition-colors rounded-xl flex items-center justify-center gap-1"
+                             >
+                               Show all {customReportJobs.length} jobs <ChevronDown className="w-4 h-4 ml-1" />
+                             </button>
+                           )}
+
+                           {isReportListExpanded && customReportJobs.length > 5 && (
+                             <button
+                               onClick={() => setIsReportListExpanded(false)}
+                               className="w-full text-center text-[10px] font-bold text-[#A1A1AA] hover:text-white uppercase tracking-wider py-3 bg-[#252529] hover:bg-[#333338] transition-colors rounded-xl flex items-center justify-center gap-1 mt-4"
+                             >
+                               Collapse List <ChevronUp className="w-4 h-4 ml-1" />
+                             </button>
+                           )}
+                        </div>
+                    </div>
+                 )}
+                 {showReportJobs && customReportJobs.length === 0 && !isGeneratingReport && (
+                    <div className="mt-2 text-center text-[#A1A1AA] text-[10px] font-bold uppercase tracking-wider py-6 bg-[#252529] rounded-xl border border-[#2C2C30]">No jobs found in this date range.</div>
+                 )}
+              </div>
+              
               {/* Overview Cards */}
               <div className="mb-6">
                 <div className="flex items-end gap-3 mb-2">
@@ -908,6 +1109,51 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
              loading={loadingFullTrips} 
           />
         )}
+        {showPaymentPortal && (
+          <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => !isProcessingPayment && setShowPaymentPortal(false)}></div>
+              <div className="relative bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl w-full max-w-sm overflow-hidden z-10 p-6 flex flex-col pt-12 text-center animate-in fade-in zoom-in-95 duration-200">
+                  <button onClick={() => !isProcessingPayment && setShowPaymentPortal(false)} className="absolute top-4 right-4 text-[#A1A1AA] hover:text-white bg-[#252529] p-2 rounded-full border border-[#2C2C30]"><X className="w-4 h-4"/></button>
+                  <CreditCard className="w-12 h-12 text-[#00D26A] mx-auto mb-4" />
+                  <h3 className="text-xl font-black text-white mb-2">Subscribe to CSV Export</h3>
+                  <p className="text-sm font-medium text-[#A1A1AA] mb-6">Unlock unlimited detailed CSV earnings exports for only £10.00/year.</p>
+                  
+                  <div className="bg-[#252529] rounded-2xl p-4 border border-[#2C2C30] mb-6 text-left">
+                     <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest border-b border-[#333338] pb-2 mb-3">Order Summary</p>
+                     <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-[#A1A1AA]">Yearly Subscription</span>
+                        <span className="text-lg font-black text-white">£10.00</span>
+                     </div>
+                  </div>
+
+                  <button 
+                     onClick={async () => {
+                         setIsProcessingPayment(true);
+                         try {
+                            // Update subscription flag on the driver profile
+                            await setDoc(doc(db, "driver_profiles", user?.uid || ""), {
+                                subscriptions: {
+                                    earningsReportExport: true,
+                                    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                                }
+                            }, { merge: true });
+                            toast.success("Subscription Activated!");
+                            setTimeout(() => setShowPaymentPortal(false), 1500);
+                         } catch (e) {
+                            toast.error("Payment failed. Please try again.");
+                         } finally {
+                            setIsProcessingPayment(false);
+                         }
+                     }}
+                     disabled={isProcessingPayment} 
+                     className="w-full bg-[#00D26A] hover:bg-[#00E575] active:scale-95 text-black font-black uppercase tracking-widest text-sm py-4 rounded-2xl transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                  >
+                     {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Pay £10.00 Now'}
+                  </button>
+              </div>
+          </div>
+        )}
+
       </AnimatePresence>
         </>
       ) : (
