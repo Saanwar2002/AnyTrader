@@ -10,6 +10,7 @@ import { GoogleGenAI } from "@google/genai";
 import jwt from "jsonwebtoken";
 import cron from "node-cron";
 import Stripe from 'stripe';
+import { startInstantMatchEngine } from "./instantMatchWorker.ts";
 
 dotenv.config();
 
@@ -48,7 +49,10 @@ const initFirebase = () => {
         
         // Immediate verification
         db.collection("users").limit(1).get()
-          .then(() => console.log(`Firestore connected to: ${dbId}`))
+          .then(() => {
+             console.log(`Firestore connected to: ${dbId}`);
+             if (db) startInstantMatchEngine(db);
+          })
           .catch(err => {
             // Code 7: Permission Denied indicates lack of Service Account credentials
             if (err.code === 7) {
@@ -653,12 +657,36 @@ async function startServer() {
         } else if (session.mode === 'payment') {
           if (session.metadata?.type === 'boost' && session.metadata?.jobId && db) {
             const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+            const isIM = session.metadata.tier === 'instant_match';
             await db.collection("jobs").doc(session.metadata.jobId).update({
               isBoosted: true,
+              boostTier: session.metadata.tier || 'emergency_boost',
               boostExpiresAt,
               postedDate: admin.firestore.FieldValue.serverTimestamp(),
+              isInstantMatch: isIM,
+              isEmergencyBoost: session.metadata.tier === 'emergency_boost',
               retryCount: 0
             });
+
+            if (isIM) {
+               const matchRef = db.collection("instant_matches").doc();
+               await matchRef.set({
+                 id: matchRef.id,
+                 jobId: session.metadata.jobId,
+                 customerId: userId || "",
+                 chargeAmountPence: session.amount_total || 299,
+                 chargeTier: "instant_match",
+                 feeWaived: false,
+                 status: "searching",
+                 currentAttempt: 0,
+                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                 searchingAt: admin.firestore.FieldValue.serverTimestamp()
+               });
+               await db.collection("jobs").doc(session.metadata.jobId).set({
+                  instantMatchId: matchRef.id,
+                  matchedViaInstantMatch: true
+               }, { merge: true });
+            }
           } else if (session.metadata?.type === 'milestone_funding' && session.metadata?.jobId && session.metadata?.quoteId && session.metadata?.milestoneId && db) {
             // Log successful funding of a milestone
             const { jobId, quoteId, milestoneId } = session.metadata;
@@ -828,12 +856,36 @@ async function startServer() {
              // For one-off payments like job boosts
              if (metadata.jobId && metadata.type === 'boost') {
                 const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+                const isIM = metadata.tier === 'instant_match';
                 await db.collection("jobs").doc(metadata.jobId).set({
                   isBoosted: true,
+                  boostTier: metadata.tier || 'emergency_boost',
                   boostExpiresAt,
                   postedDate: admin.firestore.FieldValue.serverTimestamp(),
+                  isInstantMatch: isIM,
+                  isEmergencyBoost: metadata.tier === 'emergency_boost',
                   retryCount: 0
                 }, { merge: true });
+
+                if (isIM) {
+                   const matchRef = db.collection("instant_matches").doc();
+                   await matchRef.set({
+                     id: matchRef.id,
+                     jobId: metadata.jobId,
+                     customerId: userId,
+                     chargeAmountPence: 299,
+                     chargeTier: "instant_match",
+                     feeWaived: false,
+                     status: "searching",
+                     currentAttempt: 0,
+                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                     searchingAt: admin.firestore.FieldValue.serverTimestamp()
+                   });
+                   await db.collection("jobs").doc(metadata.jobId).set({
+                      instantMatchId: matchRef.id,
+                      matchedViaInstantMatch: true
+                   }, { merge: true });
+                }
              }
            }
         }

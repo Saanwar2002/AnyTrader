@@ -1739,3 +1739,77 @@ Return a JSON array where each object has these fields:
     return [];
   }
 }
+
+export async function getDynamicInstantMatchPricing(
+  category: string,
+  title: string,
+  description: string
+): Promise<{ price: number; title: string; desc: string; bullets: { text: string }[] }> {
+  const prompt = `
+    You are the pricing and copy engine for the "Instant Match" feature on a UK tradesperson platform.
+    The customer is posting a job. Based on the urgency, job value, inconvenience, and psychological factors, you must determine the optimal price for the Instant Match fee (between £1.99 and £7.99) and generate persuasive marketing copy.
+
+    Guidelines for Pricing:
+    - EMERGENCY ("Fix This NOW"): e.g. Burst pipe, no heating, locked out. High urgency, panic. Price: £1.99 - £4.99 (Often lower to reduce friction in a panic, or slightly higher if the consequence of not fixing is very expensive).
+    - TIME PRESSURE ("I Need This Done TODAY"): e.g. Tenant moving in tomorrow, broken office AC. Hard deadline. Price: £1.99 - £4.99.
+    - CONVENIENCE ("I Just Don't Want to Deal With It"): e.g. Busy professional needs shelves put up, hates negotiating. Price: £1.99 - £2.99.
+    - HIGH-VALUE JOBS: e.g. Full kitchen refit, loft conversion, £30k extension. Price: £4.99 - £7.99. The fee is insignificant compared to the job size.
+
+    Job Details:
+    - Category: ${category}
+    - Title: ${title}
+    - Description: ${description}
+
+    Return a JSON object with:
+    - price: number (e.g. 2.99)
+    - title: string (e.g. "Immediate Rescue", "Secure the Best Pro", "Save Time & Hassle")
+    - desc: string (Persuasive description matching their psychological state. e.g. "Issues like this escalate quickly... Don't wait for quotes.")
+    - bullets: array of exactly 3 objects -> [ { "text": "Immediate pro assignment" }, ... ]
+  `;
+
+  try {
+    const result = await callGemini({
+      prompt,
+      model: "gemini-3-flash-preview",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            price: { type: Type.NUMBER },
+            title: { type: Type.STRING },
+            desc: { type: Type.STRING },
+            bullets: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: { text: { type: Type.STRING } },
+                required: ["text"]
+              }
+            }
+          },
+          required: ["price", "title", "desc", "bullets"]
+        }
+      }
+    });
+
+    const text = result.text;
+    if (text) {
+      return JSON.parse(text);
+    }
+  } catch (error) {
+    console.error("Gemini Dynamic Pricing Error:", error);
+  }
+
+  // Fallback
+  return {
+    price: 2.99,
+    title: "Instant Match",
+    desc: "Get peace of mind instantly! Our Instant Match directly secures a top-rated, fully vetted professional for your job.",
+    bullets: [
+      { text: "Skip the wait and quotes" },
+      { text: "Top-rated professionals only" },
+      { text: "Platform Guarantee covered" }
+    ]
+  };
+}

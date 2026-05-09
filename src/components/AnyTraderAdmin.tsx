@@ -4316,6 +4316,111 @@ export default function AnyTraderAdmin() {
                     </p>
                   </div>
 
+                  {/* Instant Match Engine Configuration */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <Zap className="w-4 h-4" /> Instant Match Engine configuration
+                      </h4>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Max Attempts Per Job</label>
+                        <input
+                          type="number"
+                          value={tempConfig.imMaxAttempts || 10}
+                          onChange={(e) => setTempConfig({ ...tempConfig, imMaxAttempts: parseInt(e.target.value) })}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white transition-all font-bold text-slate-900 outline-none"
+                        />
+                        <p className="text-[10px] text-slate-500">Maximum number of tradespeople to contact before giving up.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Attempt Interval (Seconds)</label>
+                        <input
+                          type="number"
+                          value={tempConfig.imAttemptIntervalSeconds || 60}
+                          onChange={(e) => setTempConfig({ ...tempConfig, imAttemptIntervalSeconds: parseInt(e.target.value) })}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white transition-all font-bold text-slate-900 outline-none"
+                        />
+                        <p className="text-[10px] text-slate-500">Time given for each contacted tradesperson to respond.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                         <div className="flex items-center justify-between mt-4">
+                           <label className="text-[10px] font-bold text-slate-400 uppercase">Require Emergency Toggle</label>
+                           <button 
+                              onClick={() => setTempConfig({ ...tempConfig, imRequireEmergencyToggle: !tempConfig.imRequireEmergencyToggle })}
+                              className={cn(
+                                "w-12 h-6 rounded-full relative transition-all",
+                                tempConfig.imRequireEmergencyToggle ? "bg-blue-600" : "bg-slate-200"
+                              )}
+                            >
+                              <div className={cn(
+                                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                                tempConfig.imRequireEmergencyToggle ? "right-1" : "left-1"
+                              )} />
+                            </button>
+                         </div>
+                         <p className="text-[10px] text-slate-500 mt-1">If enabled, only tradespeople currently marked 'Available for Emergency' will be pinged.</p>
+                      </div>
+                      <div className="space-y-2">
+                         <div className="flex items-center justify-between mt-4">
+                           <label className="text-[10px] font-bold text-slate-400 uppercase">Require Verified Profile</label>
+                           <button 
+                              onClick={() => setTempConfig({ ...tempConfig, imRequireVerified: !tempConfig.imRequireVerified })}
+                              className={cn(
+                                "w-12 h-6 rounded-full relative transition-all",
+                                tempConfig.imRequireVerified ? "bg-blue-600" : "bg-slate-200"
+                              )}
+                            >
+                              <div className={cn(
+                                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                                tempConfig.imRequireVerified ? "right-1" : "left-1"
+                              )} />
+                            </button>
+                         </div>
+                         <p className="text-[10px] text-slate-500 mt-1">If enabled, only fully vetted professionals will be considered.</p>
+                      </div>
+                      <div className="space-y-2">
+                         <div className="flex items-center justify-between mt-4">
+                           <label className="text-[10px] font-bold text-slate-400 uppercase">Require Category Match</label>
+                           <button 
+                              onClick={() => setTempConfig({ ...tempConfig, imRequireCategoryMatch: !tempConfig.imRequireCategoryMatch })}
+                              className={cn(
+                                "w-12 h-6 rounded-full relative transition-all",
+                                tempConfig.imRequireCategoryMatch ? "bg-blue-600" : "bg-slate-200"
+                              )}
+                            >
+                              <div className={cn(
+                                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                                tempConfig.imRequireCategoryMatch ? "right-1" : "left-1"
+                              )} />
+                            </button>
+                         </div>
+                         <p className="text-[10px] text-slate-500 mt-1">If enabled, tradesperson must be explicitly registered under the job's category.</p>
+                      </div>
+                      <div className="space-y-2">
+                         <div className="flex items-center justify-between mt-4">
+                           <label className="text-[10px] font-bold text-slate-400 uppercase">Require Tag/Skill Match</label>
+                           <button 
+                              onClick={() => setTempConfig({ ...tempConfig, imRequireTagMatch: !tempConfig.imRequireTagMatch })}
+                              className={cn(
+                                "w-12 h-6 rounded-full relative transition-all",
+                                tempConfig.imRequireTagMatch ? "bg-blue-600" : "bg-slate-200"
+                              )}
+                            >
+                              <div className={cn(
+                                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                                tempConfig.imRequireTagMatch ? "right-1" : "left-1"
+                              )} />
+                            </button>
+                         </div>
+                         <p className="text-[10px] text-slate-500 mt-1">If enabled, the tradesperson's profile tags/skills must appear in the job description or title.</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                       <Tag className="w-4 h-4" /> Advertising Settings

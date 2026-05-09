@@ -119,6 +119,21 @@ export default function JobDetails() {
   const [hasAutoDrafted, setHasAutoDrafted] = useState(false);
   const [hasRecurringSchedule, setHasRecurringSchedule] = useState(false);
   const [showMap, setShowMap] = useState(true);
+  const [showDigitalId, setShowDigitalId] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [imElapsedSeconds, setImElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (job?.status === "posted" && job?.boostTier === "instant_match") {
+      const interval = setInterval(() => {
+        const start = job.createdAt?.seconds ? job.createdAt.seconds * 1000 : Date.now();
+        setImElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [job?.status, job?.boostTier, job?.createdAt]);
 
   useEffect(() => {
     if (!id) return;
@@ -646,11 +661,13 @@ export default function JobDetails() {
       );
 
       // 2. Update the job status
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
       await updateDoc(doc(db, "jobs", id), {
         status: "accepted",
         acceptedTradespersonId: quote.tradespersonId,
         scheduledDate: quote.startDate || new Date().toISOString().split('T')[0],
-        isConfirmedByTradesperson: false
+        isConfirmedByTradesperson: false,
+        verificationPin: pin
       });
 
       // 3. Notify tradesperson to confirm
@@ -792,12 +809,22 @@ export default function JobDetails() {
 
   const handleStartJob = async () => {
     if (!id) return;
+    if (job.verificationPin) {
+      setShowPinModal(true);
+      return;
+    }
+    await confirmStartJob();
+  };
+
+  const confirmStartJob = async () => {
+    if (!id) return;
     setLoading(true);
     try {
       await updateDoc(doc(db, "jobs", id), {
         status: "in_progress"
       });
       setJob((prev: any) => ({ ...prev, status: "in_progress" }));
+      setShowPinModal(false);
       
       // Notify homeowner
       await sendNotification(
@@ -1594,7 +1621,8 @@ export default function JobDetails() {
   };
 
   const isHomeowner = user?.uid === job?.homeownerId;
-  const canSeeFullDetails = isHomeowner || quotes.find(q => q.status === "accepted")?.tradespersonId === user?.uid;
+  const isAssignedTrader = quotes.find(q => q.status === "accepted")?.tradespersonId === user?.uid || job?.acceptedTradespersonId === user?.uid;
+  const canSeeFullDetails = isHomeowner || isAssignedTrader;
   const hasQuoted = quotes.some(q => q.tradespersonId === user?.uid);
   const myQuote = quotes.find(q => q.tradespersonId === user?.uid);
   const needsRequote = myQuote?.status === "requote_requested";
@@ -1858,6 +1886,72 @@ export default function JobDetails() {
       </div>
 
       <div className="p-4 space-y-6">
+        {/* Instant Match Searching Banner */}
+        {isHomeowner && job.status === "posted" && job.boostTier === "instant_match" && (
+          <div className="bg-[#0f2c59] p-8 rounded-[2rem] space-y-6 shadow-2xl shadow-blue-900/40 relative overflow-hidden text-center flex flex-col items-center">
+             <div className="relative z-10 flex items-center justify-between w-full mb-2">
+                <h2 className="text-2xl font-bold text-white text-center w-full">Homeowner<br/>Matching Status</h2>
+             </div>
+
+             {/* Radar / Radio Waves Animation */}
+             <div className="relative w-64 h-64 flex items-center justify-center my-4 opacity-90">
+                <div className="absolute inset-0 border-2 border-orange-500/20 rounded-full animate-[ping_3s_linear_infinite]"></div>
+                <div className="absolute inset-4 border-2 border-orange-500/30 rounded-full animate-[ping_3s_linear_infinite]" style={{ animationDelay: '0.75s' }}></div>
+                <div className="absolute inset-8 border-2 border-orange-500/40 rounded-full animate-[ping_3s_linear_infinite]" style={{ animationDelay: '1.5s' }}></div>
+                <div className="absolute inset-12 border border-orange-500/40 rounded-full"></div>
+                <div className="absolute inset-20 border border-orange-500/60 rounded-full"></div>
+                {/* Radar Sweep */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-orange-500/10 to-orange-500/30 animate-spin" style={{ clipPath: 'polygon(50% 50%, 100% 0, 100% 100%)', animationDuration: '4s' }}></div>
+                
+                <div className="relative z-10 flex flex-col items-center justify-center space-y-1">
+                   <div className="relative">
+                      <svg className="w-8 h-8 text-orange-500 opacity-80 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 14a10 10 0 0 1 16 0"></path>
+                        <path d="M8 17a4 4 0 0 1 8 0"></path>
+                        <path d="M12 20v.01"></path>
+                      </svg>
+                   </div>
+                   <span className="text-5xl font-black tracking-tighter text-white drop-shadow-md">
+                     <span className="text-orange-500">{Math.floor((imElapsedSeconds % 3600) / 60).toString().padStart(2, '0')}</span>:{Math.floor(imElapsedSeconds % 60).toString().padStart(2, '0')}
+                   </span>
+                </div>
+             </div>
+
+             <div className="relative z-10 w-full px-4">
+               <p className="text-blue-100 text-[15px] font-medium max-w-xs mx-auto mb-6">
+                 Broadcasting your emergency request to the nearest 10 experts...
+               </p>
+             </div>
+
+             <div className="w-full space-y-3 relative z-10">
+                {/* Mock Traders being notified */}
+                {['Mike P.', 'Sarah L.', 'David K.'].map((name, i) => (
+                  <div key={i} className="bg-white rounded-[1.25rem] p-4 flex items-center justify-between shadow-lg">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-slate-200 overflow-hidden shrink-0 border-2 border-white shadow-sm">
+                         <img src={`https://i.pravatar.cc/150?u=${name}`} alt={name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold text-slate-900 text-[15px]">{name} <span className="text-slate-400 font-normal">- {job.category}</span></p>
+                        <div className="flex items-center gap-1 mt-0.5 text-slate-500 text-xs font-semibold">
+                          <Zap className="w-3 h-3 text-slate-400" />
+                          <span>{job.category}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-500">Notified...</span>
+                      <div className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+        )}
+
         {/* Confirmation Banner (Tradesperson) */}
         {!isHomeowner && job.status === "accepted" && !job.isConfirmedByTradesperson && (
           <div className="bg-indigo-600 text-white p-6 rounded-3xl space-y-4 shadow-xl shadow-indigo-100 relative overflow-hidden">
@@ -1899,6 +1993,27 @@ export default function JobDetails() {
                   Check my availability calendar
                   <ChevronRight className="w-3 h-3" />
                 </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Verification PIN Banner (Homeowner) */}
+        {isHomeowner && job.status === "accepted" && job.verificationPin && (
+          <div className="bg-indigo-600 text-white p-6 rounded-3xl space-y-4 shadow-xl shadow-indigo-100 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <ShieldCheck className="w-24 h-24" />
+            </div>
+            <div className="relative z-10">
+              <h3 className="text-xl font-black mb-2 tracking-tight">Identity Verification</h3>
+              <p className="text-sm text-indigo-100 leading-relaxed mb-4">
+                To ensure your safety, please provide the following 4-digit code to the trader upon arrival. They cannot start the job without it.
+              </p>
+              <div className="bg-white/10 p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-1">Verification PIN</p>
+                  <p className="text-4xl font-black font-mono tracking-[0.25em]">{job.verificationPin}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -3691,16 +3806,25 @@ export default function JobDetails() {
           </div>
         )}
 
-        {!isHomeowner && job.status === "accepted" && quotes.find(q => q.status === "accepted")?.tradespersonId === user?.uid && (
-          <button 
-            onClick={handleStartJob}
-            className="w-full bg-[#1e3a5f] text-white p-5 rounded-2xl font-bold hover:bg-blue-900 transition-all shadow-lg shadow-blue-100 active:scale-95"
-          >
-            Start Work
-          </button>
+        {!isHomeowner && job.status === "accepted" && isAssignedTrader && (
+          <div className="space-y-3">
+            <button 
+              onClick={() => setShowDigitalId(true)}
+              className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 active:scale-95"
+            >
+              <QrCode className="w-5 h-5" />
+              Show Digital ID Card
+            </button>
+            <button 
+              onClick={handleStartJob}
+              className="w-full bg-[#1e3a5f] text-white p-5 rounded-2xl font-bold hover:bg-blue-900 transition-all shadow-lg shadow-blue-100 active:scale-95"
+            >
+              Start Work
+            </button>
+          </div>
         )}
 
-        {!isHomeowner && job.status === "in_progress" && myQuote?.status === "accepted" && (
+        {!isHomeowner && job.status === "in_progress" && isAssignedTrader && (
           <div className="space-y-3">
             <button 
               onClick={() => setShowDisputeModal(true)}
@@ -4352,6 +4476,124 @@ export default function JobDetails() {
                     )}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* PIN Verification Modal */}
+      <AnimatePresence>
+        {showPinModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden shadow-indigo-900/20"
+            >
+              <div className="bg-indigo-600 p-6 text-center text-white relative">
+                <button
+                  onClick={() => setShowPinModal(false)}
+                  className="absolute top-4 right-4 text-white/70 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+                <div className="flex justify-center mb-4">
+                  <div className="bg-white p-3 rounded-2xl w-24 h-24 mb-2 shadow-inner">
+                    <ShieldCheck className="w-full h-full text-indigo-600" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-bold">Identity Verification</h3>
+                <p className="text-indigo-100 mt-1">Please enter the 4-digit PIN provided by the homeowner to start the job.</p>
+              </div>
+              
+              <div className="p-6 bg-slate-50 space-y-4">
+                <input
+                  autoFocus
+                  type="text"
+                  maxLength={4}
+                  value={enteredPin}
+                  onChange={(e) => {
+                    setPinError("");
+                    setEnteredPin(e.target.value.replace(/[^0-9]/g, ''));
+                  }}
+                  placeholder="0000"
+                  className="w-full text-center text-4xl font-mono tracking-[0.25em] font-black p-4 border-2 border-slate-200 rounded-2xl outline-none focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 transition-all"
+                />
+                {pinError && <p className="text-red-500 font-bold text-center text-sm">{pinError}</p>}
+              </div>
+              
+              <div className="p-4 flex flex-col gap-2 bg-white">
+                <button
+                  onClick={() => {
+                    if (enteredPin === job.verificationPin) {
+                      confirmStartJob();
+                    } else {
+                      setPinError("Incorrect PIN. Please try again.");
+                    }
+                  }}
+                  disabled={enteredPin.length !== 4 || loading}
+                  className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify & Start Work"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Digital ID Card Modal */}
+      <AnimatePresence>
+        {showDigitalId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden shadow-blue-900/20"
+            >
+              <div className="bg-blue-600 p-6 text-center text-white relative">
+                <button
+                  onClick={() => setShowDigitalId(false)}
+                  className="absolute top-4 right-4 text-white/70 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+                <div className="flex justify-center mb-4">
+                  <div className="bg-white p-2 rounded-2xl w-24 h-24 mb-2 shadow-inner">
+                    <QrCode className="w-full h-full text-blue-600" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-bold">{profile?.firstName} {profile?.lastName}</h3>
+                <p className="text-blue-100 mt-1">{profile?.category || "Professional Trader"}</p>
+              </div>
+              
+              <div className="p-6 bg-slate-50 space-y-4">
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-slate-900">AnyTrader Verified</h4>
+                    <p className="text-xs text-slate-500">ID Verification Complete</p>
+                  </div>
+                  <ShieldCheck className="w-8 h-8 text-green-500" />
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-100">
+                  <h4 className="font-bold text-slate-900 text-sm mb-2">Job Information</h4>
+                  <p className="text-xs text-slate-600"><strong>Job ID:</strong> #{job.jobNo || job.id.slice(0,6)}</p>
+                  <p className="text-xs text-slate-600 mt-1"><strong>Scheduled:</strong> {job.scheduledDate || "ASAP"}</p>
+                </div>
+              </div>
+              
+              <div className="p-4 flex flex-col gap-2 bg-white">
+                <p className="text-[10px] text-center text-slate-400 mb-2 font-medium">Show this screen to the homeowner upon arrival to verify your identity.</p>
+                <button
+                  onClick={() => setShowDigitalId(false)}
+                  className="w-full py-4 font-bold text-blue-600 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
+                >
+                  Done
+                </button>
               </div>
             </motion.div>
           </div>

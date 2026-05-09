@@ -411,10 +411,10 @@ export default function FindTrades() {
               key={opt}
               onClick={() => setSortBy(opt)}
               className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all",
+                "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border-2 border-black transition-all",
                 sortBy === opt 
-                  ? "bg-[#1e293b] text-white border-[#1e293b]" 
-                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                  ? "bg-[#1e293b] text-white" 
+                  : "bg-white text-slate-900 hover:bg-slate-50"
               )}
             >
               {opt}
@@ -682,7 +682,7 @@ export default function FindTrades() {
               </div>
 
               {/* Badges & Trust Signals */}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100/50">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border-2 border-black">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
                   <span className="text-[10px] font-bold text-slate-800 tracking-tight">Available this week</span>
@@ -697,7 +697,7 @@ export default function FindTrades() {
                   {searchFeedBadgeObjects.map((badge: any) => {
                     const Icon = { ShieldCheck, Clock, FileText, Shield, CheckCircle, MapPin, Heart, Star }[badge.icon as string] as any;
                     return (
-                      <div key={badge.id} className="flex items-center gap-1 px-2 py-1 bg-indigo-50 border border-indigo-100 rounded-lg shrink-0">
+                      <div key={badge.id} className="flex items-center gap-1 px-2 py-1 bg-indigo-50 border-2 border-black rounded-lg shrink-0">
                         <Icon className="w-3 h-3 text-indigo-600" />
                         <span className="text-[9px] font-black text-indigo-900 uppercase tracking-widest">{badge.name}</span>
                       </div>
@@ -707,7 +707,7 @@ export default function FindTrades() {
               )}
 
               {/* Click Affordance */}
-              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-center cursor-pointer">
+              <div className="mt-3 pt-3 border-t-2 border-black flex items-center justify-center cursor-pointer">
                  <span className="text-xs font-bold text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                    View Profile & Quotes <ChevronRight className="w-3 h-3" />
                  </span>
@@ -754,14 +754,14 @@ export default function FindTrades() {
               
               <button 
                 onClick={() => setSelectedTraderPreview(null)}
-                className="absolute top-4 right-4 w-9 h-9 bg-slate-100/80 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500 transition-colors z-10 border border-slate-200 border-b-slate-300"
+                className="absolute top-4 right-4 w-9 h-9 bg-slate-100/80 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500 transition-colors z-10 border-2 border-black"
               >
                 <X className="w-5 h-5" />
               </button>
 
               <div className="flex-1 overflow-y-auto px-6 pb-24 no-scrollbar">
                 <div className="flex gap-4 mb-6 pt-2">
-                  <div className="w-24 h-24 bg-slate-800 rounded-2xl shrink-0 overflow-hidden shadow-sm border border-slate-100">
+                  <div className="w-24 h-24 bg-slate-800 rounded-2xl shrink-0 overflow-hidden shadow-sm border-2 border-black">
                     {selectedTraderPreview.avatarUrl ? (
                       <img src={selectedTraderPreview.avatarUrl} alt={selectedTraderPreview.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
@@ -791,21 +791,21 @@ export default function FindTrades() {
 
                 {/* Trust Stats */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
+                  <div className="bg-slate-50 border-2 border-black rounded-2xl p-3 text-center">
                     <p className="text-lg font-black text-slate-900">{selectedTraderPreview.trustScore || 96}%</p>
                     <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Completion</p>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
+                  <div className="bg-slate-50 border-2 border-black rounded-2xl p-3 text-center">
                     <p className="text-lg font-black text-slate-900">{selectedTraderPreview.totalJobsDone || 12}</p>
                     <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Jobs Done</p>
                   </div>
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
+                  <div className="bg-slate-50 border-2 border-black rounded-2xl p-3 text-center">
                     <p className="text-lg font-black text-slate-900">&lt; {Math.floor(Math.random() * 45) + 15}m</p>
                     <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Avg Reply</p>
                   </div>
                 </div>
 
-                <p className="text-sm text-slate-700 leading-relaxed font-medium mb-6 bg-slate-50 p-4 rounded-2xl italic border border-slate-100">
+                <p className="text-sm text-slate-700 leading-relaxed font-medium mb-6 bg-slate-50 p-4 rounded-2xl italic border-2 border-black">
                   {selectedTraderPreview.bio ? `"${selectedTraderPreview.bio.substring(0, 140)}${selectedTraderPreview.bio.length > 140 ? '...' : ''}"` : '"Professional tradesman with years of experience. Fully qualified and insured for your peace of mind."'}
                 </p>
 
@@ -817,7 +817,7 @@ export default function FindTrades() {
                   <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                     {/* Placeholder images for high-tier architectural feel */}
                     {[1, 2, 3, 4, 5, 6].map(idx => (
-                      <div key={idx} className="w-28 h-28 shrink-0 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden relative group">
+                      <div key={idx} className="w-28 h-28 shrink-0 rounded-2xl bg-slate-100 border-2 border-black overflow-hidden relative group">
                         <img src={`https://picsum.photos/seed/${selectedTraderPreview.uid}${idx}/300/300`} alt="Portfolio Work" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                            <Search className="w-6 h-6 text-white" />
@@ -833,14 +833,14 @@ export default function FindTrades() {
                     <Star className="w-3 h-3 text-slate-400" /> Top Reviews
                   </h4>
                   <div className="space-y-3">
-                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                    <div className="bg-slate-50 border-2 border-black p-4 rounded-2xl">
                       <div className="flex items-center gap-1 mb-2">
                         {Array(5).fill(0).map((_, i) => <Star key={i} className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />)}
                       </div>
                       <p className="text-sm text-slate-700 font-medium italic mb-2">"Arrived on time, fixed the issue incredibly fast, and left the place spotless. Highly recommended!"</p>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mark S. — 2 weeks ago</p>
                     </div>
-                     <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                     <div className="bg-slate-50 border-2 border-black p-4 rounded-2xl">
                       <div className="flex items-center gap-1 mb-2">
                         {Array(5).fill(0).map((_, i) => <Star key={i} className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />)}
                       </div>
@@ -853,7 +853,7 @@ export default function FindTrades() {
                 <div className="flex justify-center mt-8 pb-4">
                    <Link 
                      to={`/profile/${selectedTraderPreview.uid}`}
-                     className="bg-slate-100 text-slate-700 px-6 py-3 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2 border border-slate-200"
+                     className="bg-slate-100 text-slate-700 px-6 py-3 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2 border-2 border-black"
                    >
                      View Full Profile <ChevronRight className="w-3 h-3" />
                    </Link>
@@ -861,7 +861,7 @@ export default function FindTrades() {
               </div>
 
               {/* Fixed Bottom Action Bar */}
-              <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 pb-8 flex items-center gap-4 justify-between shadow-[0_-10px_20px_rgba(0,0,0,0.03)]">
+              <div className="absolute bottom-0 left-0 right-0 bg-white border-t-2 border-black p-4 pb-8 flex items-center gap-4 justify-between shadow-[0_-10px_20px_rgba(0,0,0,0.03)]">
                 <div className="hidden sm:block">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Typical Range</p>
                   <p className="text-lg font-black text-slate-900">£150 - £250</p>
@@ -971,8 +971,8 @@ export default function FindTrades() {
                     className={cn(
                       "w-full p-5 rounded-2xl border-2 flex items-center justify-between transition-all",
                       tempVerifiedOnly 
-                        ? "border-blue-600 bg-blue-50" 
-                        : "border-slate-100 bg-white"
+                        ? "border-black bg-blue-50" 
+                        : "border-black bg-white"
                     )}
                   >
                     <div className="flex items-center gap-3">
@@ -996,8 +996,8 @@ export default function FindTrades() {
                   </button>
 
                   <div className={cn(
-                    "p-5 rounded-3xl border-2 transition-all space-y-4",
-                    tempPostcodeFilterEnabled ? "border-blue-600 bg-blue-50/30" : "border-slate-100 bg-white"
+                    "p-5 rounded-3xl border-2 border-black transition-all space-y-4",
+                    tempPostcodeFilterEnabled ? "bg-blue-50/30" : "bg-white"
                   )}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -1035,7 +1035,7 @@ export default function FindTrades() {
                           placeholder="e.g. HD, HD1, M"
                           value={tempPostcodeFilterValue}
                           onChange={(e) => setTempPostcodeFilterValue(e.target.value.toUpperCase())}
-                          className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-900"
+                          className="w-full bg-white border-2 border-black px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-900"
                         />
                       </motion.div>
                     )}

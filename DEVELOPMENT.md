@@ -345,7 +345,21 @@ The prefix is determined by the user's primary registration role:
     *   *Progressive Disclosure:* The optional comment text area is deliberately hidden unless the passenger drops the rating strictly below 5 stars to keep the default completion path rapid.
     *   *Robust State Management:* Re-coupled standard timestamp components and safely captured the `currentRideId` mapping for completed jobs ensuring zero data mismatches upon submission.
     
-## 🚕 Phase 17: Booking Page UX Enhancements (Completed May 02, 2026)
+## 🏎️ Phase 18: Instant Match & Emergency Engine (Completed May 08, 2026)
+*   **The Mission:** Introduce the Instant Match background engine to automatically pair emergency jobs with elite verified professionals within 60 seconds of successful Stripe payment.
+*   **Engine Implementation (`server.ts` & `instantMatchWorker.ts`):**
+    *   Created `startInstantMatchEngine` that polls `instant_matches` every 5 seconds.
+    *   Auto-creates attempt documents in `instant_match_attempts` collection.
+    *   Cycles through available traders if previous traders decline or timeout after 60s.
+    *   **Dynamically respects admin config from `platform_config/global`** (configurable max attempts, attempt intervals, and strict trader eligibility criteria like emergency availability and verification status).
+*   **UI Implementation (`TradesDashboard.tsx` & `AnyTraderAdmin.tsx`):**
+    *   Wired `InstantMatchTraderAlert` direct to real-time `onSnapshot` queries for active attempts targeted at the user.
+    *   Implemented `expiresAt` prop for precise countdown bridging across navigation re-renders.
+    *   Added seamless Firestore status transitions (pending -> accepted/declined/timeout) mapping securely between `instant_match_attempts` and `instant_matches`.
+    *   **Added Instant Match Engine configuration panel in the Master Admin dashboard for fine-grained control over broadcasting timings and trader inclusion rules.**
+*   **Security & Data Integrity (`firestore.rules`):**
+    *   Safely permitted the Trader to update attempts targeted at their own user ID.
+    *   Promoted `instant_match_attempts` to a unified top-level collection to bypass lack of active subcollection group indices within the AI sandbox.
 *   **Booking Layout Resizing & Dynamic Views:**
     *   *Implementation:* Refactored `PassengerBooking.tsx` to explicitly define an absolute Google Maps wrapper constrained to `relative h-[50dvh]`. The main information sheets (details, searching, confirmed, receipt) are placed in a `flex-1` bottom container and stretch to take the remaining `h-[50dvh]`. Bottom padding `pb-[calc(5.5rem...)]` added explicitly to the internal scrollable content areas.
     *   *Behavior adjustments:* The map no longer floats absolutely but is a structural part of a vertically split `flex-col` layout, enforcing a strict 50/50 ratio. The content cards dynamically fill the lower half, but padding ensures content remains scrollable without being hidden by the sticky bottom nav bar.

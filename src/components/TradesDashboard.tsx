@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { 
-  collection, query, where, orderBy, onSnapshot, db, collectionGroup, handleFirestoreError, OperationType, limit, updateDoc, doc
+  collection, query, where, orderBy, onSnapshot, db, collectionGroup, handleFirestoreError, OperationType, limit, updateDoc, doc, getDoc
 } from "@/src/firebase";
 import { getRecommendedJobs } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
@@ -10,9 +10,10 @@ import {
   Briefcase, Clock, MessageSquare, CheckCircle2, 
   ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus,
   Image as ImageIcon, Video as VideoIcon, Loader2, MapPin, Share2, Calendar, X, Info, Award, ArrowRight,
-  ChevronDown, ChevronUp, Activity
+  ChevronDown, ChevronUp, Activity, XCircle, AlertCircle
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import MediaGalleryModal from "./MediaGalleryModal";
@@ -21,6 +22,7 @@ import { SEO } from "./SEO";
 import PartnerPerks from "./PartnerPerks";
 import PartnerAdvertisement from "./shared/PartnerAdvertisement";
 import { getRegionalDemandData, RegionalDemand } from "@/src/services/demandHeatmapService";
+import { InstantMatchTraderAlert } from "./InstantMatchTraderAlert";
 
 const iconMap: Record<string, any> = {
   Briefcase, Clock, MessageSquare, CheckCircle2, ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus, ImageIcon, VideoIcon
@@ -28,6 +30,8 @@ const iconMap: Record<string, any> = {
 
 export default function TradesDashboard() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const [showTestAlert, setShowTestAlert] = useState(false);
   const [activeQuotes, setActiveQuotes] = useState<any[]>([]);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
   const [postedJobs, setPostedJobs] = useState<any[]>([]);
@@ -46,6 +50,12 @@ export default function TradesDashboard() {
   const [projectTab, setProjectTab] = useState<"active" | "upcoming">("active");
   const [confirmingEmergency, setConfirmingEmergency] = useState(false);
   const [showEmergencyToast, setShowEmergencyToast] = useState(false);
+  
+  const [showInstantMatchSetup, setShowInstantMatchSetup] = useState(false);
+  const [imSetupData, setImSetupData] = useState({ callOutFee: "", hourlyRate: "", terms: "" });
+  const [confirmingIM, setConfirmingIM] = useState(false);
+  const [showIMToast, setShowIMToast] = useState(false);
+  const [isSavingIM, setIsSavingIM] = useState(false);
   const [profitability, setProfitability] = useState<any>(null);
   const [showProfitabilityInfo, setShowProfitabilityInfo] = useState(false);
   const [showSavingsInfo, setShowSavingsInfo] = useState(true);
@@ -109,6 +119,97 @@ export default function TradesDashboard() {
   const [exclusiveCheckoutError, setExclusiveCheckoutError] = useState<string | null>(null);
 
   const [sysConfig, setSysConfig] = useState<any>(null);
+
+  // Instant Match Alert State
+  const [activeIMAttempt, setActiveIMAttempt] = useState<any | null>(null);
+  const [activeIMJob, setActiveIMJob] = useState<any | null>(null);
+  const [showIMAlert, setShowIMAlert] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(query(
+      collection(db, "instant_match_attempts"),
+      where("traderId", "==", user.uid),
+      where("status", "in", ["pending", "notified"])
+    ), async (snap) => {
+      if (!snap.empty) {
+        const attemptArray = snap.docs.map(d => ({id: d.id, ...d.data()} as any));
+        // Sort by attempt number descending just in case, though there should only be one active
+        attemptArray.sort((a: any, b: any) => b.attemptNumber - a.attemptNumber);
+        const attempt = attemptArray[0];
+        
+        // Fetch Job Details
+        try {
+          const matchDoc = await getDoc(doc(db, "instant_matches", attempt.instantMatchId));
+          if (matchDoc.exists() && matchDoc.data().jobId) {
+             const jobDoc = await getDoc(doc(db, "jobs", matchDoc.data().jobId));
+             if (jobDoc.exists()) {
+                setActiveIMJob({id: jobDoc.id, ...jobDoc.data()});
+                setActiveIMAttempt(attempt);
+                setShowIMAlert(true);
+             }
+          }
+        } catch (e) {
+          console.error("Failed to load instant match job details:", e);
+        }
+      } else {
+        setShowIMAlert(false);
+        setActiveIMAttempt(null);
+        setActiveIMJob(null);
+      }
+    });
+    return () => unsub();
+  }, [user]);
+
+  const handleAcceptIM = async () => {
+    if (!activeIMAttempt || !activeIMJob) return;
+    try {
+      setShowIMAlert(false);
+      
+      // Update Attempt
+      await updateDoc(doc(db, "instant_match_attempts", activeIMAttempt.id), {
+        status: "accepted",
+        respondedAt: new Date().toISOString()
+      });
+
+      // Update Match Match
+      await updateDoc(doc(db, "instant_matches", activeIMAttempt.instantMatchId), {
+        status: "matched",
+        matchedTraderId: user?.uid,
+        matchedAt: new Date().toISOString()
+      });
+
+      // Update the Job itself to bypass quote process
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+      await updateDoc(doc(db, "jobs", activeIMJob.id), {
+        status: "accepted",
+        acceptedTradespersonId: user?.uid,
+        isInstantMatchAccepted: true, // Custom flag if we want it
+        verificationPin: pin
+      });
+      
+      toast.success("Instant Match accepted! Please contact the customer immediately.");
+      navigate(`/job/${activeIMJob.id}`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to accept. It may have expired.");
+    }
+  };
+
+  const handleDeclineIM = async () => {
+    if (!activeIMAttempt) return;
+    setShowIMAlert(false);
+    try {
+      await updateDoc(doc(db, "instant_match_attempts", activeIMAttempt.id), {
+        status: "declined",
+        respondedAt: new Date().toISOString()
+      });
+      setActiveIMAttempt(null);
+      setActiveIMJob(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const getExclusivePrice = () => {
     const tier = profile?.tierId || "Basic";
@@ -707,23 +808,29 @@ export default function TradesDashboard() {
             <p className="text-slate-500 font-medium mt-1">Manage your quotes and active projects.</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           {/* Toggles Container */}
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto -mx-1 px-1 sm:mx-0 sm:px-0 scrollbar-hide">
+            {/* Test Alert Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowTestAlert(true)}
+              className="flex items-center gap-1.5 bg-zinc-900 text-white px-3 h-9 rounded-2xl shadow-sm hover:bg-zinc-800 transition-colors shrink-0"
+            >
+              <Zap className="w-3.5 h-3.5 text-red-500 fill-red-500" />
+              <span className="text-[10px] font-bold truncate">Test IM Alert</span>
+            </button>
+
             {/* Emergency Toggle */}
-            <div className="flex items-center gap-1.5 bg-white px-2.5 h-9 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-1.5 bg-white px-2.5 h-9 rounded-2xl border border-slate-200 shadow-sm shrink-0">
               <Zap className={cn("w-3.5 h-3.5", profile?.isAvailableForEmergency ? "text-red-500" : "text-slate-400")} />
-              <span className="text-[10px] font-bold text-slate-700 truncate">Emergency Offers</span>
+              <span className="text-[10px] font-bold text-slate-700 truncate">Emergency</span>
               <button 
                 type="button"
                 onClick={async (e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log("Emergency toggle button clicked");
-                  if (!user) {
-                    console.log("No user found");
-                    return;
-                  }
+                  if (!user) return;
                   if (!confirmingEmergency) {
                     setConfirmingEmergency(true);
                     setShowEmergencyToast(true);
@@ -737,10 +844,9 @@ export default function TradesDashboard() {
                     await updateDoc(doc(db, "users", user.uid), {
                       isAvailableForEmergency: !profile?.isAvailableForEmergency
                     });
-                    console.log("Emergency status updated successfully");
                   } catch (error) {
                     console.error("Error updating emergency status:", error);
-                    alert("Unable to update emergency status. Please try again later. If this persists, you may have reached your usage limit.");
+                    alert("Unable to update emergency status.");
                   }
                 }}
                 className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingEmergency ? 'bg-amber-400' : (profile?.isAvailableForEmergency ? 'bg-red-500' : 'bg-slate-200')}`}
@@ -749,9 +855,51 @@ export default function TradesDashboard() {
               </button>
             </div>
 
+            {/* Instant Match Toggle */}
+            <div className="flex items-center gap-1.5 bg-white px-2.5 h-9 rounded-2xl border border-slate-200 shadow-sm shrink-0">
+              <Zap className={cn("w-3.5 h-3.5", profile?.isAvailableForInstantMatch ? "text-amber-500" : "text-slate-400")} />
+              <span className="text-[10px] font-bold text-slate-700 truncate">Instant Match</span>
+              <button 
+                type="button"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!user) return;
+                  
+                  // If turning on and no pricing set, show setup
+                  if (!profile?.isAvailableForInstantMatch && (!profile?.instantMatchPricing || !profile?.instantMatchPricing.callOutFee)) {
+                    setImSetupData(profile?.instantMatchPricing || { callOutFee: "", hourlyRate: "", terms: "" });
+                    setShowInstantMatchSetup(true);
+                    return;
+                  }
+
+                  if (!confirmingIM) {
+                    setConfirmingIM(true);
+                    setShowIMToast(true);
+                    setTimeout(() => setShowIMToast(false), 3000);
+                    setTimeout(() => setConfirmingIM(false), 3000);
+                    return;
+                  }
+                  setConfirmingIM(false);
+                  setShowIMToast(false);
+                  try {
+                    await updateDoc(doc(db, "users", user.uid), {
+                      isAvailableForInstantMatch: !profile?.isAvailableForInstantMatch
+                    });
+                  } catch (error) {
+                    console.error("Error updating Instant Match status:", error);
+                    alert("Unable to update Instant Match status.");
+                  }
+                }}
+                className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingIM ? 'bg-amber-400' : (profile?.isAvailableForInstantMatch ? 'bg-amber-500' : 'bg-slate-200')}`}
+              >
+                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${profile?.isAvailableForInstantMatch ? 'translate-x-7' : 'translate-x-1'}`} />
+              </button>
+            </div>
+
             {/* Exclusive Job Offers Toggle */}
             {sysConfig?.paywallEnabled !== false && (
-              <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 px-2.5 h-9 rounded-2xl border border-amber-200 shadow-sm relative overflow-hidden">
+              <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 px-2.5 h-9 rounded-2xl border border-amber-200 shadow-sm relative overflow-hidden shrink-0">
                 <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
                 <span className="text-[10px] font-black uppercase text-amber-900 tracking-tight">Priority Offers</span>
                 <button 
@@ -785,48 +933,51 @@ export default function TradesDashboard() {
             )}
           </div>
 
-          {/* Share Button */}
-          <button 
-            onClick={async () => {
-              if (!user) return;
-              const profileUrl = `${window.location.origin}/profile/${user.uid}`;
-              try {
-                if (navigator.share) {
-                  await navigator.share({
-                    title: `${profile?.name} on AnyTrader`,
-                    text: `Check out my profile on AnyTrader!`,
-                    url: profileUrl,
-                  });
-                } else {
-                  await navigator.clipboard.writeText(profileUrl);
-                  alert('Profile link copied to clipboard!');
+          {/* Actions Container */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* Share Button */}
+            <button 
+              onClick={async () => {
+                if (!user) return;
+                const profileUrl = `${window.location.origin}/profile/${user.uid}`;
+                try {
+                  if (navigator.share) {
+                    await navigator.share({
+                      title: `${profile?.name} on AnyTrader`,
+                      text: `Check out my profile on AnyTrader!`,
+                      url: profileUrl,
+                    });
+                  } else {
+                    await navigator.clipboard.writeText(profileUrl);
+                    alert('Profile link copied to clipboard!');
+                  }
+                } catch (err: any) {
+                  if (err.name === 'AbortError') {
+                    console.log('Sharing canceled by user');
+                    return;
+                  }
+                  console.error('Error sharing:', err);
                 }
-              } catch (err: any) {
-                if (err.name === 'AbortError') {
-                  console.log('Sharing canceled by user');
-                  return;
-                }
-                console.error('Error sharing:', err);
-              }
-            }}
-            className="bg-white text-slate-700 border border-slate-200 px-4 h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
-          >
-            <Share2 className="w-4 h-4 text-blue-600" />
-            Share
-          </button>
+              }}
+              className="bg-white text-slate-700 border border-slate-200 h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm"
+            >
+              <Share2 className="w-4 h-4 text-blue-600" />
+              Share
+            </button>
 
-          {/* Availability Button */}
-          <Link 
-            to="/availability"
-            className="bg-white text-slate-700 border border-slate-200 px-4 h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
-          >
-            <Calendar className="w-4 h-4 text-blue-600" />
-            Set Availability
-          </Link>
+            {/* Availability Button */}
+            <Link 
+              to="/availability"
+              className="bg-white text-slate-700 border border-slate-200 h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm"
+            >
+              <Calendar className="w-4 h-4 text-blue-600" />
+              Set Availability
+            </Link>
+          </div>
 
           <Link 
             to="/job-feed" 
-            className="bg-primary text-white px-6 h-11 rounded-2xl font-bold hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95"
+            className="bg-primary text-white h-11 px-6 rounded-2xl font-bold hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex w-full sm:w-auto items-center justify-center gap-2 active:scale-95"
           >
             <Briefcase className="w-5 h-5" />
             Find Jobs
@@ -1318,6 +1469,163 @@ export default function TradesDashboard() {
           </div>
         )}
       </AnimatePresence>
+      {/* Instant Match Trader Alert Demo */}
+      <AnimatePresence>
+        {showTestAlert && (
+          <InstantMatchTraderAlert 
+            job={{ id: '1', title: 'Burst Pipe', location: { address: 'Peckham, SE15' }, assetName: 'Main House' }}
+            expiresAt={new Date(Date.now() + 60000).toISOString()}
+            onAccept={() => {
+              alert('Job Accepted!');
+              setShowTestAlert(false);
+            }}
+            onDecline={() => setShowTestAlert(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Actual Instant Match Worker Notification */}
+      <AnimatePresence>
+        {showIMAlert && activeIMJob && activeIMAttempt && (
+          <InstantMatchTraderAlert 
+            job={activeIMJob}
+            expiresAt={activeIMAttempt.expiresAt}
+            onAccept={handleAcceptIM}
+            onDecline={handleDeclineIM}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showIMToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[110] bg-[#1e293b] text-white px-6 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 whitespace-nowrap"
+          >
+            <Zap className="w-5 h-5 text-amber-500" />
+            <p className="text-sm font-bold">Tap again to confirm Instant Match</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Instant Match Setup Modal */}
+      <AnimatePresence>
+        {showInstantMatchSetup && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setShowInstantMatchSetup(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-amber-500" />
+                    Instant Match Setup
+                  </h3>
+                  <p className="text-sm text-slate-500 font-medium mt-1">Set your emergency response rates</p>
+                </div>
+                <button
+                  onClick={() => setShowInstantMatchSetup(false)}
+                  className="p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Call-Out Fee (£)</label>
+                    <input 
+                      type="number"
+                      value={imSetupData.callOutFee}
+                      onChange={e => setImSetupData({ ...imSetupData, callOutFee: e.target.value })}
+                      placeholder="e.g. 50"
+                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-2xl px-4 font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
+                    />
+                    <p className="text-xs text-slate-500 mt-1.5 px-1">Fixed fee just to arrive on site in an emergency.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Hourly Rate (£/hr)</label>
+                    <input 
+                      type="number"
+                      value={imSetupData.hourlyRate}
+                      onChange={e => setImSetupData({ ...imSetupData, hourlyRate: e.target.value })}
+                      placeholder="e.g. 80"
+                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-2xl px-4 font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
+                    />
+                    <p className="text-xs text-slate-500 mt-1.5 px-1">Charge per hour for subsequent emergency repair work.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Terms &amp; Conditions</label>
+                    <textarea 
+                      value={imSetupData.terms}
+                      onChange={e => setImSetupData({ ...imSetupData, terms: e.target.value })}
+                      placeholder="e.g. Rate excludes materials. Client must be present to provide access."
+                      className="w-full min-h-[100px] bg-slate-50 border border-slate-200 rounded-2xl p-4 font-medium text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors resize-y"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200/50 rounded-2xl p-4">
+                  <h4 className="font-bold text-amber-900 text-sm mb-2 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" />
+                    How Instant Matches Work
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-amber-800/80 font-medium list-disc pl-4">
+                    <li>This pricing is shown to homeowners when they request an emergency instant match.</li>
+                    <li>Because they accept these rates upfront, there is no negotiation phase.</li>
+                    <li>You must be ready to deploy immediately if you accept a match.</li>
+                    <li>Repeated cancellations after accepting will disable this feature.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-100">
+                <button
+                  disabled={isSavingIM || !imSetupData.callOutFee || !imSetupData.hourlyRate}
+                  onClick={async () => {
+                    setIsSavingIM(true);
+                    try {
+                      await updateDoc(doc(db, "users", user!.uid), {
+                        instantMatchPricing: {
+                           callOutFee: Number(imSetupData.callOutFee),
+                           hourlyRate: Number(imSetupData.hourlyRate),
+                           terms: imSetupData.terms || ""
+                        },
+                        isAvailableForInstantMatch: true
+                      });
+                      setShowInstantMatchSetup(false);
+                    } catch (error) {
+                      console.error("Failed to save instant match settings", error);
+                      alert("Error saving settings.");
+                    } finally {
+                      setIsSavingIM(false);
+                    }
+                  }}
+                  className="w-full h-12 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 disabled:bg-slate-300 text-white rounded-2xl font-black transition-colors flex items-center justify-center gap-2"
+                >
+                  {isSavingIM ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save & Enable Instant Match"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

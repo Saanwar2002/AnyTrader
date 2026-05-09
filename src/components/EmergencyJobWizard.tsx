@@ -9,6 +9,7 @@ import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { AnimatePresence, motion } from "framer-motion";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { getInstantMatchCopy } from "@/src/lib/boosts";
 
 const libraries: any[] = ['places'];
 
@@ -43,6 +44,25 @@ export default function EmergencyJobWizard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [instantMatchCopy, setInstantMatchCopy] = useState<any>(getInstantMatchCopy(formData.category || ""));
+
+  React.useEffect(() => {
+    if (step === 2 && formData.category && formData.description) {
+      import("@/src/services/gemini").then((gemini) => {
+        gemini.getDynamicInstantMatchPricing(formData.category, "Emergency Request", formData.description)
+        .then(res => {
+           if (res) {
+             setInstantMatchCopy({
+               price: res.price,
+               title: res.title,
+               desc: res.desc,
+               bullets: res.bullets.map((b: any) => ({ ...b, icon: Sparkles, color: "text-amber-500" })) // Sparkles imported
+             });
+           }
+        });
+      });
+    }
+  }, [step, formData.category, formData.description]);
 
   const [addressSuggestions, setAddressSuggestions] = useState<Array<{label: string, placeId: string, placePrediction: any}>>([]);
   const [addressSuggestionTimeout, setAddressSuggestionTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -715,9 +735,11 @@ export default function EmergencyJobWizard() {
               </div>
               <div className="flex-1 pr-6">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">£2.99</span></h4>
+                  <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">£{(instantMatchCopy?.price || 2.99).toFixed(2)}</span></h4>
                 </div>
-                <p className="text-xs text-black font-semibold line-clamp-2">Get matched with a top-rated, fully vetted professional immediately. Guaranteed availability and priority routing.</p>
+                <p className="text-xs text-black font-semibold line-clamp-2">
+                  {instantMatchCopy?.bullets?.map((b: any) => b.text).join(" • ")}
+                </p>
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); setShowBoostInfo('instant'); }}
@@ -740,7 +762,7 @@ export default function EmergencyJobWizard() {
                 <div className="flex items-center justify-between px-2">
                   <span className="text-xs font-extrabold text-black uppercase">Total Fee</span>
                   <span className="text-lg font-black text-red-600">
-                    £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? 2.99 : 0)).toFixed(2)}
+                    £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
                   </span>
                 </div>
               )}
@@ -807,7 +829,7 @@ export default function EmergencyJobWizard() {
                   <div className="text-right">
                     <p className="text-xs font-bold text-slate-500 uppercase">One-time</p>
                     <p className="text-xl font-black text-red-600">
-                      £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? 2.99 : 0)).toFixed(2)}
+                      £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -868,12 +890,12 @@ export default function EmergencyJobWizard() {
               
               <div className="space-y-4 flex-1">
                 <h3 className="text-2xl font-black text-slate-900 leading-tight">
-                  {showBoostInfo === 'emergency' ? "Emergency Boost" : "Instant Match"}
+                  {showBoostInfo === 'emergency' ? "Emergency Boost" : instantMatchCopy?.title}
                 </h3>
                 <p className="text-slate-600 text-sm leading-relaxed">
                   {showBoostInfo === 'emergency' ? 
                    "Jump the queue! The Emergency Boost (£5) pins your job listing to the top of all local tradespeople's feeds and sends them an immediate push notification alert, bypassing normal delays." : 
-                   "Get peace of mind instantly! For £2.99, our Instant Match directly secures a top-rated, fully vetted professional for your job. They will contact you immediately to arrange the visit without you having to review quotes, guaranteeing reliability."
+                   instantMatchCopy?.desc
                   }
                 </p>
                 
@@ -887,11 +909,14 @@ export default function EmergencyJobWizard() {
                          <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5" /> Ideal for urgent needs</li>
                        </>
                      ) : (
-                       <>
-                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Skip the wait and quotes</li>
-                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Only Platinum-level pros</li>
-                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Platform Guarantee covered</li>
-                       </>
+                       instantMatchCopy?.bullets?.map((b: any, i: number) => {
+                         const BulletIcon = b.icon;
+                         return (
+                           <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
+                             {BulletIcon && <BulletIcon className={`w-4 h-4 mt-0.5 ${b.color}`} />} {b.text}
+                           </li>
+                         );
+                       })
                      )}
                    </ul>
                 </div>

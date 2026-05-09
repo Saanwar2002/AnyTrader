@@ -81,9 +81,10 @@ export default function Dashboard() {
     );
 
     const unsubscribeAllJobs = onSnapshot(allJobsQuery, (snapshot) => {
-      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      let jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      jobsData = jobsData.filter(j => j.clientDeleted !== true);
       setAllJobs(jobsData);
-      setActiveJobs(jobsData.filter(j => ["posted", "quoting", "accepted", "in_progress"].includes(j.status)));
+      setActiveJobs(jobsData.filter(j => ["posted", "quoting", "accepted", "in_progress", "pending_admin_review"].includes(j.status)));
       setLoading(false);
     }, (error) => {
       console.error("Error fetching all jobs:", error);
@@ -160,7 +161,7 @@ export default function Dashboard() {
 
   const stats = {
     total: allJobs.length,
-    active: allJobs.filter(j => ["posted", "quoting", "accepted", "in_progress"].includes(j.status)).length,
+    active: allJobs.filter(j => ["posted", "quoting", "accepted", "in_progress", "pending_admin_review"].includes(j.status)).length,
     done: allJobs.filter(j => j.status === "completed").length
   };
 

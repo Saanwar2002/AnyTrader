@@ -33,7 +33,8 @@ import {
   Minus,
   Zap as ZapIcon,
   BarChart3,
-  Locate
+  Locate,
+  Star
 } from "lucide-react";
 import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
@@ -46,6 +47,8 @@ import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "sonner";
+
+import { getInstantMatchCopy } from "@/src/lib/boosts";
 
 const iconMap: Record<string, any> = {
   Droplets, Zap, Thermometer, Home, Layout, Palette, Wrench, Maximize, Grid, Leaf, Box, Sparkles, Lock
@@ -121,6 +124,25 @@ export default function PostJobWizard() {
   
   const [showBoostInfo, setShowBoostInfo] = useState<"emergency" | "instant" | null>(null);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [instantMatchCopy, setInstantMatchCopy] = useState<any>(getInstantMatchCopy(formData.category || ""));
+
+  React.useEffect(() => {
+    if (step === 7 && formData.category && formData.description) {
+      import("@/src/services/gemini").then((gemini) => {
+        gemini.getDynamicInstantMatchPricing(formData.category, formData.title, formData.description)
+        .then(res => {
+           if (res) {
+             setInstantMatchCopy({
+               price: res.price,
+               title: res.title,
+               desc: res.desc,
+               bullets: res.bullets.map((b: any) => ({ ...b, icon: Star, color: "text-amber-500" })) // Star is already imported
+             });
+           }
+        });
+      });
+    }
+  }, [step, formData.category, formData.title, formData.description]);
 
   React.useEffect(() => {
     const unsub = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
@@ -1039,9 +1061,15 @@ export default function PostJobWizard() {
       // Create jobs (handle bulk if business)
       const assetsToPost = formData.selectedAssets.length > 0 ? formData.selectedAssets : [null];
       
+      let firstJobId: string | null = null;
+      
       for (const asset of assetsToPost) {
         const finalJobNo = assetsToPost.length > 1 ? `${jobNo}-${asset.name.replace(/\s+/g, '-').toLowerCase()}` : jobNo;
         const currentJobRef = assetsToPost.length > 1 ? doc(collection(db, "jobs")) : jobRef;
+        
+        if (!firstJobId) {
+          firstJobId = currentJobRef.id;
+        }
         
         // Apply initial boost configuration based on selected premium features
         let isBoosted = editJob ? editJob.isBoosted || false : false;
@@ -1160,6 +1188,35 @@ export default function PostJobWizard() {
           } catch (err) {
             console.error("Error triggering matching system:", err);
           }
+        }
+      }
+
+      if ((formData.isInstantMatch || formData.isEmergencyBoost) && firstJobId) {
+        try {
+          const response = await fetch("/api/create-checkout-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: user?.uid,
+              priceId: formData.isInstantMatch ? "price_mock_instant_match" : "price_mock_boost",
+              mode: "payment",
+              metadata: {
+                type: "boost",
+                jobId: firstJobId,
+                tier: formData.isInstantMatch ? "instant_match" : "emergency_boost"
+              },
+              successUrl: `${window.location.origin}/job/${firstJobId}?boost_success=true`,
+              cancelUrl: `${window.location.origin}/job/${firstJobId}`
+            }),
+          });
+          const data = await response.json();
+          if (data.url) {
+            window.location.href = data.url;
+            return; // Stop execution, redirecting to Stripe
+          }
+        } catch (paymentErr) {
+          console.error("Payment init failed:", paymentErr);
+          toast.error("Failed to start checkout. Job posted without boost.");
         }
       }
 
@@ -2516,9 +2573,11 @@ export default function PostJobWizard() {
                     </div>
                     <div className="flex-1 pr-6">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">£2.99</span></h4>
+                        <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">£{(instantMatchCopy.price || 2.99).toFixed(2)}</span></h4>
                       </div>
-                      <p className="text-xs text-black font-semibold line-clamp-2">Get matched with a top-rated, fully vetted professional immediately. Guaranteed availability and priority routing.</p>
+                      <p className="text-xs text-black font-semibold line-clamp-2">
+                        {instantMatchCopy.bullets.map((b: any) => b.text).join(" • ")}
+                      </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); setShowBoostInfo('instant'); }}
@@ -2839,7 +2898,7 @@ export default function PostJobWizard() {
                 <p className="text-slate-600 text-sm leading-relaxed">
                   {showBoostInfo === 'emergency' ? 
                    "Jump the queue! The Emergency Boost (£5) pins your job listing to the top of all local tradespeople's feeds and sends them an immediate push notification alert, bypassing normal delays." : 
-                   "Get peace of mind instantly! For £2.99, our Instant Match directly secures a top-rated, fully vetted professional for your job. They will contact you immediately to arrange the visit without you having to review quotes, guaranteeing reliability."
+                   instantMatchCopy.desc
                   }
                 </p>
                 
@@ -2853,11 +2912,14 @@ export default function PostJobWizard() {
                          <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-red-500 mt-0.5" /> Ideal for urgent needs</li>
                        </>
                      ) : (
-                       <>
-                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Skip the wait and quotes</li>
-                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Only Platinum-level pros</li>
-                         <li className="flex items-start gap-2 text-sm text-slate-700 font-medium"><CheckCircle2 className="w-4 h-4 text-amber-500 mt-0.5" /> Platform Guarantee covered</li>
-                       </>
+                       instantMatchCopy.bullets.map((b: any, i: number) => {
+                         const BulletIcon = b.icon;
+                         return (
+                           <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
+                             <BulletIcon className={`w-4 h-4 mt-0.5 ${b.color}`} /> {b.text}
+                           </li>
+                         );
+                       })
                      )}
                    </ul>
                 </div>

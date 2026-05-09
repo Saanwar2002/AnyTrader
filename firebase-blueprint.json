@@ -5,51 +5,181 @@
       "description": "User profile information for homeowners and tradespeople.",
       "type": "object",
       "properties": {
-        "uid": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "enum": ["homeowner", "tradesperson", "admin"] },
-        "permissions": { "type": "array", "items": { "type": "string" } },
-        "name": { "type": "string" },
-        "postcode": { "type": "string" },
-        "avatarUrl": { "type": "string", "format": "uri" },
-        "bio": { "type": "string" },
-        "rating": { "type": "number" },
-        "totalReviews": { "type": "integer" },
-        "totalRecommendations": { "type": "integer" },
-        "totalJobsDone": { "type": "integer" },
-        "homeownerRating": { "type": "number" },
-        "totalHomeownerReviews": { "type": "integer" },
-        "responseRate": { "type": "number" },
-        "trustScore": { "type": "number" },
-        "trades": { "type": "array", "items": { "type": "string" } },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "badges": { "type": "array", "items": { "type": "string" } },
-        "searchFeedBadges": { "type": "array", "items": { "type": "string" } },
-        "services": { "type": "array", "items": { "type": "string" } },
-        "isTopTradesperson": { "type": "boolean" },
-        "isEstablishedTradesperson": { "type": "boolean" },
-        "isAcceptingRequests": { "type": "boolean" },
-        "isDisabled": { "type": "boolean" },
-        "isFoundingMember": { "type": "boolean", "description": "Tag for the first 100 verified traders." },
-        "joinedDuringBeta": { "type": "boolean", "description": "Flag for users who joined during the early launch phase." },
-        "stripeAccountId": { "type": "string", "description": "Connected Stripe Express/Custom account ID for payouts." },
-        "stripeOnboardingComplete": { "type": "boolean", "description": "Whether the trader has completed the KYC onboarding flow." },
-        "payoutsEnabled": { "type": "boolean", "description": "Whether the Stripe account is restricted or active." },
-        "fairnessScore": { "type": "number", "description": "0-100 score tracking fairness in disputes (homeowners start at 100)." },
-        "totalDisputesRaised": { "type": "integer", "description": "Historical count of disputes raised by this homeowner." },
-        "phantomFeesSaved": { "type": "number", "description": "Running total of fees saved during free beta period for ROI tracking." },
-        "memberId": { "type": "string", "description": "Human-readable ID with prefix (T-10001, H-10002, etc)." },
-        "memberSequence": { "type": "integer", "description": "Numerical part of the member ID for easier searching." },
-        "verificationStatus": { "type": "string", "enum": ["unverified", "pending", "verified", "vetted", "auditioned", "rejected"] },
+        "uid": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "homeowner",
+            "tradesperson",
+            "admin"
+          ]
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "postcode": {
+          "type": "string"
+        },
+        "avatarUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "bio": {
+          "type": "string"
+        },
+        "rating": {
+          "type": "number"
+        },
+        "totalReviews": {
+          "type": "integer"
+        },
+        "totalRecommendations": {
+          "type": "integer"
+        },
+        "totalJobsDone": {
+          "type": "integer"
+        },
+        "homeownerRating": {
+          "type": "number"
+        },
+        "totalHomeownerReviews": {
+          "type": "integer"
+        },
+        "responseRate": {
+          "type": "number"
+        },
+        "trustScore": {
+          "type": "number"
+        },
+        "trades": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "badges": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "searchFeedBadges": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isTopTradesperson": {
+          "type": "boolean"
+        },
+        "isEstablishedTradesperson": {
+          "type": "boolean"
+        },
+        "isAcceptingRequests": {
+          "type": "boolean"
+        },
+        "isDisabled": {
+          "type": "boolean"
+        },
+        "isFoundingMember": {
+          "type": "boolean",
+          "description": "Tag for the first 100 verified traders."
+        },
+        "joinedDuringBeta": {
+          "type": "boolean",
+          "description": "Flag for users who joined during the early launch phase."
+        },
+        "stripeAccountId": {
+          "type": "string",
+          "description": "Connected Stripe Express/Custom account ID for payouts."
+        },
+        "stripeOnboardingComplete": {
+          "type": "boolean",
+          "description": "Whether the trader has completed the KYC onboarding flow."
+        },
+        "payoutsEnabled": {
+          "type": "boolean",
+          "description": "Whether the Stripe account is restricted or active."
+        },
+        "fairnessScore": {
+          "type": "number",
+          "description": "0-100 score tracking fairness in disputes (homeowners start at 100)."
+        },
+        "totalDisputesRaised": {
+          "type": "integer",
+          "description": "Historical count of disputes raised by this homeowner."
+        },
+        "phantomFeesSaved": {
+          "type": "number",
+          "description": "Running total of fees saved during free beta period for ROI tracking."
+        },
+        "memberId": {
+          "type": "string",
+          "description": "Human-readable ID with prefix (T-10001, H-10002, etc)."
+        },
+        "memberSequence": {
+          "type": "integer",
+          "description": "Numerical part of the member ID for easier searching."
+        },
+        "verificationStatus": {
+          "type": "string",
+          "enum": [
+            "unverified",
+            "pending",
+            "verified",
+            "vetted",
+            "auditioned",
+            "rejected"
+          ]
+        },
         "insurance": {
           "type": "object",
           "properties": {
-            "provider": { "type": "string" },
-            "policyNumber": { "type": "string" },
-            "expiryDate": { "type": "string", "format": "date" },
-            "notifyRenew": { "type": "boolean", "description": "Consent to send renewal reminders" },
-            "verified": { "type": "boolean" },
-            "verifiedAt": { "type": "string", "format": "date-time" }
+            "provider": {
+              "type": "string"
+            },
+            "policyNumber": {
+              "type": "string"
+            },
+            "expiryDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "notifyRenew": {
+              "type": "boolean",
+              "description": "Consent to send renewal reminders"
+            },
+            "verified": {
+              "type": "boolean"
+            },
+            "verifiedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
         "verificationDocs": {
@@ -57,30 +187,71 @@
           "items": {
             "type": "object",
             "properties": {
-              "type": { "type": "string" },
-              "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
-              "fileUrl": { "type": "string" },
-              "expiryDate": { "type": "string", "format": "date" },
-              "rejectionReason": { "type": "string" }
+              "type": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected"
+                ]
+              },
+              "fileUrl": {
+                "type": "string"
+              },
+              "expiryDate": {
+                "type": "string",
+                "format": "date"
+              },
+              "rejectionReason": {
+                "type": "string"
+              }
             }
           }
         },
-        "portfolio": { "type": "array", "items": { "type": "string" } },
-        "referralCode": { "type": "string" },
-        "referredBy": { "type": "string" },
-        "referralBoostUntil": { "type": "string", "format": "date-time" },
-        "referralRewardProcessed": { "type": "boolean" },
+        "portfolio": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "referralCode": {
+          "type": "string"
+        },
+        "referredBy": {
+          "type": "string"
+        },
+        "referralBoostUntil": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "referralRewardProcessed": {
+          "type": "boolean"
+        },
         "subscription": {
           "type": "object",
           "properties": {
-            "tierId": { "type": "string" },
-            "providerModel": { "type": "string" },
-            "nextRenewalDate": { "type": "string", "format": "date-time" },
+            "tierId": {
+              "type": "string"
+            },
+            "providerModel": {
+              "type": "string"
+            },
+            "nextRenewalDate": {
+              "type": "string",
+              "format": "date-time"
+            },
             "capacity": {
               "type": "object",
               "properties": {
-                "maxQuotes": { "type": "integer" },
-                "usedQuotes": { "type": "integer" }
+                "maxQuotes": {
+                  "type": "integer"
+                },
+                "usedQuotes": {
+                  "type": "integer"
+                }
               }
             }
           }
@@ -88,11 +259,21 @@
         "notificationSettings": {
           "type": "object",
           "properties": {
-            "quietHoursEnabled": { "type": "boolean" },
-            "quietHoursStart": { "type": "string" },
-            "quietHoursEnd": { "type": "string" },
-            "pushEnabled": { "type": "boolean" },
-            "emailEnabled": { "type": "boolean" }
+            "quietHoursEnabled": {
+              "type": "boolean"
+            },
+            "quietHoursStart": {
+              "type": "string"
+            },
+            "quietHoursEnd": {
+              "type": "string"
+            },
+            "pushEnabled": {
+              "type": "boolean"
+            },
+            "emailEnabled": {
+              "type": "boolean"
+            }
           }
         },
         "savedFilters": {
@@ -100,28 +281,67 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "searchTerm": { "type": "string" },
-              "categories": { "type": "array", "items": { "type": "string" } },
-              "sortBy": { "type": "string", "enum": ["newest", "urgency", "completion"] },
-              "showMatchedOnly": { "type": "boolean" },
-              "createdAt": { "type": "string", "format": "date-time" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "searchTerm": {
+                "type": "string"
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "sortBy": {
+                "type": "string",
+                "enum": [
+                  "newest",
+                  "urgency",
+                  "completion"
+                ]
+              },
+              "showMatchedOnly": {
+                "type": "boolean"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
             },
-            "required": ["id", "name"]
+            "required": [
+              "id",
+              "name"
+            ]
           }
         },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "deviceId": { "type": "string" },
-        "ipAddress": { "type": "string" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deviceId": {
+          "type": "string"
+        },
+        "ipAddress": {
+          "type": "string"
+        },
         "favoriteAddresses": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "address": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
             }
           }
         },
@@ -130,344 +350,978 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "from": { "type": "string" },
-              "to": { "type": "string" },
-              "comments": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "comments": {
+                "type": "string"
+              }
             }
           }
         },
-        "blockedDrivers": { "type": "array", "items": { "type": "string" }, "description": "UIDs of drivers this user has blocked." },
-        "preferredDrivers": { "type": "array", "items": { "type": "string" }, "description": "UIDs of favorite drivers." },
+        "blockedDrivers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "UIDs of drivers this user has blocked."
+        },
+        "preferredDrivers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "UIDs of favorite drivers."
+        },
         "emergencyContacts": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": { "type": "string" },
-              "phone": { "type": "string" }
+              "name": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              }
             }
           }
         }
       },
-      "required": ["uid", "role", "name"]
+      "required": [
+        "uid",
+        "role",
+        "name"
+      ]
     },
     "DriverReview": {
       "title": "DriverReview",
       "description": "A review for a driver with a cooling-off period.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "rideId": { "type": "string" },
-        "driverId": { "type": "string" },
-        "passengerId": { "type": "string" },
-        "rating": { "type": "integer" },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "comment": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "visibilityDate": { "type": "string", "format": "date-time", "description": "When this review becomes public" },
-        "isAnonymous": { "type": "boolean" },
-        "status": { "type": "string", "enum": ["pending_aggregation", "aggregated", "flagged"] }
+        "id": {
+          "type": "string"
+        },
+        "rideId": {
+          "type": "string"
+        },
+        "driverId": {
+          "type": "string"
+        },
+        "passengerId": {
+          "type": "string"
+        },
+        "rating": {
+          "type": "integer"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "comment": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "visibilityDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this review becomes public"
+        },
+        "isAnonymous": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending_aggregation",
+            "aggregated",
+            "flagged"
+          ]
+        }
       },
-      "required": ["id", "rideId", "driverId", "passengerId", "rating", "createdAt", "visibilityDate"]
+      "required": [
+        "id",
+        "rideId",
+        "driverId",
+        "passengerId",
+        "rating",
+        "createdAt",
+        "visibilityDate"
+      ]
     },
     "Job": {
       "title": "Job",
       "description": "A job posted by a homeowner.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "jobNo": { "type": "string", "description": "Human-readable job number (e.g., AT-123456)." },
-        "homeownerId": { "type": "string" },
-        "category": { "type": "string" },
-        "title": { "type": "string" },
-        "description": { "type": "string" },
-        "postcode": { "type": "string" },
-        "fullAddress": { "type": "string" },
-        "houseNumber": { "type": "string" },
-        "locationInstructions": { "type": "string" },
-        "urgency": { "type": "string" },
-        "status": { "type": "string", "enum": ["posted", "quoting", "accepted", "in_progress", "completed", "cancelled", "disputed"] },
+        "id": {
+          "type": "string"
+        },
+        "jobNo": {
+          "type": "string",
+          "description": "Human-readable job number (e.g., AT-123456)."
+        },
+        "homeownerId": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "postcode": {
+          "type": "string"
+        },
+        "fullAddress": {
+          "type": "string"
+        },
+        "houseNumber": {
+          "type": "string"
+        },
+        "locationInstructions": {
+          "type": "string"
+        },
+        "urgency": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "posted",
+            "quoting",
+            "accepted",
+            "in_progress",
+            "completed",
+            "cancelled",
+            "disputed"
+          ]
+        },
         "dispute": {
           "type": "object",
           "properties": {
-            "raisedBy": { "type": "string" },
-            "reason": { "type": "string" },
-            "isPropertyDamage": { "type": "boolean", "description": "Whether the dispute involves physical damage to property." },
-            "isHandshakeVerified": { "type": "boolean", "description": "True if the job was completed via QR handshake, restricting frivolous claims." },
-            "mediationStakePaid": { "type": "boolean", "description": "Whether the £15 friction fee has been paid for this mediation." },
-            "technicalFaultReport": { "type": "string", "description": "Mandatory technical explanation for non-cosmetic disputes." },
+            "raisedBy": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "isPropertyDamage": {
+              "type": "boolean",
+              "description": "Whether the dispute involves physical damage to property."
+            },
+            "isHandshakeVerified": {
+              "type": "boolean",
+              "description": "True if the job was completed via QR handshake, restricting frivolous claims."
+            },
+            "mediationStakePaid": {
+              "type": "boolean",
+              "description": "Whether the £15 friction fee has been paid for this mediation."
+            },
+            "technicalFaultReport": {
+              "type": "string",
+              "description": "Mandatory technical explanation for non-cosmetic disputes."
+            },
             "pliClaim": {
               "type": "object",
               "properties": {
-                "status": { "type": "string", "enum": ["none", "requested", "initiated", "rejected", "settled"] },
-                "provider": { "type": "string" },
-                "policyNumber": { "type": "string" },
-                "initiatedAt": { "type": "string", "format": "date-time" }
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "requested",
+                    "initiated",
+                    "rejected",
+                    "settled"
+                  ]
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "policyNumber": {
+                  "type": "string"
+                },
+                "initiatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
               }
             },
-            "photos": { "type": "array", "items": { "type": "string" } },
-            "status": { "type": "string", "enum": ["open", "resolved", "mediated"] },
-            "createdAt": { "type": "string", "format": "date-time" }
+            "photos": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "open",
+                "resolved",
+                "mediated"
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
-        "estimateMin": { "type": "number" },
-        "estimateMax": { "type": "number" },
-        "photos": { "type": "array", "items": { "type": "string" } },
-        "videos": { "type": "array", "items": { "type": "string" } },
+        "estimateMin": {
+          "type": "number"
+        },
+        "estimateMax": {
+          "type": "number"
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "videos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "documents": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": { "type": "string" },
-              "url": { "type": "string", "format": "uri" }
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
             }
           }
         },
-        "paymentPreference": { "type": "string", "enum": ["fixed_price", "hourly", "negotiable"] },
-        "quoteScope": { "type": "string", "enum": ["labor_only", "complete_package"] },
-        "hasReview": { "type": "boolean" },
-        "hasTradespersonReview": { "type": "boolean" },
-        "scheduledDate": { "type": "string", "format": "date" },
-        "isConfirmedByTradesperson": { "type": "boolean" },
+        "paymentPreference": {
+          "type": "string",
+          "enum": [
+            "fixed_price",
+            "hourly",
+            "negotiable"
+          ]
+        },
+        "quoteScope": {
+          "type": "string",
+          "enum": [
+            "labor_only",
+            "complete_package"
+          ]
+        },
+        "hasReview": {
+          "type": "boolean"
+        },
+        "hasTradespersonReview": {
+          "type": "boolean"
+        },
+        "scheduledDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "isConfirmedByTradesperson": {
+          "type": "boolean"
+        },
         "rescheduleProposal": {
           "type": "object",
           "properties": {
-            "proposedDate": { "type": "string", "format": "date" },
-            "reason": { "type": "string" },
-            "proposedBy": { "type": "string" },
-            "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
-            "createdAt": { "type": "string", "format": "date-time" }
+            "proposedDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "proposedBy": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "accepted",
+                "rejected"
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
-        "postedDate": { "type": "string", "format": "date-time" },
-        "clientDeleted": { "type": "boolean", "description": "Soft delete flag for the homeowner" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "postedDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "clientDeleted": {
+          "type": "boolean",
+          "description": "Soft delete flag for the homeowner"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "instantMatchId": {
+          "type": "string"
+        },
+        "matchedViaInstantMatch": {
+          "type": "boolean"
+        },
+        "isInstantMatch": {
+          "type": "boolean"
+        },
+        "isEmergencyBoost": {
+          "type": "boolean"
+        }
       },
-      "required": ["id", "homeownerId", "category", "title", "description", "postcode", "status", "postedDate", "createdAt"]
+      "required": [
+        "id",
+        "homeownerId",
+        "category",
+        "title",
+        "description",
+        "postcode",
+        "status",
+        "postedDate",
+        "createdAt"
+      ]
     },
     "Quote": {
       "title": "Quote",
       "description": "A quote submitted by a tradesperson for a job.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "jobId": { "type": "string" },
-        "tradespersonId": { "type": "string" },
-        "amount": { "type": "number" },
-        "message": { "type": "string" },
-        "startDate": { "type": "string", "format": "date" },
-        "isImmediateStart": { "type": "boolean" },
-        "estimatedTimeline": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "requote_requested"] },
-        "requoteMessage": { "type": "string" },
+        "id": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "tradespersonId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "message": {
+          "type": "string"
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "isImmediateStart": {
+          "type": "boolean"
+        },
+        "estimatedTimeline": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "rejected",
+            "requote_requested"
+          ]
+        },
+        "requoteMessage": {
+          "type": "string"
+        },
         "pendingRevision": {
           "type": "object",
           "properties": {
-            "amount": { "type": "number" },
-            "message": { "type": "string" },
-            "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
-            "createdAt": { "type": "string", "format": "date-time" }
+            "amount": {
+              "type": "number"
+            },
+            "message": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
-        "createdAt": { "type": "string", "format": "date-time" },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
         "history": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "amount": { "type": "number" },
-              "message": { "type": "string" },
-              "quoteScope": { "type": "string" },
-              "paymentPreference": { "type": "string" },
-              "timestamp": { "type": "string", "format": "date-time" },
-              "reason": { "type": "string" }
+              "amount": {
+                "type": "number"
+              },
+              "message": {
+                "type": "string"
+              },
+              "quoteScope": {
+                "type": "string"
+              },
+              "paymentPreference": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "reason": {
+                "type": "string"
+              }
             }
           }
         },
-        "revisionCount": { "type": "integer" },
-        "paymentTrack": { "type": "string", "enum": ["quick", "project"] },
-        "guaranteeExpiresAt": { "type": "string", "format": "date-time" },
-        "netPayoutValue": { "type": "number", "description": "The final amount the trader receives after all fees (estimated/actual)." },
-        "stripeFeeAmount": { "type": "number", "description": "Processing fee (higher for cards, capped for bank transfers)." },
-        "platformCommission": { "type": "number", "description": "The AnyTrader platform cut based on the user's tier and any commission caps." },
-        "paymentRail": { "type": "string", "enum": ["card", "bank_transfer"], "description": "The rail used (Bank used for jobs > £400)." },
+        "revisionCount": {
+          "type": "integer"
+        },
+        "paymentTrack": {
+          "type": "string",
+          "enum": [
+            "quick",
+            "project"
+          ]
+        },
+        "guaranteeExpiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "netPayoutValue": {
+          "type": "number",
+          "description": "The final amount the trader receives after all fees (estimated/actual)."
+        },
+        "stripeFeeAmount": {
+          "type": "number",
+          "description": "Processing fee (higher for cards, capped for bank transfers)."
+        },
+        "platformCommission": {
+          "type": "number",
+          "description": "The AnyTrader platform cut based on the user's tier and any commission caps."
+        },
+        "paymentRail": {
+          "type": "string",
+          "enum": [
+            "card",
+            "bank_transfer"
+          ],
+          "description": "The rail used (Bank used for jobs > £400)."
+        },
         "milestones": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "title": { "type": "string" },
-              "amount": { "type": "number" },
-              "status": { "type": "string", "enum": ["draft", "pending_funding", "funded", "work_completed", "funds_released", "disputed"] },
-              "releaseDate": { "type": "string", "format": "date-time" },
-              "fundedAt": { "type": "string", "format": "date-time" },
-              "stripePaymentIntentId": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "number"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "pending_funding",
+                  "funded",
+                  "work_completed",
+                  "funds_released",
+                  "disputed"
+                ]
+              },
+              "releaseDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "fundedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "stripePaymentIntentId": {
+                "type": "string"
+              }
             },
-            "required": ["id", "title", "amount", "status"]
+            "required": [
+              "id",
+              "title",
+              "amount",
+              "status"
+            ]
           }
         }
       },
-      "required": ["id", "jobId", "tradespersonId", "amount", "status", "createdAt"]
+      "required": [
+        "id",
+        "jobId",
+        "tradespersonId",
+        "amount",
+        "status",
+        "createdAt"
+      ]
     },
     "Message": {
       "title": "Message",
       "description": "A message in a conversation.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "conversationId": { "type": "string" },
-        "senderId": { "type": "string" },
-        "text": { "type": "string" },
-        "imageUrl": { "type": "string", "format": "uri" },
-        "audioUrl": { "type": "string", "format": "uri" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "conversationId": {
+          "type": "string"
+        },
+        "senderId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "audioUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "conversationId", "senderId", "createdAt"]
+      "required": [
+        "id",
+        "conversationId",
+        "senderId",
+        "createdAt"
+      ]
     },
     "Conversation": {
       "title": "Conversation",
       "description": "A conversation between a homeowner and a tradesperson.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "participants": { "type": "array", "items": { "type": "string" } },
-        "jobId": { "type": "string" },
-        "jobTitle": { "type": "string" },
-        "lastMessage": { "type": "string" },
-        "lastMessageAt": { "type": "string", "format": "date-time" },
-        "deletedBy": { "type": "array", "items": { "type": "string" } },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "jobTitle": {
+          "type": "string"
+        },
+        "lastMessage": {
+          "type": "string"
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deletedBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "participants", "jobId", "jobTitle", "updatedAt"]
+      "required": [
+        "id",
+        "participants",
+        "jobId",
+        "jobTitle",
+        "updatedAt"
+      ]
     },
     "Review": {
       "title": "Review",
       "description": "A review left by a homeowner for a tradesperson.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "jobId": { "type": "string" },
-        "reviewerId": { "type": "string" },
-        "revieweeId": { "type": "string" },
-        "type": { "type": "string", "enum": ["tradesperson_review", "homeowner_review"] },
-        "rating": { "type": "integer" },
-        "comment": { "type": "string" },
-        "recommended": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "reviewerId": {
+          "type": "string"
+        },
+        "revieweeId": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "tradesperson_review",
+            "homeowner_review"
+          ]
+        },
+        "rating": {
+          "type": "integer"
+        },
+        "comment": {
+          "type": "string"
+        },
+        "recommended": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "jobId", "reviewerId", "revieweeId", "rating", "createdAt"]
+      "required": [
+        "id",
+        "jobId",
+        "reviewerId",
+        "revieweeId",
+        "rating",
+        "createdAt"
+      ]
     },
     "Notification": {
       "title": "Notification",
       "description": "In-app notification for users.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "title": { "type": "string" },
-        "message": { "type": "string" },
-        "type": { "type": "string", "enum": ["quote", "message", "status", "system"] },
-        "link": { "type": "string" },
-        "read": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "quote",
+            "message",
+            "status",
+            "system"
+          ]
+        },
+        "link": {
+          "type": "string"
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "userId", "title", "message", "type", "read", "createdAt"]
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "message",
+        "type",
+        "read",
+        "createdAt"
+      ]
     },
     "AuditLog": {
       "title": "AuditLog",
       "description": "Log of administrative actions for accountability.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "adminId": { "type": "string" },
-        "action": { "type": "string" },
-        "targetId": { "type": "string" },
-        "targetType": { "type": "string", "enum": ["user", "job", "quote", "review"] },
-        "details": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "adminId": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "targetType": {
+          "type": "string",
+          "enum": [
+            "user",
+            "job",
+            "quote",
+            "review"
+          ]
+        },
+        "details": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "adminId", "action", "targetId", "targetType", "createdAt"]
+      "required": [
+        "id",
+        "adminId",
+        "action",
+        "targetId",
+        "targetType",
+        "createdAt"
+      ]
     },
     "Invitation": {
       "title": "Invitation",
       "description": "An invitation for a new staff member or admin.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "role": { "type": "string" },
-        "permissions": { "type": "array", "items": { "type": "string" } },
-        "status": { "type": "string", "enum": ["pending", "accepted", "expired"] },
-        "invitedBy": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "role": {
+          "type": "string"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "expired"
+          ]
+        },
+        "invitedBy": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "email", "role", "permissions", "status", "invitedBy", "createdAt"]
+      "required": [
+        "id",
+        "email",
+        "role",
+        "permissions",
+        "status",
+        "invitedBy",
+        "createdAt"
+      ]
     },
     "Broadcast": {
       "title": "Broadcast",
       "description": "A mass message sent to platform users.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "title": { "type": "string" },
-        "content": { "type": "string" },
-        "type": { "type": "string", "enum": ["announcement", "offer", "greeting", "update"] },
-        "targetSegments": { "type": "array", "items": { "type": "string" } },
-        "targetTrades": { "type": "array", "items": { "type": "string" } },
-        "sentBy": { "type": "string" },
-        "recipientCount": { "type": "integer" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "announcement",
+            "offer",
+            "greeting",
+            "update"
+          ]
+        },
+        "targetSegments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "targetTrades": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sentBy": {
+          "type": "string"
+        },
+        "recipientCount": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "title", "content", "type", "targetSegments", "sentBy", "createdAt"]
+      "required": [
+        "id",
+        "title",
+        "content",
+        "type",
+        "targetSegments",
+        "sentBy",
+        "createdAt"
+      ]
     },
     "SecurityAlert": {
       "title": "SecurityAlert",
       "description": "Alert for potential security threats like phishing or hacking attempts.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "targetId": { "type": "string" },
-        "targetType": { "type": "string", "enum": ["message", "job", "user"] },
-        "threatType": { "type": "string", "enum": ["phishing", "hacking", "pii", "other"] },
-        "riskScore": { "type": "number" },
-        "details": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "resolved": { "type": "boolean" }
+        "id": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "targetType": {
+          "type": "string",
+          "enum": [
+            "message",
+            "job",
+            "user"
+          ]
+        },
+        "threatType": {
+          "type": "string",
+          "enum": [
+            "phishing",
+            "hacking",
+            "pii",
+            "other"
+          ]
+        },
+        "riskScore": {
+          "type": "number"
+        },
+        "details": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "resolved": {
+          "type": "boolean"
+        }
       },
-      "required": ["id", "targetId", "targetType", "threatType", "riskScore", "createdAt", "resolved"]
+      "required": [
+        "id",
+        "targetId",
+        "targetType",
+        "threatType",
+        "riskScore",
+        "createdAt",
+        "resolved"
+      ]
     },
     "RidesConfig": {
       "title": "RidesConfig",
       "description": "Configuration for the Rides/Taxi portal.",
       "type": "object",
       "properties": {
-        "baseFare": { "type": "number" },
-        "distanceRate": { "type": "number" },
-        "timeRate": { "type": "number" },
-        "minFare": { "type": "number" },
-        "commission": { "type": "number" },
+        "baseFare": {
+          "type": "number"
+        },
+        "distanceRate": {
+          "type": "number"
+        },
+        "timeRate": {
+          "type": "number"
+        },
+        "minFare": {
+          "type": "number"
+        },
+        "commission": {
+          "type": "number"
+        },
         "vehicleTypes": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "multiplier": { "type": "number" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "multiplier": {
+                "type": "number"
+              }
             }
           }
         },
         "peakMultipliers": {
           "type": "object",
           "properties": {
-            "morning": { "type": "number" },
-            "evening": { "type": "number" },
-            "lateNight": { "type": "number" }
+            "morning": {
+              "type": "number"
+            },
+            "evening": {
+              "type": "number"
+            },
+            "lateNight": {
+              "type": "number"
+            }
           }
         },
         "surcharges": {
@@ -475,15 +1329,31 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "amount": { "type": "number" },
-              "type": { "type": "string", "enum": ["flat"] },
-              "description": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "flat"
+                ]
+              },
+              "description": {
+                "type": "string"
+              }
             }
           }
         },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "RecurringSchedule": {
@@ -491,62 +1361,169 @@
       "description": "A recurring job arrangement between a homeowner and a tradesperson.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "originalJobId": { "type": "string" },
-        "homeownerId": { "type": "string" },
-        "tradespersonId": { "type": "string" },
-        "category": { "type": "string" },
-        "title": { "type": "string" },
-        "frequency": { "type": "string", "enum": ["weekly", "fortnightly", "monthly"] },
-        "status": { "type": "string", "enum": ["pending_approval", "active", "paused", "cancelled"] },
-        "proposedBy": { "type": "string" },
-        "amount": { "type": "number" },
-        "lastJobGeneratedAt": { "type": "string", "format": "date-time" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "originalJobId": {
+          "type": "string"
+        },
+        "homeownerId": {
+          "type": "string"
+        },
+        "tradespersonId": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "frequency": {
+          "type": "string",
+          "enum": [
+            "weekly",
+            "fortnightly",
+            "monthly"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending_approval",
+            "active",
+            "paused",
+            "cancelled"
+          ]
+        },
+        "proposedBy": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "lastJobGeneratedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "originalJobId", "homeownerId", "tradespersonId", "category", "title", "frequency", "status", "proposedBy", "amount", "createdAt"]
+      "required": [
+        "id",
+        "originalJobId",
+        "homeownerId",
+        "tradespersonId",
+        "category",
+        "title",
+        "frequency",
+        "status",
+        "proposedBy",
+        "amount",
+        "createdAt"
+      ]
     },
     "ShopOrder": {
       "title": "ShopOrder",
       "description": "Purchase record from the AI Smart Shop.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "jobId": { "type": "string" },
-        "totalAmount": { "type": "number" },
-        "items": { 
-          "type": "array", 
-          "items": { "type": "string" } 
+        "id": {
+          "type": "string"
         },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "userId": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "totalAmount": {
+          "type": "number"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "userId", "totalAmount", "createdAt"]
+      "required": [
+        "id",
+        "userId",
+        "totalAmount",
+        "createdAt"
+      ]
     },
     "Asset": {
       "title": "Asset",
       "description": "A property or asset managed by a business user.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "ownerId": { "type": "string" },
-        "name": { "type": "string", "description": "e.g. Building A, Flat 4" },
-        "address": { "type": "string" },
-        "postcode": { "type": "string" },
-        "type": { "type": "string", "enum": ["residential", "commercial", "industrial", "retail"] },
-        "notes": { "type": "string" },
-        "photos": { "type": "array", "items": { "type": "string" } },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "description": "e.g. Building A, Flat 4"
+        },
+        "address": {
+          "type": "string"
+        },
+        "postcode": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "residential",
+            "commercial",
+            "industrial",
+            "retail"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "ownerId", "name", "address", "postcode", "type"]
+      "required": [
+        "id",
+        "ownerId",
+        "name",
+        "address",
+        "postcode",
+        "type"
+      ]
     },
     "PlatformConfig": {
       "title": "PlatformConfig",
       "description": "Global platform settings and fee structures.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "maintenanceMode": { "type": "boolean" },
+        "id": {
+          "type": "string"
+        },
+        "maintenanceMode": {
+          "type": "boolean"
+        },
         "providerModels": {
           "type": "object",
           "additionalProperties": {
@@ -557,22 +1534,47 @@
                 "additionalProperties": {
                   "type": "object",
                   "properties": {
-                    "price": { "type": "number" },
-                    "maxQuotes": { "type": "integer" },
-                    "maxAcceptedQuotes": { "type": "integer" },
-                    "commission": { "type": "number" },
-                    "leadFee": { "type": "number" },
-                    "description": { "type": "string" },
-                    "features": { "type": "array", "items": { "type": "string" } },
-                    "color": { "type": "string", "description": "Hex or Tailwind color class for UI identification" }
+                    "price": {
+                      "type": "number"
+                    },
+                    "maxQuotes": {
+                      "type": "integer"
+                    },
+                    "maxAcceptedQuotes": {
+                      "type": "integer"
+                    },
+                    "commission": {
+                      "type": "number"
+                    },
+                    "leadFee": {
+                      "type": "number"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "features": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "color": {
+                      "type": "string",
+                      "description": "Hex or Tailwind color class for UI identification"
+                    }
                   }
                 }
               }
             }
           }
         },
-        "updatedAt": { "type": "string", "format": "date-time" },
-        "updatedBy": { "type": "string" }
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedBy": {
+          "type": "string"
+        }
       }
     },
     "Partner": {
@@ -580,163 +1582,716 @@
       "description": "Affiliate partners for monetization (Insurance, Finance, etc.)",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "category": { "type": "string", "enum": ["Insurance", "Finance", "Vehicle", "Health", "Supplies", "Other"] },
-        "description": { "type": "string" },
-        "logoUrl": { "type": "string", "format": "uri" },
-        "trackingUrl": { "type": "string", "format": "uri" },
-        "commissionRate": { "type": "number" },
-        "status": { "type": "string", "enum": ["active", "inactive"] },
-        "rating": { "type": "number", "description": "Average AnyRoller driver rating" },
-        "totalDrivers": { "type": "integer", "description": "Number of AnyRoller drivers using this partner" },
-        "startingPrice": { "type": "string", "description": "e.g., from £38/week" },
-        "benefits": { "type": "array", "items": { "type": "string" } },
-        "highlight": { "type": "string", "description": "e.g., Exclusive: 10% off for AnyRoller drivers" },
-        "tier": { "type": "string", "enum": ["basic", "featured", "exclusive"], "description": "Marketplace ranking tier" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Insurance",
+            "Finance",
+            "Vehicle",
+            "Health",
+            "Supplies",
+            "Other"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "logoUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "trackingUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "commissionRate": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive"
+          ]
+        },
+        "rating": {
+          "type": "number",
+          "description": "Average AnyRoller driver rating"
+        },
+        "totalDrivers": {
+          "type": "integer",
+          "description": "Number of AnyRoller drivers using this partner"
+        },
+        "startingPrice": {
+          "type": "string",
+          "description": "e.g., from £38/week"
+        },
+        "benefits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "highlight": {
+          "type": "string",
+          "description": "e.g., Exclusive: 10% off for AnyRoller drivers"
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "featured",
+            "exclusive"
+          ],
+          "description": "Marketplace ranking tier"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "name", "category", "status", "createdAt"]
+      "required": [
+        "id",
+        "name",
+        "category",
+        "status",
+        "createdAt"
+      ]
     },
     "PromoCode": {
       "title": "PromoCode",
       "description": "Discount or priority promotion codes.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "code": { "type": "string" },
-        "type": { "type": "string", "enum": ["Discount", "Upgrade"] },
-        "value": { "type": "string" },
-        "discountPercent": { "type": "number" },
-        "maxDiscount": { "type": "number" },
-        "maxUses": { "type": "integer" },
-        "currentUses": { "type": "integer" },
-        "expiresAt": { "type": "string", "format": "date-time" },
-        "status": { "type": "string", "enum": ["active", "expired"] },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "Discount",
+            "Upgrade"
+          ]
+        },
+        "value": {
+          "type": "string"
+        },
+        "discountPercent": {
+          "type": "number"
+        },
+        "maxDiscount": {
+          "type": "number"
+        },
+        "maxUses": {
+          "type": "integer"
+        },
+        "currentUses": {
+          "type": "integer"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "expired"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "code", "type", "status", "createdAt"]
+      "required": [
+        "id",
+        "code",
+        "type",
+        "status",
+        "createdAt"
+      ]
     },
     "Campaign": {
       "title": "Campaign",
       "description": "Monetization campaigns and offers.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "partnerId": { "type": "string" },
-        "title": { "type": "string" },
-        "content": { "type": "string" },
-        "targetRole": { "type": "string", "enum": ["homeowner", "tradesperson", "both"] },
-        "targetTrades": { "type": "array", "items": { "type": "string" } },
-        "triggerType": { "type": "string", "enum": ["expiry", "behavior", "seasonal", "manual"] },
-        "status": { "type": "string", "enum": ["draft", "active", "paused"] },
-        "clicks": { "type": "integer" },
-        "leads": { "type": "integer" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "partnerId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "targetRole": {
+          "type": "string",
+          "enum": [
+            "homeowner",
+            "tradesperson",
+            "both"
+          ]
+        },
+        "targetTrades": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "triggerType": {
+          "type": "string",
+          "enum": [
+            "expiry",
+            "behavior",
+            "seasonal",
+            "manual"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "active",
+            "paused"
+          ]
+        },
+        "clicks": {
+          "type": "integer"
+        },
+        "leads": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "partnerId", "title", "status", "createdAt"]
+      "required": [
+        "id",
+        "partnerId",
+        "title",
+        "status",
+        "createdAt"
+      ]
     },
     "SupportTicket": {
       "title": "SupportTicket",
       "description": "A support ticket for rider/driver issues.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "subject": { "type": "string" },
-        "preview": { "type": "string" },
-        "userId": { "type": "string" },
-        "userRole": { "type": "string", "enum": ["rider", "driver"] },
-        "status": { "type": "string", "enum": ["open", "resolved"] },
-        "priority": { "type": "string", "enum": ["high", "normal", "low"] },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userRole": {
+          "type": "string",
+          "enum": [
+            "rider",
+            "driver"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "resolved"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "high",
+            "normal",
+            "low"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "subject", "userId", "userRole", "status", "priority", "createdAt"]
+      "required": [
+        "id",
+        "subject",
+        "userId",
+        "userRole",
+        "status",
+        "priority",
+        "createdAt"
+      ]
     },
     "TaxiRide": {
       "title": "TaxiRide",
       "description": "A ride request and trip record.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "riderId": { "type": "string" },
-        "driverId": { "type": "string" },
-        "pickup": { "type": "string" },
-        "dropoff": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "accepted", "in_transit", "completed", "cancelled"] },
-        "totalFare": { "type": "number" },
-        "commissionAmount": { "type": "number", "description": "The platform's 12% cut of the total fare." },
-        "driverEarnings": { "type": "number", "description": "The amount delivered directly to the driver." },
-        "paymentStatus": { "type": "string", "enum": ["unpaid", "pending", "paid", "failed"] },
-        "stripeCheckoutSessionId": { "type": "string" },
-        "rideType": { "type": "string", "enum": ["standard", "hourly"] },
-        "duration": { "type": "integer", "description": "Duration in hours for hourly bookings." },
-        "waitTolerance": { "type": "integer", "enum": [10, 20, 30], "description": "Max wait time in minutes for ASAP requests." },
-        "comments": { "type": "string" },
-        "scheduledAt": { "type": "string", "format": "date-time", "description": "Optional future date for pre-booked rides." },
-        "passengerDeleted": { "type": "boolean", "description": "Soft delete flag for the passenger" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "riderId": {
+          "type": "string"
+        },
+        "driverId": {
+          "type": "string"
+        },
+        "pickup": {
+          "type": "string"
+        },
+        "dropoff": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "in_transit",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "totalFare": {
+          "type": "number"
+        },
+        "commissionAmount": {
+          "type": "number",
+          "description": "The platform's 12% cut of the total fare."
+        },
+        "driverEarnings": {
+          "type": "number",
+          "description": "The amount delivered directly to the driver."
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": [
+            "unpaid",
+            "pending",
+            "paid",
+            "failed"
+          ]
+        },
+        "stripeCheckoutSessionId": {
+          "type": "string"
+        },
+        "rideType": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "hourly"
+          ]
+        },
+        "duration": {
+          "type": "integer",
+          "description": "Duration in hours for hourly bookings."
+        },
+        "waitTolerance": {
+          "type": "integer",
+          "enum": [
+            10,
+            20,
+            30
+          ],
+          "description": "Max wait time in minutes for ASAP requests."
+        },
+        "comments": {
+          "type": "string"
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional future date for pre-booked rides."
+        },
+        "passengerDeleted": {
+          "type": "boolean",
+          "description": "Soft delete flag for the passenger"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "riderId", "status", "createdAt"]
+      "required": [
+        "id",
+        "riderId",
+        "status",
+        "createdAt"
+      ]
     },
     "DriverLocation": {
       "title": "DriverLocation",
       "description": "Real-time location and status of a driver for dispatching.",
       "type": "object",
       "properties": {
-        "driverId": { "type": "string" },
-        "lat": { "type": "number" },
-        "lng": { "type": "number" },
-        "geohash": { "type": "string" },
-        "isOnline": { "type": "boolean", "description": "Whether the driver is currently fetching jobs." },
-        "sessionStartTime": { "type": "string", "format": "date-time", "description": "Timestamp when the driver last went online." },
-        "vehicleClass": { "type": "string", "enum": ["standard", "executive", "xl", "pro_van", "luxury"] },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "driverId": {
+          "type": "string"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lng": {
+          "type": "number"
+        },
+        "geohash": {
+          "type": "string"
+        },
+        "isOnline": {
+          "type": "boolean",
+          "description": "Whether the driver is currently fetching jobs."
+        },
+        "sessionStartTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the driver last went online."
+        },
+        "vehicleClass": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "executive",
+            "xl",
+            "pro_van",
+            "luxury"
+          ]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["driverId", "lat", "lng", "geohash", "isOnline", "updatedAt"]
+      "required": [
+        "driverId",
+        "lat",
+        "lng",
+        "geohash",
+        "isOnline",
+        "updatedAt"
+      ]
     },
     "DriverMetrics": {
       "title": "DriverMetrics",
       "description": "Real-time daily performance metrics for driver fairness.",
       "type": "object",
       "properties": {
-        "driverId": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
-        "dailyEarnings": { "type": "number" },
-        "jobsDoneToday": { "type": "integer" },
-        "lastAssignmentAt": { "type": "string", "format": "date-time" }
+        "driverId": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "dailyEarnings": {
+          "type": "number"
+        },
+        "jobsDoneToday": {
+          "type": "integer"
+        },
+        "lastAssignmentAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["driverId", "date", "dailyEarnings", "jobsDoneToday", "lastAssignmentAt"]
+      "required": [
+        "driverId",
+        "date",
+        "dailyEarnings",
+        "jobsDoneToday",
+        "lastAssignmentAt"
+      ]
     },
     "Lead": {
       "title": "Lead",
       "description": "A lead generated for a partner.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "partnerId": { "type": "string" },
-        "campaignId": { "type": "string" },
-        "userId": { "type": "string" },
-        "userRole": { "type": "string", "enum": ["homeowner", "tradesperson"] },
-        "status": { "type": "string", "enum": ["new", "contacted", "converted", "rejected"] },
-        "data": { "type": "object" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string"
+        },
+        "partnerId": {
+          "type": "string"
+        },
+        "campaignId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userRole": {
+          "type": "string",
+          "enum": [
+            "homeowner",
+            "tradesperson"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "new",
+            "contacted",
+            "converted",
+            "rejected"
+          ]
+        },
+        "data": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "partnerId", "userId", "status", "createdAt"]
+      "required": [
+        "id",
+        "partnerId",
+        "userId",
+        "status",
+        "createdAt"
+      ]
     },
     "DriverExpense": {
       "title": "DriverExpense",
       "description": "An expense logged by a driver.",
       "type": "object",
       "properties": {
-        "driverId": { "type": "string" },
-        "amount": { "type": "number" },
-        "category": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
-        "notes": { "type": "string" },
-        "receiptImage": { "type": "string", "format": "uri" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "driverId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "category": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "receiptImage": {
+          "type": "string",
+          "format": "uri"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["driverId", "amount", "category", "date", "createdAt"]
+      "required": [
+        "driverId",
+        "amount",
+        "category",
+        "date",
+        "createdAt"
+      ]
+    },
+    "InstantMatch": {
+      "title": "InstantMatch",
+      "description": "Represents an Instant Match session for a job.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "chargeAmountPence": {
+          "type": "integer"
+        },
+        "chargeTier": {
+          "type": "string",
+          "enum": [
+            "free",
+            "instant_match",
+            "emergency"
+          ]
+        },
+        "feeWaived": {
+          "type": "boolean"
+        },
+        "stripePaymentIntent": {
+          "type": "string"
+        },
+        "stripeRefundId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "searching",
+            "matched",
+            "accepted",
+            "expired",
+            "refunded",
+            "cancelled"
+          ]
+        },
+        "matchedTraderId": {
+          "type": "string"
+        },
+        "matchScore": {
+          "type": "number"
+        },
+        "currentAttempt": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "searchingAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "matchedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "refundedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "cancelledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "refundReason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "jobId",
+        "customerId",
+        "status",
+        "currentAttempt",
+        "createdAt"
+      ]
+    },
+    "InstantMatchAttempt": {
+      "title": "InstantMatchAttempt",
+      "description": "A notification attempt sent to a specific trader for an Instant Match.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "instantMatchId": {
+          "type": "string"
+        },
+        "attemptNumber": {
+          "type": "integer"
+        },
+        "traderId": {
+          "type": "string"
+        },
+        "traderCompositeScore": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "notified",
+            "accepted",
+            "declined",
+            "timeout"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notifiedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "respondedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "responseTimeSeconds": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "instantMatchId",
+        "attemptNumber",
+        "traderId",
+        "status",
+        "createdAt"
+      ]
+    },
+    "TraderMatchScore": {
+      "title": "TraderMatchScore",
+      "description": "Trader scores for Instant Match targeting based on category.",
+      "type": "object",
+      "properties": {
+        "traderId": {
+          "type": "string"
+        },
+        "categoryId": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "reliability": {
+          "type": "number"
+        },
+        "speed": {
+          "type": "number"
+        },
+        "quality": {
+          "type": "number"
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "traderId",
+        "categoryId",
+        "score",
+        "lastUpdated"
+      ]
     }
   },
   "firestore": {
@@ -793,7 +2348,9 @@
       "description": "Purchase record from the AI Smart Shop."
     },
     "/assets/{assetId}": {
-      "schema": { "$ref": "#/entities/Asset" },
+      "schema": {
+        "$ref": "#/entities/Asset"
+      },
       "description": "Properties and assets managed by business users."
     },
     "/platform_config/{configId}": {
@@ -804,7 +2361,9 @@
       "schema": {
         "type": "object",
         "properties": {
-          "currentValue": { "type": "integer" }
+          "currentValue": {
+            "type": "integer"
+          }
         }
       },
       "description": "Atomic counters for member IDs and job numbers."
@@ -838,15 +2397,21 @@
       "description": "Real-time location index for drivers."
     },
     "/dispatches/{dispatchId}": {
-      "schema": { "type": "object" },
+      "schema": {
+        "type": "object"
+      },
       "description": "Dispatch jobs."
     },
     "/admins/{adminId}": {
-      "schema": { "type": "object" },
+      "schema": {
+        "type": "object"
+      },
       "description": "Trusted admin UIDs for RBAC."
     },
     "/driver_status/{driverId}": {
-      "schema": { "type": "object" },
+      "schema": {
+        "type": "object"
+      },
       "description": "Driver status."
     },
     "/driver_reviews/{reviewId}": {
@@ -860,6 +2425,22 @@
     "/driver_expenses/{expenseId}": {
       "schema": "DriverExpense",
       "description": "Expenses tracked by the driver."
+    },
+    "/instant_matches/{matchId}": {
+      "schema": "InstantMatch",
+      "description": "Instant Match sessions"
+    },
+    "/instant_matches/{matchId}/attempts/{attemptId}": {
+      "schema": "InstantMatchAttempt",
+      "description": "Notification attempts for an Instant Match"
+    },
+    "/users/{userId}/trader_match_scores/{categoryId}": {
+      "schema": "TraderMatchScore",
+      "description": "Trader match scores per category"
+    },
+    "/instant_match_attempts/{attemptId}": {
+      "schema": "InstantMatchAttempt",
+      "description": "Notification attempts for an Instant Match"
     }
   }
 }

@@ -236,6 +236,26 @@ service cloud.firestore {
       allow update: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || resource.data.tradespersonId == request.auth.uid || isAdmin());
     }
 
+    // --- Instant Match and Scores ---
+    match /instant_matches/{matchId} {
+      allow get: if isSignedIn(); // Allow get for matched traders and customers
+      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || resource.data.matchedTraderId == request.auth.uid);
+      allow create: if isSignedIn() && (request.resource.data.customerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn(); // Allow traders to respond to attempts, update match status
+    }
+
+    match /instant_match_attempts/{attemptId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && (resource.data.traderId == request.auth.uid || isAdmin());
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId);
+      allow update: if isSignedIn() && (resource.data.traderId == request.auth.uid || isAdmin());
+    }
+
+    match /users/{userId}/trader_match_scores/{categoryId} {
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow write: if isAdmin() || (isSignedIn() && userId == request.auth.uid);
+    }
+
     // --- Home Portal (Tradesperson/Homeowner Logic) ---
     match /jobs/{jobId} {
       allow read: if isSignedIn();

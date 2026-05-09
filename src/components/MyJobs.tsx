@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, handleFirestoreError, OperationType, deleteDoc } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History } from "lucide-react";
+import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { EmergencyTimer } from "./EmergencyTimer";
@@ -301,6 +301,12 @@ export default function MyJobs() {
                       )}>
                         {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace(/_/g, " ")}
                       </span>
+                      {job.status === "posted" && job.boostTier === "instant_match" && (
+                        <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1 animate-pulse border border-amber-200">
+                          <Zap className="w-3 h-3" />
+                          Finding Pro
+                        </span>
+                      )}
                     </div>
                   </div>
 
