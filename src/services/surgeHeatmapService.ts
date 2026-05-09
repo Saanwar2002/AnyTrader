@@ -55,7 +55,7 @@ export async function fetchLiveDemandZones(): Promise<SurgeZone[]> {
     const pendingRides = rideSnapshot.docs.map((d) => d.data());
 
     // Fetch active drivers to compare supply/demand
-    const driversRef = collection(db, "driver_locations");
+    const driversRef = collection(db, "live_tracking");
     const qDrivers = query(driversRef, where("isOnline", "==", true));
     const driverSnapshot = await getDocs(qDrivers);
     const onlineDrivers = driverSnapshot.docs.map((d) => d.data());

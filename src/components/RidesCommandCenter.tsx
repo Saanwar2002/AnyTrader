@@ -89,7 +89,14 @@ export default function RidesCommandCenter() {
             { id: "airport", name: "Airport Drop-off", amount: 5.0, description: "Standard airport terminal entry fee", type: "flat" },
             { id: "ulez", name: "ULEZ Charge", amount: 12.5, description: "Ultra Low Emission Zone fee", type: "flat" },
             { id: "congestion", name: "Congestion Charge", amount: 15, description: "London central zone fee", type: "flat" }
-          ]
+          ],
+          surgeEnabled: data.surgeEnabled ?? true,
+          surgeModel: data.surgeModel || 'fixed',
+          surgeRules: data.surgeRules || {
+             lowWaitMins: 5, mediumWaitMins: 10, highWaitMins: 20,
+             lowFee: 1.0, mediumFee: 2.0, highFee: 3.5,
+             lowMultiplier: 1.1, mediumMultiplier: 1.3, highMultiplier: 1.6
+          }
         };
 
         setServerConfig(merged);
@@ -141,6 +148,19 @@ export default function RidesCommandCenter() {
         dispatchRadiusMiles: Number(config.dispatchRadiusMiles) || 15,
         dispatchTimeoutSeconds: Number(config.dispatchTimeoutSeconds) || 15,
         autoDispatchEnabled: Boolean(config.autoDispatchEnabled),
+        surgeEnabled: Boolean(config.surgeEnabled ?? true),
+        surgeModel: config.surgeModel || 'fixed',
+        surgeRules: {
+           lowWaitMins: Number(config.surgeRules?.lowWaitMins) || 5,
+           mediumWaitMins: Number(config.surgeRules?.mediumWaitMins) || 10,
+           highWaitMins: Number(config.surgeRules?.highWaitMins) || 20,
+           lowFee: Number(config.surgeRules?.lowFee) || 1.0,
+           mediumFee: Number(config.surgeRules?.mediumFee) || 2.0,
+           highFee: Number(config.surgeRules?.highFee) || 3.5,
+           lowMultiplier: Number(config.surgeRules?.lowMultiplier) || 1.1,
+           mediumMultiplier: Number(config.surgeRules?.mediumMultiplier) || 1.3,
+           highMultiplier: Number(config.surgeRules?.highMultiplier) || 1.6,
+        },
         vehicleTypes: (config.vehicleTypes || []).map((vt: any) => ({
           ...vt,
           multiplier: Number(vt.multiplier) || 1
@@ -849,6 +869,78 @@ export default function RidesCommandCenter() {
                       />
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="space-y-6 pt-6 border-t border-slate-50">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Live Demand Surge Engine</h4>
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-slate-200 transition-colors">
+                    <div className="relative">
+                      <input 
+                        type="checkbox" 
+                        checked={config.surgeEnabled ?? true} 
+                        onChange={(e) => setConfig({ ...config, surgeEnabled: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </div>
+                    <div>
+                        <span className="text-sm font-bold text-slate-900 block">Enable Dynamic Surging</span>
+                        <span className="text-[10px] text-slate-500 font-medium">Automatically calculate surge in busy areas.</span>
+                    </div>
+                  </label>
+
+                  {(config.surgeEnabled ?? true) && (
+                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                           <div>
+                               <span className="text-xs font-bold text-slate-900 block">Surge Model</span>
+                               <span className="text-[10px] text-slate-500 font-medium">Use fixed additions or multipliers.</span>
+                           </div>
+                           <select 
+                             value={config.surgeModel || "fixed"}
+                             onChange={(e) => setConfig({ ...config, surgeModel: e.target.value })}
+                             className="bg-white border rounded p-1 text-sm font-bold outline-none"
+                           >
+                              <option value="fixed">Fixed Amount (£)</option>
+                              <option value="multiplier">Multiplier (x)</option>
+                           </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block h-auto sm:h-8">Max Surge / Fee (High)</label>
+                            <input 
+                              type="number" 
+                              step="0.5"
+                              value={config.surgeModel === 'multiplier' ? (config.surgeRules?.highMultiplier || 1.6) : (config.surgeRules?.highFee || 3.5)}
+                              onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                if (config.surgeModel === 'multiplier') {
+                                    setConfig({...config, surgeRules: { ...config.surgeRules, highMultiplier: isNaN(val) ? 1.6 : val }});
+                                } else {
+                                    setConfig({...config, surgeRules: { ...config.surgeRules, highFee: isNaN(val) ? 3.5 : val }});
+                                }
+                              }}
+                              className="w-full bg-white border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block h-auto sm:h-8">Max Wait Time Warning</label>
+                            <input 
+                              type="number" 
+                              step="5"
+                              value={config.surgeRules?.highWaitMins || 20}
+                              onChange={e => {
+                                const val = parseInt(e.target.value);
+                                setConfig({...config, surgeRules: { ...config.surgeRules, highWaitMins: isNaN(val) ? 20 : val }});
+                              }}
+                              className="w-full bg-white border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold"
+                            />
+                          </div>
+                        </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

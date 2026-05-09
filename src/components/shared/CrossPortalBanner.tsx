@@ -102,23 +102,5 @@ export default function CrossPortalBanner() {
     );
   }
 
-  // When on AnyRoller but there is an active job
-  if (activePortal === 'anyroller' && activeJob) {
-    return (
-      <button 
-        onClick={() => {
-          switchPortal('anytrader');
-          navigate(`/jobs/${activeJob.id}`);
-        }}
-        className="w-full bg-[#007AFF] text-white px-4 py-3 flex items-center justify-center gap-3 shadow-lg z-[60] sticky top-0 active:scale-[0.98] transition-all border-b border-[#007AFF]/80 cursor-pointer"
-      >
-        <Wrench className="w-5 h-5 flex-shrink-0" />
-        <span className="font-bold text-sm tracking-wide">
-          Trader en route — {activeJob.scheduledDate ? new Date(activeJob.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Arriving soon'}
-        </span>
-      </button>
-    );
-  }
-
   return null;
 }

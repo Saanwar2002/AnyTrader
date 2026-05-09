@@ -185,6 +185,8 @@ export default function TradesDashboard() {
         status: "accepted",
         acceptedTradespersonId: user?.uid,
         isInstantMatchAccepted: true, // Custom flag if we want it
+        isConfirmedByTradesperson: true,
+        scheduledDate: new Date().toISOString().split('T')[0],
         verificationPin: pin
       });
       

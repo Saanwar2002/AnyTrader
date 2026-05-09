@@ -2980,23 +2980,32 @@ export default function PassengerBooking() {
                         </AnimatePresence>
                         
                         {/* Fare Summary */}
-                        <div className="bg-white shadow-sm rounded-[8px] pb-2 pt-3 px-3 border border-black">
-                          <p className="text-[10px] font-bold uppercase text-slate-900 tracking-widest mb-2">Fare Breakdown</p>
-                          <div className="space-y-1 mb-2 text-[13px] text-black font-medium">
-                            <div className="flex justify-between"><span>Base fare:</span><span>£{(fareEstimate || 5.0).toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Vehicle ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}):</span><span>£{getComputedFare(selectedCategory).toFixed(2)}</span></div>
-                            {isPriority && <div className="flex justify-between text-[#2563EB] font-bold"><span>Priority:</span><span>+£3.00</span></div>}
-                            {isPetFriendly && <div className="flex justify-between text-[#2563EB] font-bold"><span>Pet:</span><span>+£3.00</span></div>}
-                            {((assignedDriverInfo?.tipAmount || 0) > 0) && <div className="flex justify-between text-emerald-600 font-bold"><span>Driver Tip:</span><span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span></div>}
-                            {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600 font-bold"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
-                          </div>
-                          <div className="border-t border-slate-300 pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
-                            <div className="flex items-center justify-between">
-                              <span>Total estimate:</span>
-                              <span className="text-[20px]">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Payment Method</span>
+                        {(() => {
+                           const base = Math.max(fareEstimate || 5.0, fareConfig.minFare);
+                           const catMultiplier = CAR_CATEGORIES.find(c => c.id === selectedCategory)?.multiplier || 1.0;
+                           const vehicleSubtotal = Math.max((fareEstimate || 5.0) * catMultiplier, fareConfig.minFare * catMultiplier);
+                           const vehicleExtra = vehicleSubtotal - base;
+                           const finalFare = getComputedFare(selectedCategory);
+                           const surgeExtra = finalFare - vehicleSubtotal;
+                           return (
+                             <div className="bg-white shadow-sm rounded-[8px] pb-2 pt-3 px-3 border border-black">
+                               <p className="text-[10px] font-bold uppercase text-slate-900 tracking-widest mb-2">Fare Breakdown</p>
+                               <div className="space-y-1 mb-2 text-[13px] text-black font-medium">
+                                 <div className="flex justify-between"><span>Journey Fare:</span><span>£{base.toFixed(2)}</span></div>
+                                 {vehicleExtra > 0 && <div className="flex justify-between text-slate-600"><span>Vehicle Upgrade ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}):</span><span>+£{vehicleExtra.toFixed(2)}</span></div>}
+                                 {surgeExtra > 0 && <div className="flex justify-between text-red-600 font-bold"><span>High Demand Surge:</span><span>+£{surgeExtra.toFixed(2)}</span></div>}
+                                 {isPriority && <div className="flex justify-between text-[#2563EB] font-bold"><span>Priority:</span><span>+£3.00</span></div>}
+                                 {isPetFriendly && <div className="flex justify-between text-[#2563EB] font-bold"><span>Pet:</span><span>+£3.00</span></div>}
+                                 {((assignedDriverInfo?.tipAmount || 0) > 0) && <div className="flex justify-between text-emerald-600 font-bold"><span>Driver Tip:</span><span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span></div>}
+                                 {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600 font-bold"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
+                               </div>
+                               <div className="border-t border-slate-300 pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
+                                 <div className="flex items-center justify-between">
+                                   <span>Total estimate:</span>
+                                   <span className="text-[20px]">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                                 </div>
+                                 <div className="flex items-center justify-between mt-2">
+                                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Payment Method</span>
                               {!!profile?.stripeCustomerId ? (
                                 <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm">
                                   <span className="text-emerald-700 text-[10px] font-black uppercase tracking-wider block leading-none">Auto Payment</span>
@@ -3010,6 +3019,8 @@ export default function PassengerBooking() {
                           </div>
                           <p className="text-[9px] text-slate-700 italic text-center pb-1 font-medium">Final fare may vary based on route</p>
                         </div>
+                        )
+                      })()}
 
                         <div className="pt-2">
                            <div className="relative">
@@ -3043,7 +3054,7 @@ export default function PassengerBooking() {
                                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                                  <div>
                                    <h4 className="text-sm font-bold text-red-900">High Demand Area</h4>
-                                   <p className="text-xs text-red-700 mt-1">Drivers are very busy in this area. You might have to wait {maxWaitTimeMins || 20}+ minutes.</p>
+                                   <p className="text-xs text-red-700 mt-1">Drivers are very busy in this area. You might have to wait {maxWaitTimeMins > 30 ? 30 : (maxWaitTimeMins || 20)}+ minutes.</p>
                                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
                                      <input 
                                        type="checkbox" 
@@ -3862,29 +3873,63 @@ export default function PassengerBooking() {
                         </div>
                      </div>
                      
-                     <div className="rounded-[16px] p-5 flex flex-col bg-white shadow-sm border border-slate-100">
-                        <p className="font-extrabold text-[#0a1930] text-[11px] uppercase tracking-wider border-b border-slate-100 pb-3 mb-3">Fare Breakdown</p>
-                        <div className="flex justify-between items-center text-[15px] mb-2">
-                           <span className="text-[#0a1930]">Base Estimate</span>
-                           <span className="text-[#0a1930]">£{(fareEstimate || 0).toFixed(2)}</span>
-                        </div>
-                        {isPriority && (
-                          <div className="flex justify-between items-center text-[15px] mb-2">
-                             <span className="text-[#0a1930] flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500"/> Priority Search</span>
-                             <span className="text-[#0a1930]">£1.50</span>
-                          </div>
-                        )}
-                        {isPetFriendly && (
-                          <div className="flex justify-between items-center text-[15px] mb-2">
-                             <span className="text-[#0a1930] flex items-center gap-1.5"><Dog className="w-3.5 h-3.5 text-orange-500"/> Pet Friendly</span>
-                             <span className="text-[#0a1930]">£2.00</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
-                           <span className="font-extrabold text-[#0a1930] text-[18px]">Total Estimate</span>
-                           <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{((assignedDriverInfo?.fareEstimate || fareEstimate || 0)).toFixed(2)}</span>
-                        </div>
-                     </div>
+                     {(() => {
+                        const base = Math.max(fareEstimate || 5.0, fareConfig.minFare);
+                        const catMultiplier = CAR_CATEGORIES.find(c => c.id === selectedCategory)?.multiplier || 1.0;
+                        const vehicleSubtotal = Math.max((fareEstimate || 5.0) * catMultiplier, fareConfig.minFare * catMultiplier);
+                        const vehicleExtra = vehicleSubtotal - base;
+                        const finalFare = getComputedFare(selectedCategory);
+                        const surgeExtra = finalFare - vehicleSubtotal;
+                        return (
+                           <div className="rounded-[16px] p-5 flex flex-col bg-white shadow-sm border border-slate-100">
+                              <p className="font-extrabold text-[#0a1930] text-[11px] uppercase tracking-wider border-b border-slate-100 pb-3 mb-3">Fare Breakdown</p>
+                              <div className="flex justify-between items-center text-[15px] mb-2">
+                                 <span className="text-[#0a1930]">Journey Fare</span>
+                                 <span className="text-[#0a1930]">£{base.toFixed(2)}</span>
+                              </div>
+                              {vehicleExtra > 0 && (
+                                <div className="flex justify-between items-center text-[15px] mb-2 text-slate-600">
+                                   <span className="truncate pr-2">Vehicle Upgrade ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name})</span>
+                                   <span>+£{vehicleExtra.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {surgeExtra > 0 && (
+                                <div className="flex justify-between items-center text-[15px] mb-2 text-red-600 font-bold">
+                                   <span>High Demand Surge</span>
+                                   <span>+£{surgeExtra.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {isPriority && (
+                                <div className="flex justify-between items-center text-[15px] mb-2 text-[#2563EB] font-bold">
+                                   <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-[#2563EB] fill-[#2563EB]"/> Priority</span>
+                                   <span>+£3.00</span>
+                                </div>
+                              )}
+                              {isPetFriendly && (
+                                <div className="flex justify-between items-center text-[15px] mb-2 text-[#2563EB] font-bold">
+                                   <span className="flex items-center gap-1.5"><Dog className="w-3.5 h-3.5 text-[#2563EB]"/> Pet</span>
+                                   <span>+£3.00</span>
+                                </div>
+                              )}
+                              {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && (
+                                <div className="flex justify-between items-center text-[15px] mb-2 text-red-600 font-bold">
+                                   <span>Unpaid Cancellation Fee</span>
+                                   <span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span>
+                                </div>
+                              )}
+                              {((assignedDriverInfo?.tipAmount || 0) > 0) && (
+                                <div className="flex justify-between items-center text-[15px] mb-2 text-emerald-600 font-bold">
+                                   <span>Driver Tip</span>
+                                   <span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+                                 <span className="font-extrabold text-[#0a1930] text-[18px]">Total Estimate</span>
+                                 <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                              </div>
+                           </div>
+                        )
+                     })()}
 
                      {comments && (
                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">

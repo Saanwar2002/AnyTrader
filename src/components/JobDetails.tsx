@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment } from "@/src/firebase";
+import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch } from "@/src/firebase";
 import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { useAuth } from "./AuthProvider";
+import { usePortal } from "@/src/lib/PortalContext";
 import { motion } from "motion/react";
 import { 
   MapPin, Clock, Wrench, ChevronLeft, CheckCircle2, 
@@ -28,6 +29,7 @@ import {
 import { RECURRING_CATEGORIES } from "@/src/constants";
 import { format, addHours, parseISO } from 'date-fns';
 import { TrustPulse } from "./TrustPulse";
+import { toast } from "sonner";
 
 // Helper to generate Google Calendar link
 const generateGoogleCalendarLink = (job: any, quote: any) => {
@@ -126,9 +128,12 @@ export default function JobDetails() {
   const [pinError, setPinError] = useState("");
   const [imElapsedSeconds, setImElapsedSeconds] = useState(0);
 
+const libraries: any[] = ['places'];
+
   const { isLoaded } = useJsApiLoader({
-    id: 'google-maps-script',
+    id: 'google-map-script',
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    libraries,
     version: "weekly"
   });
 
@@ -156,6 +161,17 @@ export default function JobDetails() {
           const hoDoc = await getDoc(doc(db, "users", data.homeownerId));
           if (hoDoc.exists()) {
             setHomeownerProfile(hoDoc.data());
+          }
+
+          // Fetch accepted tradesperson profile if not in quotes yet
+          if (data.acceptedTradespersonId) {
+            const tpDoc = await getDoc(doc(db, "users", data.acceptedTradespersonId));
+            if (tpDoc.exists()) {
+              setTradespersonProfiles(prev => ({
+                ...prev,
+                [data.acceptedTradespersonId]: tpDoc.data()
+              }));
+            }
           }
 
           // Check if a recurring schedule already exists for this job
@@ -1187,7 +1203,7 @@ export default function JobDetails() {
       }
 
       // Notify other party
-      const otherUserId = isHomeowner ? quotes.find(q => q.status === "accepted")?.tradespersonId : job.homeownerId;
+      const otherUserId = isHomeowner ? (quotes.find(q => q.status === "accepted")?.tradespersonId || job.acceptedTradespersonId) : job.homeownerId;
       if (otherUserId) {
         await sendNotification(
           otherUserId,
@@ -1623,17 +1639,18 @@ export default function JobDetails() {
     setIsProposingRecurring(true);
     try {
       const acceptedQuote = quotes.find(q => q.status === "accepted");
-      if (!acceptedQuote) throw new Error("No accepted quote found");
+      const tradespersonId = acceptedQuote?.tradespersonId || job.acceptedTradespersonId;
+      if (!tradespersonId) throw new Error("No accepted quote or tradesperson found");
 
       const scheduleId = `recurring_${id}_${Date.now()}`;
-      const otherPartyId = isHomeowner ? acceptedQuote.tradespersonId : job.homeownerId;
+      const otherPartyId = isHomeowner ? tradespersonId : job.homeownerId;
       
       await setDoc(doc(db, "recurring_schedules", scheduleId), {
         id: scheduleId,
         originalJobId: id,
         homeownerId: job.homeownerId,
-        tradespersonId: acceptedQuote.tradespersonId,
-        participants: [job.homeownerId, acceptedQuote.tradespersonId],
+        tradespersonId: tradespersonId,
+        participants: [job.homeownerId, tradespersonId],
         category: job.category,
         title: job.title,
         postcode: job.postcode,
@@ -1665,7 +1682,8 @@ export default function JobDetails() {
     }
   };
 
-  const isHomeowner = user?.uid === job?.homeownerId;
+  const { activeRole } = usePortal();
+  const isHomeowner = user?.uid === job?.homeownerId && activeRole !== "trader" && activeRole !== "business";
   const isAssignedTrader = quotes.find(q => q.status === "accepted")?.tradespersonId === user?.uid || job?.acceptedTradespersonId === user?.uid;
   const canSeeFullDetails = isHomeowner || isAssignedTrader;
   const hasQuoted = quotes.some(q => q.tradespersonId === user?.uid);
@@ -1962,10 +1980,45 @@ export default function JobDetails() {
                 </div>
              </div>
 
-             <div className="relative z-10 w-full px-4">
+           <div className="relative z-10 w-full px-4">
                <p className="text-blue-100 text-[15px] font-medium max-w-xs mx-auto mb-6">
                  Broadcasting your emergency request to the nearest 10 experts...
                </p>
+               <button 
+                 onClick={async () => {
+                   if (!id || !user) return;
+                   try {
+                     const matchRef = doc(collection(db, "instant_matches"));
+                     const attemptRef = doc(collection(db, "instant_match_attempts"));
+                     const batch = writeBatch(db);
+
+                     batch.set(matchRef, {
+                       jobId: id,
+                       customerId: user.uid,
+                       status: "searching",
+                       createdAt: serverTimestamp()
+                     });
+
+                     batch.set(attemptRef, {
+                       instantMatchId: matchRef.id,
+                       traderId: user.uid,
+                       status: "pending",
+                       attemptNumber: 1,
+                       createdAt: serverTimestamp(),
+                       expiresAt: new Date(Date.now() + 60000).toISOString()
+                     });
+                     
+                     await batch.commit();
+                     toast.success("Simulation triggered! Switch to Trader portal to see the alert.");
+                   } catch(e: any) {
+                     toast.error("Error creating match: " + e.message);
+                   }
+                 }}
+                 className="w-full bg-orange-500 text-white font-bold py-3 px-4 flex justify-center items-center gap-2 rounded-2xl hover:bg-orange-600 transition-colors mb-4"
+               >
+                 <Zap className="w-5 h-5" />
+                 Simulate: Send Match Alert to ME
+               </button>
              </div>
 
              <div className="w-full space-y-3 relative z-10">
@@ -1998,7 +2051,7 @@ export default function JobDetails() {
         )}
 
         {/* Confirmation Banner (Tradesperson) */}
-        {!isHomeowner && job.status === "accepted" && !job.isConfirmedByTradesperson && (
+        {!isHomeowner && job.status === "accepted" && !job.isConfirmedByTradesperson && job.scheduledDate && (
           <div className="bg-indigo-600 text-white p-6 rounded-3xl space-y-4 shadow-xl shadow-indigo-100 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <Calendar className="w-24 h-24" />
@@ -2154,7 +2207,7 @@ export default function JobDetails() {
         )}
 
         {/* Waiting for Confirmation Banner (Homeowner) */}
-        {isHomeowner && job.status === "accepted" && !job.isConfirmedByTradesperson && (
+        {isHomeowner && job.status === "accepted" && !job.isConfirmedByTradesperson && job.scheduledDate && (
           <div className="bg-slate-50 border border-slate-200 p-6 rounded-3xl space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
@@ -2172,7 +2225,7 @@ export default function JobDetails() {
         )}
 
         {/* Reschedule Proposal Banner (Homeowner) */}
-        {isHomeowner && job.rescheduleProposal?.status === "pending" && (
+        {isHomeowner && job.rescheduleProposal?.status === "pending" && job.scheduledDate && (
           <div className="bg-orange-50 border border-orange-100 p-6 rounded-3xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
@@ -2371,15 +2424,16 @@ export default function JobDetails() {
               </div>
               <div>
                 <h3 className="font-bold text-lg">Active Discussion</h3>
-                <p className="text-blue-100 text-xs">Chat with {isHomeowner ? (tradespersonProfiles[quotes.find(q => q.status === "accepted")?.tradespersonId]?.name || "Tradesperson") : (homeownerProfile?.name || "Homeowner")}</p>
+                <p className="text-blue-100 text-xs">Chat with {isHomeowner ? (tradespersonProfiles[(quotes.find(q => q.status === "accepted")?.tradespersonId || job.acceptedTradespersonId)]?.name || "Tradesperson") : (homeownerProfile?.name || "Homeowner")}</p>
               </div>
             </div>
             <button 
               onClick={() => {
                 const acceptedQuote = quotes.find(q => q.status === "accepted");
-                if (acceptedQuote) {
-                  const tpProfile = tradespersonProfiles[acceptedQuote.tradespersonId];
-                  handleStartChat(acceptedQuote, tpProfile);
+                const targetTradesperson = acceptedQuote?.tradespersonId || job.acceptedTradespersonId;
+                if (targetTradesperson) {
+                  const tpProfile = tradespersonProfiles[targetTradesperson];
+                  handleStartChat(acceptedQuote || { jobId: job.id, amount: 0, tradespersonId: targetTradesperson }, tpProfile);
                 }
               }}
               className="relative z-10 bg-white text-blue-600 px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-50 transition-all active:scale-95 flex items-center gap-2"
@@ -2799,7 +2853,7 @@ export default function JobDetails() {
               </div>
             )}
 
-            {(isHomeowner || quotes.find(q => q.status === "accepted")?.tradespersonId === user?.uid) && (
+            {(isHomeowner || (quotes.find(q => q.status === "accepted")?.tradespersonId || job.acceptedTradespersonId) === user?.uid) && (
               <button 
                 onClick={() => navigate(`/job/${id}/timeline`)}
                 className="w-full bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all"
@@ -3012,30 +3066,30 @@ export default function JobDetails() {
           job={job}
         />
 
-        {/* Quotes Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-black text-slate-900">
-              Quotes ({job.quoteCount || quotes.length})
-            </h3>
-            <div className="flex items-center gap-3">
-              {isHomeowner && quotes.length > 1 && (
-                <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Smart Sorted</span>
-                </div>
-              )}
-              {quotes.length > 1 && isHomeowner && (
-                <button 
-                  onClick={() => setIsComparisonModalOpen(true)}
-                  className="bg-blue-600 text-white px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2 active:scale-95"
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  Compare All
-                </button>
-              )}
+        {!job.isInstantMatchAccepted && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-black text-slate-900">
+                Quotes ({job.quoteCount || quotes.length})
+              </h3>
+              <div className="flex items-center gap-3">
+                {isHomeowner && quotes.length > 1 && (
+                  <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Smart Sorted</span>
+                  </div>
+                )}
+                {quotes.length > 1 && isHomeowner && (
+                  <button 
+                    onClick={() => setIsComparisonModalOpen(true)}
+                    className="bg-blue-600 text-white px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2 active:scale-95"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Compare All
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
           
           <div className="space-y-4">
             {/* Show actual quotes for homeowner or the tradesperson's own quote */}
@@ -3690,9 +3744,10 @@ export default function JobDetails() {
             )}
           </div>
         </div>
+        )}
 
         {/* Sidebar Actions (Tradesperson view) */}
-        {!isHomeowner && profile?.role === "tradesperson" && (!hasQuoted || needsRequote) && (
+        {!isHomeowner && profile?.role === "tradesperson" && job.status === "posted" && (!hasQuoted || needsRequote) && (
           (job.quoteCount || 0) >= 5 && !hasQuoted ? (
             <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center space-y-4">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
@@ -4098,7 +4153,7 @@ export default function JobDetails() {
               <ReviewForm
                 jobId={id!}
                 reviewerId={user!.uid}
-                revieweeId={quotes.find(q => q.status === "accepted")?.tradespersonId}
+                revieweeId={quotes.find(q => q.status === "accepted")?.tradespersonId || job.acceptedTradespersonId}
                 type="homeowner_review"
                 onSuccess={() => {
                   setShowReviewForm(false);
@@ -4110,15 +4165,17 @@ export default function JobDetails() {
           </div>
         )}
 
-        {!isHomeowner && job.status === "completed" && myQuote?.status === "accepted" && (
+        {!isHomeowner && job.status === "completed" && (myQuote?.status === "accepted" || job.acceptedTradespersonId === user?.uid) && (
           <div className="space-y-4">
-            <button 
-              onClick={handleDownloadInvoice}
-              className="w-full bg-white border-2 border-slate-200 text-slate-700 p-5 rounded-2xl font-bold hover:border-blue-600 hover:text-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95"
-            >
-              <FileText className="w-5 h-5" />
-              Download Invoice PDF
-            </button>
+            {myQuote?.status === "accepted" && (
+              <button 
+                onClick={handleDownloadInvoice}
+                className="w-full bg-white border-2 border-slate-200 text-slate-700 p-5 rounded-2xl font-bold hover:border-blue-600 hover:text-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95"
+              >
+                <FileText className="w-5 h-5" />
+                Download Invoice PDF
+              </button>
+            )}
 
             <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-lg shadow-indigo-100 space-y-4 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10">

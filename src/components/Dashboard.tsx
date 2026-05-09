@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import MediaGalleryModal from "./MediaGalleryModal";
 import { 
-  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, addDoc, runTransaction,
+  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, addDoc, runTransaction, writeBatch,
   db, auth, storage, handleFirestoreError, OperationType
 } from "@/src/firebase";
 import { motion } from "motion/react";
@@ -18,6 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { EmergencyTimer } from "./EmergencyTimer";
+import { toast } from "sonner";
 import { SEO } from "./SEO";
 import { getMaintenancePredictions } from "@/src/services/gemini";
 import HomeownerPerks from "./HomeownerPerks";
@@ -218,7 +219,7 @@ export default function Dashboard() {
       </button>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Link to="/find-trades" className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group">
           <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-blue-50 transition-colors">
             <Search className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
@@ -242,8 +243,54 @@ export default function Dashboard() {
             <EmergencyIcon className="w-5 h-5 text-red-600" />
           </div>
           <span className="text-[10px] text-center leading-tight">Emergency<br/>Fast Job Post</span>
-          <span className="text-[8px] font-black text-red-500 uppercase tracking-tighter mt-0.5">Exempt from limit</span>
         </Link>
+        <button 
+          onClick={async () => {
+             if (!user) return;
+             try {
+               const jobRef = doc(collection(db, "jobs"));
+               const matchRef = doc(collection(db, "instant_matches"));
+               const attemptRef = doc(collection(db, "instant_match_attempts"));
+               const batch = writeBatch(db);
+
+               batch.set(jobRef, {
+                 title: "Simulation Emergency Leak",
+                 description: "Water is everywhere. Full simulation job.",
+                 homeownerId: user.uid,
+                 status: "posted",
+                 boostTier: "instant_match",
+                 category: "Plumbing",
+                 subcategory: "Emergency Leak",
+                 createdAt: serverTimestamp(),
+               });
+               batch.set(matchRef, {
+                 jobId: jobRef.id,
+                 customerId: user.uid,
+                 status: "searching",
+                 createdAt: serverTimestamp()
+               });
+               batch.set(attemptRef, {
+                 instantMatchId: matchRef.id,
+                 traderId: user.uid,
+                 status: "pending",
+                 attemptNumber: 1,
+                 createdAt: serverTimestamp(),
+                 expiresAt: new Date(Date.now() + 60000).toISOString()
+               });
+               await batch.commit();
+               toast.success("Simulation triggered!")
+               navigate(`/job/${jobRef.id}`);
+             } catch (e: any) {
+               toast.error("Error: " + e.message);
+             }
+          }}
+          className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 font-bold text-orange-700 hover:bg-orange-100 transition-all shadow-sm group"
+        >
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center group-hover:bg-orange-100 transition-colors border border-orange-100">
+            <EmergencyIcon className="w-5 h-5 text-orange-600" />
+          </div>
+          <span className="text-[10px] text-center leading-tight">Simulate<br/>Instant Match</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

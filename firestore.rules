@@ -247,7 +247,7 @@ service cloud.firestore {
     match /instant_match_attempts/{attemptId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn() && (resource.data.traderId == request.auth.uid || isAdmin());
-      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId);
+      allow create: if isAdmin() || (isSignedIn() && (request.auth.uid == get(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId || request.auth.uid == getAfter(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId));
       allow update: if isSignedIn() && (resource.data.traderId == request.auth.uid || isAdmin());
     }
 

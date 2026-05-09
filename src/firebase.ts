@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
-import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString } from "firebase/storage";
 import firebaseConfig from "../firebase-applet-config.json";
 
@@ -211,6 +211,6 @@ export const submitReview = async (
 };
 
 export { 
-  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, addDoc, runTransaction, deleteField, arrayUnion, arrayRemove, increment,
+  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment,
   ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString
 };
