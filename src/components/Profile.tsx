@@ -225,6 +225,7 @@ export default function Profile() {
   const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
   const [expandedMenuGroups, setExpandedMenuGroups] = useState<string[]>([]);
   const [isEditingNotifications, setIsEditingNotifications] = useState(false);
+  const [isEditingIM, setIsEditingIM] = useState(false);
   const [showBioInfo, setShowBioInfo] = useState(false);
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
   const [showUserGuide, setShowUserGuide] = useState(false);
@@ -363,7 +364,7 @@ export default function Profile() {
   };
 
   useEffect(() => {
-    if (isEditing && profile) {
+    if ((isEditing || isEditingIM) && profile) {
       setEditData({
         name: profile.name || "",
         postcode: profile.postcode || "",
@@ -374,10 +375,12 @@ export default function Profile() {
         tags: (profile.tags || []).join(", "),
         services: profile.services || [],
         badges: profile.badges || [],
-        searchFeedBadges: profile.searchFeedBadges || []
+        searchFeedBadges: profile.searchFeedBadges || [],
+        isAvailableForInstantMatch: profile.isAvailableForInstantMatch || false,
+        instantMatchPricing: profile.instantMatchPricing || { callOutFee: 0, hourlyRate: 0, terms: "" }
       });
     }
-  }, [isEditing, profile]);
+  }, [isEditing, isEditingIM, profile]);
 
   useEffect(() => {
     const unsubConfig = onSnapshot(doc(db, "platform_config", "advertising"), (docSnapshot) => {
@@ -1311,11 +1314,11 @@ export default function Profile() {
   return (
     <div id="account" className="max-w-2xl mx-auto pb-24 px-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border border-black">
+      <div className="flex items-center justify-between mb-8 pb-4">
         <h1 className="text-3xl font-black text-slate-900 tracking-tight">Profile</h1>
         <button 
           onClick={() => navigate("/")} 
-          className="w-12 h-12 bg-white border border-black hover:bg-slate-50 hover:border-slate-300 rounded-full flex items-center justify-center transition-all shadow-sm text-slate-600 hover:text-slate-900 focus:ring-2 focus:ring-slate-200"
+          className="w-12 h-12 bg-white border border-slate-200 hover:bg-slate-50 border-slate-300 rounded-full flex items-center justify-center transition-all shadow-sm text-slate-600 hover:text-slate-900 focus:ring-2 focus:ring-slate-200"
         >
           <X className="w-6 h-6" />
         </button>
@@ -1328,12 +1331,6 @@ export default function Profile() {
       )}
 
       {/* Referral Program */}
-      {profile.role === "tradesperson" && (
-        <div className="mb-8">
-          <ReferralCard profile={profile} />
-        </div>
-      )}
-
       {/* Subscription Plan Card */}
       {activePortal === 'rides' && profile.role === "homeowner" && (
         <div className="bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-500 rounded-[2rem] shadow-[0_8px_30px_rgb(251,191,36,0.25)] overflow-hidden p-5 mb-8 relative">
@@ -1669,9 +1666,36 @@ export default function Profile() {
           </div>
         </div>
 
+        {/* Phase 1: Performance Stats */}
+        {profile.role === "tradesperson" && (
+          <div className="grid grid-cols-3 gap-4 mt-6">
+            <div className="text-center">
+              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
+                <Briefcase className="w-5 h-5 text-slate-600" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{profile.totalJobsDone || 0}</p>
+              <p className="text-xs text-slate-500 font-medium">Jobs</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
+                <Clock className="w-5 h-5 text-slate-600" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{profile.acceptanceRate || 100}%</p>
+              <p className="text-xs text-slate-500 font-medium">Response</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
+                <Shield className="w-5 h-5 text-slate-600" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{profile.trustScore || 95}</p>
+              <p className="text-xs text-slate-500 font-medium">Trust</p>
+            </div>
+          </div>
+        )}
+
         {/* Badges & Achievements Section */}
         {profile.role === "tradesperson" && (
-          <div className="mt-8 border-t border border-black pt-8">
+          <div className="mt-8">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Award className="w-4 h-4" />
               Badges & Milestones
@@ -1697,7 +1721,7 @@ export default function Profile() {
                 </div>
               ))}
               {getTraderBadges(profile).length === 0 && (
-                <div className="col-span-full py-6 text-center bg-slate-50 rounded-2xl border border-dashed border-black">
+                <div className="col-span-full py-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300">
                   <p className="text-xs text-slate-400 font-medium italic">Complete more jobs to earn badges!</p>
                 </div>
               )}
@@ -1706,7 +1730,7 @@ export default function Profile() {
         )}
 
         {profile.role === "tradesperson" && isBannerAdsEnabled && (
-          <div className="mt-8 border-t border border-black pt-8">
+          <div className="mt-8 mb-2">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Zap className="w-4 h-4" />
               Promotion & Advertising
@@ -1724,33 +1748,6 @@ export default function Profile() {
               <div className="absolute top-0 right-0 opacity-10 pointer-events-none transform translate-x-1/3 -translate-y-1/4">
                 <Zap className="w-64 h-64" />
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Phase 1: Performance Stats */}
-        {profile.role === "tradesperson" && (
-          <div className="grid grid-cols-3 gap-4 mt-8 border-t border border-black pt-8">
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-                <Briefcase className="w-5 h-5 text-slate-600" />
-              </div>
-              <p className="text-xl font-bold text-slate-900">{profile.totalJobsDone || 0}</p>
-              <p className="text-xs text-slate-500 font-medium">Jobs</p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-                <Clock className="w-5 h-5 text-slate-600" />
-              </div>
-              <p className="text-xl font-bold text-slate-900">{profile.acceptanceRate || 100}%</p>
-              <p className="text-xs text-slate-500 font-medium">Response</p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-                <Shield className="w-5 h-5 text-slate-600" />
-              </div>
-              <p className="text-xl font-bold text-slate-900">{profile.trustScore || 95}</p>
-              <p className="text-xs text-slate-500 font-medium">Trust</p>
             </div>
           </div>
         )}
@@ -1826,9 +1823,9 @@ export default function Profile() {
       {/* Products and Services Section */}
       {profile.role === "tradesperson" && (
         <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8 relative">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
                 <Briefcase className="w-5 h-5" />
               </div>
               <h3 className="text-xl font-bold text-slate-900">Products and Services</h3>
@@ -1845,18 +1842,18 @@ export default function Profile() {
                 </button>
               </div>
             ) : (
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full sm:w-auto">
                 <button 
                   onClick={handleSaveServices}
                   disabled={isSaving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all text-[11px] font-black uppercase tracking-wider shadow-sm disabled:opacity-50"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all text-[11px] font-black uppercase tracking-wider shadow-sm disabled:opacity-50"
                 >
                   {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                   Save
                 </button>
                 <button 
                   onClick={cancelEditingServices}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all text-[11px] font-black uppercase tracking-wider border border-black"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all text-[11px] font-black uppercase tracking-wider border border-black"
                 >
                   <X className="w-3 h-3" />
                   Cancel
@@ -1896,7 +1893,7 @@ export default function Profile() {
                 <input 
                   type="text"
                   placeholder="e.g. Boiler cleaning, servicing & repair"
-                  className="flex-1 p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
+                  className="flex-1 min-w-0 p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
                   value={newService}
                   onChange={(e) => setNewService(e.target.value)}
                   onKeyDown={(e) => {
@@ -1915,9 +1912,9 @@ export default function Profile() {
                       setNewService("");
                     }
                   }}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm font-bold text-sm flex items-center gap-2"
+                  className="px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm font-bold text-sm flex items-center justify-center gap-2 shrink-0"
                 >
-                  <Plus className="w-4 h-4" /> Add
+                  <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add</span>
                 </button>
               </div>
 
@@ -2016,19 +2013,19 @@ export default function Profile() {
               ))}
             </div>
 
-            <div className="mt-6 pt-6 border-t border border-black">
+            <div className="mt-6 pt-6 border-t border-slate-200">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Professional Badges</h4>
                 <button 
                   onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline"
+                  className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
                 >
                   <Pencil className="w-3 h-3" />
                   Edit prof badges
                 </button>
               </div>
               {(!profile.badges || profile.badges.length === 0) ? (
-                <div className="bg-slate-50 border border-black rounded-xl p-4 text-center">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
                   <Award className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                   <p className="text-sm text-slate-500 font-medium">No professional badges selected yet.</p>
                   <button 
@@ -2051,7 +2048,7 @@ export default function Profile() {
                       green: "bg-green-50 text-green-700 border-green-100",
                       indigo: "bg-indigo-50 text-indigo-700 border-indigo-100",
                       amber: "bg-amber-50 text-amber-700 border-amber-100",
-                      slate: "bg-slate-50 text-slate-700 border border-black",
+                      slate: "bg-slate-50 text-slate-700 border border-slate-200",
                       rose: "bg-rose-50 text-rose-700 border-rose-100"
                     };
 
@@ -2070,6 +2067,51 @@ export default function Profile() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-bold text-slate-900">Instant Match Settings</h4>
+                <button 
+                  onClick={() => setIsEditingIM(true)}
+                  className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
+                >
+                  <Pencil className="w-3 h-3" />
+                  Edit Settings
+                </button>
+              </div>
+              
+              {!profile.isAvailableForInstantMatch ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                  <Zap className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500 font-medium">Instant Match is currently disabled.</p>
+                  <button 
+                    onClick={() => setIsEditingIM(true)}
+                    className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700"
+                  >
+                    Enable Instant Match
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Call-Out Fee</p>
+                      <p className="text-2xl font-black text-slate-900 leading-none">£{profile.instantMatchPricing?.callOutFee || 0}</p>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Hourly Rate</p>
+                      <p className="text-2xl font-black text-slate-900 leading-none">£{profile.instantMatchPricing?.hourlyRate || 0}</p>
+                    </div>
+                  </div>
+                  {profile.instantMatchPricing?.terms && (
+                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl">
+                      <p className="text-[10px] text-amber-700/70 font-black uppercase tracking-widest mb-1">Terms & Conditions</p>
+                      <p className="text-sm font-bold text-amber-900">{profile.instantMatchPricing.terms}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -3342,7 +3384,7 @@ export default function Profile() {
                       />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center justify-between mb-3 mt-4">
                         <div className="flex items-center gap-2">
                           <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Professional Badges</label>
                           <button 
@@ -3369,7 +3411,7 @@ export default function Profile() {
                           Search Card: {editData.searchFeedBadges?.length || 0}/4
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 gap-3">
+                      <div className="grid grid-cols-1 gap-3 mb-6">
                         {PROFESSIONAL_BADGES.map((badge) => {
                           const Icon = { ShieldCheck, Clock, FileText, Shield, CheckCircle, MapPin, Heart, Star }[badge.icon] as any;
                           const isSelected = editData.badges?.includes(badge.id) || badge.id === 'local_business';
@@ -3462,6 +3504,111 @@ export default function Profile() {
                 >
                   {isSaving && <Loader2 className="w-5 h-5 animate-spin" />}
                   Save Changes
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isEditingIM && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end sm:items-center sm:justify-center"
+          >
+            <motion.div 
+              initial={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
+              animate={{ y: 0, sm: { scale: 1, opacity: 1 } }}
+              exit={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-t-[2rem] sm:rounded-[2rem] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            >
+              <div className="p-5 pb-4 flex items-center justify-between shrink-0 border-b border-slate-50">
+                <h3 className="text-xl font-bold text-slate-900">Instant Match Settings</h3>
+                <button onClick={() => setIsEditingIM(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5">
+                <label className="flex items-center justify-between p-3 border border-slate-300 rounded-xl mb-4 hover:bg-slate-50 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
+                    <span className="text-sm font-bold text-slate-700">Available for Instant Match</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 accent-blue-600"
+                    checked={editData.isAvailableForInstantMatch || false}
+                    onChange={(e) => setEditData({...editData, isAvailableForInstantMatch: e.target.checked})}
+                  />
+                </label>
+                
+                {editData.isAvailableForInstantMatch && (
+                  <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Call-Out Fee (£)</label>
+                      <input 
+                        type="number"
+                        className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                        value={editData.instantMatchPricing?.callOutFee || ''}
+                        onChange={(e) => setEditData({ 
+                          ...editData, 
+                          instantMatchPricing: { ...(editData.instantMatchPricing || {} as any), callOutFee: Number(e.target.value) } 
+                        })}
+                        placeholder="e.g. 50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Hourly Rate (£/hr)</label>
+                      <input 
+                        type="number"
+                        className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                        value={editData.instantMatchPricing?.hourlyRate || ''}
+                        onChange={(e) => setEditData({ 
+                          ...editData, 
+                          instantMatchPricing: { ...(editData.instantMatchPricing || {} as any), hourlyRate: Number(e.target.value) } 
+                        })}
+                        placeholder="e.g. 80"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Terms & Conditions</label>
+                      <textarea 
+                        className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm resize-y"
+                        value={editData.instantMatchPricing?.terms || ''}
+                        onChange={(e) => setEditData({ 
+                          ...editData, 
+                          instantMatchPricing: { ...(editData.instantMatchPricing || {} as any), terms: e.target.value } 
+                        })}
+                        placeholder="e.g. Rate excludes materials. Client must be present to provide access."
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-slate-100 bg-white">
+                <button 
+                  onClick={() => setIsEditingIM(false)}
+                  className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={async () => {
+                    await handleSave();
+                    setIsEditingIM(false);
+                  }}
+                  disabled={isSaving}
+                  className="flex-1 p-4 rounded-2xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                >
+                  {isSaving && <Loader2 className="w-5 h-5 animate-spin" />}
+                  Save Settings
                 </button>
               </div>
             </motion.div>
