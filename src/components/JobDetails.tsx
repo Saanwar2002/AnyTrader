@@ -10,9 +10,10 @@ import {
   MessageSquare, PoundSterling, Calendar, Loader2, User as UserIcon, Video, Star,
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
-  BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home
+  BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation
 } from "lucide-react";
 import jsPDF from 'jspdf';
+import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { ReviewForm } from "./ReviewForm";
 import { AnimatePresence } from "motion/react";
@@ -124,6 +125,12 @@ export default function JobDetails() {
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [imElapsedSeconds, setImElapsedSeconds] = useState(0);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-maps-script',
+    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    version: "weekly"
+  });
 
   useEffect(() => {
     if (job?.status === "posted" && job?.boostTier === "instant_match") {
@@ -838,6 +845,44 @@ export default function JobDetails() {
       console.error("Error starting job:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSetOnRoute = async () => {
+    if (!id || !job) return;
+    try {
+      await updateDoc(doc(db, "jobs", id), {
+        trackingStatus: "on_route"
+      });
+      setJob((prev: any) => ({ ...prev, trackingStatus: "on_route" }));
+      await sendNotification(
+        job.homeownerId,
+        "Tradesperson on route!",
+        `Your assigned tradesperson is currently on route to your location.`,
+        "status",
+        `/job/${id}`
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSetArrived = async () => {
+    if (!id || !job) return;
+    try {
+      await updateDoc(doc(db, "jobs", id), {
+        trackingStatus: "arrived"
+      });
+      setJob((prev: any) => ({ ...prev, trackingStatus: "arrived" }));
+      await sendNotification(
+        job.homeownerId,
+        "Tradesperson arrived!",
+        `Your assigned tradesperson has arrived at your location.`,
+        "status",
+        `/job/${id}`
+      );
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -1995,6 +2040,95 @@ export default function JobDetails() {
                 </a>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Live Trader Tracking Map (Homeowner) */}
+        {isHomeowner && job.status === "accepted" && job.trackingStatus && (
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4 shadow-xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-5">
+              <Navigation className="w-24 h-24 text-white" />
+            </div>
+            <div className="relative z-10 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black mb-1 tracking-tight text-white flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                  </span>
+                  Live Tracking
+                </h3>
+                <p className="text-sm text-slate-400 font-bold uppercase tracking-wider">
+                  {job.trackingStatus === "on_route" ? "Tradesperson is on route" : "Tradesperson has arrived"}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative h-48 w-full rounded-2xl overflow-hidden bg-slate-800 border border-slate-700">
+              {isLoaded ? (
+                <GoogleMap
+                  mapContainerStyle={{ width: '100%', height: '100%' }}
+                  center={{ lat: 51.5074, lng: -0.1278 }}
+                  zoom={12}
+                  options={{
+                    disableDefaultUI: true,
+                    gestureHandling: 'none',
+                    styles: [
+                      { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
+                      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
+                      { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
+                      {
+                        "featureType": "road",
+                        "elementType": "geometry",
+                        "stylers": [{ "color": "#38414e" }]
+                      },
+                      {
+                        "featureType": "road",
+                        "elementType": "geometry.stroke",
+                        "stylers": [{ "color": "#212a37" }]
+                      },
+                      {
+                        "featureType": "water",
+                        "elementType": "geometry",
+                        "stylers": [{ "color": "#17263c" }]
+                      }
+                    ]
+                  }}
+                >
+                  <OverlayViewF position={{ lat: 51.5074, lng: -0.1278 }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                    <div className="absolute -translate-x-1/2 -translate-y-1/2">
+                      {job.trackingStatus === "on_route" ? (
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 animate-pulse border-2 border-white">
+                          <Navigation className="w-4 h-4 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-green-500/50 border-2 border-white">
+                          <MapPin className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
+                  </OverlayViewF>
+                </GoogleMap>
+              ) : (
+                <div className="absolute inset-0 bg-slate-800 animate-pulse border border-slate-700"></div>
+              )}
+              <div className="absolute bottom-4 left-4 right-4 bg-slate-900/90 backdrop-blur-md p-3 rounded-xl border border-slate-700 text-white shadow-xl pointer-events-none">
+                 <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-2">
+                     <Clock className="w-4 h-4 text-blue-400" />
+                     <span className="text-xs font-bold font-mono">
+                       {job.trackingStatus === "on_route" ? "ETA: 12 mins (2.4 mi)" : "Arrived at location"}
+                     </span>
+                   </div>
+                 </div>
+              </div>
+            </div>
+            {job.trackingStatus === "arrived" && (
+              <div className="bg-green-500/10 border border-green-500/20 p-3 rounded-xl flex items-center gap-3">
+                 <CheckCircle2 className="w-5 h-5 text-green-400" />
+                 <p className="text-sm font-bold text-green-400">The tradesperson is ready. Please check their digital ID.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -3808,19 +3942,42 @@ export default function JobDetails() {
 
         {!isHomeowner && job.status === "accepted" && isAssignedTrader && (
           <div className="space-y-3">
-            <button 
-              onClick={() => setShowDigitalId(true)}
-              className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 active:scale-95"
-            >
-              <QrCode className="w-5 h-5" />
-              Show Digital ID Card
-            </button>
-            <button 
-              onClick={handleStartJob}
-              className="w-full bg-[#1e3a5f] text-white p-5 rounded-2xl font-bold hover:bg-blue-900 transition-all shadow-lg shadow-blue-100 active:scale-95"
-            >
-              Start Work
-            </button>
+            {!job.trackingStatus && (
+              <button 
+                onClick={handleSetOnRoute}
+                className="w-full bg-blue-600 text-white p-5 rounded-2xl font-bold hover:bg-blue-700 transition-all active:scale-95 flex justify-center items-center gap-2"
+              >
+                <Navigation className="w-5 h-5" />
+                Signal On Route
+              </button>
+            )}
+            {job.trackingStatus === "on_route" && (
+              <button 
+                onClick={handleSetArrived}
+                className="w-full bg-green-600 text-white p-5 rounded-2xl font-bold hover:bg-green-700 transition-all active:scale-95 flex justify-center items-center gap-2"
+              >
+                <MapPin className="w-5 h-5" />
+                Signal Arrived
+              </button>
+            )}
+
+            {(job.trackingStatus === "arrived" || job.trackingStatus === "completed" || job.trackingStatus === undefined) && (
+              <>
+                <button 
+                  onClick={() => setShowDigitalId(true)}
+                  className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <QrCode className="w-5 h-5" />
+                  Show Digital ID Card
+                </button>
+                <button 
+                  onClick={handleStartJob}
+                  className="w-full bg-[#1e3a5f] text-white p-5 rounded-2xl font-bold hover:bg-blue-900 transition-all shadow-lg shadow-blue-100 active:scale-95"
+                >
+                  Start Work
+                </button>
+              </>
+            )}
           </div>
         )}
 

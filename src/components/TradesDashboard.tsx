@@ -808,22 +808,22 @@ export default function TradesDashboard() {
             <p className="text-slate-500 font-medium mt-1">Manage your quotes and active projects.</p>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
+          {/* Test Alert Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowTestAlert(true)}
+            className="self-end flex items-center gap-1.5 bg-zinc-900 text-white px-2.5 h-7 rounded-2xl shadow-sm hover:bg-zinc-800 transition-colors shrink-0"
+          >
+            <Zap className="w-3 h-3 text-red-500 fill-red-500" />
+            <span className="text-[10px] font-bold truncate">Test IM Alert</span>
+          </button>
+
           {/* Toggles Container */}
           <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto -mx-1 px-1 sm:mx-0 sm:px-0 scrollbar-hide">
-            {/* Test Alert Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowTestAlert(true)}
-              className="flex items-center gap-1.5 bg-zinc-900 text-white px-3 h-9 rounded-2xl shadow-sm hover:bg-zinc-800 transition-colors shrink-0"
-            >
-              <Zap className="w-3.5 h-3.5 text-red-500 fill-red-500" />
-              <span className="text-[10px] font-bold truncate">Test IM Alert</span>
-            </button>
-
             {/* Emergency Toggle */}
-            <div className="flex items-center gap-1.5 bg-white px-2.5 h-9 rounded-2xl border border-slate-200 shadow-sm shrink-0">
-              <Zap className={cn("w-3.5 h-3.5", profile?.isAvailableForEmergency ? "text-red-500" : "text-slate-400")} />
+            <div className={cn("flex items-center gap-1.5 px-2 h-8 rounded-2xl border border-black shadow-sm shrink-0 transition-colors", profile?.isAvailableForEmergency ? "bg-red-50" : "bg-white")}>
+              <Zap className={cn("w-3 h-3", profile?.isAvailableForEmergency ? "text-red-500" : "text-slate-400")} />
               <span className="text-[10px] font-bold text-slate-700 truncate">Emergency</span>
               <button 
                 type="button"
@@ -849,15 +849,15 @@ export default function TradesDashboard() {
                     alert("Unable to update emergency status.");
                   }
                 }}
-                className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingEmergency ? 'bg-amber-400' : (profile?.isAvailableForEmergency ? 'bg-red-500' : 'bg-slate-200')}`}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingEmergency ? 'bg-amber-400' : (profile?.isAvailableForEmergency ? 'bg-red-500' : 'bg-slate-300')}`}
               >
-                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${profile?.isAvailableForEmergency ? 'translate-x-7' : 'translate-x-1'}`} />
+                <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${profile?.isAvailableForEmergency ? 'translate-x-4' : 'translate-x-[2px]'}`} />
               </button>
             </div>
 
             {/* Instant Match Toggle */}
-            <div className="flex items-center gap-1.5 bg-white px-2.5 h-9 rounded-2xl border border-slate-200 shadow-sm shrink-0">
-              <Zap className={cn("w-3.5 h-3.5", profile?.isAvailableForInstantMatch ? "text-amber-500" : "text-slate-400")} />
+            <div className={cn("flex items-center gap-1.5 px-2 h-8 rounded-2xl border border-black shadow-sm shrink-0 transition-colors", profile?.isAvailableForInstantMatch ? "bg-amber-50" : "bg-white")}>
+              <Zap className={cn("w-3 h-3", profile?.isAvailableForInstantMatch ? "text-amber-500" : "text-slate-400")} />
               <span className="text-[10px] font-bold text-slate-700 truncate">Instant Match</span>
               <button 
                 type="button"
@@ -891,17 +891,17 @@ export default function TradesDashboard() {
                     alert("Unable to update Instant Match status.");
                   }
                 }}
-                className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingIM ? 'bg-amber-400' : (profile?.isAvailableForInstantMatch ? 'bg-amber-500' : 'bg-slate-200')}`}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingIM ? 'bg-amber-400' : (profile?.isAvailableForInstantMatch ? 'bg-amber-500' : 'bg-slate-300')}`}
               >
-                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${profile?.isAvailableForInstantMatch ? 'translate-x-7' : 'translate-x-1'}`} />
+                <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${profile?.isAvailableForInstantMatch ? 'translate-x-4' : 'translate-x-[2px]'}`} />
               </button>
             </div>
 
             {/* Exclusive Job Offers Toggle */}
             {sysConfig?.paywallEnabled !== false && (
-              <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 px-2.5 h-9 rounded-2xl border border-amber-200 shadow-sm relative overflow-hidden shrink-0">
-                <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
-                <span className="text-[10px] font-black uppercase text-amber-900 tracking-tight">Priority Offers</span>
+              <div className={cn("flex items-center gap-1.5 px-2 h-8 rounded-2xl border border-black shadow-sm shrink-0 transition-colors overflow-hidden", (profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? "bg-yellow-50" : "bg-white")}>
+                <Zap className="w-3 h-3 text-yellow-500 fill-current" />
+                <span className="text-[10px] font-black uppercase text-yellow-900 tracking-tight">Priority Offers</span>
                 <button 
                   type="button"
                   onClick={async (e) => {
@@ -925,9 +925,9 @@ export default function TradesDashboard() {
                       }
                     }
                   }}
-                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none z-10 ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'bg-amber-500' : 'bg-slate-300'}`}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none z-10 ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'bg-yellow-500' : 'bg-slate-300'}`}
                 >
-                  <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'translate-x-7' : 'translate-x-1'}`} />
+                  <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'translate-x-4' : 'translate-x-[2px]'}`} />
                 </button>
               </div>
             )}
@@ -959,7 +959,7 @@ export default function TradesDashboard() {
                   console.error('Error sharing:', err);
                 }
               }}
-              className="bg-white text-slate-700 border border-slate-200 h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm"
+              className="bg-white text-slate-700 border border-black h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm shrink-0"
             >
               <Share2 className="w-4 h-4 text-blue-600" />
               Share
@@ -968,7 +968,7 @@ export default function TradesDashboard() {
             {/* Availability Button */}
             <Link 
               to="/availability"
-              className="bg-white text-slate-700 border border-slate-200 h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm"
+              className="bg-white text-slate-700 border border-black h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm shrink-0"
             >
               <Calendar className="w-4 h-4 text-blue-600" />
               Set Availability
@@ -977,7 +977,7 @@ export default function TradesDashboard() {
 
           <Link 
             to="/job-feed" 
-            className="bg-primary text-white h-11 px-6 rounded-2xl font-bold hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex w-full sm:w-auto items-center justify-center gap-2 active:scale-95"
+            className="bg-primary text-white h-11 px-6 rounded-2xl font-bold border border-primary hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex w-full sm:w-auto items-center justify-center gap-2 active:scale-95 shrink-0"
           >
             <Briefcase className="w-5 h-5" />
             Find Jobs
@@ -987,35 +987,35 @@ export default function TradesDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+        <div className="bg-white p-3 rounded-2xl border border-black shadow-sm space-y-1 content-center">
           <div className="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 mb-1">
             <PoundSterling className="w-3 h-3" />
           </div>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Quotes</p>
           <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats.activeQuotes}</p>
         </div>
-        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+        <div className="bg-white p-3 rounded-2xl border border-black shadow-sm space-y-1 content-center">
           <div className="w-6 h-6 bg-green-50 rounded-lg flex items-center justify-center text-green-600 mb-1">
             <Briefcase className="w-3 h-3" />
           </div>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Active Jobs</p>
           <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats.activeJobs}</p>
         </div>
-        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+        <div className="bg-white p-3 rounded-2xl border border-black shadow-sm space-y-1 content-center">
           <div className="w-6 h-6 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 mb-1">
             <Calendar className="w-3 h-3" />
           </div>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Upcoming</p>
           <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats.upcomingJobs}</p>
         </div>
-        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+        <div className="bg-white p-3 rounded-2xl border border-black shadow-sm space-y-1 content-center">
           <div className="w-6 h-6 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 mb-1">
             <Star className="w-3 h-3 fill-current" />
           </div>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Rating</p>
           <p className="text-xl sm:text-2xl font-bold text-slate-900">{profile?.rating ? profile.rating.toFixed(1) : "N/A"}</p>
         </div>
-        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 content-center">
+        <div className="bg-white p-3 rounded-2xl border border-black shadow-sm space-y-1 content-center">
           <div className="w-6 h-6 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 mb-1">
             <ShieldCheck className="w-3 h-3" />
           </div>
@@ -1432,7 +1432,7 @@ export default function TradesDashboard() {
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900 text-sm">Top 5 Quote Guarantee</h4>
-                      <p className="text-xs text-slate-500">Submit your quote while others are locked out. Use up to 3 exclusive skips per day.</p>
+                      <p className="text-xs text-slate-500">Submit your quote while others are locked out. Get matched to 3 Exclusive Offer per day.</p>
                     </div>
                   </div>
                 </div>
