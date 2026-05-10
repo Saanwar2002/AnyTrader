@@ -34,7 +34,8 @@ import {
   Zap as ZapIcon,
   BarChart3,
   Locate,
-  Star
+  Star,
+  PenTool
 } from "lucide-react";
 import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
@@ -131,7 +132,7 @@ export default function PostJobWizard() {
   }, [step]);
 
   React.useEffect(() => {
-    if (step === 7 && formData.category && formData.description) {
+    if (step === 5 && formData.category && formData.description) {
       import("@/src/services/gemini").then((gemini) => {
         gemini.getDynamicInstantMatchPricing(formData.category, formData.title, formData.description)
         .then(res => {
@@ -184,6 +185,7 @@ export default function PostJobWizard() {
     version: "weekly"
   });
   const [titleError, setTitleError] = useState("");
+  const [descriptionError, setDescriptionError] = useState("");
   const [postcodeError, setPostcodeError] = useState("");
   const [cameraMode, setCameraMode] = useState<"photo" | "video">("photo");
   const [isRecording, setIsRecording] = useState(false);
@@ -910,6 +912,23 @@ export default function PostJobWizard() {
   };
 
   const handleGetRefinement = async () => {
+    let hasError = false;
+    if (!formData.title || formData.title.trim().length < 3) {
+      setTitleError("Title must be at least 3 characters long");
+      hasError = true;
+    } else {
+      setTitleError("");
+    }
+    
+    if (!formData.description || formData.description.trim().length < 10) {
+      setDescriptionError("Description must be at least 10 characters long");
+      hasError = true;
+    } else {
+      setDescriptionError("");
+    }
+
+    if (hasError) return;
+
     setStep(3.5); // Move to 3.5 immediately so user sees loader
     setIsRefiningScope(true);
     try {
@@ -1225,7 +1244,11 @@ export default function PostJobWizard() {
       }
 
       toast.success(assetsToPost.length > 1 ? `Successfully posted ${assetsToPost.length} projects` : "Job posted successfully!");
-      navigate(profile?.subscriptionType === "business" ? "/portfolio" : "/my-jobs");
+      if (editJob || targetTradespersonId) {
+        navigate(profile?.subscriptionType === "business" ? "/portfolio" : "/my-jobs");
+      } else {
+        setStep(6);
+      }
     } catch (err) {
       console.error("Error posting job:", err);
       try {
@@ -1266,9 +1289,9 @@ export default function PostJobWizard() {
             Back
           </button>
           
-          {step > 0 && (
+          {step > 0 && step < 6 && (
             <div className="absolute left-1/2 -translate-x-1/2 text-center">
-              <p className="text-slate-900 font-bold text-base">Step {step} of 7</p>
+              <p className="text-slate-900 font-bold text-base">Step {step} of 5</p>
             </div>
           )}
           
@@ -1277,12 +1300,12 @@ export default function PostJobWizard() {
           </button>
         </div>
         
-        {step > 0 && (
+        {step > 0 && step < 6 && (
           <div className="w-full bg-slate-100 h-1">
             <motion.div 
               className="h-full bg-[#0084a5]"
               initial={{ width: 0 }}
-              animate={{ width: `${(step / 7) * 100}%` }}
+              animate={{ width: `${(step / 5) * 100}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}
             />
           </div>
@@ -1661,7 +1684,7 @@ export default function PostJobWizard() {
                   </div>
                 )}
                 <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">Job Title</label>
+                  <label className="text-sm font-bold text-slate-700">Job Title <span className="text-red-500">*</span></label>
                   <input 
                     type="text" 
                     placeholder="e.g. Fix leaking kitchen tap"
@@ -1673,24 +1696,35 @@ export default function PostJobWizard() {
                     onChange={(e) => {
                       const value = e.target.value;
                       setFormData({ ...formData, title: value });
-                      if (value.length > 0 && value.length < 3) {
+                      if (value.trim().length > 0 && value.trim().length < 3) {
                         setTitleError("Title must be at least 3 characters long");
                       } else {
                         setTitleError("");
                       }
                     }}
                   />
-                  {titleError && <p className="text-red-500 text-xs mt-1">{titleError}</p>}
+                  {titleError && <p className="text-red-500 text-xs mt-1 font-medium">{titleError}</p>}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">Description</label>
+                  <label className="text-sm font-bold text-slate-700">Description <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <textarea 
                       rows={4}
                       placeholder="Describe the issue, any specific parts needed, and the current state..."
-                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white"
+                      className={cn(
+                        "w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white",
+                        descriptionError ? "border-red-500" : "border-black"
+                      )}
                       value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFormData({ ...formData, description: value });
+                        if (value.trim().length > 0 && value.trim().length < 10) {
+                          setDescriptionError("Description must be at least 10 characters long");
+                        } else {
+                          setDescriptionError("");
+                        }
+                      }}
                     />
                     <div className="absolute bottom-4 right-4 flex items-center gap-2">
                       {formData.description.length > 0 && formData.description.length < 10 && (
@@ -1715,6 +1749,135 @@ export default function PostJobWizard() {
                       </button>
                     </div>
                   </div>
+                  {descriptionError && <p className="text-red-500 text-xs mt-1 font-medium">{descriptionError}</p>}
+
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button 
+                      onClick={() => handleStartCamera("photo")}
+                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <Camera className="w-4 h-4 text-[#0084a5]" /> Add Photo
+                    </button>
+                    <button 
+                      onClick={() => handleStartCamera("video")}
+                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <Video className="w-4 h-4 text-[#0084a5]" /> Add Video
+                    </button>
+                    <button 
+                      onClick={() => docInputRef.current?.click()}
+                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <FileText className="w-4 h-4 text-[#0084a5]" /> Add PDF
+                    </button>
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <PenTool className="w-4 h-4 text-[#0084a5]" /> Add Drawing
+                    </button>
+                  </div>
+
+                  {/* Document & Media Previews */}
+                  {(formData.photos.length > 0 || formData.videos.length > 0 || formData.documents.length > 0) && (
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      {formData.photos.map((url, i) => (
+                        <div key={`photo-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                          <img src={url} alt={`Job photo ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <button 
+                            onClick={() => setFormData({ ...formData, photos: formData.photos.filter((_, idx) => idx !== i) })}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {formData.videos.map((url, i) => (
+                        <div key={`video-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center shadow-sm">
+                          <video src={url} className="w-full h-full object-cover opacity-60" />
+                          <Video className="w-6 h-6 text-white absolute" />
+                          <button 
+                            onClick={() => setFormData({ ...formData, videos: formData.videos.filter((_, idx) => idx !== i) })}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {formData.documents.map((doc, i) => (
+                        <div key={`doc-${i}`} className="flex items-center gap-2 p-2 w-16 h-16 bg-slate-50 flex-col justify-center rounded-xl border border-slate-200 shadow-sm relative">
+                          <FileText className="w-6 h-6 text-indigo-600 shrink-0" />
+                          <span className="text-[9px] text-slate-700 truncate w-full text-center font-medium">{doc.name}</span>
+                          <button 
+                            onClick={() => setFormData(prev => ({ ...prev, documents: prev.documents.filter((_, idx) => idx !== i) }))}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {formData.photos.length > 0 && !aiDiagnosis && (
+                    <button 
+                      onClick={handleAnalyzePhoto}
+                      disabled={isAnalyzingPhoto}
+                      className="w-full mt-2 p-3 rounded-xl bg-blue-50 border border-blue-100 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all disabled:opacity-50 text-sm"
+                    >
+                      {isAnalyzingPhoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      Analyze Photos with AI
+                    </button>
+                  )}
+
+                  {aiDiagnosis && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="mt-2 p-4 rounded-xl bg-blue-600 text-white space-y-3 shadow-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5" />
+                        <h4 className="font-bold">AI Diagnosis</h4>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1 bg-white/10 p-2 rounded-lg">
+                          <p className="text-[10px] opacity-80 font-bold uppercase">Suggested Category</p>
+                          <p className="font-bold text-sm leading-tight">{aiDiagnosis.category}</p>
+                        </div>
+                        <div className="space-y-1 bg-white/10 p-2 rounded-lg">
+                          <p className="text-[10px] opacity-80 font-bold uppercase">Urgency Level</p>
+                          <p className="font-bold text-sm leading-tight">{aiDiagnosis.urgency}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm opacity-90 italic">"{aiDiagnosis.reasoning}"</p>
+                      <button 
+                        onClick={applyAiDiagnosis}
+                        className="w-full mt-1 p-2 rounded-lg bg-white text-blue-600 font-bold hover:bg-blue-50 transition-all text-sm"
+                      >
+                        Apply Suggestions
+                      </button>
+                    </motion.div>
+                  )}
+
+                  {/* Hidden inputs left outside visual flow */}
+                  <input 
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                    onChange={handleGalleryUpload}
+                  />
+
+                  <input 
+                    type="file"
+                    ref={docInputRef}
+                    className="hidden"
+                    accept="application/pdf"
+                    multiple
+                    onChange={handleDocUpload}
+                  />
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-bold text-slate-700">Estimated Completion Time (Optional)</label>
@@ -1821,282 +1984,216 @@ export default function PostJobWizard() {
             </motion.div>
           )}
 
-          {step === 4 && (
+                    {step === 4 && (
             <motion.div
               key="step4"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
+              className="space-y-6"
             >
               <JobReminder />
-              <div className="space-y-1">
-                <h2 className="text-xl font-bold text-slate-900">Where is the job?</h2>
-                <p className="text-slate-500 text-sm">Help tradespeople find your location.</p>
-              </div>
-              <div className="space-y-4">
-                <div className="pt-2">
+
+              {/* 1. Where is the job? */}
+              <div className="space-y-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500 rounded-l-3xl"></div>
+                
+                <h2 className="text-lg font-black text-slate-800 flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-sm font-black text-blue-600">1</span>
+                  Where is the job?
+                </h2>
+                
+                <div className="relative">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input 
+                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all text-sm font-medium placeholder:font-normal placeholder:text-slate-400"
+                    placeholder="Enter job address..."
+                    value={addressInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAddressInput(val);
+                      setUseRegisteredAddress(false);
+                      if (addressSuggestionTimeout) clearTimeout(addressSuggestionTimeout);
+                      if (!val || val.length < 2 || !window.google) {
+                        setAddressSuggestions([]);
+                        return;
+                      }
+                      const timeout = setTimeout(async () => {
+                        try {
+                          const { AutocompleteSuggestion } = await google.maps.importLibrary("places") as any;
+                          const request = { input: val, includedRegionCodes: ['gb'] };
+                          const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+                          if (suggestions && suggestions.length > 0) {
+                            setAddressSuggestions(suggestions.map((p: any) => ({
+                              label: p.placePrediction.text.text,
+                              placeId: p.placePrediction.placeId,
+                              placePrediction: p.placePrediction
+                            })));
+                          } else { setAddressSuggestions([]); }
+                        } catch (err) {
+                          console.error(err);
+                          setAddressSuggestions([]);
+                        }
+                      }, 500);
+                      setAddressSuggestionTimeout(timeout);
+                    }}
+                    onBlur={async (e) => {
+                      const val = e.target.value;
+                      if (!val || addressSuggestions.length > 0 || useRegisteredAddress) return;
+                      try {
+                        const data = await lookupPostcode(val);
+                        if (data) {
+                          setFormData(prev => ({ ...prev, city: data.city, area: data.area, postcode: data.postcode, fullAddress: data.postcode }));
+                        }
+                      } catch (err) { console.error("Error looking up postcode:", err); }
+                    }}
+                  />
+                  {addressSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 max-h-64 overflow-y-auto z-50">
+                      {addressSuggestions.map((suggestion, idx) => (
+                        <div 
+                          key={idx}
+                          onClick={async () => {
+                            setAddressInput(suggestion.label);
+                            setFormData(prev => ({ ...prev, fullAddress: suggestion.label }));
+                            setAddressSuggestions([]);
+                            setUseRegisteredAddress(false);
+                            if (suggestion.placeId) {
+                              try {
+                                const { Place } = await google.maps.importLibrary("places") as any;
+                                const place = new Place({ id: suggestion.placeId });
+                                await place.fetchFields({ fields: ['addressComponents'] });
+                                if (place.addressComponents) {
+                                  let newCity = formData.city;
+                                  let newArea = formData.area;
+                                  let newPostcode = "";
+                                  let newHouseNumber = formData.houseNumber;
+                                  place.addressComponents.forEach((comp: any) => {
+                                    if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.longText;
+                                    if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.longText;
+                                    if (comp.types.includes("postal_code")) newPostcode = comp.longText;
+                                    if (comp.types.includes("street_number")) newHouseNumber = comp.longText;
+                                  });
+                                  if (!newPostcode) {
+                                    const pcMatch = suggestion.label.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                                    newPostcode = pcMatch ? pcMatch[0] : "";
+                                  }
+                                  if (!newHouseNumber) {
+                                    const match = suggestion.label.match(/^(\d+|[a-zA-Z\d/]+)\s+/);
+                                    if (match) newHouseNumber = match[1];
+                                  }
+                                  setFormData(prev => ({ ...prev, city: newCity || prev.city, area: newArea || prev.area, postcode: newPostcode, houseNumber: newHouseNumber || prev.houseNumber }));
+                                }
+                              } catch (err) { console.error(err); }
+                            }
+                          }}
+                          className="p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 flex items-start gap-3 transition-colors"
+                        >
+                          <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                          <span className="text-sm font-medium text-slate-700">{suggestion.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 w-full">
                   <button
                     type="button"
                     onClick={handleAutoDetectLocation}
-                    className="w-full p-4 rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all shadow-[0_4px_12px_rgba(37,99,235,0.1)] active:scale-95"
+                    className="flex-1 p-3 rounded-2xl border border-blue-100 bg-blue-50 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all text-sm active:scale-95"
                   >
-                    <Locate className="w-5 h-5 flex-shrink-0" /> Auto-detect my location
+                    <Locate className="w-4 h-4 flex-shrink-0" /> Current Location
                   </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input 
-                      className="w-full p-4 pl-12 pr-12 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
-                      placeholder="Start typing your address or postcode..."
-                      value={addressInput}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAddressInput(val);
-                        setUseRegisteredAddress(false);
-                        
-                        if (addressSuggestionTimeout) clearTimeout(addressSuggestionTimeout);
-                        
-                        if (!val || val.length < 2 || !window.google) {
-                          setAddressSuggestions([]);
-                          return;
-                        }
-                        
-                        const timeout = setTimeout(async () => {
-                          try {
-                            const { AutocompleteSuggestion } = await google.maps.importLibrary("places") as any;
-                            const request = {
-                              input: val,
-                              includedRegionCodes: ['gb']
-                            };
-                            
-                            const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
-                            
-                            if (suggestions && suggestions.length > 0) {
-                              setAddressSuggestions(suggestions.map((p: any) => ({
-                                label: p.placePrediction.text.text,
-                                placeId: p.placePrediction.placeId,
-                                placePrediction: p.placePrediction
-                              })));
-                            } else {
-                              setAddressSuggestions([]);
-                            }
-                          } catch (err) {
-                            console.error(err);
-                            setAddressSuggestions([]);
-                          }
-                        }, 500);
-                        setAddressSuggestionTimeout(timeout);
-                      }}
-                      onBlur={async (e) => {
-                        const val = e.target.value;
-                        if (!val || addressSuggestions.length > 0) return;
-                        if (useRegisteredAddress) return;
-                        try {
-                          const data = await lookupPostcode(val);
-                          if (data) {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              city: data.city,
-                              area: data.area,
-                              postcode: data.postcode,
-                              fullAddress: data.postcode
-                            }));
-                          }
-                        } catch (err) {
-                          console.error("Error looking up postcode:", err);
-                        }
-                      }}
-                    />
-                    
+                  {profile?.postcode && (
                     <button
                       type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
-                      title="Auto-detect location"
-                      onClick={handleAutoDetectLocation}
+                      onClick={() => {
+                        setUseRegisteredAddress(true);
+                        setAddressInput("");
+                        setFormData(prev => ({
+                          ...prev,
+                          postcode: profile.postcode,
+                          city: profile.city || prev.city,
+                          area: profile.area || prev.area,
+                          county: profile.county || prev.county,
+                          fullAddress: profile.postcode
+                        }));
+                      }}
+                      className={cn(
+                        "flex-1 p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all text-sm active:scale-95",
+                        useRegisteredAddress ? "border-blue-200 bg-white text-blue-700 shadow-inner" : "border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      )}
                     >
-                      <Locate className="w-5 h-5" />
+                      Use Profile Address
                     </button>
-                    
-                    {addressSuggestions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-64 overflow-y-auto z-50">
-                        {addressSuggestions.map((suggestion, idx) => (
-                          <div 
-                            key={idx}
-                            onClick={async () => {
-                              setAddressInput(suggestion.label);
-                              setFormData(prev => ({ ...prev, fullAddress: suggestion.label }));
-                              setAddressSuggestions([]);
-                              setUseRegisteredAddress(false);
-                              
-                              if (suggestion.placeId) {
-                                try {
-                                  const { Place } = await google.maps.importLibrary("places") as any;
-                                  const place = new Place({ id: suggestion.placeId });
-                                  await place.fetchFields({ fields: ['addressComponents'] });
-                                  
-                                  if (place.addressComponents) {
-                                    let newCity = formData.city;
-                                    let newArea = formData.area;
-                                    let newPostcode = "";
+                  )}
+                </div>
 
-                                    place.addressComponents.forEach((comp: any) => {
-                                      if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.longText;
-                                      if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.longText;
-                                      if (comp.types.includes("postal_code")) newPostcode = comp.longText;
-                                    });
-
-                                    if (!newPostcode) {
-                                      const pcMatch = suggestion.label.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
-                                      newPostcode = pcMatch ? pcMatch[0] : "";
-                                    }
-
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      city: newCity || prev.city,
-                                      area: newArea || prev.area,
-                                      postcode: newPostcode
-                                    }));
-                                  }
-                                } catch (err) {
-                                  console.error(err);
-                                }
-                              }
-                            }}
-                            className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 flex items-center gap-3"
-                          >
-                            <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                            <span className="text-sm text-slate-700">{suggestion.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 mt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">House / Flat *</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. 42 or Flat 3B"
+                      className="w-full p-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white text-sm font-medium placeholder:text-slate-300"
+                      value={formData.houseNumber}
+                      onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
+                    />
                   </div>
-
-                  <div className="space-y-2">
-                    {formData.fullAddress && (
-                      <div 
-                        className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", !useRegisteredAddress ? "border-blue-200 bg-blue-50/50" : "border-slate-200 hover:bg-slate-50")}
-                        onClick={() => setUseRegisteredAddress(false)}
-                      >
-                        <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", !useRegisteredAddress ? "border-blue-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
-                        <div>
-                          <div className="font-bold text-sm text-slate-900">Use selected address</div>
-                          <div className="text-xs text-slate-600">
-                            {formData.fullAddress}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {profile?.postcode && (
-                      <div 
-                        className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", useRegisteredAddress ? "border-blue-200 bg-blue-50/50" : "border-slate-200 hover:bg-slate-50")}
-                        onClick={() => {
-                          setUseRegisteredAddress(true);
-                          setAddressInput("");
-                          setFormData(prev => ({
-                            ...prev,
-                            postcode: profile.postcode,
-                            city: profile.city || prev.city,
-                            area: profile.area || prev.area,
-                            county: profile.county || prev.county,
-                            fullAddress: profile.postcode
-                          }));
-                        }}
-                      >
-                        <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", useRegisteredAddress ? "border-blue-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
-                        <div>
-                          <div className="font-bold text-sm text-slate-900">Use my registered address</div>
-                          <div className="text-xs text-slate-600">
-                            {profile.postcode} {profile.city ? `, ${profile.city}` : ''}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">City</label>
+                    <input 
+                      type="text" 
+                      placeholder="Auto-filled"
+                      className="w-full p-3.5 rounded-2xl border-none bg-slate-50 text-sm font-medium focus:outline-none cursor-not-allowed text-slate-500"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      readOnly
+                    />
                   </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">House Number / Flat / Building Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. 42 or Flat 3B"
-                    className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
-                    value={formData.houseNumber}
-                    onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">Location Instructions (Optional)</label>
-                  <textarea 
-                    placeholder="Any specific instructions for finding you? (e.g., Use side gate, park on driveway, ring doorbell twice)"
-                    className="w-full p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white resize-none h-24 transition-all font-medium placeholder:font-normal"
-                    value={formData.locationInstructions}
-                    onChange={(e) => setFormData({ ...formData, locationInstructions: e.target.value })}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-700">City (Auto-filled)</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Manchester"
-                    className="w-full p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-slate-50 transition-all font-medium placeholder:font-normal"
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  />
                 </div>
               </div>
-            </motion.div>
-          )}
 
-          {step === 5 && (
-            <motion.div
-              key="step5"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
-            >
-              <JobReminder />
-              <div className="space-y-1">
-                <h2 className="text-xl font-bold text-slate-900">When do you need it?</h2>
-                <p className="text-slate-500 text-sm">Urgency affects the pricing and availability.</p>
-              </div>
-              {formData.urgency === "emergency" && (
-                <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex gap-3">
-                  <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-bold text-red-800">Priority Emergency Post</h4>
-                    <p className="text-sm text-red-700 mb-2">This post is exempt from your monthly allowance.</p>
-                    <p className="text-sm text-red-700">
-                      {formData.category === "Plumbing" ? "Turn off your main water valve immediately." : 
-                       formData.category === "Electrical" ? "Turn off your main power switch." : 
-                       "Ensure your safety first and stay clear of the area."}
-                    </p>
-                  </div>
-                </div>
-              )}
-              <div className="space-y-3">
-                {URGENCY_LEVELS.filter(level => !targetTradespersonId || level.id !== "emergency").map((level) => (
-                  <button
-                    key={level.id}
-                    onClick={() => setFormData({ ...formData, urgency: level.id })}
-                    className={cn(
-                      "w-full p-5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-blue-600 transition-all shadow-sm active:scale-[0.98]",
-                      formData.urgency === level.id && "border-blue-600 bg-blue-50"
-                    )}
-                  >
-                    <div className="text-left">
-                      <p className="font-bold text-slate-900">{level.name}</p>
-                      <p className="text-xs text-slate-500">{level.description}</p>
+              {/* 2. When do you need it? */}
+              <div className="space-y-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500 rounded-l-3xl"></div>
+
+                <h2 className="text-lg font-black text-slate-800 flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-full bg-orange-50 flex items-center justify-center text-sm font-black text-orange-600">2</span>
+                  When do you need it?
+                </h2>
+                
+                {formData.urgency === "emergency" && (
+                  <div className="bg-red-50 p-3 rounded-2xl border border-red-100 flex gap-3 text-left">
+                    <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-red-800 text-sm">Emergency Post</h4>
+                      <p className="text-xs text-red-700 font-medium">
+                        {formData.category === "Plumbing" ? "Turn off your main water valve immediately." : 
+                         formData.category === "Electrical" ? "Turn off your main power switch." : 
+                         "Ensure your safety first and stay clear."}
+                      </p>
                     </div>
-                    {formData.urgency === level.id && <CheckCircle2 className="w-6 h-6 text-blue-600" />}
-                  </button>
-                ))}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {URGENCY_LEVELS.filter(level => !targetTradespersonId || level.id !== "emergency").map((level) => (
+                    <button
+                      key={level.id}
+                      onClick={() => setFormData({ ...formData, urgency: level.id })}
+                      className={cn(
+                        "px-5 py-3 text-sm rounded-2xl border transition-all font-bold",
+                        formData.urgency === level.id 
+                          ? "border-[#0084a5] bg-[#0084a5] text-white shadow-[0_4px_12px_rgba(0,132,165,0.2)]" 
+                          : "border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      {level.name}
+                    </button>
+                  ))}
+                </div>
 
                 {formData.urgency === "specific_date" && (
                   <motion.div 
@@ -2104,10 +2201,9 @@ export default function PostJobWizard() {
                     animate={{ opacity: 1, height: "auto" }}
                     className="pt-2"
                   >
-                    <label className="text-sm font-bold text-slate-700 block mb-2">Select Date</label>
                     <input 
                       type="date" 
-                      className="w-full p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
+                      className="w-full p-4 rounded-2xl border border-slate-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium text-slate-700"
                       value={formData.jobDate}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setFormData({ ...formData, jobDate: e.target.value })}
@@ -2118,189 +2214,11 @@ export default function PostJobWizard() {
             </motion.div>
           )}
 
-          {step === 6 && (
+
+
+{step === 5 && (
             <motion.div
               key="step6"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
-            >
-              <JobReminder />
-              <div className="space-y-1">
-                <h2 className="text-xl font-bold text-slate-900">Add photos & videos (Optional)</h2>
-                <p className="text-slate-500 text-sm">Visuals help tradespeople give more accurate quotes.</p>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={() => handleStartCamera("photo")}
-                    className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border border-slate-100 bg-white hover:border-blue-600 transition-all font-bold text-slate-700 shadow-sm active:scale-95"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-                      <Camera className="w-6 h-6 text-blue-600" />
-                    </div>
-                    Take Photo
-                  </button>
-                  <button 
-                    onClick={() => handleStartCamera("video")}
-                    className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border border-slate-100 bg-white hover:border-blue-600 transition-all font-bold text-slate-700 shadow-sm active:scale-95"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
-                      <Video className="w-6 h-6 text-red-600" />
-                    </div>
-                    Record Video
-                  </button>
-                </div>
-                
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl border border-slate-100 bg-white hover:border-blue-600 transition-all font-bold text-slate-700 shadow-sm active:scale-95"
-                >
-                  <ImageIcon className="w-5 h-5 text-purple-600" />
-                  Upload from Gallery
-                </button>
-
-                <button 
-                  onClick={() => docInputRef.current?.click()}
-                  disabled={isUploadingDoc}
-                  className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl border border-slate-100 bg-white hover:border-blue-600 transition-all font-bold text-slate-700 shadow-sm active:scale-95 disabled:opacity-50"
-                >
-                  {isUploadingDoc ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5 text-indigo-600" />}
-                  Attach Plans / Drawings (PDF)
-                </button>
-
-                {formData.documents.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-slate-400 uppercase">Attached Documents</p>
-                    <div className="space-y-2">
-                      {formData.documents.map((doc, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
-                            <span className="text-sm text-slate-700 truncate font-medium">{doc.name}</span>
-                          </div>
-                          <button 
-                            onClick={() => setFormData(prev => ({ ...prev, documents: prev.documents.filter((_, i) => i !== idx) }))}
-                            className="p-1 text-slate-400 hover:text-red-600 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <input 
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept="image/*"
-                  multiple
-                  onChange={handleGalleryUpload}
-                />
-
-                <input 
-                  type="file"
-                  ref={docInputRef}
-                  className="hidden"
-                  accept="application/pdf"
-                  multiple
-                  onChange={handleDocUpload}
-                />
-
-                {formData.photos.length > 0 && !aiDiagnosis && (
-                  <button 
-                    onClick={handleAnalyzePhoto}
-                    disabled={isAnalyzingPhoto}
-                    className="w-full p-4 rounded-2xl bg-blue-50 border border-blue-100 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all disabled:opacity-50"
-                  >
-                    {isAnalyzingPhoto ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                    Analyze Photos with AI
-                  </button>
-                )}
-
-                {aiDiagnosis && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="p-4 rounded-2xl bg-blue-600 text-white space-y-3 shadow-lg"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-5 h-5" />
-                      <h4 className="font-bold">AI Diagnosis</h4>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs opacity-80 font-bold uppercase">Suggested Category</p>
-                      <p className="font-bold text-lg">{aiDiagnosis.category}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs opacity-80 font-bold uppercase">Urgency Level</p>
-                      <p className="font-bold">{aiDiagnosis.urgency}</p>
-                    </div>
-                    <p className="text-sm opacity-90 italic">"{aiDiagnosis.reasoning}"</p>
-                    <button 
-                      onClick={applyAiDiagnosis}
-                      className="w-full p-3 rounded-xl bg-white text-blue-600 font-bold hover:bg-blue-50 transition-all"
-                    >
-                      Apply Suggestions
-                    </button>
-                  </motion.div>
-                )}
-
-                {/* Preview Grid */}
-                {(formData.photos.length > 0 || formData.videos.length > 0) && (
-                  <div className="grid grid-cols-3 gap-3 pt-4">
-                    {formData.photos.map((url, i) => (
-                      <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group shadow-sm">
-                        <img src={url} alt={`Job photo ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        <button 
-                          onClick={() => setFormData({ ...formData, photos: formData.photos.filter((_, idx) => idx !== i) })}
-                          className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                    {formData.videos.map((url, i) => (
-                      <div key={`video-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group bg-slate-900 flex items-center justify-center shadow-sm">
-                        <video src={url} className="w-full h-full object-cover opacity-60" />
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-black/40">
-                          <button 
-                            onClick={() => {
-                              setFormData(prev => ({ ...prev, videos: prev.videos.filter((_, idx) => idx !== i) }));
-                              handleStartCamera("video");
-                            }}
-                            className="bg-white text-blue-600 p-2 rounded-full shadow-lg hover:bg-blue-50 transition-colors"
-                            title="Re-record Video"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => setFormData(prev => ({ ...prev, videos: prev.videos.filter((_, idx) => idx !== i) }))}
-                            className="bg-white text-red-600 p-2 rounded-full shadow-lg hover:bg-red-50 transition-colors"
-                            title="Delete Video"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">
-                          Video {i + 1}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-            </motion.div>
-          )}
-
-          {step === 7 && (
-            <motion.div
-              key="step7"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -2324,17 +2242,16 @@ export default function PostJobWizard() {
               ) : estimate ? (
                 <div className="space-y-6">
                   {estimate.isAvailable === false ? (
-                    <div className="bg-amber-50 rounded-3xl p-8 text-amber-900 border border-amber-200 shadow-sm">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Sparkles className="w-6 h-6 text-amber-500" />
-                        <h3 className="text-xl font-black">AI Estimate Unavailable</h3>
+                    <div className="bg-orange-50 rounded-xl p-6 text-orange-900 border border-orange-200/50 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-6 h-6 text-orange-500 shrink-0 mt-0.5" />
+                        <div>
+                          <h3 className="text-base font-extrabold mb-1">AI Estimate Unavailable</h3>
+                          <p className="text-orange-800 font-medium text-sm leading-relaxed">
+                            Your job category ('{formData.category}') is outside the scope of our AI pricing model. You will need to receive direct quotes from tradespeople for this request.
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-amber-800 font-medium leading-relaxed">
-                        {estimate.unavailableReason || "This job requires more specific details or a site visit for an accurate estimate."}
-                      </p>
-                      <p className="text-amber-700 text-sm mt-4">
-                        Tradespeople will need to assess this job directly to provide a quote. You can still enter a custom budget below if you have one in mind.
-                      </p>
                     </div>
                   ) : (
                     <div className={cn(
@@ -2377,14 +2294,27 @@ export default function PostJobWizard() {
                     </div>
                   )}
 
-                  <div className="space-y-4 bg-slate-100/50 p-6 rounded-3xl border border-slate-100">
-                    <h3 className="text-xl font-black text-slate-900">Or enter custom amount</h3>
+                  <div className="space-y-3 pt-6 border-t border-slate-100">
+                    <h3 className="font-extrabold text-black flex items-center justify-center -mt-2 bg-white px-4 mx-auto w-max text-sm relative -top-6">Custom budget</h3>
                     <div className="relative">
-                      <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-900 font-black text-xl">£</span>
+                      <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 text-xl font-bold">£</span>
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const el = document.getElementById('custom-budget-input');
+                          if (el) el.blur();
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#114b78] hover:bg-[#0a3556] text-white rounded-lg text-sm font-bold shadow-sm active:scale-95 transition-all z-10"
+                      >
+                        Save
+                      </button>
                       <input
+                        id="custom-budget-input"
                         type="number"
                         placeholder="0.00"
-                        className="w-full p-5 pl-12 rounded-2xl border border-black bg-white font-black text-xl focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        className="w-full py-4 pl-12 pr-24 rounded-xl border border-slate-300 bg-white font-bold text-xl text-center focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
                         value={formData.selectedBudget && formData.selectedBudget !== `£${estimate?.min} - £${estimate?.max}` ? formData.selectedBudget : ""}
                         onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
                       />
@@ -2459,63 +2389,49 @@ export default function PostJobWizard() {
                   )}
 
                   {estimate?.pricingInsights && (
-                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                      <div className="p-6 space-y-6">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-                              <BarChart3 className="w-5 h-5 text-indigo-600" />
-                            </div>
-                            Dynamic Pricing Insights
-                          </h3>
-                          <div className={cn(
-                            "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                            estimate.pricingInsights.marketTrend === "rising" ? "bg-red-50 text-red-600" :
-                            estimate.pricingInsights.marketTrend === "falling" ? "bg-green-50 text-green-600" :
-                            "bg-slate-50 text-slate-600"
-                          )}>
-                            {estimate.pricingInsights.marketTrend === "rising" && <TrendingUp className="w-3 h-3" />}
-                            {estimate.pricingInsights.marketTrend === "falling" && <TrendingDown className="w-3 h-3" />}
-                            {estimate.pricingInsights.marketTrend === "stable" && <Minus className="w-3 h-3" />}
-                            Market: {estimate.pricingInsights.marketTrend}
+                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                      <div className="p-4 bg-slate-50/50 border-b border-slate-100">
+                        <h3 className="font-extrabold text-slate-900">Dynamic Pricing Insights</h3>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        <div className="p-4 flex gap-4">
+                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0">
+                            <Clock className="w-4 h-4 text-slate-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm text-slate-900 mb-0.5">Seasonal impact</h4>
+                            <p className="text-sm text-slate-600">{estimate.pricingInsights.seasonalImpact || "Prices may vary depending on the time of year and local demand."}</p>
                           </div>
                         </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-amber-600" />
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seasonal Impact</h4>
-                            </div>
-                            <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                              {estimate.pricingInsights.seasonalImpact}
-                            </p>
+                        <div className="p-4 flex gap-4">
+                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0">
+                            <MapPin className="w-4 h-4 text-slate-600" />
                           </div>
-
-                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-blue-600" />
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Regional Premium</h4>
-                            </div>
-                            <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                              {estimate.pricingInsights.regionalPremium}
-                            </p>
+                          <div>
+                            <h4 className="font-bold text-sm text-slate-900 mb-0.5">Regional premium</h4>
+                            <p className="text-sm text-slate-600">{estimate.pricingInsights.regionalPremium || "Local rates in your area may be higher or lower than the national average."}</p>
                           </div>
                         </div>
-
-                        <div className="bg-green-50/50 p-5 rounded-2xl border border-green-100 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <ZapIcon className="w-4 h-4 text-green-600" />
-                            <h4 className="text-[10px] font-black text-green-800 uppercase tracking-widest">Cost Saving Tips</h4>
+                        <div className="p-4 flex gap-4">
+                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0">
+                            <ZapIcon className="w-4 h-4 text-slate-600" />
                           </div>
-                          <ul className="space-y-2">
-                            {estimate.pricingInsights.costSavingTips.map((tip, i) => (
-                              <li key={i} className="flex items-start gap-2 text-xs text-green-800 font-medium">
-                                <div className="w-1 h-1 rounded-full bg-green-400 mt-1.5 shrink-0" />
-                                {tip}
-                              </li>
-                            ))}
-                          </ul>
+                          <div>
+                            <h4 className="font-bold text-sm text-slate-900 mb-1">Cost-saving tips</h4>
+                            <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
+                              {estimate.pricingInsights.costSavingTips.length > 0 ? (
+                                estimate.pricingInsights.costSavingTips.map((tip: string, i: number) => (
+                                  <li key={i}>{tip}</li>
+                                ))
+                              ) : (
+                                <>
+                                  <li>Bundle multiple small jobs together.</li>
+                                  <li>Provide clear photos to get more accurate quotes.</li>
+                                  <li>Be flexible with your scheduling if possible.</li>
+                                </>
+                              )}
+                            </ul>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2547,64 +2463,63 @@ export default function PostJobWizard() {
                 </div>
               )}
 
-              {/* Premium Job Upgrades */}
               {platformConfig?.premiumJobUpgradesEnabled !== false && formData.urgency !== 'emergency' && (
-                <div className="space-y-3 pt-4 border-t border-slate-100">
-                  <h3 className="text-lg font-extrabold text-black mt-2 mb-2">Premium Job Upgrades (Optional)</h3>
+                <div className="space-y-3 pt-6">
+                  <h3 className="text-sm font-extrabold text-slate-900 mb-2">Premium Job Upgrades (Optional)</h3>
                   
                   <div className={cn(
-                    "relative p-3 rounded-lg border-2 transition-all cursor-pointer flex items-start gap-3",
-                    formData.isEmergencyBoost ? "border-red-500 bg-red-50/50 shadow-sm shadow-red-500/10" : "border-slate-300 hover:border-slate-400 bg-white"
+                    "relative p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3",
+                    formData.isEmergencyBoost ? "border-[#e11d48] bg-rose-50" : "border-[#e11d48]/50 hover:border-[#e11d48] bg-white"
                   )}
                   onClick={() => setFormData({...formData, isEmergencyBoost: !formData.isEmergencyBoost})}
                   >
                      <div className={cn(
                       "w-5 h-5 rounded-full border-2 flex shrink-0 mt-0.5 transition-colors items-center justify-center",
-                      formData.isEmergencyBoost ? "border-red-500 bg-red-500" : "border-slate-300"
+                      formData.isEmergencyBoost ? "border-slate-900" : "border-slate-300"
                     )}>
-                      {formData.isEmergencyBoost && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      {formData.isEmergencyBoost && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
                     </div>
                     <div className="flex-1 pr-6">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-base font-extrabold text-black">Emergency Boost <span className="text-red-600 font-black ml-1">£5</span></h4>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-base font-extrabold text-slate-900">Emergency Boost <span className="font-black ml-1">£5</span></h4>
                       </div>
-                      <p className="text-xs text-black font-semibold line-clamp-2">Pin your job to the top of all local tradespeople's feeds and send them an instant push notification alert.</p>
+                      <p className="text-sm text-slate-600 leading-snug">Emergency boost to elevate your job, help with reliability, and match your choices.</p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); setShowBoostInfo('emergency'); }}
-                      className="absolute top-2.5 right-2.5 text-slate-500 hover:text-red-500 transition-colors"
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
                       type="button"
                     >
-                      <Info className="w-5 h-5 fill-slate-100" />
+                      <Info className="w-5 h-5" />
                     </button>
                   </div>
 
                   <div className={cn(
-                    "relative p-3 rounded-lg border-2 transition-all cursor-pointer flex items-start gap-3",
-                    formData.isInstantMatch ? "border-amber-500 bg-amber-50/50 shadow-sm shadow-amber-500/10" : "border-slate-300 hover:border-slate-400 bg-white"
+                    "relative p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3",
+                    formData.isInstantMatch ? "border-[#f59e0b] bg-amber-50" : "border-[#f59e0b]/50 hover:border-[#f59e0b] bg-white"
                   )}
                   onClick={() => setFormData({...formData, isInstantMatch: !formData.isInstantMatch})}
                   >
                      <div className={cn(
                       "w-5 h-5 shrink-0 rounded-full border-2 flex mt-0.5 transition-colors items-center justify-center",
-                      formData.isInstantMatch ? "border-amber-500 bg-amber-500" : "border-slate-300"
+                      formData.isInstantMatch ? "border-slate-900" : "border-slate-300"
                     )}>
-                      {formData.isInstantMatch && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      {formData.isInstantMatch && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
                     </div>
                     <div className="flex-1 pr-6">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">£{(instantMatchCopy.price || 2.99).toFixed(2)}</span></h4>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-base font-extrabold text-slate-900 tracking-tight">Instant Match <span className="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="font-black ml-0.5">£{(instantMatchCopy.price || 2.49).toFixed(2)}</span></h4>
                       </div>
-                      <p className="text-xs text-black font-semibold line-clamp-2">
-                        {instantMatchCopy.bullets.map((b: any) => b.text).join(" • ")}
+                      <p className="text-sm text-slate-600 leading-snug">
+                        Instant Match premium value gets you started and connects you to a record number of tradespeople.
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); setShowBoostInfo('instant'); }}
-                      className="absolute top-2.5 right-2.5 text-slate-500 hover:text-amber-500 transition-colors"
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
                       type="button"
                     >
-                      <Info className="w-5 h-5 fill-slate-100" />
+                      <Info className="w-5 h-5" />
                     </button>
                   </div>
 
@@ -2664,13 +2579,11 @@ export default function PostJobWizard() {
             <div className="flex-[3] flex gap-3">
               <button 
                 onClick={handleGetRefinement} 
-                disabled={!formData.title || formData.title.length < 3 || !formData.description || isRefiningScope}
+                disabled={isRefiningScope}
                 id="wizard-next-step-3"
                 className={cn(
                   "flex-[2] p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all",
-                  (formData.title && formData.title.length >= 3 && formData.description)
-                    ? "bg-orange-500 text-white shadow-xl shadow-orange-500/20 active:scale-95" 
-                    : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  "bg-orange-500 text-white shadow-xl shadow-orange-500/20 active:scale-95" 
                 )}
               >
                 {isRefiningScope ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue <ChevronRight className="w-6 h-6" /></>}
@@ -2700,61 +2613,114 @@ export default function PostJobWizard() {
           ) : step === 4 ? (
             <div className="flex-[3] flex gap-3">
               <button 
-                onClick={nextStep} 
-                disabled={!formData.city || !formData.postcode || !!postcodeError}
+                onClick={handleEstimate} 
+                disabled={!formData.houseNumber || !formData.city || !formData.postcode || !!postcodeError || isUploading || isEstimating || (formData.urgency === "specific_date" && !formData.jobDate)}
                 id="wizard-next-step-4"
                 className={cn(
                   "flex-[2] p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all",
-                  (formData.city && formData.postcode && !postcodeError)
-                    ? "bg-orange-500 text-white shadow-xl shadow-orange-500/20 active:scale-95" 
+                  (formData.houseNumber && formData.city && formData.postcode && !postcodeError && !isUploading && !isEstimating && (formData.urgency !== "specific_date" || formData.jobDate))
+                    ? "bg-[#0084a5] text-white shadow-xl shadow-cyan-500/20 active:scale-95" 
                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
                 )}
               >
-                Continue <ChevronRight className="w-6 h-6" />
+                {isUploading || isEstimating ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue to Estimate <ChevronRight className="w-6 h-6" /></>}
               </button>
             </div>
           ) : step === 5 ? (
             <div className="flex-[3] flex gap-3">
               <button 
-                onClick={nextStep} 
-                id="wizard-next-step-5"
-                className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all"
-              >
-                Continue <ChevronRight className="w-6 h-6" />
-              </button>
-            </div>
-          ) : step === 6 ? (
-            <div className="flex-[3] flex gap-3">
-              <button 
-                onClick={handleEstimate} 
-                disabled={isUploading || isEstimating}
-                id="wizard-next-step-6"
-                className="flex-[2] p-4 rounded-2xl bg-[#0084a5] text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-cyan-500/20 active:scale-95 transition-all"
-              >
-                {isUploading || isEstimating ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue to Estimate <ChevronRight className="w-6 h-6" /></>}
-              </button>
-            </div>
-          ) : step === 7 ? (
-            <div className="flex-[3] flex gap-3">
-              <button 
                 onClick={handleSubmit}
                 disabled={isSubmitting || (!estimate && !formData.selectedBudget)}
-                id="wizard-next-step-7"
-                className="flex-[2] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 disabled:opacity-50 transition-all active:scale-95"
+                id="wizard-next-step-5"
+                className="w-full p-4 rounded-xl bg-[#f97316] text-white font-extrabold flex items-center justify-center gap-2 disabled:opacity-50 transition-all active:scale-95 text-lg"
               >
-                {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Post your job <CheckCircle2 className="w-6 h-6" /></>}
+                {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Post your job <CheckCircle2 className="w-5 h-5 bg-white text-[#f97316] rounded-full p-0.5" /></>}
               </button>
             </div>
           ) : null}
         </div>
         
-        {step === 7 && error && (
+        {step === 5 && error && (
           <div className="max-w-2xl mx-auto mt-4 px-4">
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-2">
               <X className="w-4 h-4" />
               {error}
             </div>
           </div>
+        )}
+
+        {step === 6 && (
+          <motion.div
+            key="step7"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center py-10"
+          >
+            {/* Illustration Composite */}
+            <div className="relative w-full max-w-sm mx-auto mb-8 h-48 flex justify-center items-end bg-[#e6f4f9] rounded-[4rem] px-8 pt-8 overflow-hidden">
+              <div className="absolute inset-x-0 bottom-0 h-10 bg-[#75c8b2] opacity-40 rounded-t-[4rem]"></div>
+              <div className="relative z-10 flex items-end gap-2 -mb-2">
+                <svg width="120" height="150" viewBox="0 0 120 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 150V70C10 60 20 50 35 50H85C100 50 110 60 110 70V150" fill="#a4d5ec" stroke="#2564aaa5" strokeWidth="3" />
+                  <circle cx="60" cy="30" r="20" fill="#a4d5ec" stroke="#2564aaa5" strokeWidth="3" />
+                  <path d="M45 40C45 40 50 45 60 45C70 45 75 40 75 40" stroke="#2564aaa5" strokeWidth="2.5" strokeLinecap="round" />
+                  <path d="M50 25C50 25 55 25 60 25C65 25 70 25 70 25" stroke="#2564aaa5" strokeWidth="2.5" strokeLinecap="round" />
+                  <path d="M10 80C10 80 0 100 0 150H30V90L10 80Z" fill="#a4d5ec" stroke="#2564aaa5" strokeWidth="3" strokeLinejoin="round" />
+                  <path d="M110 80C110 80 120 100 120 150H90V90L110 80Z" fill="#a4d5ec" stroke="#2564aaa5" strokeWidth="3" strokeLinejoin="round" />
+                </svg>
+                
+                <svg width="140" height="130" viewBox="0 0 140 130" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="25" y="45" width="90" height="85" fill="#a4d5ec" fillOpacity="0.4" stroke="#2564aaa5" strokeWidth="3" />
+                  <path d="M5 45L70 5L135 45" fill="#a4d5ec" fillOpacity="0.8" stroke="#2564aaa5" strokeWidth="3" strokeLinejoin="round" />
+                  <rect x="15" y="25" width="20" height="30" fill="#a4d5ec" stroke="#2564aaa5" strokeWidth="3" />
+                  <rect x="65" y="75" width="30" height="55" fill="#a4d5ec" stroke="#2564aaa5" strokeWidth="3" />
+                  <circle cx="85" cy="55" r="10" fill="none" stroke="#2564aaa5" strokeWidth="3" />
+                  <path d="M85 45V65M75 55H95" stroke="#2564aaa5" strokeWidth="3" />
+                </svg>
+              </div>
+
+              <div className="absolute top-10 right-10 w-16 h-16 bg-[#a5dbc2] rounded-full border-4 border-white flex items-center justify-center z-20 shadow-md">
+                <CheckCircle2 className="w-10 h-10 text-[#21855a]" />
+              </div>
+            </div>
+
+            <h2 className="text-3xl font-extrabold text-[#114b78] mb-8">Great news! Your job is live</h2>
+
+            <div className="w-full max-w-sm mb-8 space-y-4 text-left">
+              <h3 className="font-extrabold text-slate-900 text-lg">Next Steps</h3>
+              
+              <div className="flex items-center gap-4">
+                <MessageSquare className="w-6 h-6 text-slate-600" />
+                <span className="text-lg text-slate-800 font-medium tracking-tight">Check your messages</span>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <FileText className="w-6 h-6 text-slate-600" />
+                <span className="text-lg text-slate-800 font-medium tracking-tight">Review quotes</span>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <Calendar className="w-6 h-6 text-slate-600" />
+                <span className="text-lg text-slate-800 font-medium tracking-tight">Schedule appointments</span>
+              </div>
+            </div>
+
+            <div className="w-full max-w-sm space-y-4">
+              <button 
+                onClick={() => navigate(profile?.subscriptionType === "business" ? "/portfolio" : "/my-jobs")}
+                className="w-full py-4 rounded-xl bg-[#f97316] text-white font-extrabold text-lg hover:bg-[#ea580c] transition-colors"
+              >
+                Go to My Jobs
+              </button>
+              
+              <button 
+                onClick={() => navigate("/")}
+                className="w-full py-4 rounded-xl bg-transparent text-[#114b78] font-bold text-lg hover:bg-slate-50 transition-colors"
+              >
+                Home
+              </button>
+            </div>
+          </motion.div>
         )}
       </div>
       )}
