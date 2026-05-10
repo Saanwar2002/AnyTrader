@@ -3,7 +3,7 @@ import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, serv
 import { useAuth } from "./AuthProvider";
 import { usePortal } from "@/src/lib/PortalContext";
 import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap } from "lucide-react";
+import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, AlertTriangle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { EmergencyTimer } from "./EmergencyTimer";
@@ -22,6 +22,7 @@ export default function MyJobs() {
   const [filter, setFilter] = useState<"all" | "pending" | "cancelled" | "completed">("pending");
   const [selectedJobMedia, setSelectedJobMedia] = useState<any | null>(null);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
   const isHistoryView = new URLSearchParams(location.search).get("history") === "true";
 
@@ -442,13 +443,27 @@ export default function MyJobs() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleCancel(job.id);
+                                      if (confirmCancelId === job.id) {
+                                        handleCancel(job.id);
+                                        setConfirmCancelId(null);
+                                      } else {
+                                        setConfirmCancelId(job.id);
+                                        setTimeout(() => setConfirmCancelId(null), 3000);
+                                      }
                                     }}
                                     disabled={isProcessing === job.id}
-                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-amber-600 hover:bg-amber-50 flex items-center gap-3 disabled:opacity-50"
+                                    className={cn("w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-3 disabled:opacity-50",
+                                      confirmCancelId === job.id ? "text-red-600 hover:bg-red-50" : "text-amber-600 hover:bg-amber-50"
+                                    )}
                                   >
-                                    {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                                    Cancel Job
+                                    {isProcessing === job.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : confirmCancelId === job.id ? (
+                                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                                    ) : (
+                                      <XCircle className="w-4 h-4" />
+                                    )}
+                                    {confirmCancelId === job.id ? "Confirm Cancel" : "Cancel Job"}
                                   </button>
                                 )}
                                 

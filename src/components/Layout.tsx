@@ -340,6 +340,7 @@ export default function Layout() {
   const isMapUX = (activePortal === "anyroller" && activeRole === "customer");
   
   const isDriverTerminal = activeRole === "driver" && activePortal === "anyroller";
+  const isFullScreenPage = location.pathname.includes('/post-job') || location.pathname.includes('/post-emergency-job');
 
   return (
     <div className={cn("min-h-screen flex flex-col", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
@@ -730,7 +731,9 @@ export default function Layout() {
       {/* Main Content */}
       <main className={cn(
         "flex-1 w-full relative min-h-0",
-        isDriverTerminal ? "p-0 flex flex-col overflow-hidden" : (activePortal === 'anyroller' ? "p-0 flex flex-col overflow-hidden" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
+        isDriverTerminal || activePortal === 'anyroller' 
+          ? "p-0 flex flex-col overflow-hidden" 
+          : (isFullScreenPage ? "p-0 flex flex-col" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
       )}>
         <Outlet />
       </main>

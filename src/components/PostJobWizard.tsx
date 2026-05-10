@@ -68,7 +68,7 @@ export default function PostJobWizard() {
   const JobReminder = () => {
     if (!formData.category && !formData.title) return null;
     return (
-      <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center gap-3 mb-4">
+      <div className="bg-white rounded-2xl p-4 border border-[#0084a5] shadow-sm flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
           <Sparkles className="w-5 h-5 text-blue-600" />
         </div>
@@ -125,6 +125,10 @@ export default function PostJobWizard() {
   const [showBoostInfo, setShowBoostInfo] = useState<"emergency" | "instant" | null>(null);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
   const [instantMatchCopy, setInstantMatchCopy] = useState<any>(getInstantMatchCopy(formData.category || ""));
+
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
 
   React.useEffect(() => {
     if (step === 7 && formData.category && formData.description) {
@@ -1254,22 +1258,22 @@ export default function PostJobWizard() {
 
       {/* Header */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-30">
-        <div className="flex items-center justify-between p-4">
+        <div className="flex items-center justify-between p-3 min-h-[48px]">
           <button 
             onClick={prevStep} 
-            className="text-[#0084a5] font-bold text-lg flex items-center gap-1 hover:opacity-80 transition-opacity"
+            className="text-[#0084a5] font-bold text-base flex items-center gap-1 hover:opacity-80 transition-opacity"
           >
             Back
           </button>
           
           {step > 0 && (
             <div className="absolute left-1/2 -translate-x-1/2 text-center">
-              <p className="text-slate-900 font-black text-lg">Step {step} of 7</p>
+              <p className="text-slate-900 font-bold text-base">Step {step} of 7</p>
             </div>
           )}
           
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-            <X className="w-6 h-6 text-slate-400" />
+          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-slate-100 rounded-full transition-colors">
+            <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
         
@@ -1285,7 +1289,7 @@ export default function PostJobWizard() {
         )}
       </div>
 
-      <div className="max-w-2xl mx-auto p-4">
+      <div className="max-w-2xl mx-auto p-3 sm:p-4">
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-2">
             <X className="w-4 h-4" />
@@ -1300,18 +1304,26 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <div className="space-y-1">
-                <h2 className="text-xl font-bold text-slate-700">Get up to 5 quotes from verified local tradespeople</h2>
+                <h2 className="text-lg font-bold text-slate-700">Get quotes from verified tradespeople</h2>
               </div>
 
-              <button 
-                onClick={() => setStep(1)}
-                className="w-full p-5 rounded-[2rem] bg-orange-500 text-white font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-orange-500/20 active:scale-95 transition-all group"
-              >
-                Post Job Manually <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-              </button>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => setStep(1)}
+                  className="w-full p-4 rounded-[2rem] bg-orange-500 text-white font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-orange-500/20 active:scale-95 transition-all group"
+                >
+                  Post Job Manually <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                </button>
+                <button 
+                  onClick={() => navigate('/post-emergency-job')}
+                  className="w-full p-4 rounded-[2rem] bg-red-600 text-white font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-red-600/20 active:scale-95 transition-all group"
+                >
+                  Emergency Job Post <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
 
               {/* Post by Voice */}
               <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
@@ -1478,11 +1490,11 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">What type of job is it?</h2>
-                <p className="text-slate-500">Select the main trade category</p>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">What type of job is it?</h2>
+                <p className="text-sm text-slate-500">Select the main trade category</p>
               </div>
 
               <div className="relative">
@@ -1490,13 +1502,13 @@ export default function PostJobWizard() {
                 <input 
                   type="text"
                   placeholder="Search or describe (e.g. leaky)"
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
+                  className="w-full pl-12 pr-4 py-3 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
 
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+              <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 pb-4 no-scrollbar">
                 {filteredCategories.map((cat) => {
                   const Icon = iconMap[cat.icon];
                   return (
@@ -1507,21 +1519,18 @@ export default function PostJobWizard() {
                         nextStep();
                       }}
                       className={cn(
-                        "w-full p-4 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-blue-600 transition-all shadow-sm active:scale-[0.98]",
-                        formData.category === cat.name && "border-blue-600 bg-blue-50"
+                        "w-full py-3 px-3 rounded-xl border flex items-center gap-2 transition-all active:scale-[0.98]",
+                        formData.category === cat.name 
+                          ? "border-[#0084a5] border-2 bg-blue-50 text-[#0084a5]" 
+                          : "border-[#0084a5]/40 border-2 bg-white hover:border-[#0084a5] hover:bg-slate-50 text-slate-700"
                       )}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", formData.category === cat.name ? "bg-blue-600 text-white" : "bg-slate-100 text-blue-600")}>
-                          {Icon ? (
-                            <Icon className="w-5 h-5" />
-                          ) : (
-                            <span className="text-xl">{cat.icon}</span>
-                          )}
-                        </div>
-                        <span className="font-bold text-slate-900">{cat.name}</span>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-slate-300" />
+                      {Icon ? (
+                        <Icon className="w-5 h-5 text-[#0084a5] flex-shrink-0" />
+                      ) : (
+                        <span className="text-lg">{cat.icon}</span>
+                      )}
+                      <span className="font-bold text-sm leading-tight text-left">{cat.name}</span>
                     </button>
                   );
                 })}
@@ -1535,14 +1544,14 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">What specifically do you need?</h2>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">What specifically do you need?</h2>
                 <p className="text-slate-500 text-sm">Select the subcategory for {formData.category}.</p>
               </div>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+              <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 pb-4 no-scrollbar">
                 {categories.find(c => c.name === formData.category)?.subcategories.map((sub) => (
                   <button
                     key={`${formData.category}-${sub}`}
@@ -1551,14 +1560,25 @@ export default function PostJobWizard() {
                       nextStep();
                     }}
                     className={cn(
-                      "w-full p-4 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-blue-600 transition-all shadow-sm active:scale-[0.98]",
-                      formData.subcategory === sub && "border-blue-600 bg-blue-50"
+                      "w-full py-4 px-4 rounded-xl flex items-center gap-2 transition-all active:scale-[0.98]",
+                      formData.subcategory === sub 
+                        ? "border-[#0084a5] border-2 bg-blue-50 text-[#0084a5]" 
+                        : "border-[#0084a5]/40 border-2 bg-white hover:border-[#0084a5] hover:bg-slate-50 text-slate-700"
                     )}
                   >
-                    <span className="font-bold text-slate-700 text-left">{sub}</span>
-                    <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
+                    <span className="font-bold text-sm leading-tight text-left">{sub}</span>
                   </button>
                 ))}
+                
+                <div className="col-span-2 pt-2">
+                  <input
+                    type="text"
+                    placeholder="Custom Text Box"
+                    className="w-full text-center p-4 rounded-xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-black bg-white font-bold placeholder:font-bold placeholder:text-slate-600 text-xl text-slate-700"
+                    value={formData.subcategory && !categories.find(c => c.name === formData.category)?.subcategories.includes(formData.subcategory) ? formData.subcategory : ""}
+                    onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                  />
+                </div>
               </div>
             </motion.div>
           )}
@@ -1569,11 +1589,11 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">Tell us about the job</h2>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">Tell us about the job</h2>
                 <p className="text-slate-500 text-sm">Be as descriptive as possible for a better estimate.</p>
               </div>
 
@@ -1668,7 +1688,7 @@ export default function PostJobWizard() {
                     <textarea 
                       rows={4}
                       placeholder="Describe the issue, any specific parts needed, and the current state..."
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white"
+                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white"
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     />
@@ -1702,12 +1722,12 @@ export default function PostJobWizard() {
                     <input 
                       type="number" 
                       placeholder="e.g. 4"
-                      className="w-24 p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
+                      className="w-24 p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
                       value={formData.estimatedCompletionTime}
                       onChange={(e) => setFormData({ ...formData, estimatedCompletionTime: e.target.value })}
                     />
                     <select 
-                      className="w-32 p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700 transition-all font-medium"
+                      className="w-32 p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700 transition-all font-medium"
                       value={formData.estimatedCompletionTimeUnit}
                       onChange={(e) => setFormData({ ...formData, estimatedCompletionTimeUnit: e.target.value })}
                     >
@@ -1723,7 +1743,7 @@ export default function PostJobWizard() {
                   <div className="space-y-1">
                     <label className="text-sm font-bold text-slate-700">Payment Preference</label>
                     <select 
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700"
+                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700"
                       value={formData.paymentPreference}
                       onChange={(e) => setFormData({ ...formData, paymentPreference: e.target.value })}
                     >
@@ -1735,7 +1755,7 @@ export default function PostJobWizard() {
                   <div className="space-y-1">
                     <label className="text-sm font-bold text-slate-700">Quote Scope</label>
                     <select 
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700"
+                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white font-bold text-slate-700"
                       value={formData.quoteScope}
                       onChange={(e) => setFormData({ ...formData, quoteScope: e.target.value })}
                     >
@@ -1755,13 +1775,13 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-blue-600" />
-                  <h2 className="text-2xl font-bold text-slate-900">Refine your job post</h2>
+                  <h2 className="text-xl font-bold text-slate-900">Refine your job post</h2>
                 </div>
                 <p className="text-slate-500 text-sm">AI has generated a few questions to help tradespeople give you more accurate quotes.</p>
               </div>
@@ -1789,7 +1809,7 @@ export default function PostJobWizard() {
                       <textarea 
                         rows={2}
                         placeholder="Your answer..."
-                        className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white"
+                        className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white"
                         value={clarifyingAnswers[question] || ""}
                         onChange={(e) => setClarifyingAnswers(prev => ({ ...prev, [question]: e.target.value }))}
                       />
@@ -1807,11 +1827,11 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">Where is the job?</h2>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">Where is the job?</h2>
                 <p className="text-slate-500 text-sm">Help tradespeople find your location.</p>
               </div>
               <div className="space-y-4">
@@ -1828,7 +1848,7 @@ export default function PostJobWizard() {
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <input 
-                      className="w-full p-4 pl-12 pr-12 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
+                      className="w-full p-4 pl-12 pr-12 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
                       placeholder="Start typing your address or postcode..."
                       value={addressInput}
                       onChange={(e) => {
@@ -2003,7 +2023,7 @@ export default function PostJobWizard() {
                   <input 
                     type="text" 
                     placeholder="e.g. 42 or Flat 3B"
-                    className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
+                    className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
                     value={formData.houseNumber}
                     onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
                   />
@@ -2013,7 +2033,7 @@ export default function PostJobWizard() {
                   <label className="text-sm font-bold text-slate-700">Location Instructions (Optional)</label>
                   <textarea 
                     placeholder="Any specific instructions for finding you? (e.g., Use side gate, park on driveway, ring doorbell twice)"
-                    className="w-full p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white resize-none h-24 transition-all font-medium placeholder:font-normal"
+                    className="w-full p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white resize-none h-24 transition-all font-medium placeholder:font-normal"
                     value={formData.locationInstructions}
                     onChange={(e) => setFormData({ ...formData, locationInstructions: e.target.value })}
                   />
@@ -2024,7 +2044,7 @@ export default function PostJobWizard() {
                   <input 
                     type="text" 
                     placeholder="e.g. Manchester"
-                    className="w-full p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-slate-50 transition-all font-medium placeholder:font-normal"
+                    className="w-full p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-slate-50 transition-all font-medium placeholder:font-normal"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   />
@@ -2039,11 +2059,11 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">When do you need it?</h2>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">When do you need it?</h2>
                 <p className="text-slate-500 text-sm">Urgency affects the pricing and availability.</p>
               </div>
               {formData.urgency === "emergency" && (
@@ -2087,7 +2107,7 @@ export default function PostJobWizard() {
                     <label className="text-sm font-bold text-slate-700 block mb-2">Select Date</label>
                     <input 
                       type="date" 
-                      className="w-full p-4 rounded-2xl border-2 border-slate-300 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
+                      className="w-full p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium placeholder:font-normal"
                       value={formData.jobDate}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setFormData({ ...formData, jobDate: e.target.value })}
@@ -2104,11 +2124,11 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">Add photos & videos (Optional)</h2>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">Add photos & videos (Optional)</h2>
                 <p className="text-slate-500 text-sm">Visuals help tradespeople give more accurate quotes.</p>
               </div>
               
@@ -2284,11 +2304,11 @@ export default function PostJobWizard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-900">AI Price Guide</h2>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">AI Price Guide</h2>
                 <p className="text-slate-500 text-sm">A rough estimate to help you set your budget.</p>
               </div>               {isEstimating ? (
                 <div className="bg-white rounded-3xl p-12 border border-slate-100 shadow-sm flex flex-col items-center justify-center space-y-4">
@@ -2364,7 +2384,7 @@ export default function PostJobWizard() {
                       <input
                         type="number"
                         placeholder="0.00"
-                        className="w-full p-5 pl-12 rounded-2xl border-2 border-white bg-white font-black text-xl focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
+                        className="w-full p-5 pl-12 rounded-2xl border border-black bg-white font-black text-xl focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
                         value={formData.selectedBudget && formData.selectedBudget !== `£${estimate?.min} - £${estimate?.max}` ? formData.selectedBudget : ""}
                         onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
                       />
@@ -2518,7 +2538,7 @@ export default function PostJobWizard() {
                       <input
                         type="number"
                         placeholder="0.00"
-                        className="w-full p-5 pl-12 rounded-2xl border-2 border-white bg-white font-black text-xl focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
+                        className="w-full p-5 pl-12 rounded-2xl border border-black bg-white font-black text-xl focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
                         value={formData.selectedBudget || ""}
                         onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
                       />
@@ -2601,9 +2621,9 @@ export default function PostJobWizard() {
         </AnimatePresence>
       </div>
 
-      {/* Sticky Navigation Footer */}
+      {/* Navigation Footer */}
       {step !== 0 && (
-        <div className="fixed bottom-4 sm:bottom-0 left-4 right-4 p-4 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl z-40 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:mt-10 shadow-2xl">
+        <div className="mt-8 mb-8 pb-10 sm:mt-10 sm:pb-0">
           <div className="max-w-2xl mx-auto flex gap-3">
             {step > 0 && (
               <button 
@@ -2614,10 +2634,23 @@ export default function PostJobWizard() {
               </button>
             )}
             
-            {step === 1 || step === 2 ? (
+            {step === 1 ? (
               <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{step === 1 ? "Category Selection" : "Subcategory Selection"}</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Category Selection</p>
               </div>
+            ) : step === 2 ? (
+              formData.subcategory ? (
+                <button 
+                  onClick={nextStep} 
+                  className="flex-[3] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all text-lg"
+                >
+                  Continue <ChevronRight className="w-5 h-5" />
+                </button>
+              ) : (
+                <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Subcategory Selection</p>
+                </div>
+              )
             ) : step === 3 ? (
             <div className="flex-[3] flex gap-3">
               <button 

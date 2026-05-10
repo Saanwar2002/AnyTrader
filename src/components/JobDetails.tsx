@@ -12,7 +12,7 @@ import {
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
   BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation,
-  MessageCircle, Mail
+  MessageCircle, Mail, Check, Plus
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
@@ -113,6 +113,7 @@ export default function JobDetails() {
   const [quoteScope, setQuoteScope] = useState("complete_package");
   const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [isDraftingAI, setIsDraftingAI] = useState(false);
   const [isGeneratingMaterials, setIsGeneratingMaterials] = useState(false);
   const [isGeneratingMarketing, setIsGeneratingMarketing] = useState(false);
@@ -1136,6 +1137,7 @@ const libraries: any[] = ['places'];
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
   const [isEditingRevision, setIsEditingRevision] = useState(false);
   const [revisionAmount, setRevisionAmount] = useState("");
+  const [revisionReason, setRevisionReason] = useState("");
   const [revisionMessage, setRevisionMessage] = useState("");
   const [revisionScope, setRevisionScope] = useState<"labour_only" | "complete_package">("complete_package");
   const [revisionPaymentPreference, setRevisionPaymentPreference] = useState<"fixed_price" | "hourly" | "negotiable">("fixed_price");
@@ -1589,6 +1591,16 @@ const libraries: any[] = ['places'];
     }
   };
 
+  const handleCancelJobClick = () => {
+    if (confirmCancel) {
+      handleCancelJob();
+      setConfirmCancel(false);
+    } else {
+      setConfirmCancel(true);
+      setTimeout(() => setConfirmCancel(false), 3000);
+    }
+  };
+
   const handleDeleteJob = async () => {
     if (!id || !window.confirm("Are you sure you want to delete this job?")) return;
     setIsProcessing(true);
@@ -1946,12 +1958,20 @@ const libraries: any[] = ['places'];
                       
                       {(job.status === "posted" || job.status === "accepted") && (
                         <button
-                          onClick={handleCancelJob}
+                          onClick={handleCancelJobClick}
                           disabled={isProcessing}
-                          className="w-full px-4 py-2 text-left text-sm font-semibold text-amber-600 hover:bg-amber-50 flex items-center gap-2 disabled:opacity-50"
+                          className={cn("w-full px-4 py-2 text-left text-sm font-semibold flex items-center gap-2 disabled:opacity-50",
+                            confirmCancel ? "text-red-600 hover:bg-red-50" : "text-amber-600 hover:bg-amber-50"
+                          )}
                         >
-                          {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                          Cancel Job
+                          {isProcessing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : confirmCancel ? (
+                            <AlertTriangle className="w-4 h-4 text-red-600" />
+                          ) : (
+                            <XCircle className="w-4 h-4" />
+                          )}
+                          {confirmCancel ? "Confirm Cancel" : "Cancel Job"}
                         </button>
                       )}
                       
@@ -2201,7 +2221,7 @@ const libraries: any[] = ['places'];
                 </button>
               </div>
               <div className="bg-slate-200 rounded-[2rem] h-48 border border-slate-200 overflow-hidden relative pointer-events-none">
-                <iframe width="100%" height="100%" style={{ border: 0 }} loading="lazy" src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent((job.fullAddress || job.postcode || job.area) + ", UK")}`} />
+                <iframe width="100%" height="100%" style={{ border: 0 }} loading="lazy" src={`https://www.google.com/maps/embed/v1/place?key=${(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent((job.fullAddress || job.postcode || job.area) + ", UK")}`} />
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full font-bold text-xs text-slate-700 shadow-lg tracking-widest uppercase">
                     Approx. Area
