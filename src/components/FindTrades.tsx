@@ -461,10 +461,10 @@ export default function FindTrades() {
                       setSearchQuery("");
                     }}
                     className={cn(
-                      "flex flex-col items-center gap-2 p-3 bg-white rounded-2xl border-2 transition-all group shadow-sm hover:shadow-md relative",
+                      "flex flex-col items-center justify-center gap-3 p-4 rounded-xl border transition-all group active:scale-[0.98] relative",
                       selectedCategory === cat.name 
-                        ? "border-orange-500 ring-1 ring-orange-500" 
-                        : "border-black hover:border-slate-800"
+                        ? "border-[#0084a5] border-2 bg-[#0084a5]/5" 
+                        : "border-[#0084a5]/40 border-2 bg-white hover:border-[#0084a5] hover:bg-slate-50"
                     )}
                   >
                     {categoryCounts[cat.name] > 0 && (
@@ -473,10 +473,10 @@ export default function FindTrades() {
                         {categoryCounts[cat.name]}
                       </span>
                     )}
-                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                      {Icon ? <Icon className="w-5 h-5" /> : <span className="text-xl">{cat.icon}</span>}
+                    <div className="w-10 h-10 rounded-lg bg-[#0084a5]/10 flex items-center justify-center shrink-0">
+                      {Icon ? <Icon className="w-5 h-5 text-[#0084a5]" /> : <span className="text-xl">{cat.icon}</span>}
                     </div>
-                    <span className="text-[10px] font-bold text-slate-600 text-center line-clamp-1">{cat.name}</span>
+                    <span className="font-bold text-[11px] text-center leading-tight text-slate-800 line-clamp-2">{cat.name}</span>
                   </button>
                 );
               })}

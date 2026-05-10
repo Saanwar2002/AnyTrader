@@ -35,7 +35,9 @@ import {
   BarChart3,
   Locate,
   Star,
-  PenTool
+  PenTool,
+  MessageSquare,
+  Calendar
 } from "lucide-react";
 import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
@@ -1422,7 +1424,7 @@ export default function PostJobWizard() {
               {/* Popular Categories */}
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-slate-900">Popular Categories</h3>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {categories.slice(0, 6).map((cat) => {
                     const Icon = iconMap[cat.icon];
                     return (
@@ -1432,16 +1434,21 @@ export default function PostJobWizard() {
                           setFormData({ ...formData, category: cat.name, subcategory: "" });
                           setStep(2);
                         }}
-                        className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform"
+                        className={cn(
+                          "w-full p-4 rounded-xl border flex flex-col items-center justify-center gap-3 transition-all active:scale-[0.98]",
+                          formData.category === cat.name 
+                            ? "border-[#0084a5] border-2 bg-[#0084a5]/5" 
+                            : "border-[#0084a5]/40 border-2 bg-white hover:border-[#0084a5] hover:bg-slate-50"
+                        )}
                       >
-                        <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-lg bg-[#0084a5]/10 flex items-center justify-center shrink-0">
                           {Icon ? (
-                            <Icon className="w-6 h-6 text-orange-500" />
+                            <Icon className="w-5 h-5 text-[#0084a5]" />
                           ) : (
-                            <span className="text-2xl">{cat.icon}</span>
+                            <span className="text-xl">{cat.icon}</span>
                           )}
                         </div>
-                        <span className="text-[10px] font-bold text-slate-900 text-center leading-tight">{cat.name}</span>
+                        <span className="font-bold text-sm text-center leading-tight text-slate-800">{cat.name}</span>
                       </button>
                     );
                   })}
@@ -1542,18 +1549,20 @@ export default function PostJobWizard() {
                         nextStep();
                       }}
                       className={cn(
-                        "w-full py-3 px-3 rounded-xl border flex items-center gap-2 transition-all active:scale-[0.98]",
+                        "w-full p-4 rounded-xl border flex flex-col items-center justify-center gap-3 transition-all active:scale-[0.98]",
                         formData.category === cat.name 
-                          ? "border-[#0084a5] border-2 bg-blue-50 text-[#0084a5]" 
-                          : "border-[#0084a5]/40 border-2 bg-white hover:border-[#0084a5] hover:bg-slate-50 text-slate-700"
+                          ? "border-[#0084a5] border-2 bg-[#0084a5]/5" 
+                          : "border-[#0084a5]/40 border-2 bg-white hover:border-[#0084a5] hover:bg-slate-50"
                       )}
                     >
-                      {Icon ? (
-                        <Icon className="w-5 h-5 text-[#0084a5] flex-shrink-0" />
-                      ) : (
-                        <span className="text-lg">{cat.icon}</span>
-                      )}
-                      <span className="font-bold text-sm leading-tight text-left">{cat.name}</span>
+                      <div className="w-10 h-10 rounded-lg bg-[#0084a5]/10 flex items-center justify-center shrink-0">
+                        {Icon ? (
+                          <Icon className="w-5 h-5 text-[#0084a5]" />
+                        ) : (
+                          <span className="text-xl">{cat.icon}</span>
+                        )}
+                      </div>
+                      <span className="font-bold text-sm text-center leading-tight text-slate-800">{cat.name}</span>
                     </button>
                   );
                 })}
