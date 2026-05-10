@@ -782,41 +782,41 @@ export default function FindTrades() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-white rounded-3xl shadow-2xl p-6 relative w-full max-w-sm z-10 border-2 border-slate-900"
+              className="bg-white rounded-[2rem] shadow-2xl p-6 md:p-8 relative w-full max-w-sm z-10 mx-4"
             >
               <button 
                 onClick={() => setSelectedMiniProfile(null)}
-                className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"
+                className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors flex items-center justify-center"
               >
-                <X className="w-4 h-4 text-slate-600" />
+                <X className="w-4 h-4 text-slate-400 font-bold" />
               </button>
               
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
-                  <Info className="w-6 h-6" />
+              <div className="flex items-center gap-4 mb-8 pt-2">
+                <div className="w-14 h-14 bg-[#0066cc] rounded-full flex items-center justify-center text-white shrink-0">
+                  <span className="font-serif font-bold text-3xl italic">i</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 leading-tight">Instant Info</h3>
-                  <p className="text-xs text-slate-500 font-medium">Pricing & Details</p>
+                  <h3 className="font-bold text-[#0066cc] text-2xl tracking-tight leading-tight">Instant Info</h3>
+                  <p className="text-sm text-slate-400 font-medium">Pricing & Details</p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Call-Out Fee</p>
-                    <p className="text-2xl font-black text-slate-900">£{selectedMiniProfile.miniProfileSettings?.callOutFee || 0}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white rounded-2xl p-4 border-[2.5px] border-[#81c3f8] text-center">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">CALL-OUT FEE</p>
+                    <p className="text-3xl font-black text-[#0066cc]">£{selectedMiniProfile.miniProfileSettings?.callOutFee || 0}</p>
                   </div>
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Hourly Rate</p>
-                    <p className="text-2xl font-black text-slate-900">£{selectedMiniProfile.miniProfileSettings?.hourlyRate || 0}</p>
+                  <div className="bg-white rounded-2xl p-4 border-[2.5px] border-[#81c3f8] text-center">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">HOURLY RATE</p>
+                    <p className="text-3xl font-black text-[#0066cc]">£{selectedMiniProfile.miniProfileSettings?.hourlyRate || 0}</p>
                   </div>
                 </div>
 
                 {selectedMiniProfile.miniProfileSettings?.extraInfo && (
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Extra Info</p>
-                    <p className="text-sm font-medium text-slate-700 leading-relaxed italic">
+                  <div className="bg-white rounded-2xl p-5 border-[2.5px] border-[#81c3f8] text-center">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">EXTRA INFO</p>
+                    <p className="text-lg font-medium text-[#0066cc]">
                       "{selectedMiniProfile.miniProfileSettings.extraInfo}"
                     </p>
                   </div>
