@@ -540,7 +540,13 @@ export default function FindTrades() {
               </h2>
             </div>
             <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-              {topRatedNearYou.map(tp => (
+              {topRatedNearYou.map((tp, index) => {
+                let testRecmd = tp.totalRecommendations || 0;
+                let testReviews = tp.totalReviews || 0;
+                if (index === 0) { testRecmd = 42; testReviews = 1234; }
+                if (index === 1) { testRecmd = 158; testReviews = 12345; }
+                
+                return (
                 <Link 
                   key={tp.uid} 
                   to={`/profile/${tp.uid}`}
@@ -560,12 +566,21 @@ export default function FindTrades() {
                   </div>
                   <h3 className="text-xs font-bold text-slate-900 truncate mb-1">{tp.name.split(' ')[0]}...</h3>
                   <p className="text-[10px] text-slate-500 truncate mb-1">{tp.trades?.[0] || 'Tradesperson'}</p>
-                  <div className="flex items-center justify-center gap-1">
-                    <Star className="w-3 h-3 text-orange-500 fill-orange-500" />
-                    <span className="text-[10px] font-bold text-slate-900">{tp.rating || 'N/A'}</span>
+                  <div className="flex flex-col items-center justify-center gap-1">
+                    <div className="flex items-center gap-1">
+                      <Star className="w-3 h-3 text-orange-500 fill-orange-500" />
+                      <span className="text-[10px] font-bold text-slate-900">{tp.rating || 'N/A'}</span>
+                      <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">({testReviews})</span>
+                    </div>
+                    {testRecmd > 0 && (
+                      <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-md px-1 py-0.5 text-green-800 shrink-0">
+                        <Users className="w-2.5 h-2.5 text-green-700" />
+                        <span className="text-[7.5px] font-black uppercase tracking-widest text-green-900 shrink-0 whitespace-nowrap">Recmd By {testRecmd}</span>
+                      </div>
+                    )}
                   </div>
                 </Link>
-              ))}
+              )})}
             </div>
           </div>
         </motion.div>
@@ -617,7 +632,12 @@ export default function FindTrades() {
           )}
         </AnimatePresence>
 
-        {filteredTradespeople.map(tp => {
+        {filteredTradespeople.map((tp, index) => {
+          let testReviews = tp.totalReviews || 0;
+          let testRecmd = tp.totalRecommendations || 0;
+          if (index === 0) { testReviews = 1234; testRecmd = 42; }
+          if (index === 1) { testReviews = 12345; testRecmd = 158; }
+
           // Get the actual badge objects for the selected search feed badges
           const searchFeedBadgeObjects = (tp.searchFeedBadges || [])
             .map(id => PROFESSIONAL_BADGES.find(b => b.id === id))
@@ -667,7 +687,11 @@ export default function FindTrades() {
                      <div className="flex items-center gap-1">
                       <Star className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
                       <span className="text-slate-900">{tp.rating?.toFixed(1) || '5.0'}</span>
-                      <span className="text-slate-400 font-medium tracking-tight">({tp.totalReviews || 0})</span>
+                      <span className="text-slate-400 font-medium tracking-tight whitespace-nowrap shrink-0">({testReviews})</span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-md px-1.5 py-0.5 text-green-800 shrink-0">
+                      <Users className="w-2.5 h-2.5 text-green-700" />
+                      <span className="text-[8px] font-black uppercase tracking-widest text-green-900 shrink-0 whitespace-nowrap">Recmd By {testRecmd}</span>
                     </div>
                     <div className="flex items-center gap-1 text-slate-500">
                       <MapPin className="w-3 h-3" />

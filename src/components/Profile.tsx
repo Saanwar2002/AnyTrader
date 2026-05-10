@@ -1612,7 +1612,7 @@ export default function Profile() {
                       <Users className="w-3.5 h-3.5 text-white" />
                     </div>
                     <div className="flex flex-col items-start">
-                      <span className="text-[9px] font-black text-green-700 uppercase tracking-widest leading-none mb-0.5">Recommended</span>
+                      <span className="text-[8px] font-black text-green-900 uppercase tracking-widest leading-none mb-0.5">Recmd By</span>
                       <span className="text-lg font-black text-green-900 leading-none">{profile.totalRecommendations || 0}</span>
                     </div>
                   </div>
