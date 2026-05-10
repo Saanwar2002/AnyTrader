@@ -2641,7 +2641,16 @@ export default function PostJobWizard() {
             ) : step === 2 ? (
               formData.subcategory ? (
                 <button 
-                  onClick={nextStep} 
+                  onClick={() => {
+                    const category = categories.find(c => c.name === formData.category);
+                    if (category && formData.subcategory && !category.subcategories.includes(formData.subcategory)) {
+                      addDoc(collection(db, "search_logs"), {
+                        query: formData.subcategory.toLowerCase(),
+                        timestamp: serverTimestamp()
+                      }).catch(err => console.error("Error logging custom subcategory:", err));
+                    }
+                    nextStep();
+                  }}
                   className="flex-[3] p-4 rounded-2xl bg-orange-500 text-white font-black flex items-center justify-center gap-2 shadow-xl shadow-orange-500/20 active:scale-95 transition-all text-lg"
                 >
                   Continue <ChevronRight className="w-5 h-5" />
