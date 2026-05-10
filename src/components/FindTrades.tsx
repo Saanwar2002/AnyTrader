@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info } from "lucide-react";
 import { db, collection, query, where, onSnapshot, setDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { cn } from "@/src/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
@@ -23,6 +23,7 @@ interface Tradesperson {
   rating?: number;
   totalReviews?: number;
   totalJobsDone?: number;
+  completedJobsRevenue?: number;
   responseRate?: number;
   trustScore?: number;
   trades?: string[];
@@ -30,6 +31,11 @@ interface Tradesperson {
   tags?: string[];
   badges?: string[];
   searchFeedBadges?: string[];
+  miniProfileSettings?: {
+    callOutFee: number;
+    hourlyRate: number;
+    extraInfo: string;
+  };
   postcode?: string;
   isTopTradesperson?: boolean;
   isEstablishedTradesperson?: boolean;
@@ -71,6 +77,7 @@ export default function FindTrades() {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedTraderPreview, setSelectedTraderPreview] = useState<Tradesperson | null>(null);
+  const [selectedMiniProfile, setSelectedMiniProfile] = useState<Tradesperson | null>(null);
   const resultsRef = React.useRef<HTMLDivElement>(null);
 
   // Calculate counts for each category (only available traders)
@@ -543,8 +550,6 @@ export default function FindTrades() {
               {topRatedNearYou.map((tp, index) => {
                 let testRecmd = tp.totalRecommendations || 0;
                 let testReviews = tp.totalReviews || 0;
-                if (index === 0) { testRecmd = 42; testReviews = 1234; }
-                if (index === 1) { testRecmd = 158; testReviews = 12345; }
                 
                 return (
                 <Link 
@@ -635,14 +640,24 @@ export default function FindTrades() {
         {filteredTradespeople.map((tp, index) => {
           let testReviews = tp.totalReviews || 0;
           let testRecmd = tp.totalRecommendations || 0;
-          if (index === 0) { testReviews = 1234; testRecmd = 42; }
-          if (index === 1) { testReviews = 12345; testRecmd = 158; }
 
           // Get the actual badge objects for the selected search feed badges
           const searchFeedBadgeObjects = (tp.searchFeedBadges || [])
             .map(id => PROFESSIONAL_BADGES.find(b => b.id === id))
             .filter(Boolean)
             .slice(0, 2); // Tier 1 Rule Constraint: Max 2 badges
+
+          let typicalPriceHtml = null;
+          if ((tp.totalJobsDone || 0) >= 5 && (tp.completedJobsRevenue || 0) > 0) {
+            const avg = (tp.completedJobsRevenue || 0) / (tp.totalJobsDone || 1);
+            const lowerBound = Math.round(avg * 0.85 / 10) * 10; // Round to nearest 10
+            const upperBound = Math.round(avg * 1.15 / 10) * 10;
+            typicalPriceHtml = (
+              <div className="flex items-center gap-2 text-[10px] font-black text-slate-900 tracking-tight">
+                💰 Typical: <span className="text-blue-600">£{lowerBound} - £{upperBound}</span>
+              </div>
+            );
+          }
 
           return (
           <motion.div
@@ -653,6 +668,15 @@ export default function FindTrades() {
             onClick={() => setSelectedTraderPreview(tp)}
             className="bg-white rounded-3xl border-2 border-black shadow-sm overflow-hidden flex flex-col relative cursor-pointer hover:border-slate-800 hover:shadow-md transition-all group"
           >
+            {/* Top Right Triangle Corner */}
+            <div 
+              className="absolute top-0 right-0 w-12 h-12 bg-blue-600 z-10 cursor-pointer flex items-start justify-end p-1 hover:bg-blue-700 transition-colors"
+              style={{ clipPath: 'polygon(100% 0, 0 0, 100% 100%)', clipRule: 'evenodd' }}
+              onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(tp); }}
+            >
+              <Info className="w-3.5 h-3.5 text-white mr-1.5 mt-1.5" />
+            </div>
+
             <div className="p-4">
               <div className="flex gap-4">
                 {/* Photo: Large & Left-Aligned for rapid scanning */}
@@ -711,9 +735,7 @@ export default function FindTrades() {
                   <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
                   <span className="text-[10px] font-bold text-slate-800 tracking-tight">Available this week</span>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-900 tracking-tight">
-                  💰 Typical: <span className="text-blue-600">£150 - £250</span>
-                </div>
+                {typicalPriceHtml}
               </div>
 
               {searchFeedBadgeObjects.length > 0 && (
@@ -744,6 +766,66 @@ export default function FindTrades() {
 
       {/* Spacer for bottom navigation */}
       <div className="h-24"></div>
+
+      {/* Mini Profile Info Modal */}
+      <AnimatePresence>
+        {selectedMiniProfile && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedMiniProfile(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl p-6 relative w-full max-w-sm z-10 border-2 border-slate-900"
+            >
+              <button 
+                onClick={() => setSelectedMiniProfile(null)}
+                className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"
+              >
+                <X className="w-4 h-4 text-slate-600" />
+              </button>
+              
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
+                  <Info className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 leading-tight">Instant Info</h3>
+                  <p className="text-xs text-slate-500 font-medium">Pricing & Details</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Call-Out Fee</p>
+                    <p className="text-2xl font-black text-slate-900">£{selectedMiniProfile.miniProfileSettings?.callOutFee || 0}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Hourly Rate</p>
+                    <p className="text-2xl font-black text-slate-900">£{selectedMiniProfile.miniProfileSettings?.hourlyRate || 0}</p>
+                  </div>
+                </div>
+
+                {selectedMiniProfile.miniProfileSettings?.extraInfo && (
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Extra Info</p>
+                    <p className="text-sm font-medium text-slate-700 leading-relaxed italic">
+                      "{selectedMiniProfile.miniProfileSettings.extraInfo}"
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Tier 2: Expanded Preview (Bottom Sheet) */}
       <AnimatePresence>
@@ -912,12 +994,12 @@ export default function FindTrades() {
             <button 
               onClick={async () => {
                 const sampleTrades = [
-                  { name: "Sarah Jenkins", trades: ["Electrical"], tags: ["Electrician", "Rewiring", "Smart Home", "Lighting"], postcode: "M1 3AP", rating: 4.9, totalReviews: 89, totalJobsDone: 112, responseRate: 97, trustScore: 98, badges: ["NICEIC", "Verified"], bio: "NICEIC-registered electrician specialising in rewires and smart home installations.", isTopTradesperson: true, verificationStatus: "verified" },
-                  { name: "Andy Parker", trades: ["Heating", "Building & Construction"], tags: ["Builder", "Bricklayer", "Heating Engineer", "Boiler Repair"], postcode: "M4 1HQ", rating: 4.9, totalReviews: 210, totalJobsDone: 255, responseRate: 94, trustScore: 96, badges: ["Gas Safe", "Verified"], bio: "Premium heating and building solutions for homes across Greater Manchester.", isTopTradesperson: true, verificationStatus: "verified" },
-                  { name: "Dave Collins", trades: ["Plumbing & Heating"], tags: ["Plumber", "Heating Engineer", "Leak Repair", "Bathroom Fitting"], postcode: "M3 4FH", rating: 4.8, totalReviews: 127, totalJobsDone: 143, responseRate: 92, trustScore: 94, badges: ["Gas Safe", "Verified"], bio: "Gas Safe registered plumber with 15 years experience.", isTopTradesperson: true, verificationStatus: "verified" },
-                  { name: "Lisa Park", trades: ["Painting & Decorating"], tags: ["Painter", "Decorator", "Wallpapering", "Exterior Painting"], postcode: "M20 3LJ", rating: 4.7, totalReviews: 63, totalJobsDone: 78, responseRate: 95, trustScore: 82, badges: ["Verified"], bio: "Interior and exterior decorating. Fast, clean, and quality finish.", isEstablishedTradesperson: true, verificationStatus: "verified" },
-                  { name: "Mike Walsh", trades: ["Plumbing & Heating"], tags: ["Heating Engineer", "Plumber", "Boiler Installation", "Radiator Repair"], postcode: "M2 5NA", rating: 4.6, totalReviews: 210, totalJobsDone: 240, responseRate: 90, trustScore: 88, badges: ["Gas Safe", "Verified"], bio: "Boiler installation specialist with 20+ years experience.", isTopTradesperson: true, verificationStatus: "verified" },
-                  { name: "Tom Briggs", trades: ["Plumbing & Heating"], tags: ["Plumber", "Drainage", "Tap Repair"], postcode: "SK1 3PL", rating: 4.3, totalReviews: 45, totalJobsDone: 58, responseRate: 85, trustScore: 72, badges: ["Gas Safe"], bio: "Family-run plumbing business with 10 years in the trade.", isEstablishedTradesperson: true, verificationStatus: "unverified" }
+                  { name: "Sarah Jenkins", trades: ["Electrical"], tags: ["Electrician", "Rewiring", "Smart Home", "Lighting"], postcode: "M1 3AP", rating: 4.9, totalReviews: 89, totalJobsDone: 112, completedJobsRevenue: 22400, responseRate: 97, trustScore: 98, badges: ["NICEIC", "Verified"], bio: "NICEIC-registered electrician specialising in rewires and smart home installations.", isTopTradesperson: true, verificationStatus: "verified" },
+                  { name: "Andy Parker", trades: ["Heating", "Building & Construction"], tags: ["Builder", "Bricklayer", "Heating Engineer", "Boiler Repair"], postcode: "M4 1HQ", rating: 4.9, totalReviews: 210, totalJobsDone: 255, completedJobsRevenue: 76500, responseRate: 94, trustScore: 96, badges: ["Gas Safe", "Verified"], bio: "Premium heating and building solutions for homes across Greater Manchester.", isTopTradesperson: true, verificationStatus: "verified" },
+                  { name: "Dave Collins", trades: ["Plumbing & Heating"], tags: ["Plumber", "Heating Engineer", "Leak Repair", "Bathroom Fitting"], postcode: "M3 4FH", rating: 4.8, totalReviews: 127, totalJobsDone: 143, completedJobsRevenue: 31460, responseRate: 92, trustScore: 94, badges: ["Gas Safe", "Verified"], bio: "Gas Safe registered plumber with 15 years experience.", isTopTradesperson: true, verificationStatus: "verified" },
+                  { name: "Lisa Park", trades: ["Painting & Decorating"], tags: ["Painter", "Decorator", "Wallpapering", "Exterior Painting"], postcode: "M20 3LJ", rating: 4.7, totalReviews: 63, totalJobsDone: 78, completedJobsRevenue: 15600, responseRate: 95, trustScore: 82, badges: ["Verified"], bio: "Interior and exterior decorating. Fast, clean, and quality finish.", isEstablishedTradesperson: true, verificationStatus: "verified" },
+                  { name: "Mike Walsh", trades: ["Plumbing & Heating"], tags: ["Heating Engineer", "Plumber", "Boiler Installation", "Radiator Repair"], postcode: "M2 5NA", rating: 4.6, totalReviews: 210, totalJobsDone: 240, completedJobsRevenue: 52800, responseRate: 90, trustScore: 88, badges: ["Gas Safe", "Verified"], bio: "Boiler installation specialist with 20+ years experience.", isTopTradesperson: true, verificationStatus: "verified" },
+                  { name: "Tom Briggs", trades: ["Plumbing & Heating"], tags: ["Plumber", "Drainage", "Tap Repair"], postcode: "SK1 3PL", rating: 4.3, totalReviews: 45, totalJobsDone: 58, completedJobsRevenue: 8700, responseRate: 85, trustScore: 72, badges: ["Gas Safe"], bio: "Family-run plumbing business with 10 years in the trade.", isEstablishedTradesperson: true, verificationStatus: "unverified" }
                 ];
                 
                 for (const tp of sampleTrades) {

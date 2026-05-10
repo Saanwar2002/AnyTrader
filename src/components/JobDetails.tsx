@@ -979,6 +979,11 @@ const libraries: any[] = ['places'];
           tpUpdateData.phantomFeesSaved = increment(potentialFee);
         }
 
+        tpUpdateData.totalJobsDone = increment(1);
+        if (acceptedQuote.amount && acceptedQuote.amount > 0) {
+          tpUpdateData.completedJobsRevenue = increment(acceptedQuote.amount);
+        }
+
         if (job.isBoosted && job.urgency === 'emergency') {
           tpUpdateData.boostedEmergencyJobsDone = increment(1);
         }

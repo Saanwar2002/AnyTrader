@@ -222,6 +222,7 @@ export default function Profile() {
   const location = useLocation();
   const { isInstallable, installApp } = usePWAInstall();
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingMiniProfile, setIsEditingMiniProfile] = useState(false);
   const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
   const [expandedMenuGroups, setExpandedMenuGroups] = useState<string[]>([]);
   const [isEditingNotifications, setIsEditingNotifications] = useState(false);
@@ -250,7 +251,8 @@ export default function Profile() {
     tags: (profile?.tags || []).join(", "),
     services: profile?.services || [],
     badges: profile?.badges || [],
-    searchFeedBadges: profile?.searchFeedBadges || []
+    searchFeedBadges: profile?.searchFeedBadges || [],
+    miniProfileSettings: profile?.miniProfileSettings || { hourlyRate: 0, callOutFee: 0, extraInfo: "" }
   });
   const [notificationSettings, setNotificationSettings] = useState(profile?.notificationSettings || {
     quietHoursEnabled: false,
@@ -376,11 +378,12 @@ export default function Profile() {
         services: profile.services || [],
         badges: profile.badges || [],
         searchFeedBadges: profile.searchFeedBadges || [],
+        miniProfileSettings: profile.miniProfileSettings || { hourlyRate: 0, callOutFee: 0, extraInfo: "" },
         isAvailableForInstantMatch: profile.isAvailableForInstantMatch || false,
         instantMatchPricing: profile.instantMatchPricing || { callOutFee: 0, hourlyRate: 0, terms: "" }
       });
     }
-  }, [isEditing, isEditingIM, profile]);
+  }, [isEditing, isEditingIM, isEditingMiniProfile, profile]);
 
   useEffect(() => {
     const unsubConfig = onSnapshot(doc(db, "platform_config", "advertising"), (docSnapshot) => {
@@ -2074,6 +2077,37 @@ export default function Profile() {
 
             <div className="mt-6 pt-6 border-t border-slate-200">
               <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-bold text-slate-900">Mini Profile Card Settings</h4>
+                <button 
+                  onClick={() => setIsEditingMiniProfile(true)}
+                  className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
+                >
+                  <Pencil className="w-3 h-3" />
+                  Edit settings
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Call-Out Fee</p>
+                    <p className="text-2xl font-black text-slate-900 leading-none">£{profile.miniProfileSettings?.callOutFee || 0}</p>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Hourly Rate</p>
+                    <p className="text-2xl font-black text-slate-900 leading-none">£{profile.miniProfileSettings?.hourlyRate || 0}</p>
+                  </div>
+                </div>
+                {profile.miniProfileSettings?.extraInfo && (
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Extra Info</p>
+                    <p className="text-sm text-slate-700 font-medium">{profile.miniProfileSettings.extraInfo}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Instant Match Settings</h4>
                 <button 
                   onClick={() => setIsEditingIM(true)}
@@ -3505,6 +3539,96 @@ export default function Profile() {
                 >
                   {isSaving && <Loader2 className="w-5 h-5 animate-spin" />}
                   Save Changes
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isEditingMiniProfile && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end sm:items-center sm:justify-center"
+          >
+            <motion.div 
+              initial={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
+              animate={{ y: 0, sm: { scale: 1, opacity: 1 } }}
+              exit={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-t-[2rem] sm:rounded-[2rem] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            >
+              <div className="p-5 pb-4 flex items-center justify-between shrink-0 border-b border-slate-50">
+                <h3 className="text-xl font-bold text-slate-900">Mini Profile Card Settings</h3>
+                <button onClick={() => setIsEditingMiniProfile(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5">
+                <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Call-Out Fee (£)</label>
+                    <input 
+                      type="number"
+                      className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                      value={editData.miniProfileSettings?.callOutFee || ''}
+                      onChange={(e) => setEditData({ 
+                        ...editData, 
+                        miniProfileSettings: { ...(editData.miniProfileSettings || {} as any), callOutFee: Number(e.target.value) } 
+                      })}
+                      placeholder="e.g. 50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Hourly Rate (£/hr)</label>
+                    <input 
+                      type="number"
+                      className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                      value={editData.miniProfileSettings?.hourlyRate || ''}
+                      onChange={(e) => setEditData({ 
+                        ...editData, 
+                        miniProfileSettings: { ...(editData.miniProfileSettings || {} as any), hourlyRate: Number(e.target.value) } 
+                      })}
+                      placeholder="e.g. 80"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Extra Info</label>
+                    <textarea 
+                      className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm resize-y"
+                      value={editData.miniProfileSettings?.extraInfo || ''}
+                      onChange={(e) => setEditData({ 
+                        ...editData, 
+                        miniProfileSettings: { ...(editData.miniProfileSettings || {} as any), extraInfo: e.target.value } 
+                      })}
+                      placeholder="e.g. Rate excludes materials."
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-slate-100 bg-white">
+                <button 
+                  onClick={() => setIsEditingMiniProfile(false)}
+                  className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={async () => {
+                    await handleSave();
+                    setIsEditingMiniProfile(false);
+                  }}
+                  disabled={isSaving}
+                  className="flex-1 p-4 rounded-2xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                >
+                  {isSaving && <Loader2 className="w-5 h-5 animate-spin" />}
+                  Save Settings
                 </button>
               </div>
             </motion.div>
