@@ -219,30 +219,30 @@ export default function Dashboard() {
       </button>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-4 gap-4">
-        <Link to="/find-trades" className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group">
-          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-            <Search className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
+      <div className="grid grid-cols-4 gap-2.5">
+        <Link to="/find-trades" className="bg-white border border-slate-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square">
+          <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-blue-50 transition-colors shrink-0">
+            <Search className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
           </div>
-          <span className="text-xs">Find Trades</span>
+          <span className="text-[10px] sm:text-xs text-center leading-[1.1] truncate w-full px-1">Find Trades</span>
         </Link>
         <Link 
           to="/analytics" 
-          className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group"
+          className="bg-white border border-slate-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
         >
-          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-green-50 transition-colors">
-            <BarChart3 className="w-5 h-5 text-green-500" />
+          <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors shrink-0">
+            <BarChart3 className="w-4 h-4 text-green-500" />
           </div>
-          <span className="text-xs">Analytics</span>
+          <span className="text-[10px] sm:text-xs text-center leading-[1.1] truncate w-full px-1">Analytics</span>
         </Link>
         <Link 
           to="/post-emergency-job" 
-          className="bg-red-50 border border-red-200 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 font-bold text-red-700 hover:bg-red-100 transition-all shadow-sm group"
+          className="bg-red-50 border border-red-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-red-700 hover:bg-red-100 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
         >
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center group-hover:bg-red-100 transition-colors border border-red-100">
-            <EmergencyIcon className="w-5 h-5 text-red-600" />
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:bg-red-100 transition-colors border border-red-100 shrink-0">
+            <EmergencyIcon className="w-4 h-4 text-red-600" />
           </div>
-          <span className="text-[10px] text-center leading-tight">Emergency<br/>Fast Job Post</span>
+          <span className="text-[9px] sm:text-[10px] text-center leading-[1.1]">Emergency<br/>Fast Job Post</span>
         </Link>
         <button 
           onClick={async () => {
@@ -284,12 +284,12 @@ export default function Dashboard() {
                toast.error("Error: " + e.message);
              }
           }}
-          className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 font-bold text-orange-700 hover:bg-orange-100 transition-all shadow-sm group"
+          className="bg-orange-50 border border-orange-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-orange-700 hover:bg-orange-100 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
         >
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center group-hover:bg-orange-100 transition-colors border border-orange-100">
-            <EmergencyIcon className="w-5 h-5 text-orange-600" />
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:bg-orange-100 transition-colors border border-orange-100 shrink-0">
+            <EmergencyIcon className="w-4 h-4 text-orange-600" />
           </div>
-          <span className="text-[10px] text-center leading-tight">Simulate<br/>Instant Match</span>
+          <span className="text-[9px] sm:text-[10px] text-center leading-[1.1]">Simulate<br/>Instant Match</span>
         </button>
       </div>
 

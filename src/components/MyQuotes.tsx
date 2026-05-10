@@ -8,8 +8,6 @@ import { cn } from "@/src/lib/utils";
 
 export default function MyQuotes() {
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const mode = searchParams.get("mode") || "active";
   const [quotes, setQuotes] = useState<any[]>([]);
   const [recurringSchedules, setRecurringSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +15,7 @@ export default function MyQuotes() {
   const [jobs, setJobs] = useState<Record<string, any>>({});
   const [jobsLoading, setJobsLoading] = useState(false);
 
-  const [filter, setFilter] = useState<string>("pending");
+  const [filter, setFilter] = useState<string>("all");
   const [withdrawingQuote, setWithdrawingQuote] = useState<any | null>(null);
   const [withdrawReason, setWithdrawReason] = useState("");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -160,17 +158,7 @@ export default function MyQuotes() {
   }, [quotes]);
 
   const filteredQuotes = quotes.filter(q => {
-    const job = jobs[q.jobId];
-    const isCompleted = job?.status === "completed";
-    
-    // First filter by mode (active vs completed)
-    if (mode === "completed") {
-      if (!isCompleted) return false;
-    } else {
-      if (isCompleted) return false;
-    }
-
-    // Then filter by status (pending, accepted, etc.)
+    // Just filter by status
     if (filter === "all") return true;
     return q.status === filter;
   });
@@ -195,29 +183,27 @@ export default function MyQuotes() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold text-slate-900">
-          {mode === "completed" ? "Completed Quotes & Jobs" : "My Active Quotes"}
+          My Quotes
         </h1>
         
-        {mode !== "completed" && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar">
-            {statusFilters.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setFilter(f.id)}
-                className={cn(
-                  "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border",
-                  filter === f.id 
-                    ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" 
-                    : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar mt-2">
+          {statusFilters.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border",
+                filter === f.id 
+                  ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" 
+                  : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {filter === "recurring" ? (
@@ -287,23 +273,19 @@ export default function MyQuotes() {
       ) : filteredQuotes.length === 0 ? (
         <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-4">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
-            {mode === "completed" ? <Briefcase className="w-8 h-8" /> : <PoundSterling className="w-8 h-8" />}
+            <PoundSterling className="w-8 h-8" />
           </div>
           <div className="space-y-1">
             <h3 className="text-lg font-bold text-slate-900">
-              {mode === "completed" 
-                ? "No completed jobs found" 
-                : (filter === "all" ? "No active quotes" : `No ${filter} quotes found`)}
+              {filter === "all" ? "No active quotes" : `No ${filter} quotes found`}
             </h3>
             <p className="text-slate-500">
-              {mode === "completed"
-                ? "Your finished projects will appear here once marked as complete."
-                : (filter === "all" 
-                    ? "Browse the job feed to find opportunities and submit your first quote."
-                    : "Try changing your filter to see more quotes.")}
+              {filter === "all" 
+                  ? "Browse the job feed to find opportunities and submit your first quote."
+                  : "Try changing your filter to see more quotes."}
             </p>
           </div>
-          {mode !== "completed" && filter === "all" && (
+          {filter === "all" && (
             <Link 
               to="/"
               className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"

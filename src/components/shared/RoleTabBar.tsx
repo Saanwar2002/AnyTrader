@@ -36,7 +36,7 @@ export default function RoleTabBar() {
 
   const getLabel = (role: string) => {
     switch(role) {
-      case "customer": return activePortal === "anyroller" ? "As Rider" : "As Homeowner";
+      case "customer": return activePortal === "anyroller" ? "As Rider" : "As Homeowner / Hire Trades";
       case "trader": return "As Tradesperson";
       case "business": return "As Business";
       case "driver": return "As Driver";

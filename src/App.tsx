@@ -13,6 +13,7 @@ import { useAuth } from "./components/AuthProvider";
 import Login from "./components/Login";
 import Onboarding from "./components/Onboarding";
 import MyJobs from "./components/MyJobs";
+import TradeJobs from "./components/TradeJobs";
 import MyQuotes from "./components/MyQuotes";
 import Conversations from "./components/Conversations";
 import Notifications from "./components/Notifications";
@@ -183,6 +184,7 @@ export default function App() {
                 <Route path="trades-dashboard" element={<TradesDashboard />} />
                 <Route path="job-feed" element={<JobFeed />} />
                 <Route path="my-jobs" element={<MyJobs />} />
+                <Route path="trade-jobs" element={<TradeJobs />} />
                 <Route path="portfolio" element={<Portfolio />} />
                 <Route path="trader/banner-ads" element={<TradesBannerAdStudio />} />
                 <Route path="post-job" element={<PostJobWizard />} />

@@ -11,7 +11,8 @@ import {
   MessageSquare, PoundSterling, Calendar, Loader2, User as UserIcon, Video, Star,
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
-  BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation
+  BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation,
+  MessageCircle, Mail
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
@@ -85,6 +86,13 @@ const downloadICS = (job: any, quote: any) => {
   document.body.removeChild(link);
 };
 
+const formatTimer = (totalSeconds: number) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
 export default function JobDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -123,10 +131,31 @@ export default function JobDetails() {
   const [hasRecurringSchedule, setHasRecurringSchedule] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [showDigitalId, setShowDigitalId] = useState(false);
+  const [showJobSummary, setShowJobSummary] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [imElapsedSeconds, setImElapsedSeconds] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (job?.status === "in_progress" && job?.startedAt) {
+      const start = job.startedAt.seconds ? job.startedAt.seconds * 1000 : Date.now();
+      
+      const updateTimer = () => {
+        const now = Date.now();
+        const seconds = Math.floor((now - start) / 1000);
+        setElapsedSeconds(seconds >= 0 ? seconds : 0);
+      };
+      
+      updateTimer();
+      interval = setInterval(updateTimer, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [job?.status, job?.startedAt]);
 
 const libraries: any[] = ['places'];
 
@@ -844,9 +873,10 @@ const libraries: any[] = ['places'];
     setLoading(true);
     try {
       await updateDoc(doc(db, "jobs", id), {
-        status: "in_progress"
+        status: "in_progress",
+        startedAt: serverTimestamp()
       });
-      setJob((prev: any) => ({ ...prev, status: "in_progress" }));
+      setJob((prev: any) => ({ ...prev, status: "in_progress", startedAt: { seconds: Math.floor(Date.now() / 1000) } }));
       setShowPinModal(false);
       
       // Notify homeowner
@@ -1949,6 +1979,289 @@ const libraries: any[] = ['places'];
       </div>
 
       <div className="p-4 space-y-6">
+        {(!isHomeowner && job.status === "in_progress") ? (
+          <div className="space-y-6 pb-[100px] mt-4">
+            {/* UK Active Job Tracker Header */}
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 flex flex-col items-center">
+              <div className="w-full flex justify-between items-center mb-8">
+                <h2 className="font-bold text-lg text-slate-900">UK Active Job Tracker</h2>
+                <div className="flex items-center gap-1.5 text-green-600 font-bold text-sm bg-green-50 px-3 py-1 rounded-full border border-green-100">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  LIVE
+                </div>
+              </div>
+              <div className="text-[4.5rem] font-black text-blue-600 tracking-tighter leading-none mb-2 tabular-nums">
+                {formatTimer(elapsedSeconds)}
+              </div>
+            </div>
+
+            {/* Job Progress */}
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+              <h3 className="font-bold text-2xl text-slate-900 mb-2 tracking-tight">Job Progress</h3>
+              <p className="text-slate-600 font-medium pb-4 border-b border-slate-100 mb-6">{job.category} Repair at {job.fullAddress || job.houseNumber || job.postcode}</p>
+              
+              <div className="space-y-5">
+                <label className="flex items-start gap-4 cursor-pointer group">
+                  <div className="w-7 h-7 rounded-lg border-2 border-green-500 bg-green-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <Check className="w-4 h-4" strokeWidth={3} />
+                  </div>
+                  <span className="text-slate-900 font-medium group-hover:text-black transition-colors text-lg pt-0.5 leading-snug">Secure Area (HSE Guidelines)</span>
+                </label>
+                <label className="flex items-start gap-4 cursor-pointer group">
+                  <div className="w-7 h-7 rounded-lg border-2 border-green-500 bg-green-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <Check className="w-4 h-4" strokeWidth={3} />
+                  </div>
+                  <span className="text-slate-900 font-medium group-hover:text-black transition-colors text-lg pt-0.5 leading-snug">Isolate Water Supply</span>
+                </label>
+                <label className="flex items-start gap-4 cursor-pointer group">
+                  <div className="w-7 h-7 rounded-lg border-2 border-slate-300 flex items-center justify-center shrink-0 mt-0.5 bg-white group-hover:border-blue-500 transition-colors">
+                  </div>
+                  <span className="text-slate-900 font-medium group-hover:text-black transition-colors text-lg pt-0.5 leading-snug">Initial Assessment & Risk Check</span>
+                </label>
+                <label className="flex items-start gap-4 cursor-pointer group">
+                  <div className="w-7 h-7 rounded-lg border-2 border-slate-300 flex items-center justify-center shrink-0 mt-0.5 bg-white group-hover:border-blue-500 transition-colors">
+                  </div>
+                  <span className="text-slate-900 font-medium group-hover:text-black transition-colors text-lg pt-0.5 leading-snug">Commence Repair Work</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Media Gallery */}
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+              <h3 className="font-bold text-2xl text-slate-900 tracking-tight mb-1">Media Gallery</h3>
+              <p className="text-slate-600 font-medium mb-5">During Work</p>
+              
+              <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar">
+                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-slate-200">
+                   <img src="https://images.unsplash.com/photo-1581092921461-7031e4bfb83e?auto=format&fit=crop&w=300&q=80" alt="Work 1" className="w-full h-full object-cover opacity-90" />
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
+                   <span className="absolute bottom-3 left-0 right-0 text-center text-white text-xs font-semibold tracking-wide shadow-black">10:02 AM</span>
+                </div>
+                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-slate-200">
+                   <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=300&q=80" alt="Work 2" className="w-full h-full object-cover opacity-90" />
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
+                   <span className="absolute bottom-3 left-0 right-0 text-center text-white text-xs font-semibold tracking-wide shadow-black">10:10 AM</span>
+                </div>
+                <button className="w-32 h-32 border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 transition-colors rounded-[1.5rem] shrink-0 flex flex-col items-center justify-center gap-3 text-slate-500 snap-start">
+                  <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400">
+                    <Plus className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-600 tracking-tight">Add Photo</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Actions Fixed Area */}
+            <div className="fixed bottom-[100px] sm:bottom-[80px] left-0 right-0 p-4 bg-slate-50/90 backdrop-blur-md border-t border-slate-200/50 z-40">
+              <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+                <button className="flex-1 bg-slate-500 text-white py-4 rounded-[1.2rem] font-bold shadow-sm active:scale-95 transition-all text-[17px] tracking-tight">
+                  Pause
+                </button>
+                <button 
+                  onClick={() => setShowJobSummary(true)}
+                  className="flex-[2] bg-green-600 text-white py-4 rounded-[1.2rem] font-bold shadow-sm active:scale-95 transition-all text-[17px] tracking-tight hover:bg-green-700"
+                >
+                  Complete Job
+                </button>
+                <button 
+                  onClick={() => setShowDigitalId(true)}
+                  className="px-6 bg-blue-700 text-white py-4 rounded-[1.2rem] font-bold shadow-sm active:scale-95 transition-all text-[15px] tracking-tight text-center"
+                >
+                  CSCS Card
+                </button>
+              </div>
+            </div>
+
+            {/* Trader Tools for Dispute/Revision */}
+            {isAssignedTrader && (
+              <div className="space-y-3 pt-6 border-t border-slate-200 mt-8 mb-16 px-4">
+                <button 
+                  onClick={() => setShowDisputeModal(true)}
+                  className="w-full bg-white border border-red-200 text-red-600 p-4 rounded-[1.5rem] font-bold hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <AlertTriangle className="w-5 h-5" /> Raise a Dispute
+                </button>
+                
+                {!isEditingRevision ? (
+                  <button 
+                    onClick={() => {
+                      const myQuote = quotes.find(q => q.tradespersonId === user?.uid);
+                      if (myQuote) {
+                        setRevisionAmount(myQuote.amount.toString());
+                        setIsEditingRevision(true);
+                      }
+                    }}
+                    className="w-full bg-white border border-slate-200 text-slate-700 p-4 rounded-[1.5rem] font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Edit2 className="w-5 h-5" /> Request Job Revision
+                  </button>
+                ) : (
+                  <div className="bg-white border border-slate-200 p-5 rounded-[1.5rem] space-y-4">
+                    <p className="font-bold text-sm text-slate-900">Request Revision</p>
+                    <input
+                      type="number"
+                      value={revisionAmount}
+                      onChange={(e) => setRevisionAmount(e.target.value)}
+                      placeholder="New total amount"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                    />
+                    <textarea
+                      value={revisionReason}
+                      onChange={(e) => setRevisionReason(e.target.value)}
+                      placeholder="Reason for revision (e.g. additional parts needed)"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 resize-none h-24 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                    />
+                    <div className="flex gap-2">
+                       <button 
+                         onClick={() => setIsEditingRevision(false)}
+                         className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50"
+                       >
+                         Cancel
+                       </button>
+                       <button 
+                         onClick={handleRequestRevision}
+                         disabled={!revisionAmount || !revisionReason || isProcessing}
+                         className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50"
+                       >
+                         Submit
+                       </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (!isHomeowner && job.status === "accepted") ? (
+          <div className="space-y-6 pb-24">
+            {/* Header & Status */}
+            <div className="space-y-3">
+              <h1 className="text-2xl font-black text-slate-900 leading-tight">
+                {job.category}: {job.title}
+              </h1>
+              <div className="flex items-center justify-between">
+                <span className={cn("px-4 py-1.5 rounded-full text-sm font-bold capitalize", job.status === "accepted" ? "bg-green-500 text-white" : "bg-blue-600 text-white")}>
+                  {job.status === "accepted" && job.trackingStatus === "on_route" ? "On Route" : 
+                   job.status === "accepted" && job.trackingStatus === "arrived" ? "Arrived" : 
+                   job.status.replace("_", " ")}
+                </span>
+                <button 
+                  onClick={() => setShowRescheduleModal(true)}
+                  className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-sm font-bold shadow-sm"
+                >
+                  Reschedule
+                </button>
+              </div>
+            </div>
+
+            {/* Job Actions */}
+            <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100 space-y-4">
+              <h2 className="font-bold text-lg text-slate-900">Job Actions</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => {
+                    const acceptedQuote = quotes.find(q => q.status === "accepted");
+                    const targetTradesperson = acceptedQuote?.tradespersonId || job.acceptedTradespersonId;
+                    if (targetTradesperson) {
+                      const tpProfile = tradespersonProfiles[targetTradesperson];
+                      handleStartChat(acceptedQuote || { jobId: job.id, amount: 0, tradespersonId: targetTradesperson }, tpProfile);
+                    }
+                  }}
+                  className="bg-blue-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm"
+                >
+                  <MessageSquare className="w-5 h-5" /> Open Chat
+                </button>
+                {!job.trackingStatus && (
+                  <button 
+                    onClick={handleSetOnRoute}
+                    className="bg-blue-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm"
+                  >
+                    <Navigation className="w-5 h-5" /> Signal On Route
+                  </button>
+                )}
+                {job.trackingStatus === "on_route" && (
+                  <button 
+                    onClick={handleSetArrived}
+                    className="bg-green-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm"
+                  >
+                    <MapPin className="w-5 h-5" /> Signal Arrived
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Job Location */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-lg text-slate-900">Job Location</h2>
+                <button onClick={() => {
+                  const address = encodeURIComponent((job?.fullAddress && job.houseNumber ? `${job.houseNumber} ${job.fullAddress}` : job?.fullAddress) || job?.postcode || job?.area || '');
+                  window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}`, '_blank');
+                }} className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold shadow-sm">
+                  <Navigation className="w-4 h-4" /> Get Directions
+                </button>
+              </div>
+              <div className="bg-slate-200 rounded-[2rem] h-48 border border-slate-200 overflow-hidden relative pointer-events-none">
+                <iframe width="100%" height="100%" style={{ border: 0 }} loading="lazy" src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent((job.fullAddress || job.postcode || job.area) + ", UK")}`} />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full font-bold text-xs text-slate-700 shadow-lg tracking-widest uppercase">
+                    Approx. Area
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Work Details */}
+            <div className="space-y-3">
+              <h2 className="font-bold text-lg text-slate-900">Work Details</h2>
+              <p className="text-slate-700 leading-relaxed text-[15px]">{job.description}</p>
+              
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                  <h3 className="font-bold text-sm text-slate-900 mb-3">Job Checklist</h3>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm text-slate-600 font-medium cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600" /> Assess Damage
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-600 font-medium cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600" /> Locate Shutoff
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-600 font-medium cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600" /> Complete Repair
+                    </label>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+                  <h3 className="font-bold text-sm text-slate-900 mb-3 text-center">Upload Before Photos</h3>
+                  <button className="flex-1 w-full border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl flex flex-col items-center justify-center gap-2 hover:bg-blue-50 transition-colors text-blue-600">
+                    <Camera className="w-6 h-6" />
+                    <span className="text-sm font-bold">Add Photos</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Actions Fixed */}
+            <div className="fixed bottom-[80px] left-0 right-0 p-4 bg-slate-50 z-40">
+              <div className="max-w-2xl mx-auto flex items-center gap-3 bg-slate-50">
+                <button 
+                  onClick={handleStartJob}
+                  className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+                >
+                  Start Work
+                </button>
+                <button 
+                  onClick={() => setShowDigitalId(true)}
+                  className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+                >
+                  Show Digital ID
+                </button>
+              </div>
+            </div>
+            
+          </div>
+        ) : (
+          <>
         {/* Instant Match Searching Banner */}
         {isHomeowner && job.status === "posted" && job.boostTier === "instant_match" && (
           <div className="bg-[#0f2c59] p-8 rounded-[2rem] space-y-6 shadow-2xl shadow-blue-900/40 relative overflow-hidden text-center flex flex-col items-center">
@@ -4139,6 +4452,40 @@ const libraries: any[] = ['places'];
           </div>
         )}
 
+        {isHomeowner && job.status === "completed" && (
+          <div className="space-y-4 mb-4">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-[#1e3a8a] text-[19px]">Financial Summary</h3>
+                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Fully Paid
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center bg-white">
+                   <span className="text-slate-600 font-medium text-[15px]">Job Total:</span>
+                   <span className="text-slate-900 font-medium text-[15px]">£{(quotes.find(q => q.status === "accepted")?.amount || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                   <span className="text-[#1e3a8a] font-medium text-[15px]">VAT (20%):</span>
+                   <span className="text-slate-900 font-medium text-[15px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.20).toFixed(2)}</span>
+                </div>
+                <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-slate-200"></div>
+                <div className="flex justify-between items-center pt-1">
+                   <span className="text-black font-black text-[18px]">Total Paid:</span>
+                   <span className="text-black font-black text-[18px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 1.20).toFixed(2)}</span>
+                </div>
+              </div>
+              <button 
+                onClick={handleDownloadInvoice}
+                className="w-full mt-2 bg-slate-100 text-[#1e3a8a] hover:bg-slate-200 py-3 rounded-[1rem] font-bold text-[15px] transition-colors flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Download PDF Receipt
+              </button>
+            </div>
+          </div>
+        )}
+
         {isHomeowner && job.status === "completed" && !job.hasReview && (
           <div className="space-y-4">
             {!showReviewForm ? (
@@ -4251,6 +4598,8 @@ const libraries: any[] = ['places'];
               )
             )}
           </div>
+        )}
+          </>
         )}
       </div>
 
@@ -4758,56 +5107,248 @@ const libraries: any[] = ['places'];
         )}
       </AnimatePresence>
 
-      {/* Digital ID Card Modal */}
+      {/* Job Summary / Completion Report Modal */}
       <AnimatePresence>
-        {showDigitalId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        {showJobSummary && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-white sm:bg-slate-900/50 sm:backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden shadow-blue-900/20"
+              className="w-full h-full sm:h-auto max-w-md bg-slate-50 sm:rounded-[2rem] sm:shadow-2xl overflow-y-auto flex flex-col pt-safe-top relative"
             >
-              <div className="bg-blue-600 p-6 text-center text-white relative">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 bg-white border-b border-slate-100 shrink-0 sticky top-0 z-10">
                 <button
-                  onClick={() => setShowDigitalId(false)}
-                  className="absolute top-4 right-4 text-white/70 hover:text-white"
+                  onClick={() => setShowJobSummary(false)}
+                  className="flex items-center text-blue-600 font-medium text-[17px]"
                 >
-                  <X className="w-6 h-6" />
+                  <ChevronLeft className="w-5 h-5 mr-1" /> Back
                 </button>
-                <div className="flex justify-center mb-4">
-                  <div className="bg-white p-2 rounded-2xl w-24 h-24 mb-2 shadow-inner">
-                    <QrCode className="w-full h-full text-blue-600" />
-                  </div>
-                </div>
-                <h3 className="text-xl font-bold">{profile?.firstName} {profile?.lastName}</h3>
-                <p className="text-blue-100 mt-1">{profile?.category || "Professional Trader"}</p>
+                <h2 className="text-[17px] font-semibold text-slate-900 absolute left-1/2 -translate-x-1/2">Job Summary</h2>
+                <div className="w-16"></div> {/* Spacer */}
               </div>
-              
-              <div className="p-6 bg-slate-50 space-y-4">
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h4 className="font-bold text-slate-900">AnyTrader Verified</h4>
-                    <p className="text-xs text-slate-500">ID Verification Complete</p>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto px-4 pb-40">
+                <div className="flex flex-col items-center justify-center py-6">
+                  <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center border-[6px] border-green-100 mb-3 shadow-sm">
+                    <Check className="w-10 h-10 text-white" strokeWidth={3} />
                   </div>
-                  <ShieldCheck className="w-8 h-8 text-green-500" />
+                  <h2 className="text-[28px] font-black text-[#1e3a8a] tracking-tight">Job Completed</h2>
+                  <p className="text-slate-600 font-medium mt-0.5 text-[17px]">Duration: {formatTimer(elapsedSeconds)}</p>
                 </div>
 
-                <div className="bg-white p-4 rounded-2xl border border-slate-100">
-                  <h4 className="font-bold text-slate-900 text-sm mb-2">Job Information</h4>
-                  <p className="text-xs text-slate-600"><strong>Job ID:</strong> #{job.jobNo || job.id.slice(0,6)}</p>
-                  <p className="text-xs text-slate-600 mt-1"><strong>Scheduled:</strong> {job.scheduledDate || "ASAP"}</p>
+                <div className="space-y-6">
+                  {/* Financial Summary */}
+                  <div>
+                    <h3 className="font-bold text-[#1e3a8a] text-[19px] mb-3 px-1">Financial Summary</h3>
+                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100 space-y-3">
+                      <div className="flex justify-between items-center bg-white">
+                         <span className="text-slate-600 font-medium text-[17px]">Labour Cost:</span>
+                         <span className="text-slate-900 font-medium text-[17px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.714).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                         <span className="text-slate-600 font-medium text-[17px]">Materials:</span>
+                         <div className="flex flex-col items-end">
+                           <span className="text-slate-900 font-medium text-[17px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.286).toFixed(2)}</span>
+                           <span className="text-blue-600 text-[13px] font-medium leading-none">(View Receipt link)</span>
+                         </div>
+                      </div>
+                      <div className="h-px bg-slate-100 w-full my-1"></div>
+                      <div className="flex justify-between items-center">
+                         <span className="text-[#1e3a8a] font-medium text-[17px]">Subtotal:</span>
+                         <span className="text-slate-900 font-medium text-[17px]">£{(quotes.find(q => q.status === "accepted")?.amount || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                         <span className="text-[#1e3a8a] font-medium text-[17px]">VAT (20%):</span>
+                         <span className="text-slate-900 font-medium text-[17px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.20).toFixed(2)}</span>
+                      </div>
+                      <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-slate-200"></div>
+                      <div className="flex justify-between items-center pt-1">
+                         <span className="text-black font-black text-[20px]">Total:</span>
+                         <span className="text-black font-black text-[20px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 1.20).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Media */}
+                  <div>
+                    <h3 className="font-bold text-[#1e3a8a] text-[19px] mb-3 px-1">Media</h3>
+                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100">
+                      <div className="flex gap-4">
+                        <div className="w-[100px] h-[100px] shrink-0 relative rounded-[1rem] overflow-hidden shadow-sm">
+                           <img src="https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=200&q=80" alt="Before" className="w-full h-full object-cover" />
+                           <div className="absolute inset-x-0 bottom-0 py-1px px-2 bg-black/60 flex items-center gap-1.5 h-6">
+                             <Camera className="w-3 h-3 text-white shrink-0" />
+                             <span className="text-white text-[11px] font-medium tracking-wide">Before</span>
+                           </div>
+                        </div>
+                        <div className="w-[100px] h-[100px] shrink-0 relative rounded-[1rem] overflow-hidden shadow-sm">
+                           <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=200&q=80" alt="After" className="w-full h-full object-cover" />
+                           <div className="absolute inset-x-0 bottom-0 py-1px px-2 bg-black/60 flex items-center gap-1.5 h-6">
+                             <Camera className="w-3 h-3 text-white shrink-0" />
+                             <span className="text-white text-[11px] font-medium tracking-wide">After</span>
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Share Financial Summary */}
+                  <div>
+                    <h3 className="font-bold text-[#1e3a8a] text-[19px] mb-3 px-1">Share Financial Summary</h3>
+                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100 flex flex-col gap-3">
+                      <button 
+                        onClick={() => {
+                          const subject = encodeURIComponent(`Invoice: ${job?.title || 'Job Completed'}`);
+                          const body = encodeURIComponent(`Hi ${job?.homeownerName || ''},\n\nHere is the financial summary for the completed job.\n\nTotal: £${((quotes.find(q => q.status === "accepted")?.amount || 0) * 1.20).toFixed(2)}\n\nPlease let me know if you have any questions.`);
+                          window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                        }}
+                        className="w-full py-4 border-[1.5px] border-blue-600 text-[#004bb4] rounded-[1rem] font-semibold text-[17px] flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors"
+                      >
+                        <Mail className="w-5 h-5 text-[#004bb4]" />
+                        Email VAT Invoice
+                      </button>
+                      <button 
+                        onClick={() => {
+                           const text = encodeURIComponent(`Hi ${job?.homeownerName || ''}, the job "${job?.title || ''}" is complete. The total amount is £${((quotes.find(q => q.status === "accepted")?.amount || 0) * 1.20).toFixed(2)}.`);
+                           window.open(`https://wa.me/?text=${text}`, '_blank');
+                        }}
+                        className="w-full py-4 bg-[#25D366] hover:bg-[#1ebd59] text-white rounded-[1rem] font-semibold text-[17px] flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <MessageCircle className="w-5 h-5 text-white" />
+                        Share via WhatsApp
+                      </button>
+                      <button 
+                        onClick={() => {
+                           setShowJobSummary(false);
+                           navigate(`/chat/${job.id}`);
+                        }}
+                        className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-[1rem] font-semibold text-[17px] flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <MessageSquare className="w-5 h-5 text-white" />
+                        Send In-App Message
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              
-              <div className="p-4 flex flex-col gap-2 bg-white">
-                <p className="text-[10px] text-center text-slate-400 mb-2 font-medium">Show this screen to the homeowner upon arrival to verify your identity.</p>
+
+              {/* Bottom Actions Form Menu */}
+              <div className="fixed sm:absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-100 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-20">
+                <div className="space-y-3">
+                  <button 
+                    className="w-full bg-[#004bb4] hover:bg-[#003c90] text-white py-4 rounded-[1rem] font-bold text-[17px] transition-colors"
+                    onClick={() => {
+                        setShowJobSummary(false);
+                        handleCompleteJob();
+                    }}
+                  >
+                    Confirm & Request Payment
+                  </button>
+                  <button className="w-full bg-white border-2 border-[#1e3a8a] text-[#1e3a8a] py-4 rounded-[1rem] font-bold text-[17px] hover:bg-slate-50 transition-colors">
+                    Leave Customer Review
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Digital ID Card Modal */}
+      <AnimatePresence>
+        {showDigitalId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white sm:bg-slate-900/50 sm:backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full h-full sm:h-auto max-w-sm sm:max-w-md bg-white sm:rounded-[2rem] sm:shadow-2xl overflow-y-auto sm:overflow-hidden flex flex-col pt-safe-top"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 bg-white border-b border-slate-100 sm:border-none shrink-0">
                 <button
                   onClick={() => setShowDigitalId(false)}
-                  className="w-full py-4 font-bold text-blue-600 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
+                  className="text-blue-600 font-medium text-[17px]"
                 >
-                  Done
+                  Close
                 </button>
+                <h2 className="text-[17px] font-semibold text-slate-900 absolute left-1/2 -translate-x-1/2">Digital ID Card</h2>
+                <div className="w-12"></div> {/* Spacer */}
+              </div>
+
+              {/* ID Card Content */}
+              <div className="flex-1 p-4 sm:p-6 bg-slate-50/50 sm:bg-white flex flex-col items-center justify-center min-h-0 overflow-y-auto">
+                <div className="w-full bg-white rounded-3xl border-[6px] border-[#1e40af] shadow-lg overflow-hidden flex flex-col shrink-0">
+                  {/* AnyTrader Logo Header */}
+                  <div className="py-6 flex items-center justify-center gap-2">
+                    <span className="text-blue-700 font-black text-xl italic tracking-tight flex items-center">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-1">
+                        <path d="M12 4L4 20H8.5L12 13L15.5 20H20L12 4Z" fill="currentColor"/>
+                      </svg>
+                      AnyTrader
+                    </span>
+                  </div>
+
+                  {/* Profile Header */}
+                  <div className="px-6 flex flex-col sm:flex-row items-center gap-6 mb-6">
+                     <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-100 border-[3px] border-blue-600 shadow-md overflow-hidden shrink-0">
+                       {profile?.photoURL ? (
+                         <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                       ) : (
+                         <div className="w-full h-full flex items-center justify-center text-4xl text-slate-400 font-bold bg-slate-200">
+                           {profile?.firstName?.charAt(0) || profile?.name?.charAt(0) || "U"}
+                         </div>
+                       )}
+                     </div>
+                     <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+                       <h3 className="text-2xl font-bold text-[#1e3a8a] mb-2 leading-tight">
+                         {profile?.firstName || profile?.name?.split(' ')[0]} {profile?.lastName || profile?.name?.split(' ').slice(1).join(' ') || ""}
+                       </h3>
+                       <div className="bg-[#2563eb] text-white px-3 py-1.5 rounded-lg flex items-center justify-center sm:justify-start gap-1.5 w-max mb-2">
+                         <ShieldCheck className="w-4 h-4" />
+                         <span className="text-sm font-bold">Verified Pro</span>
+                       </div>
+                       <p className="text-slate-800 font-medium text-center sm:text-left">{profile?.category || "Professional Tradesperson"}</p>
+                     </div>
+                  </div>
+
+                  {/* Certification Badge Box */}
+                  <div className="mx-6 mb-8 bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                       <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-400 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-yellow-500 hidden sm:flex">
+                         <div className="text-center font-black leading-none text-black">
+                           <span className="text-[8px] uppercase tracking-tighter">Cert</span><br />
+                           <span className="text-sm">PRO</span>
+                         </div>
+                       </div>
+                       <div>
+                         <p className="font-bold text-slate-900 leading-tight">
+                           {profile?.category === 'Plumbing' ? 'Gas Safe Registered' : 
+                            profile?.category === 'Electrical' ? 'NICEIC Registered' : 'Accredited Professional'}
+                         </p>
+                         <p className="text-xs text-slate-600 mt-1 uppercase tracking-widest bg-white inline-block px-1 rounded border border-slate-100 shrink-0">ID: AT-{profile?.uid?.substring(0,6).toUpperCase() || '8920-UK'}</p>
+                       </div>
+                     </div>
+                     <div className="flex flex-col items-center gap-1 shrink-0 ml-2">
+                        <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-blue-100">
+                          <div className="w-full h-full bg-blue-500 rounded-full animate-ping absolute opacity-20"></div>
+                          <div className="w-3 h-3 bg-blue-500 rounded-full relative z-10 shadow-sm border border-blue-600"></div>
+                        </div>
+                        <span className="text-[10px] uppercase font-medium text-slate-600">Active</span>
+                     </div>
+                  </div>
+
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center justify-center pb-8 pt-4 mx-6">
+                     <div className="w-56 h-56 sm:w-48 sm:h-48 bg-white p-2 flex items-center justify-center">
+                       <QrCode className="w-full h-full text-black" strokeWidth={1} />
+                     </div>
+                     <p className="text-[13px] sm:text-[15px] text-slate-900 mt-4 text-center">Scan for Instant Tenant Verification</p>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>

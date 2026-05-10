@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
+import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, deleteDoc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { Bell, MessageSquare, FileText, Info, Check, Trash2, Loader2, Clock, X } from "lucide-react";
@@ -50,6 +50,15 @@ export default function Notifications() {
       await updateDoc(doc(db, "notifications", id), { read: true });
     } catch (err) {
       console.error("Error marking notification as read:", err);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "notifications", id));
+    } catch (err) {
+      console.error("Error deleting notification:", err);
+      handleFirestoreError(err, OperationType.DELETE, "notifications");
     }
   };
 
@@ -150,6 +159,16 @@ export default function Notifications() {
                       </button>
                     )}
                   </div>
+                </div>
+
+                <div className="shrink-0 flex items-center h-full">
+                  <button
+                    onClick={() => deleteNotification(notification.id)}
+                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    title="Delete notification"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </motion.div>
             ))

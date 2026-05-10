@@ -6,7 +6,7 @@ import {
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
-  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling
+  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -928,6 +928,7 @@ export default function Profile() {
         { icon: User, label: "Account Details", path: "#account" },
         { icon: Bell, label: "Notification Preferences", path: "#notifications" },
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
+        { icon: PoundSterling, label: "Billing & Pricing Tiers", path: "/billing" },
         { icon: Shield, label: "Privacy & Security", path: "#privacy" },
       ]
     },
@@ -935,8 +936,8 @@ export default function Profile() {
       title: "Business",
       items: [
         { icon: Layout, label: "My Dashboard", path: "/" },
-        { icon: Briefcase, label: "My Jobs", path: "/my-jobs" },
-        { icon: CreditCard, label: "My Completed Quotes/Jobs", path: "/my-quotes?mode=completed" },
+        { icon: PoundSterling, label: "My Quotes", path: "/my-quotes" },
+        { icon: Briefcase, label: "My Jobs", path: "/trade-jobs" },
         { icon: BarChart3, label: "Job Analytics", path: "/analytics" },
         { icon: Calendar, label: "Availability Calendar", path: "/availability" },
         ...(isBannerAdsEnabled ? [{ icon: Zap, label: "Traders Banner Ad Studio", path: "/trader/banner-ads" }] : []),

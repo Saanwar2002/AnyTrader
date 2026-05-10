@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Plus, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark, Clock } from "lucide-react";
+import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Plus, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark, Clock, ClipboardList } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc, updateDoc, arrayRemove, orderBy, limit, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
@@ -243,7 +243,7 @@ export default function Layout() {
     }
   };
 
-  const { activePortal, switchPortal, activeRole } = usePortal();
+  const { activePortal, switchPortal, activeRole, setActiveRole, availableRoles } = usePortal();
 
   // Keep routing somewhat hardened to portal, only trigger on location change to avoid fighting manual switches
   useEffect(() => {
@@ -255,25 +255,31 @@ export default function Layout() {
     else if (location.pathname === "/job-feed" || location.pathname === "/post-job") {
       switchPortal("anytrader");
     }
+    
+    // Role specific paths matching
+    if (location.pathname === "/my-jobs" && activeRole === "trader" && availableRoles.includes("customer")) {
+      setActiveRole("customer");
+    } else if (location.pathname === "/trade-jobs" && activeRole === "customer" && availableRoles.includes("trader")) {
+      setActiveRole("trader");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
+  }, [location.pathname, activeRole, availableRoles]);
 
   const homeownerNav = [
     { name: "Home", path: "/", icon: Home, isCta: false },
     { name: "Find Trades", path: "/find-trades", icon: Search, isCta: false },
     { name: "Post Job", path: "/post-job", icon: PlusCircle, isCta: true },
-    { name: "My Jobs", path: "/my-jobs", icon: Briefcase, isCta: false },
+    { name: "Hiring Jobs", path: "/my-jobs", icon: Briefcase, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
-    { name: "Billing", path: "/billing", icon: PoundSterling, isCta: false },
   ];
 
   const tradespersonNav = [
     { name: "Home", path: "/", icon: Home, isCta: false },
-    { name: "Find Work", path: "/job-feed", icon: Briefcase, isCta: false },
-    { name: "Hire Trades", path: "/find-trades", icon: Search, isCta: false },
+    { name: "Find Work", path: "/job-feed", icon: Search, isCta: false },
+    { name: "Hire Trades", path: "/find-trades", icon: HardHat, isCta: false },
+    { name: "Quotes", path: "/my-quotes", icon: PoundSterling, isCta: false },
+    { name: "Trade Jobs", path: "/trade-jobs", icon: Briefcase, isCta: false },
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
-    { name: "My Quotes", path: "/my-quotes?mode=active", icon: PoundSterling, isCta: false },
-    { name: "Billing", path: "/billing", icon: CreditCard, isCta: false },
   ];
 
   const adminNav = [
@@ -445,6 +451,7 @@ export default function Layout() {
                     if (item.path === "/messages" && unreadTypes.has("message")) hasUnread = true;
                     if (item.path.startsWith("/my-quotes") && unreadTypes.has("quote")) hasUnread = true;
                     if (item.path === "/my-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
+                    if (item.path === "/trade-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
 
                     return (
                       <Link
@@ -453,15 +460,18 @@ export default function Layout() {
                         className={cn(
                           "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all relative",
                           isActive 
-                            ? "bg-primary/10 text-primary" 
-                            : "text-slate-500 hover:text-slate-900 hover:bg-slate-100",
+                            ? "bg-slate-100 text-slate-900" 
+                            : "text-slate-900 hover:bg-slate-100",
                           item.isCta && "bg-primary text-white hover:bg-primary-hover hover:text-white ml-2 shadow-lg shadow-primary/20"
                         )}
                       >
                         <div className="relative">
                           <Icon className={cn("w-4 h-4", item.isCta && "w-5 h-5")} />
                           {hasUnread && (
-                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
+                            </span>
                           )}
                         </div>
                         {item.name}
@@ -1063,6 +1073,7 @@ export default function Layout() {
             if (item.path === "/messages" && unreadTypes.has("message")) hasUnread = true;
             if (item.path.startsWith("/my-quotes") && unreadTypes.has("quote")) hasUnread = true;
             if (item.path === "/my-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
+            if (item.path === "/trade-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
 
             return (
               <Link
@@ -1071,15 +1082,18 @@ export default function Layout() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 transition-colors relative flex-1 min-w-0 mx-1 h-[60px] rounded-[16px] z-10",
                   isActive 
-                    ? (isDriverTerminal ? "text-white font-black" : "text-blue-700 font-black") 
-                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-500 font-bold hover:text-slate-900"),
+                    ? (isDriverTerminal ? "text-white font-black" : "text-slate-900 font-black") 
+                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-900 font-bold"),
                   item.isCta && !isActive && "text-blue-600"
                 )}
               >
                 <div className="relative flex-shrink-0 mt-0.5">
                   <Icon className={cn(isActive ? "w-6 h-6" : "w-5 h-5", item.isCta && "w-6 h-6")} />
                   {hasUnread && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
+                    </span>
                   )}
                 </div>
                 <span className="text-[9px] min-[380px]:text-[10px] sm:text-[11px] font-black tracking-tight text-center leading-none truncate w-full">{item.name}</span>

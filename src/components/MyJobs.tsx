@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, handleFirestoreError, OperationType, deleteDoc } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
+import { usePortal } from "@/src/lib/PortalContext";
 import { motion, AnimatePresence } from "motion/react";
 import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -10,6 +11,7 @@ import MediaGalleryModal from "./MediaGalleryModal";
 
 export default function MyJobs() {
   const { user, profile } = useAuth();
+  const { activeRole } = usePortal();
   const navigate = useNavigate();
   const location = useLocation();
   const isBusiness = profile?.subscriptionType === "business";
@@ -170,7 +172,9 @@ export default function MyJobs() {
       <div className="space-y-6 pb-24">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-black text-slate-900">
-            {isHistoryView ? (isBusiness ? "Project History" : "Job History") : (isBusiness ? "Your Projects" : "Your Jobs")}
+            {isHistoryView ? 
+              (isBusiness ? "Project History" : "Job History") : 
+              (isBusiness ? "My Hiring Projects" : "My Hiring Jobs")}
           </h1>
           {!isHistoryView && filter !== "completed" && filter !== "cancelled" && (
             <Link 
