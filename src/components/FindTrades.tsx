@@ -666,7 +666,7 @@ export default function FindTrades() {
           const searchFeedBadgeObjects = (tp.searchFeedBadges || [])
             .map(id => PROFESSIONAL_BADGES.find(b => b.id === id))
             .filter(Boolean)
-            .slice(0, 2); // Tier 1 Rule Constraint: Max 2 badges
+            .slice(0, 4); // Tier 1 Rule Constraint: Max 4 badges
 
           let typicalPriceHtml = null;
           if ((tp.totalJobsDone || 0) >= 5 && (tp.completedJobsRevenue || 0) > 0) {
@@ -831,13 +831,13 @@ export default function FindTrades() {
               </div>
 
               {searchFeedBadgeObjects.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="mt-3 grid grid-cols-2 gap-1.5">
                   {searchFeedBadgeObjects.map((badge: any) => {
                     const Icon = { ShieldCheck, Clock, FileText, Shield, CheckCircle, MapPin, Heart, Star }[badge.icon as string] as any;
                     return (
-                      <div key={badge.id} className="flex items-center gap-1 px-2 py-1 bg-indigo-50 border-2 border-black rounded-lg shrink-0">
-                        <Icon className="w-3 h-3 text-indigo-600" />
-                        <span className="text-[9px] font-black text-indigo-900 uppercase tracking-widest">{badge.name}</span>
+                      <div key={badge.id} className="flex items-center gap-1 py-0.5 overflow-hidden">
+                        <Icon className="w-3 h-3 shrink-0 text-blue-600" />
+                        <span className="text-[7px] leading-3 font-black text-blue-600 uppercase tracking-widest truncate">{badge.name}</span>
                       </div>
                     );
                   })}
