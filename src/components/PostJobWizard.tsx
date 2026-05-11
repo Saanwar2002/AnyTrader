@@ -67,6 +67,7 @@ export default function PostJobWizard() {
   const editJob = (location.state as any)?.editJob;
   const targetTradespersonId = (location.state as any)?.targetTradespersonId;
   const targetTradespersonName = (location.state as any)?.targetTradespersonName;
+  const targetTrades = (location.state as any)?.targetTrades;
   
   const JobReminder = () => {
     if (!formData.category && !formData.title) return null;
@@ -349,10 +350,17 @@ export default function PostJobWizard() {
   };
 
   const safeSearchQuery = searchQuery.trim().toLowerCase();
-  const filteredCategories = categories.filter(cat => 
-    cat.name.toLowerCase().includes(safeSearchQuery) ||
-    (cat.subcategories && cat.subcategories.some(sub => sub.toLowerCase().includes(safeSearchQuery)))
-  );
+  const filteredCategories = categories.filter(cat => {
+    const matchesSearch = cat.name.toLowerCase().includes(safeSearchQuery) ||
+      (cat.subcategories && cat.subcategories.some(sub => sub.toLowerCase().includes(safeSearchQuery)));
+    
+    // If we have a specific target tradesperson, only show categories they cover
+    const matchesTargetTrades = targetTrades && Array.isArray(targetTrades) && targetTrades.length > 0 
+      ? targetTrades.includes(cat.name) 
+      : true;
+      
+    return matchesSearch && matchesTargetTrades;
+  });
 
   // ... rest of the existing logic (handleStartCamera, handleCapturePhoto, etc.) ...
 
@@ -1273,7 +1281,7 @@ export default function PostJobWizard() {
             <span>Requesting quote from: {targetTradespersonName}</span>
           </div>
           <button 
-            onClick={() => navigate(location.pathname, { state: { ...location.state, targetTradespersonId: null, targetTradespersonName: null } })}
+            onClick={() => navigate(location.pathname, { state: { ...location.state, targetTradespersonId: null, targetTradespersonName: null, targetTrades: null } })}
             className="hover:bg-white/10 p-1 rounded transition-colors"
           >
             <X className="w-3 h-3" />
@@ -1343,7 +1351,7 @@ export default function PostJobWizard() {
                   Post Job Manually <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                 </button>
                 <button 
-                  onClick={() => navigate('/post-emergency-job')}
+                  onClick={() => navigate('/post-emergency-job', { state: location.state })}
                   className="w-full p-4 rounded-[2rem] bg-red-600 text-white font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-red-600/20 active:scale-95 transition-all group"
                 >
                   Emergency Job Post <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />

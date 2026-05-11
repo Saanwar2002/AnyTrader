@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { QRCodeSVG } from 'qrcode.react';
 import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch } from "@/src/firebase";
 import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
@@ -12,7 +13,7 @@ import {
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
   BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation,
-  MessageCircle, Mail, Check, Plus
+  MessageCircle, Mail, Check, Plus, ImageIcon
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
@@ -114,6 +115,7 @@ export default function JobDetails() {
   const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDraftingAI, setIsDraftingAI] = useState(false);
   const [isGeneratingMaterials, setIsGeneratingMaterials] = useState(false);
   const [isGeneratingMarketing, setIsGeneratingMarketing] = useState(false);
@@ -1167,6 +1169,7 @@ const libraries: any[] = ['places'];
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleReason, setRescheduleReason] = useState("");
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [isUploadingBeforePhoto, setIsUploadingBeforePhoto] = useState(false);
   const [payoutSummary, setPayoutSummary] = useState<PayoutBreakdown | null>(null);
   
   useEffect(() => {
@@ -1606,8 +1609,18 @@ const libraries: any[] = ['places'];
     }
   };
 
+  const handleDeleteJobClick = () => {
+    if (confirmDelete) {
+      handleDeleteJob();
+      setConfirmDelete(false);
+    } else {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 3000);
+    }
+  };
+
   const handleDeleteJob = async () => {
-    if (!id || !window.confirm("Are you sure you want to delete this job?")) return;
+    if (!id) return;
     setIsProcessing(true);
     try {
       await deleteDoc(doc(db, "jobs", id));
@@ -1681,6 +1694,32 @@ const libraries: any[] = ['places'];
     }
   };
 
+  const handleBeforePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0 || !id || !user) return;
+    
+    setIsUploadingBeforePhoto(true);
+    try {
+      const files = Array.from(e.target.files);
+      const urls: string[] = [];
+      
+      for (const file of files) {
+        const fileRef = ref(storage, `jobs/${id}/before_photos/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(fileRef, file);
+        const url = await getDownloadURL(snapshot.ref);
+        urls.push(url);
+      }
+      
+      await updateDoc(doc(db, "jobs", id), {
+        beforePhotos: arrayUnion(...urls)
+      });
+      
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `jobs/${id}`);
+    } finally {
+      setIsUploadingBeforePhoto(false);
+    }
+  };
+
   const handleProposeRecurring = async () => {
     if (!id || !user || !job) return;
     setIsProposingRecurring(true);
@@ -1730,7 +1769,7 @@ const libraries: any[] = ['places'];
   };
 
   const { activeRole } = usePortal();
-  const isHomeowner = user?.uid === job?.homeownerId && activeRole !== "trader" && activeRole !== "business";
+  const isHomeowner = user?.uid === job?.homeownerId;
   const isAssignedTrader = quotes.find(q => q.status === "accepted")?.tradespersonId === user?.uid || job?.acceptedTradespersonId === user?.uid;
   const canSeeFullDetails = isHomeowner || isAssignedTrader;
   const hasQuoted = quotes.some(q => q.tradespersonId === user?.uid);
@@ -1995,12 +2034,18 @@ const libraries: any[] = ['places'];
                         <>
                           <div className="h-px bg-slate-100 my-1" />
                           <button
-                            onClick={handleDeleteJob}
+                            onClick={handleDeleteJobClick}
                             disabled={isProcessing}
                             className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
                           >
-                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            Delete Job
+                            {isProcessing ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : confirmDelete ? (
+                                <AlertTriangle className="w-4 h-4 text-red-600" />
+                            ) : (
+                                <Trash2 className="w-4 h-4" />
+                            )}
+                            {confirmDelete ? "Confirm Delete" : "Delete Job"}
                           </button>
                         </>
                       )}
@@ -2225,7 +2270,14 @@ const libraries: any[] = ['places'];
               <h2 className="font-bold text-lg text-slate-900 tracking-tight">Job Location</h2>
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="h-40 w-full relative pointer-events-none overflow-hidden">
-                  <iframe width="100%" height="100%" style={{ border: 0 }} loading="lazy" src={`https://www.google.com/maps/embed/v1/place?key=${(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent((job.fullAddress || job.postcode || job.area) + ", UK")}`} />
+                  <iframe 
+                    width="100%" 
+                    height="100%" 
+                    style={{ border: 0 }} 
+                    loading="lazy" 
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent((job.fullAddress || job.postcode || job.location) + ", UK")}&t=&z=13&ie=UTF8&iwloc=&output=embed`} 
+                  />
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-blue-50/20">
                     <div className="bg-white/95 px-3 py-1.5 rounded-md text-xs font-bold text-slate-800 shadow-md border border-slate-100/80 backdrop-blur-md mb-2 z-10 relative">
                        <span className="tracking-widest uppercase text-[10px] text-slate-600">APPROX. AREA</span>
@@ -2278,10 +2330,53 @@ const libraries: any[] = ['places'];
                 
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col text-center">
                   <h3 className="font-bold text-[13px] text-slate-900 mb-3 tracking-tight leading-tight">Upload Before Photos</h3>
-                  <button className="flex-1 w-full border border-dashed border-[#2D68C4] bg-blue-50/50 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-blue-50 transition-colors text-[#2D68C4] py-6">
-                    <Camera className="w-[20px] h-[20px]" />
-                    <span className="text-[13px] font-medium text-[#2D68C4]">Add Photos</span>
-                  </button>
+                  {job.beforePhotos && job.beforePhotos.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      {job.beforePhotos.map((url: string, i: number) => (
+                        <div key={i} className="aspect-square rounded-lg overflow-hidden border border-slate-100 bg-slate-50">
+                          <img src={url} alt={`Before ${i+1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <label className="flex-1 border border-dashed border-[#2D68C4] bg-blue-50/50 rounded-lg flex flex-col items-center justify-center gap-1.5 hover:bg-blue-50 transition-colors text-[#2D68C4] py-4 cursor-pointer relative">
+                      {isUploadingBeforePhoto ? (
+                        <Loader2 className="w-[18px] h-[18px] animate-spin" />
+                      ) : (
+                        <>
+                          <Camera className="w-[18px] h-[18px]" />
+                          <span className="text-[12px] font-medium text-[#2D68C4]">Camera</span>
+                        </>
+                      )}
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        capture="environment"
+                        className="hidden" 
+                        onChange={handleBeforePhotoUpload}
+                        disabled={isUploadingBeforePhoto}
+                      />
+                    </label>
+                    <label className="flex-1 border border-dashed border-[#2D68C4] bg-blue-50/50 rounded-lg flex flex-col items-center justify-center gap-1.5 hover:bg-blue-50 transition-colors text-[#2D68C4] py-4 cursor-pointer relative">
+                      {isUploadingBeforePhoto ? (
+                        <Loader2 className="w-[18px] h-[18px] animate-spin" />
+                      ) : (
+                        <>
+                          <ImageIcon className="w-[18px] h-[18px]" />
+                          <span className="text-[12px] font-medium text-[#2D68C4]">Gallery</span>
+                        </>
+                      )}
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        multiple 
+                        className="hidden" 
+                        onChange={handleBeforePhotoUpload}
+                        disabled={isUploadingBeforePhoto}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -4644,6 +4739,27 @@ const libraries: any[] = ['places'];
             )}
           </div>
         )}
+
+        {isHomeowner && job.status === "cancelled" && (
+          <div className="space-y-4 mb-4 mt-6">
+            <button
+               onClick={handleDeleteJobClick}
+               disabled={isProcessing}
+               className={cn("w-full bg-white border-2 p-5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 active:scale-95 shadow-sm",
+                 confirmDelete ? "text-red-700 border-red-500 bg-red-50" : "text-red-600 border-red-100 hover:bg-red-50 shadow-red-100/50"
+               )}
+            >
+               {isProcessing ? (
+                 <Loader2 className="w-5 h-5 animate-spin" />
+               ) : confirmDelete ? (
+                 <AlertTriangle className="w-5 h-5" />
+               ) : (
+                 <Trash2 className="w-5 h-5" />
+               )}
+               {confirmDelete ? "Confirm Deletion" : "Delete Cancelled Job"}
+            </button>
+          </div>
+        )}
           </>
         )}
       </div>
@@ -5305,32 +5421,31 @@ const libraries: any[] = ['places'];
       {/* Digital ID Card Modal */}
       <AnimatePresence>
         {showDigitalId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white sm:bg-slate-900/50 sm:backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full h-full sm:h-auto max-w-sm sm:max-w-md bg-white sm:rounded-[2rem] sm:shadow-2xl overflow-y-auto sm:overflow-hidden flex flex-col pt-safe-top"
+              className="w-[80%] max-w-[280px] max-h-[85vh] bg-white rounded-[1.5rem] shadow-2xl flex flex-col relative overflow-hidden"
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-4 bg-white border-b border-slate-100 sm:border-none shrink-0">
+              <div className="flex items-center justify-between p-3 bg-white border-b border-slate-100 shrink-0 relative z-10">
                 <button
                   onClick={() => setShowDigitalId(false)}
-                  className="text-blue-600 font-medium text-[17px]"
+                  className="text-blue-600 font-medium text-[13px] px-2 py-1"
                 >
                   Close
                 </button>
-                <h2 className="text-[17px] font-semibold text-slate-900 absolute left-1/2 -translate-x-1/2">Digital ID Card</h2>
-                <div className="w-12"></div> {/* Spacer */}
+                <h2 className="text-[14px] font-semibold text-slate-900 absolute left-1/2 -translate-x-1/2">Digital ID Card</h2>
               </div>
 
               {/* ID Card Content */}
-              <div className="flex-1 p-4 sm:p-6 bg-slate-50/50 sm:bg-white flex flex-col items-center justify-center min-h-0 overflow-y-auto">
-                <div className="w-full bg-white rounded-3xl border-[6px] border-[#1e40af] shadow-lg overflow-hidden flex flex-col shrink-0">
+              <div className="flex-1 p-3 bg-slate-50/50 flex flex-col items-center justify-center overflow-y-auto">
+                <div className="w-full bg-white rounded-2xl border-[3px] border-[#1e40af] shadow-sm overflow-hidden flex flex-col my-1 shrink-0">
                   {/* AnyTrader Logo Header */}
-                  <div className="py-6 flex items-center justify-center gap-2">
-                    <span className="text-blue-700 font-black text-xl italic tracking-tight flex items-center">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-1">
+                  <div className="py-2.5 flex items-center justify-center gap-1.5 border-b border-slate-50">
+                    <span className="text-blue-700 font-black text-[14px] italic tracking-tight flex items-center">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-1">
                         <path d="M12 4L4 20H8.5L12 13L15.5 20H20L12 4Z" fill="currentColor"/>
                       </svg>
                       AnyTrader
@@ -5338,60 +5453,57 @@ const libraries: any[] = ['places'];
                   </div>
 
                   {/* Profile Header */}
-                  <div className="px-6 flex flex-col sm:flex-row items-center gap-6 mb-6">
-                     <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-100 border-[3px] border-blue-600 shadow-md overflow-hidden shrink-0">
+                  <div className="px-3 py-3 flex flex-col items-center gap-2.5">
+                     <div className="w-14 h-14 rounded-full bg-slate-100 border-[2px] border-blue-600 shadow-sm overflow-hidden shrink-0">
                        {profile?.photoURL ? (
                          <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
                        ) : (
-                         <div className="w-full h-full flex items-center justify-center text-4xl text-slate-400 font-bold bg-slate-200">
+                         <div className="w-full h-full flex items-center justify-center text-lg text-slate-400 font-bold bg-slate-200">
                            {profile?.firstName?.charAt(0) || profile?.name?.charAt(0) || "U"}
                          </div>
                        )}
                      </div>
-                     <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
-                       <h3 className="text-2xl font-bold text-[#1e3a8a] mb-2 leading-tight">
+                     <div className="flex flex-col items-center text-center w-full">
+                       <h3 className="text-[15px] font-bold text-[#1e3a8a] mb-1 leading-tight truncate w-full px-1">
                          {profile?.firstName || profile?.name?.split(' ')[0]} {profile?.lastName || profile?.name?.split(' ').slice(1).join(' ') || ""}
                        </h3>
-                       <div className="bg-[#2563eb] text-white px-3 py-1.5 rounded-lg flex items-center justify-center sm:justify-start gap-1.5 w-max mb-2">
-                         <ShieldCheck className="w-4 h-4" />
-                         <span className="text-sm font-bold">Verified Pro</span>
+                       <div className="bg-[#2563eb] text-white px-2 py-0.5 rounded flex items-center justify-center gap-1 w-max mb-1">
+                         <ShieldCheck className="w-[10px] h-[10px]" />
+                         <span className="text-[9px] font-bold uppercase tracking-wider mt-[1px]">Verified Pro</span>
                        </div>
-                       <p className="text-slate-800 font-medium text-center sm:text-left">{profile?.category || "Professional Tradesperson"}</p>
+                       <p className="text-slate-700 font-medium text-[11px] text-center w-full truncate px-1">{profile?.category || "Professional Tradesperson"}</p>
                      </div>
                   </div>
 
                   {/* Certification Badge Box */}
-                  <div className="mx-6 mb-8 bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
-                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                       <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-400 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-yellow-500 hidden sm:flex">
-                         <div className="text-center font-black leading-none text-black">
-                           <span className="text-[8px] uppercase tracking-tighter">Cert</span><br />
-                           <span className="text-sm">PRO</span>
-                         </div>
-                       </div>
-                       <div>
-                         <p className="font-bold text-slate-900 leading-tight">
-                           {profile?.category === 'Plumbing' ? 'Gas Safe Registered' : 
-                            profile?.category === 'Electrical' ? 'NICEIC Registered' : 'Accredited Professional'}
-                         </p>
-                         <p className="text-xs text-slate-600 mt-1 uppercase tracking-widest bg-white inline-block px-1 rounded border border-slate-100 shrink-0">ID: AT-{profile?.uid?.substring(0,6).toUpperCase() || '8920-UK'}</p>
-                       </div>
+                  <div className="mx-3 mb-3 bg-slate-50 border border-slate-200 rounded-md p-2.5 flex items-center justify-between shadow-sm">
+                     <div className="flex flex-col items-start min-w-0 pr-2">
+                       <p className="font-bold text-slate-900 text-[11px] leading-tight truncate w-full">
+                         {profile?.category === 'Plumbing' ? 'Gas Safe Registered' : 
+                          profile?.category === 'Electrical' ? 'NICEIC Registered' : 'Accredited Professional'}
+                       </p>
+                       <p className="text-[9px] text-slate-500 mt-0.5 uppercase tracking-wider truncate w-full">ID: AT-{profile?.uid?.substring(0,6).toUpperCase() || '8920-UK'}</p>
                      </div>
-                     <div className="flex flex-col items-center gap-1 shrink-0 ml-2">
-                        <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-blue-100">
+                     <div className="flex flex-col items-center gap-0.5 shrink-0">
+                        <div className="relative flex items-center justify-center w-4 h-4 rounded-full bg-blue-100">
                           <div className="w-full h-full bg-blue-500 rounded-full animate-ping absolute opacity-20"></div>
-                          <div className="w-3 h-3 bg-blue-500 rounded-full relative z-10 shadow-sm border border-blue-600"></div>
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full relative z-10 shadow-sm"></div>
                         </div>
-                        <span className="text-[10px] uppercase font-medium text-slate-600">Active</span>
+                        <span className="text-[7px] uppercase font-bold text-blue-700">Active</span>
                      </div>
                   </div>
 
                   {/* QR Code */}
-                  <div className="flex flex-col items-center justify-center pb-8 pt-4 mx-6">
-                     <div className="w-56 h-56 sm:w-48 sm:h-48 bg-white p-2 flex items-center justify-center">
-                       <QrCode className="w-full h-full text-black" strokeWidth={1} />
+                  <div className="flex flex-col items-center justify-center pb-4 pt-0 mx-3">
+                     <div className="w-24 h-24 bg-white flex items-center justify-center p-1 border border-slate-100 rounded-lg">
+                       <QRCodeSVG 
+                         value={`${window.location.origin}/profile/${profile?.uid}`} 
+                         size={88}
+                         level="H"
+                         className="w-full h-full text-slate-800"
+                       />
                      </div>
-                     <p className="text-[13px] sm:text-[15px] text-slate-900 mt-4 text-center">Scan for Instant Tenant Verification</p>
+                     <p className="text-[9px] text-slate-500 mt-2 text-center font-medium">Scan for Instant Verification</p>
                   </div>
                 </div>
               </div>

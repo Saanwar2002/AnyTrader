@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
@@ -16,6 +16,11 @@ const libraries: any[] = ['places'];
 export default function EmergencyJobWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const targetTradespersonId = (location.state as any)?.targetTradespersonId;
+  const targetTradespersonName = (location.state as any)?.targetTradespersonName;
+  const targetTrades = (location.state as any)?.targetTrades;
   
   const [step, setStep] = useState(1);
   const [addressInput, setAddressInput] = useState("");
@@ -110,9 +115,13 @@ export default function EmergencyJobWizard() {
     fetchUser();
   }, [user]);
 
-  const filteredCategories = TRADE_CATEGORIES.filter(cat => 
-    cat.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredCategories = TRADE_CATEGORIES.filter(cat => {
+    const matchesSearch = cat.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTargetTrades = targetTrades && Array.isArray(targetTrades) && targetTrades.length > 0
+      ? targetTrades.includes(cat.name)
+      : true;
+    return matchesSearch && matchesTargetTrades;
+  });
 
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -343,13 +352,29 @@ export default function EmergencyJobWizard() {
 
   return (
     <div className="max-w-2xl mx-auto bg-red-50/20 min-h-screen p-4 pb-48 border-x border-red-50">
-      <div className="flex items-center justify-between mb-6 bg-red-50 p-4 rounded-2xl border border-red-100">
+      <div className="flex items-center justify-between mb-4 bg-red-50 p-4 rounded-2xl border border-red-100">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-6 h-6 text-red-600" />
           <h1 className="text-xl font-bold text-slate-900">Emergency Job</h1>
         </div>
         <button onClick={() => navigate(-1)} className="p-2 bg-white hover:bg-slate-100 rounded-full border border-red-100 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
       </div>
+
+      {/* Target Tradesperson Indicator */}
+      {targetTradespersonId && (
+        <div className="bg-blue-600 text-white px-4 py-2 mb-4 rounded-xl flex items-center justify-between text-xs font-bold">
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 flex items-center justify-center shrink-0">👤</span>
+            <span>Requesting emergency quote from: {targetTradespersonName}</span>
+          </div>
+          <button 
+            onClick={() => navigate(location.pathname, { state: { ...location.state, targetTradespersonId: null, targetTradespersonName: null, targetTrades: null } })}
+            className="hover:bg-white/10 p-1 rounded transition-colors"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
       {step === 2 && (
         <div className="mb-4 flex items-center justify-between">

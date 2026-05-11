@@ -25,6 +25,7 @@ interface Tradesperson {
   totalJobsDone?: number;
   completedJobsRevenue?: number;
   responseRate?: number;
+  avgReplyTime?: number;
   trustScore?: number;
   trades?: string[];
   services?: string[];
@@ -953,7 +954,7 @@ export default function FindTrades() {
                     <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Jobs Done</p>
                   </div>
                   <div className="bg-slate-50 border-2 border-black rounded-2xl p-3 text-center">
-                    <p className="text-lg font-black text-slate-900">&lt; {Math.floor(Math.random() * 45) + 15}m</p>
+                    <p className="text-lg font-black text-slate-900">&lt; {selectedTraderPreview.avgReplyTime || 28}m</p>
                     <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Avg Reply</p>
                   </div>
                 </div>

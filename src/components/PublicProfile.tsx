@@ -854,7 +854,7 @@ export default function PublicProfile() {
                       <p className="text-slate-500 font-medium mb-6">You don't have any active jobs yet.</p>
                       <Link 
                         to="/post-job"
-                        state={{ targetTradespersonId: id, targetTradespersonName: profile.name }}
+                        state={{ targetTradespersonId: id, targetTradespersonName: profile.name, targetTrades: profile.trades }}
                         className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
                       >
                         Post a Job Now
@@ -868,7 +868,7 @@ export default function PublicProfile() {
                     <p className="text-center text-xs text-slate-400 mb-4">Need to post a new job?</p>
                     <Link 
                       to="/post-job"
-                      state={{ targetTradespersonId: id, targetTradespersonName: profile.name }}
+                      state={{ targetTradespersonId: id, targetTradespersonName: profile.name, targetTrades: profile.trades }}
                       className="w-full py-4 rounded-2xl border-2 border-slate-200 text-slate-600 font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
                     >
                       Post New Job
