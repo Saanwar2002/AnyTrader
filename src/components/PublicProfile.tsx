@@ -632,7 +632,7 @@ export default function PublicProfile() {
         <h3 className="text-xl font-bold text-slate-900 mb-4">About</h3>
         <p className="text-slate-600 text-sm leading-relaxed mb-6">{profile.bio || "No bio provided."}</p>
         
-        <h4 className="text-sm font-bold text-slate-900 mb-3">Specializations</h4>
+        <h4 className="text-sm font-bold text-slate-900 mb-3">Skills/Services</h4>
         <div className="flex flex-wrap gap-2">
           {profile.trades?.map((trade: string) => (
             <span key={trade} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">

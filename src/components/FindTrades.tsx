@@ -532,7 +532,7 @@ export default function FindTrades() {
                         tp.name.charAt(0)
                       )}
                     </div>
-                    <h3 className="text-[10px] font-bold text-slate-900 truncate">{tp.name.split(' ')[0]}</h3>
+                    <h3 className="text-[10px] font-bold text-slate-900 truncate">{tp.name}</h3>
                   </Link>
                 ))}
               </div>
@@ -590,7 +590,7 @@ export default function FindTrades() {
                       <SlidersHorizontal className="w-3 h-3 text-white" />
                     </div>
                   </div>
-                  <h3 className="text-xs font-bold text-slate-900 truncate mb-1">{tp.name.split(' ')[0]}...</h3>
+                  <h3 className="text-xs font-bold text-slate-900 truncate mb-1">{tp.name}</h3>
                   <p className="text-[10px] text-slate-500 truncate mb-1">{tp.trades?.[0] || 'Tradesperson'}</p>
                   <div className="flex flex-col items-center justify-center gap-1">
                     <div className="flex items-center gap-1">
@@ -788,7 +788,7 @@ export default function FindTrades() {
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                   <div className="flex items-center gap-1.5 mb-1">
                     <h3 className="font-bold text-slate-900 text-lg truncate group-hover:text-blue-600 transition-colors">
-                      {tp.name.split(' ')[0]} {tp.name.split(' ')[1]?.charAt(0) || ''}.
+                      {tp.name}
                     </h3>
                     {tp.verificationStatus === "verified" && (
                       <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
@@ -837,7 +837,7 @@ export default function FindTrades() {
                     return (
                       <div key={badge.id} className="flex items-center gap-1 py-0.5 overflow-hidden">
                         <Icon className="w-3 h-3 shrink-0 text-blue-600" />
-                        <span className="text-[7px] leading-3 font-black text-blue-600 uppercase tracking-widest truncate">{badge.name}</span>
+                        <span className="text-[9px] leading-snug font-black text-blue-600 uppercase tracking-widest truncate">{badge.name}</span>
                       </div>
                     );
                   })}
@@ -911,9 +911,8 @@ export default function FindTrades() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col justify-center">
-                    <h2 className="text-2xl font-black text-slate-900 mb-1 leading-none">{selectedTraderPreview.name.split(' ')[0]} {selectedTraderPreview.name.split(' ')[1]?.charAt(0) || ''}.</h2>
-                    <p className="text-sm font-bold text-blue-600 mb-2">{selectedTraderPreview.trades?.[0] || 'Professional'}</p>
+                  <div className="flex flex-col justify-center overflow-hidden">
+                    <h2 className="text-2xl font-black text-slate-900 mb-1 leading-tight line-clamp-2">{selectedTraderPreview.name}</h2>
                     <div className="flex flex-wrap items-center gap-1.5 gap-y-2 mb-2">
                        {selectedTraderPreview.verificationStatus === "verified" && (
                          <div className="flex items-center gap-1">
@@ -921,13 +920,26 @@ export default function FindTrades() {
                            <span className="text-xs font-bold text-emerald-700">Verified ID</span>
                          </div>
                        )}
-                       <span className="text-slate-300 mx-1">•</span>
+                       {selectedTraderPreview.verificationStatus === "verified" && <span className="text-slate-300 mx-1">•</span>}
                        <div className="flex items-center gap-1">
                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
                          <span className="text-xs font-bold text-slate-600 truncate max-w-[100px]">{selectedTraderPreview.postcode?.split(' ')[0] || 'Local Area'}</span>
                        </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Skills/Trades */}
+                <div className="flex flex-wrap items-center gap-2 mb-6 max-h-[120px] overflow-y-auto no-scrollbar">
+                  {(selectedTraderPreview.trades && selectedTraderPreview.trades.length > 0) ? (
+                    selectedTraderPreview.trades.map((trade: string) => (
+                      <span key={trade} className="text-xs leading-tight font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
+                        {trade}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm font-bold text-blue-600 truncate">Professional Tradesperson</p>
+                  )}
                 </div>
 
                 {/* Trust Stats */}

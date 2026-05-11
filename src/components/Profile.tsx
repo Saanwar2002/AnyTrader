@@ -749,7 +749,7 @@ export default function Profile() {
     setIsSaving(true);
     setError(null);
     try {
-      const tradesArray = editData.trades.split(",").map(t => t.trim()).filter(t => t !== "");
+      const tradesArray = editData.trades.split(",").map(t => t.trim()).filter(t => t !== "").slice(0, 15);
       const tagsArray = editData.tags.split(",").map(t => t.trim()).filter(t => t !== "");
       
       const finalData = {
@@ -2020,7 +2020,7 @@ export default function Profile() {
         {profile.role === "tradesperson" && (
           <>
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-slate-900">Specializations</h4>
+              <h4 className="text-sm font-bold text-slate-900">Skills/Services</h4>
               <button 
                 onClick={() => setIsEditing(true)}
                 className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
@@ -3441,7 +3441,10 @@ export default function Profile() {
                 {profile.role === "tradesperson" && (
                   <>
                     <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Trades (comma separated)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Trades (comma separated)</label>
+                        <span className="text-[10px] font-bold text-slate-400">{editData.trades.split(',').filter(t => t.trim() !== '').length}/15</span>
+                      </div>
                       <input 
                         type="text"
                         className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
