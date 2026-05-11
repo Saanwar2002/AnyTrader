@@ -1991,9 +1991,21 @@ const libraries: any[] = ['places'];
                         </button>
                       )}
                       
-                      <div className="h-px bg-slate-100 my-1" />
-                      
-                      {/* Delete Job option removed as requested */}
+                      {job.status === "cancelled" && (
+                        <>
+                          <div className="h-px bg-slate-100 my-1" />
+                          <button
+                            onClick={handleDeleteJob}
+                            disabled={isProcessing}
+                            className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            Delete Job
+                          </button>
+                        </>
+                      )}
+
+                      {/* Delete Job option removed as requested (except for cancelled now) */}
                     </motion.div>
                   </>
                 )}
@@ -2157,30 +2169,24 @@ const libraries: any[] = ['places'];
             )}
           </div>
         ) : (!isHomeowner && job.status === "accepted") ? (
-          <div className="space-y-6 pb-24">
+          <div className="bg-white min-h-screen px-4 pt-6 pb-6 relative z-40">
             {/* Header & Status */}
             <div className="space-y-3">
-              <h1 className="text-2xl font-black text-slate-900 leading-tight">
+              <h1 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">
                 {job.category}: {job.title}
               </h1>
-              <div className="flex items-center justify-between">
-                <span className={cn("px-4 py-1.5 rounded-full text-sm font-bold capitalize", job.status === "accepted" ? "bg-green-500 text-white" : "bg-blue-600 text-white")}>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={cn("px-4 py-1.5 rounded-full text-sm font-bold capitalize tracking-wide", job.status === "accepted" ? "bg-green-500 text-white" : "bg-blue-600 text-white")}>
                   {job.status === "accepted" && job.trackingStatus === "on_route" ? "On Route" : 
                    job.status === "accepted" && job.trackingStatus === "arrived" ? "Arrived" : 
-                   job.status.replace("_", " ")}
+                   "Accepted"}
                 </span>
-                <button 
-                  onClick={() => setShowRescheduleModal(true)}
-                  className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-sm font-bold shadow-sm"
-                >
-                  Reschedule
-                </button>
               </div>
             </div>
 
             {/* Job Actions */}
-            <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100 space-y-4">
-              <h2 className="font-bold text-lg text-slate-900">Job Actions</h2>
+            <div className="space-y-3 mt-6">
+              <h2 className="font-bold text-[17px] text-slate-900 tracking-tight">Job Actions</h2>
               <div className="grid grid-cols-2 gap-3">
                 <button 
                   onClick={() => {
@@ -2191,22 +2197,22 @@ const libraries: any[] = ['places'];
                       handleStartChat(acceptedQuote || { jobId: job.id, amount: 0, tradespersonId: targetTradesperson }, tpProfile);
                     }
                   }}
-                  className="bg-blue-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm"
+                  className="bg-[#2D68C4] text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95"
                 >
                   <MessageSquare className="w-5 h-5" /> Open Chat
                 </button>
                 {!job.trackingStatus && (
                   <button 
                     onClick={handleSetOnRoute}
-                    className="bg-blue-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm"
+                    className="bg-[#2D68C4] text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95"
                   >
-                    <Navigation className="w-5 h-5" /> Signal On Route
+                    <Navigation className="w-4 h-4 fill-white flex-shrink-0" /> Signal On Route
                   </button>
                 )}
                 {job.trackingStatus === "on_route" && (
                   <button 
                     onClick={handleSetArrived}
-                    className="bg-green-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm"
+                    className="bg-green-600 text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95"
                   >
                     <MapPin className="w-5 h-5" /> Signal Arrived
                   </button>
@@ -2215,69 +2221,83 @@ const libraries: any[] = ['places'];
             </div>
 
             {/* Job Location */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="font-bold text-lg text-slate-900">Job Location</h2>
+            <div className="space-y-3 mt-6">
+              <h2 className="font-bold text-lg text-slate-900 tracking-tight">Job Location</h2>
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="h-40 w-full relative pointer-events-none overflow-hidden">
+                  <iframe width="100%" height="100%" style={{ border: 0 }} loading="lazy" src={`https://www.google.com/maps/embed/v1/place?key=${(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent((job.fullAddress || job.postcode || job.area) + ", UK")}`} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-blue-50/20">
+                    <div className="bg-white/95 px-3 py-1.5 rounded-md text-xs font-bold text-slate-800 shadow-md border border-slate-100/80 backdrop-blur-md mb-2 z-10 relative">
+                       <span className="tracking-widest uppercase text-[10px] text-slate-600">APPROX. AREA</span>
+                    </div>
+                    <MapPin className="w-8 h-8 text-slate-800 drop-shadow-md z-10 relative" />
+                    <div className="w-32 h-32 rounded-full border border-blue-400 bg-blue-400/20 absolute"></div>
+                  </div>
+                </div>
                 <button onClick={() => {
                   const address = encodeURIComponent((job?.fullAddress && job.houseNumber ? `${job.houseNumber} ${job.fullAddress}` : job?.fullAddress) || job?.postcode || job?.area || '');
                   window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}`, '_blank');
-                }} className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold shadow-sm">
-                  <Navigation className="w-4 h-4" /> Get Directions
+                }} className="w-full bg-[#2D68C4] text-white py-4 font-bold text-[15px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors active:bg-blue-800">
+                  <Navigation className="w-4 h-4 fill-white" /> Get Directions
                 </button>
-              </div>
-              <div className="bg-slate-200 rounded-[2rem] h-48 border border-slate-200 overflow-hidden relative pointer-events-none">
-                <iframe width="100%" height="100%" style={{ border: 0 }} loading="lazy" src={`https://www.google.com/maps/embed/v1/place?key=${(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || ''}&q=${encodeURIComponent((job.fullAddress || job.postcode || job.area) + ", UK")}`} />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full font-bold text-xs text-slate-700 shadow-lg tracking-widest uppercase">
-                    Approx. Area
-                  </div>
-                </div>
               </div>
             </div>
 
             {/* Work Details */}
-            <div className="space-y-3">
-              <h2 className="font-bold text-lg text-slate-900">Work Details</h2>
-              <p className="text-slate-700 leading-relaxed text-[15px]">{job.description}</p>
+            <div className="space-y-2 mt-8">
+              <h2 className="font-bold text-[17px] text-slate-900 tracking-tight">Work Details</h2>
+              <p className="text-slate-800 leading-relaxed text-[15px]">{job.description}</p>
               
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                  <h3 className="font-bold text-sm text-slate-900 mb-3">Job Checklist</h3>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-slate-600 font-medium cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600" /> Assess Damage
+              <div className="grid grid-cols-2 gap-3 mt-5">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                  <h3 className="font-bold text-[13px] text-slate-900 mb-4 tracking-tight">Job Checklist</h3>
+                  <div className="space-y-3.5 w-full">
+                    <label className="flex items-center gap-2.5 text-[14px] text-slate-700 font-medium cursor-pointer relative group">
+                      <div className="w-4 h-4 rounded-sm border-2 border-[#2D68C4] flex items-center justify-center group-has-[input:checked]:bg-[#2D68C4] transition-colors">
+                         <input type="checkbox" className="w-full h-full opacity-0 absolute cursor-pointer" />
+                         <Check className="w-3 h-3 text-white opacity-0 group-has-[input:checked]:opacity-100 transition-opacity" strokeWidth={3} />
+                      </div>
+                      Assess Damage
                     </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-600 font-medium cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600" /> Locate Shutoff
+                    <label className="flex items-center gap-2.5 text-[14px] text-slate-700 font-medium cursor-pointer relative group">
+                      <div className="w-4 h-4 rounded-sm border-2 border-[#2D68C4] flex items-center justify-center group-has-[input:checked]:bg-[#2D68C4] transition-colors">
+                         <input type="checkbox" className="w-full h-full opacity-0 absolute cursor-pointer" />
+                         <Check className="w-3 h-3 text-white opacity-0 group-has-[input:checked]:opacity-100 transition-opacity" strokeWidth={3} />
+                      </div>
+                      Locate Shutoff
                     </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-600 font-medium cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600" /> Complete Repair
+                    <label className="flex items-center gap-2.5 text-[14px] text-slate-700 font-medium cursor-pointer relative group">
+                      <div className="w-4 h-4 rounded-sm border-2 border-[#2D68C4] flex items-center justify-center group-has-[input:checked]:bg-[#2D68C4] transition-colors">
+                         <input type="checkbox" className="w-full h-full opacity-0 absolute cursor-pointer" />
+                         <Check className="w-3 h-3 text-white opacity-0 group-has-[input:checked]:opacity-100 transition-opacity" strokeWidth={3} />
+                      </div>
+                      Complete Repair
                     </label>
                   </div>
                 </div>
                 
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-                  <h3 className="font-bold text-sm text-slate-900 mb-3 text-center">Upload Before Photos</h3>
-                  <button className="flex-1 w-full border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl flex flex-col items-center justify-center gap-2 hover:bg-blue-50 transition-colors text-blue-600">
-                    <Camera className="w-6 h-6" />
-                    <span className="text-sm font-bold">Add Photos</span>
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col text-center">
+                  <h3 className="font-bold text-[13px] text-slate-900 mb-3 tracking-tight leading-tight">Upload Before Photos</h3>
+                  <button className="flex-1 w-full border border-dashed border-[#2D68C4] bg-blue-50/50 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-blue-50 transition-colors text-[#2D68C4] py-6">
+                    <Camera className="w-[20px] h-[20px]" />
+                    <span className="text-[13px] font-medium text-[#2D68C4]">Add Photos</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Bottom Actions Fixed */}
-            <div className="fixed bottom-[80px] left-0 right-0 p-4 bg-slate-50 z-40">
-              <div className="max-w-2xl mx-auto flex items-center gap-3 bg-slate-50">
+            {/* Bottom Actions */}
+            <div className="mt-8 pb-4 z-50">
+              <div className="w-full flex items-center gap-3">
                 <button 
                   onClick={handleStartJob}
-                  className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+                  className="flex-1 bg-[#2D68C4] text-white py-3.5 rounded-[14px] font-bold text-[15px] hover:bg-blue-700 transition-colors shadow-sm active:scale-95 transform"
                 >
                   Start Work
                 </button>
                 <button 
                   onClick={() => setShowDigitalId(true)}
-                  className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+                  className="flex-1 bg-[#2D68C4] text-white py-3.5 rounded-[14px] font-bold text-[15px] hover:bg-blue-700 transition-colors shadow-sm active:scale-95 transform"
                 >
                   Show Digital ID
                 </button>

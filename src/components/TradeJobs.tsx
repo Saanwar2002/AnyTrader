@@ -129,11 +129,24 @@ export default function TradeJobs() {
             <Link
               key={job.id}
               to={`/job/${job.id}`}
-              className="block bg-white rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden relative group"
+              className="block bg-white rounded-[2.5rem] shadow-sm hover:shadow-md transition-all overflow-hidden relative group border border-slate-100"
             >
+              {(job.boostTier === 'instant_match' || job.isInstantMatch) ? (
+                <div className="bg-[#E6A020] text-center py-2 text-slate-900 font-black text-3xl tracking-wide uppercase border-b border-[#D4921E]">
+                  Instant Match
+                </div>
+              ) : job.urgency === 'emergency' ? (
+                <div className="bg-red-600 text-center py-2 text-white font-black text-xl tracking-wide uppercase border-b border-red-700">
+                  Emergency
+                </div>
+              ) : (
+                <div className="bg-blue-500 text-center py-2 text-white font-black text-xl tracking-wide uppercase border-b border-blue-600">
+                  Normal Job
+                </div>
+              )}
               <div className={cn(
-                "p-8 space-y-4 border-l-4",
-                job.urgency === 'emergency' ? "border-red-500 bg-red-50/30" : "border-transparent"
+                "p-8 space-y-4",
+                job.urgency === 'emergency' ? "bg-red-50/30" : ""
               )}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
