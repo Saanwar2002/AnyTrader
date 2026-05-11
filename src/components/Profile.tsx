@@ -3391,10 +3391,14 @@ export default function Profile() {
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Bio</label>
                   <textarea 
                     className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all resize-none"
-                    rows={3}
-                    value={editData.bio}
+                    rows={4}
+                    maxLength={300}
+                    value={editData.bio || ''}
                     onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
                   />
+                  <div className="text-right mt-1">
+                    <span className="text-[10px] font-bold text-slate-400">{(editData.bio || '').length}/300</span>
+                  </div>
                 </div>
                 {profile.role === "tradesperson" && (
                   <>
