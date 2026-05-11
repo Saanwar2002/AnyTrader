@@ -8,6 +8,7 @@ import {
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
   Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList
 } from "lucide-react";
+import { GoogleGenAI } from "@google/genai";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { usePWAInstall } from "@/src/hooks/usePWAInstall";
@@ -241,6 +242,7 @@ export default function Profile() {
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
   const [privacyConsent, setPrivacyConsent] = useState<Record<string, boolean>>({});
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isAIPolishing, setIsAIPolishing] = useState(false);
   const [editData, setEditData] = useState({
     name: profile?.name || "",
     postcode: profile?.postcode || "",
@@ -716,6 +718,29 @@ export default function Profile() {
       window.location.href = "/";
     } catch (error) {
       console.error("Error logging out:", error);
+    }
+  };
+
+  const handleAIPolish = async () => {
+    if (!editData.bio) return;
+    setIsAIPolishing(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const prompt = `Rewrite the following bio to be professional and suitable for a tradesperson profile. It must be strictly under 300 characters. Keep it concise, engaging, and highlight their trades: ${editData.trades} and tags: ${editData.tags}.\n\nCurrent Bio:\n${editData.bio}`;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+      });
+      
+      const text = response.text?.trim() || "";
+      if (text) {
+        setEditData({ ...editData, bio: text.substring(0, 300) });
+      }
+    } catch (err) {
+      console.error("Error polishing bio:", err);
+    } finally {
+      setIsAIPolishing(false);
     }
   };
 
@@ -3388,7 +3413,20 @@ export default function Profile() {
                   </div>
                 )}
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Bio</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Bio</label>
+                    {profile.role === "tradesperson" && (
+                      <button
+                        type="button"
+                        onClick={handleAIPolish}
+                        disabled={!editData.bio || isAIPolishing}
+                        className="flex items-center gap-1 text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-lg hover:bg-purple-100 disabled:opacity-50 transition-colors"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        {isAIPolishing ? "Polishing..." : "AI Polish"}
+                      </button>
+                    )}
+                  </div>
                   <textarea 
                     className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all resize-none"
                     rows={4}
