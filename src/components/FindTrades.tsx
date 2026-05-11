@@ -80,6 +80,27 @@ export default function FindTrades() {
   const [selectedMiniProfile, setSelectedMiniProfile] = useState<Tradesperson | null>(null);
   const resultsRef = React.useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!selectedMiniProfile) return;
+
+    // Auto-close after 5 seconds
+    const timeoutId = setTimeout(() => {
+      setSelectedMiniProfile(null);
+    }, 5000);
+
+    // Auto-close on scroll
+    const handleScroll = () => {
+      setSelectedMiniProfile(null);
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('scroll', handleScroll, { capture: true } as any);
+    };
+  }, [selectedMiniProfile]);
+
   // Calculate counts for each category (only available traders)
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -659,26 +680,97 @@ export default function FindTrades() {
             );
           }
 
+          const isMiniProfileFlipped = selectedMiniProfile?.uid === tp.uid;
+
           return (
           <motion.div
             layout
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             key={tp.uid}
-            onClick={() => setSelectedTraderPreview(tp)}
+            onClick={() => {
+              if (isMiniProfileFlipped) {
+                setSelectedMiniProfile(null);
+              } else {
+                setSelectedTraderPreview(tp);
+              }
+            }}
             className="bg-white rounded-3xl border-2 border-black shadow-sm overflow-hidden flex flex-col relative cursor-pointer hover:border-slate-800 hover:shadow-md transition-all group"
           >
             {/* Top Right Triangle Corner */}
-            <div 
-              className="absolute top-0 right-0 w-12 h-12 bg-blue-600 z-10 cursor-pointer flex items-start justify-end p-1 hover:bg-blue-700 transition-colors"
-              style={{ clipPath: 'polygon(100% 0, 0 0, 100% 100%)', clipRule: 'evenodd' }}
-              onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(tp); }}
-            >
-              <Info className="w-3.5 h-3.5 text-white mr-1.5 mt-1.5" />
-            </div>
+            {!isMiniProfileFlipped && (
+              <div 
+                className="absolute top-0 right-0 w-[52px] h-[52px] bg-[#0066cc] z-10 cursor-pointer hover:bg-blue-700 transition-colors"
+                style={{ clipPath: 'polygon(100% 0, 0 0, 100% 100%)' }}
+                onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(tp); }}
+              >
+                <div className="absolute top-[8px] right-[2px] transform rotate-45 uppercase text-white text-[10px] font-black tracking-widest">
+                  INFO
+                </div>
+              </div>
+            )}
 
-            <div className="p-4">
-              <div className="flex gap-4">
+            <AnimatePresence mode="popLayout">
+              {isMiniProfileFlipped ? (
+                <motion.div
+                  key="flipped"
+                  initial={{ rotateY: -90, opacity: 0 }}
+                  animate={{ rotateY: 0, opacity: 1 }}
+                  exit={{ rotateY: 90, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="bg-white p-6 relative w-full h-full flex flex-col justify-center min-h-[160px]"
+                  style={{ transformStyle: 'preserve-3d' }}
+                >
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(null); }}
+                    className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors flex items-center justify-center z-20"
+                  >
+                    <X className="w-4 h-4 text-slate-400 font-bold" />
+                  </button>
+                  
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 bg-[#0066cc] rounded-full flex items-center justify-center text-white shrink-0 shadow-sm">
+                      <span className="font-serif font-bold text-2xl italic">i</span>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-[#0066cc] text-xl tracking-tight leading-tight">Instant Info</h3>
+                      <p className="text-xs text-slate-400 font-medium">Pricing & Details</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white rounded-2xl py-2 border-2 border-[#81c3f8] text-center shadow-sm">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">CALL-OUT FEE</p>
+                        <p className="text-xl font-black text-[#0066cc]">£{tp.miniProfileSettings?.callOutFee || 0}</p>
+                      </div>
+                      <div className="bg-white rounded-2xl py-2 border-2 border-[#81c3f8] text-center shadow-sm">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">HOURLY RATE</p>
+                        <p className="text-xl font-black text-[#0066cc]">£{tp.miniProfileSettings?.hourlyRate || 0}</p>
+                      </div>
+                    </div>
+
+                    {tp.miniProfileSettings?.extraInfo && (
+                      <div className="bg-white rounded-2xl p-3 border-2 border-[#81c3f8] text-center shadow-sm">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">EXTRA INFO</p>
+                        <p className="text-sm font-medium text-[#0066cc] leading-tight break-words whitespace-pre-wrap">
+                          "{tp.miniProfileSettings.extraInfo.length > 120 ? tp.miniProfileSettings.extraInfo.substring(0, 120) + '...' : tp.miniProfileSettings.extraInfo}"
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="front"
+                  initial={{ rotateY: 90, opacity: 0 }}
+                  animate={{ rotateY: 0, opacity: 1 }}
+                  exit={{ rotateY: -90, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ transformStyle: 'preserve-3d' }}
+                >
+                  <div className="p-4">
+                    <div className="flex gap-4">
                 {/* Photo: Large & Left-Aligned for rapid scanning */}
                 <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center text-white font-black text-2xl relative shrink-0 overflow-hidden shadow-inner">
                   {tp.avatarUrl ? (
@@ -759,6 +851,9 @@ export default function FindTrades() {
                  </span>
               </div>
             </div>
+            </motion.div>
+            )}
+            </AnimatePresence>
           </motion.div>
           );
         })}
@@ -766,66 +861,6 @@ export default function FindTrades() {
 
       {/* Spacer for bottom navigation */}
       <div className="h-24"></div>
-
-      {/* Mini Profile Info Modal */}
-      <AnimatePresence>
-        {selectedMiniProfile && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedMiniProfile(null)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-white rounded-[2rem] shadow-2xl p-6 md:p-8 relative w-full max-w-sm z-10 mx-4"
-            >
-              <button 
-                onClick={() => setSelectedMiniProfile(null)}
-                className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors flex items-center justify-center"
-              >
-                <X className="w-4 h-4 text-slate-400 font-bold" />
-              </button>
-              
-              <div className="flex items-center gap-4 mb-8 pt-2">
-                <div className="w-14 h-14 bg-[#0066cc] rounded-full flex items-center justify-center text-white shrink-0">
-                  <span className="font-serif font-bold text-3xl italic">i</span>
-                </div>
-                <div>
-                  <h3 className="font-bold text-[#0066cc] text-2xl tracking-tight leading-tight">Instant Info</h3>
-                  <p className="text-sm text-slate-400 font-medium">Pricing & Details</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-2xl p-4 border-[2.5px] border-[#81c3f8] text-center">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">CALL-OUT FEE</p>
-                    <p className="text-3xl font-black text-[#0066cc]">£{selectedMiniProfile.miniProfileSettings?.callOutFee || 0}</p>
-                  </div>
-                  <div className="bg-white rounded-2xl p-4 border-[2.5px] border-[#81c3f8] text-center">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">HOURLY RATE</p>
-                    <p className="text-3xl font-black text-[#0066cc]">£{selectedMiniProfile.miniProfileSettings?.hourlyRate || 0}</p>
-                  </div>
-                </div>
-
-                {selectedMiniProfile.miniProfileSettings?.extraInfo && (
-                  <div className="bg-white rounded-2xl p-5 border-[2.5px] border-[#81c3f8] text-center">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">EXTRA INFO</p>
-                    <p className="text-lg font-medium text-[#0066cc]">
-                      "{selectedMiniProfile.miniProfileSettings.extraInfo}"
-                    </p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Tier 2: Expanded Preview (Bottom Sheet) */}
       <AnimatePresence>

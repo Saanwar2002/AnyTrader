@@ -2017,7 +2017,7 @@ export default function Profile() {
               ))}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-200">
+            <div className="mt-6 pt-6 border-t-4 border-dotted border-slate-300">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Professional Badges</h4>
                 <button 
@@ -2075,7 +2075,7 @@ export default function Profile() {
               )}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-200">
+            <div className="mt-6 pt-6 border-t-4 border-dotted border-slate-300">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Mini Profile Card Settings</h4>
                 <button 
@@ -2106,7 +2106,7 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-200">
+            <div className="mt-6 pt-6 border-t-4 border-dotted border-slate-300">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Instant Match Settings</h4>
                 <button 
@@ -3605,9 +3605,13 @@ export default function Profile() {
                         ...editData, 
                         miniProfileSettings: { ...(editData.miniProfileSettings || {} as any), extraInfo: e.target.value } 
                       })}
+                      maxLength={120}
                       placeholder="e.g. Rate excludes materials."
                       rows={3}
                     />
+                    <div className="text-right mt-1">
+                      <span className="text-[10px] font-bold text-slate-400">{(editData.miniProfileSettings?.extraInfo || '').length}/120</span>
+                    </div>
                   </div>
                 </div>
               </div>
