@@ -1640,7 +1640,7 @@ export default function PostJobWizard() {
               {/* Asset Selection for Business Users */}
               {profile?.subscriptionType === "business" && userAssets.length > 0 && (
                 <div className="space-y-3">
-                  <label className="text-sm font-bold text-slate-700 block">Select Properties (Optional)</label>
+                  <label className="text-sm font-bold text-slate-700 block">Select Property(s) / Project (Optional)</label>
                   <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-2 no-scrollbar">
                     {userAssets.map((asset) => (
                       <button

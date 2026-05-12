@@ -74,3 +74,10 @@ This roadmap outlines the planned AI-powered enhancements to make the platform m
 - [ ] **Phase 11.5: Final Production Build**:
   - Finalize App Store / Google Play submissions.
   - Perform continuous post-launch monitoring and scaling.
+
+## Phase 12: AI-Powered Trader Calendar + Smart Scheduling (Post-Launch)
+- [ ] **Phase 12.1: Built-in Trader Calendar Foundation**: Develop calendar UI and underlying data model to track trader availability, auto-populating accepted jobs, travel time, and recurring tasks.
+- [ ] **Phase 12.2: AI Availability Engine**: Implement scoring logic to evaluate trader fit based on time slot availability, travel logistics, route efficiency, workload balance, and earnings optimization.
+- [ ] **Phase 12.3: AI Scheduling Assistant (Trader-Facing)**: Introduce a smart assistant to suggest optimal scheduling slots for new jobs, refill canceled slots, and proactively fill empty days with matching job opportunities.
+- [ ] **Phase 12.4: Enhanced Match Algorithm Integration**: Update the Instant Match algorithm to factor in Schedule Fit (weighted at 20%) alongside rating, completion rate, response speed, distance, and price fairness.
+- [ ] **Phase 12.5: External Calendar Sync**: Enable seamless two-way syncing with external services like Google, Apple, and Outlook calendars to incorporate personal availability constraints.
