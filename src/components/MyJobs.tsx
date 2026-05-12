@@ -19,12 +19,14 @@ export default function MyJobs() {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "pending" | "cancelled" | "completed">("pending");
+  
+  const isHistoryView = new URLSearchParams(location.search).get("history") === "true";
+  const propertyId = new URLSearchParams(location.search).get("propertyId");
+
+  const [filter, setFilter] = useState<"all" | "pending" | "cancelled" | "completed">(propertyId ? "all" : "pending");
   const [selectedJobMedia, setSelectedJobMedia] = useState<any | null>(null);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
-
-  const isHistoryView = new URLSearchParams(location.search).get("history") === "true";
 
   useEffect(() => {
     if (!user) return;
@@ -51,10 +53,21 @@ export default function MyJobs() {
   }, [user]);
 
   const displayJobs = jobs.filter(job => {
+    if (propertyId && job.assetId !== propertyId) return false;
+
     const jobDate = job.createdAt?.seconds ? job.createdAt.seconds * 1000 : new Date(job.createdAt).getTime();
     const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
     const isRecent = jobDate > fourteenDaysAgo;
     const isArchivableStatus = job.status === "completed" || job.status === "cancelled";
+
+    // If filtering by a specific property, show all its jobs (unless a specific tab is selected)
+    if (propertyId) {
+      if (filter === "all") return true;
+      if (filter === "pending") return job.status !== "completed" && job.status !== "cancelled";
+      if (filter === "cancelled") return job.status === "cancelled";
+      if (filter === "completed") return job.status === "completed";
+      return true;
+    }
 
     if (isHistoryView) {
       // History view shows archived jobs (completed/cancelled > 14 days)

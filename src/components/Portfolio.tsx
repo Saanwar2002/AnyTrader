@@ -158,8 +158,8 @@ export default function Portfolio() {
                  <div className="text-center py-8 text-slate-500 text-sm bg-white rounded-3xl shadow-sm border border-slate-100">
                    No properties added yet. Click + to add your first property.
                  </div>
-              ) : (showAllProperties ? properties : properties.slice(0, 5)).map(property => (
-                <div key={property.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl border border-black hover:bg-slate-50 transition group shadow-sm bg-white">
+              ) : properties.map(property => (
+                <div key={property.id} className="flex items-stretch justify-between py-2 px-3 rounded-xl border border-black hover:bg-slate-50 transition group shadow-sm bg-white min-h-[72px]">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="text-blue-600/80 shrink-0">
                       {property.propertyType === "commercial" ? (
@@ -172,35 +172,27 @@ export default function Portfolio() {
                         <Home className="w-5 h-5" strokeWidth={1.5} />
                       )}
                     </div>
-                    <div className="flex flex-col flex-1 min-w-0 justify-center">
-                      <div className="flex items-center gap-2 w-full">
+                    <div className="flex flex-col flex-1 min-w-0 justify-center py-1">
+                      <div className="flex items-center justify-between gap-2 w-full mb-1">
                         <h3 className="font-semibold text-slate-900 text-[14px] leading-tight truncate">{property.name || "Unnamed Property"}</h3>
-                        <div className="text-[12px] text-slate-500 truncate max-w-[40%]">{property.address?.line1}</div>
+                        <Link 
+                          to={`/my-jobs?propertyId=${property.id}`}
+                          className="text-[12px] text-blue-600 font-medium hover:text-blue-800 transition shrink-0"
+                        >
+                          History
+                        </Link>
                       </div>
-                      <div className="flex items-center gap-4 mt-0.5">
-                        <button className="text-[11px] text-slate-500 flex items-center gap-1 hover:text-slate-800 transition">
-                          <Clock className="w-3 h-3" /> View History
-                        </button>
-                      </div>
+                      {property.address?.line1 && (
+                        <div className="text-[11px] text-black font-bold w-full break-words whitespace-normal leading-snug pt-0.5">
+                          {property.address.line1}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 ml-3 shrink-0">
-                    {/* Status Icon */}
-                    {Math.random() > 0.5 ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-50" strokeWidth={2} />
-                    ) : (
-                      <Wrench className="w-4 h-4 text-amber-500" strokeWidth={2} />
-                    )}
-                    
-                    <button 
-                      onClick={() => handleEditClick(property)}
-                      className="text-blue-600 hover:text-blue-800 transition p-1"
-                    >
-                      <Edit className="w-4 h-4" strokeWidth={1.5} />
-                    </button>
+                  <div className="flex flex-col items-center justify-start gap-1.5 ml-3 shrink-0 pt-0.5">
                     <div className="relative">
                       {deletingId === property.id && (
-                        <div className="absolute bottom-full mb-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-black z-10">
+                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-black z-10">
                           <p className="mb-2">Delete property?</p>
                           <div className="flex gap-2">
                             <button 
@@ -216,28 +208,26 @@ export default function Portfolio() {
                               Yes
                             </button>
                           </div>
-                          <div className="absolute -bottom-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-black"></div>
+                          <div className="absolute -top-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-t border-l border-black"></div>
                         </div>
                       )}
                       <button 
                         onClick={() => setDeletingId(property.id)}
                         className="text-red-500 hover:text-red-700 transition p-1"
                       >
-                        <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                        <Trash2 className="w-[15px] h-[15px]" strokeWidth={1.5} />
                       </button>
                     </div>
+                    
+                    <button 
+                      onClick={() => handleEditClick(property)}
+                      className="text-blue-600 hover:text-blue-800 transition p-1"
+                    >
+                      <Edit className="w-[15px] h-[15px]" strokeWidth={1.5} />
+                    </button>
                   </div>
                 </div>
               ))}
-              
-              {properties.length > 5 && (
-                <button
-                  onClick={() => setShowAllProperties(!showAllProperties)}
-                  className="w-full py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors mt-2"
-                >
-                  {showAllProperties ? "Show Less" : `View All Properties (${properties.length})`}
-                </button>
-              )}
             </div>
           </div>
         </>

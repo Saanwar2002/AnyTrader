@@ -15,6 +15,7 @@ import CrossPortalBanner from "./shared/CrossPortalBanner";
 import { getShopRecommendations } from "@/src/services/gemini";
 
 import RoleTabBar from "./shared/RoleTabBar";
+import { useBusinessTab } from "@/src/store/businessTabStore";
 
 const getIconComponent = (iconName: string) => {
   const icons: any = { Wrench, Hammer, HardHat, Shield, Zap, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, Briefcase, PenTool, Box };

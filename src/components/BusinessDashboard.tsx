@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { SEO } from "./SEO";
 import { PropertyManager } from "./PropertyManager";
+import { useBusinessTab } from "@/src/store/businessTabStore";
 
 export default function BusinessDashboard() {
   const { user, profile, setIsTradeBotOpen } = useAuth();
@@ -24,18 +25,7 @@ export default function BusinessDashboard() {
   const [loading, setLoading] = useState(true);
   const [recentQuotes, setRecentQuotes] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"properties" | "field_services" | "consultancy">("properties");
-
-  useEffect(() => {
-    // Default the selected tab based on business category at load
-    if (profile?.businessCategory?.toLowerCase().includes("consult")) {
-      setActiveTab("consultancy");
-    } else if (profile?.businessCategory?.toLowerCase().includes("field")) {
-      setActiveTab("field_services");
-    } else {
-      setActiveTab("properties");
-    }
-  }, [profile]);
+  const { activeTab, setActiveTab } = useBusinessTab();
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -93,250 +83,151 @@ export default function BusinessDashboard() {
   const usagePercent = Math.min(100, (stats.total / jobLimit) * 100);
 
   return (
-    <div className="space-y-8 pb-24">
+    <div className="pb-24">
       <SEO 
         title="Business Dashboard" 
         description="Manage your property portfolio and professional trade services on AnyTrader."
       />
       
-      {/* Business Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className={cn(
-              "text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider",
-              (!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "bg-orange-500" : "bg-blue-600"
-            )}>
-              {(!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "Standard" : "Professional"}
-            </div>
-            <span className="text-slate-400 text-xs font-bold">• {profile?.businessCategory || "General Business"}</span>
+      {/* Business Name Header */}
+      <div className="flex items-center justify-between mt-4 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg uppercase shrink-0">
+            {profile?.name?.charAt(0) || "B"}
           </div>
-          <h1 className="text-4xl font-display font-black text-slate-900 tracking-tight">
-            {profile?.name} <span className="text-slate-400 font-normal">HQ</span>
-          </h1>
-          <p className="text-slate-500 font-medium">Portfolio overview and maintenance tracking.</p>
-        </div>
-        <div className="hidden sm:flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Plan</p>
-            <p className="text-sm font-bold text-blue-600">
-              {(!profile?.subscriptionId || profile?.subscriptionStatus !== "active") ? "Homeowner/Standard" : (profile?.tierId || "Business Professional")}
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">
+              Hello, {user?.displayName?.split(' ')[0] || "User"}!
+            </h1>
+            <p className="text-[13px] text-slate-600 font-medium leading-tight">
+              {profile?.businessCategory || profile?.name || "Business Dashboard HQ"}
             </p>
           </div>
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center border border-blue-100">
-            <Building2 className="w-6 h-6 text-blue-600" />
-          </div>
         </div>
-      </div>
-
-      {/* Business Sub-Category Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide border-b border-slate-100">
-        {(["properties", "field_services", "consultancy"] as const).map((tab) => {
-          const isActive = activeTab === tab;
-          const displayNames = {
-            properties: "Properties",
-            field_services: "Field Services",
-            consultancy: "Consultancy"
-          };
-          
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "relative px-4 py-3 rounded-t-2xl font-bold text-sm transition-all whitespace-nowrap",
-                isActive 
-                  ? "text-blue-600 bg-blue-50/50" 
-                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-              )}
-            >
-              {displayNames[tab]}
-              {/* Optional Notifications Indicator for inactive tabs */}
-              {!isActive && tab === "field_services" && (
-                <span className="absolute top-2.5 right-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse ring-2 ring-white"></span>
-              )}
-              {isActive && (
-                <motion.div
-                  layoutId="activeBusinessTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"
-                />
-              )}
-            </button>
-          );
-        })}
+        {!isSubscribed && (
+          <div className="w-8 h-8 flex items-center justify-center rounded-full bg-orange-100">
+            <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-orange-500" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="6"/>
+              <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>
+            </svg>
+          </div>
+        )}
       </div>
 
       {/* Conditional Content Output Block */}
       {activeTab === "properties" && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {/* Plan Status Banner */}
-      {!isSubscribed ? (
-        <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-6 rounded-[32px] text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg shadow-orange-500/20">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
-              <Zap className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-lg">Business Trial Active</h3>
-              <p className="text-orange-50 text-sm">You have {Math.max(0, 10 - stats.total)} free posts remaining. Upgrade to a professional plan for unlimited access.</p>
-            </div>
-          </div>
-          <Link 
-            to="/settings?tab=subscription" 
-            className="bg-white text-orange-600 px-6 py-3 rounded-2xl font-bold text-sm hover:bg-orange-50 transition-colors whitespace-nowrap"
-          >
-            Upgrade Now
-          </Link>
-        </div>
-      ) : (
-        <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center shrink-0 border border-blue-100">
-              <CreditCard className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-slate-900">{profile?.tierId || "Business Professional"} Plan</h3>
-                <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Active</span>
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          
+          {/* Plan Status Banner (Only visible if not subscribed) */}
+          {!isSubscribed && (
+            <div className="bg-gradient-to-r from-orange-400 to-amber-500 p-3 rounded-xl text-white flex flex-col shadow-sm">
+              <div className="flex items-start gap-3 mb-3">
+                <Zap className="w-6 h-6 text-white shrink-0 mt-0.5 fill-white" />
+                <p className="text-[13px] leading-snug">
+                  <span className="font-bold">Business Trial Active</span> - You have {Math.max(0, 10 - stats.total)} free posts remaining. Upgrade to a professional plan for unlimited access.
+                </p>
               </div>
-              <div className="mt-2 w-full md:w-64">
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase mb-1">
-                  <span>Usage</span>
-                  <span>{stats.total} / {jobLimit} Posts</span>
-                </div>
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${usagePercent}%` }}
-                    className={cn(
-                      "h-full rounded-full",
-                      usagePercent > 90 ? "bg-red-500" : usagePercent > 70 ? "bg-orange-500" : "bg-blue-600"
-                    )}
-                  />
-                </div>
+              <Link 
+                to="/settings?tab=subscription" 
+                className="bg-white text-orange-600 w-full py-2 rounded-lg font-bold text-[14px] hover:bg-orange-50 transition-colors shadow-sm text-center"
+              >
+                Upgrade Now
+              </Link>
+            </div>
+          )}
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: "Active Projects", value: stats.active, icon: Activity, color: "text-blue-500" },
+              { label: "Total Sites", value: stats.total, icon: MapPin, color: "text-purple-500" },
+              { label: "Completed", value: stats.completed, icon: ShieldCheck, color: "text-green-500" },
+              { label: "Total Spend", value: `£${stats.spend.toLocaleString()}`, icon: TrendingUp, color: "text-orange-500" }
+            ].map((stat, i) => (
+              <div key={i} className="bg-white rounded-xl border border-black p-2 text-center flex flex-col justify-center items-center shadow-sm">
+                 <stat.icon className={cn("w-5 h-5 mb-1", stat.color)} />
+                 <div className="text-lg font-bold text-slate-900 leading-none mb-1">{stat.value}</div>
+                 <div className="text-[9px] uppercase font-bold text-slate-500 leading-[1.1] whitespace-pre-line">
+                   {stat.label.split(' ').join('\n')}
+                 </div>
               </div>
-            </div>
+            ))}
           </div>
-          <Link 
-            to="/settings?tab=subscription" 
-            className="flex items-center gap-2 text-blue-600 font-bold text-sm hover:bg-blue-50 px-4 py-2 rounded-xl transition-colors"
-          >
-            <ArrowUpCircle className="w-4 h-4" />
-            Manage Plan
-          </Link>
-        </div>
-      )}
 
-      {/* Business Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Active Projects", value: stats.active, icon: Activity, color: "blue" },
-          { label: "Total Sites", value: stats.total, icon: MapPin, color: "indigo" },
-          { label: "Completed", value: stats.completed, icon: ShieldCheck, color: "green" },
-          { label: "Total Spend", value: `£${stats.spend.toLocaleString()}`, icon: TrendingUp, color: "orange" }
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
-            <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center mb-4 border",
-              stat.color === "blue" ? "bg-blue-50 text-blue-600 border-blue-100" :
-              stat.color === "indigo" ? "bg-indigo-50 text-indigo-600 border-indigo-100" :
-              stat.color === "green" ? "bg-green-50 text-green-600 border-green-100" :
-              "bg-orange-50 text-orange-600 border-orange-100"
-            )}>
-              <stat.icon className="w-5 h-5" />
-            </div>
-            <p className="text-2xl font-display font-black text-slate-900">{stat.value}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{stat.label}</p>
+          {/* Action Grid */}
+          <div className="grid grid-cols-2 gap-2">
+            <Link to="/post-job" className="bg-blue-600 rounded-xl border border-black p-3 flex flex-col items-center justify-center text-center shadow-sm text-white row-span-2 hover:bg-blue-700 transition">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2">
+                <Plus className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-[15px] mb-1 leading-tight">Post New Project</h3>
+              <p className="text-blue-100 text-[11px] leading-tight">Add a job to your portfolio.</p>
+            </Link>
+            
+            <Link to="/analytics" className="bg-white rounded-xl border border-black p-3 flex items-center gap-2 shadow-sm hover:bg-slate-50 transition">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                <BarChart3 className="w-4 h-4 text-slate-600" />
+              </div>
+              <div>
+                <h4 className="font-bold text-[12px] text-slate-900 leading-tight mb-0.5">Business Analytics</h4>
+                <p className="text-[10px] text-slate-500 leading-tight">Track spend and performance.</p>
+              </div>
+            </Link>
+
+            <button onClick={() => setIsTradeBotOpen(true)} className="bg-purple-50 rounded-xl border border-black p-3 flex items-center gap-2 shadow-sm hover:bg-purple-100 transition text-left">
+              <div className="w-8 h-8 rounded-lg bg-purple-200 flex items-center justify-center shrink-0">
+                <Bot className="w-4 h-4 text-purple-700" />
+              </div>
+              <div>
+                <h4 className="font-bold text-[12px] text-purple-900 leading-tight mb-0.5">AI Project Planner</h4>
+                <p className="text-[10px] text-purple-600 leading-tight">Get professional scope advice.</p>
+              </div>
+            </button>
           </div>
-        ))}
-      </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link to="/post-job" className="bg-blue-600 p-6 rounded-[32px] text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all group">
-          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Plus className="w-6 h-6" />
-          </div>
-          <h3 className="font-bold text-xl mb-1">Post New Project</h3>
-          <p className="text-blue-100 text-sm">Add a job to your portfolio</p>
-        </Link>
-        
-        <Link to="/analytics" className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:border-blue-600 transition-all group">
-          <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-blue-50 transition-colors">
-            <BarChart3 className="w-6 h-6 text-slate-400 group-hover:text-blue-600" />
-          </div>
-          <h3 className="font-bold text-xl text-slate-900 mb-1">Business Analytics</h3>
-          <p className="text-slate-500 text-sm">Track spend and performance</p>
-        </Link>
-
-        {(profile?.subscriptionType === 'Business Professional' || profile?.subscriptionType === 'Enterprise Powerhouse') ? (
-          <Link to="/team" className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:border-indigo-600 transition-all group">
-            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-indigo-50 transition-colors">
-              <Users className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
-            </div>
-            <h3 className="font-bold text-xl text-slate-900 mb-1">Team Management</h3>
-            <p className="text-slate-500 text-sm">Manage seats and members</p>
-          </Link>
-        ) : (
-          <button 
-            onClick={() => setIsTradeBotOpen(true)}
-            className="bg-indigo-600 p-6 rounded-[32px] text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all group text-left"
-          >
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Bot className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-xl mb-1">AI Project Planner</h3>
-            <p className="text-indigo-100 text-sm">Get professional scope advice</p>
-          </button>
-        )}
-      </div>
-
-      {/* Active Portfolio Section */}
-      <PropertyManager />
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-              <LayoutGrid className="w-5 h-5 text-slate-600" />
-            </div>
-            Active Portfolio
+          {/* Active Portfolio Section */}
+          <PropertyManager />
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            Active Projects
           </h2>
-          <Link to="/my-jobs" className="text-sm font-bold text-blue-600 hover:underline">View All Sites</Link>
+          <Link to="/my-jobs" className="text-[12px] font-bold text-blue-600 hover:underline">View All Projects</Link>
         </div>
 
         {activeJobs.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-slate-100 rounded-[40px] p-12 text-center space-y-4">
-            <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto">
-              <Briefcase className="w-8 h-8 text-slate-300" />
+          <div className="bg-white border border-black shadow-sm rounded-xl p-8 text-center space-y-3">
+            <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center mx-auto">
+              <Briefcase className="w-6 h-6 text-slate-400" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-xl font-bold text-slate-900">No active projects</h3>
-              <p className="text-slate-500 max-w-xs mx-auto">Your portfolio is currently quiet. Post a new job to find professional tradespeople.</p>
+              <h3 className="text-[16px] font-bold text-slate-900">No active projects</h3>
+              <p className="text-slate-500 text-[12px] max-w-xs mx-auto">Your portfolio is currently quiet. Post a new job to find professional tradespeople.</p>
             </div>
-            <Link to="/post-job" className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all">
-              <Plus className="w-5 h-5" /> Post First Business Job
+            <Link to="/post-job" className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-blue-700 transition-all shadow-sm">
+              <Plus className="w-4 h-4" /> Post First Business Job
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeJobs.slice(0, 4).map((job) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {activeJobs.slice(0, 5).map((job) => (
               <Link 
                 key={job.id} 
                 to={`/job/${job.id}`}
-                className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:border-blue-600 transition-all group relative overflow-hidden"
+                className="bg-white p-4 rounded-xl border border-black shadow-sm hover:border-blue-600 transition-all group relative overflow-hidden flex flex-col justify-between"
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[9px] font-black uppercase tracking-tighter">
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md text-[9px] font-black uppercase tracking-tighter">
                         {job.category}
                       </span>
-                      <span className="text-[10px] font-bold text-slate-400">• {job.city}</span>
+                      <span className="text-[10px] font-bold text-slate-500">• {job.city || "Pending"}</span>
                     </div>
-                    <h3 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{job.title}</h3>
+                    <h3 className="font-bold text-[14px] text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">{job.title}</h3>
                   </div>
                   <div className={cn(
-                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                    "px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0",
                     job.status === "posted" ? "bg-green-100 text-green-700" :
                     job.status === "quoting" ? "bg-blue-100 text-blue-700" :
                     "bg-orange-100 text-orange-700"
@@ -345,17 +236,17 @@ export default function BusinessDashboard() {
                   </div>
                 </div>
                 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-auto">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center">
-                      <FileText className="w-4 h-4 text-slate-400" />
+                    <div className="w-7 h-7 bg-slate-50 rounded-md flex items-center justify-center">
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Quotes</p>
-                      <p className="text-xs font-black text-slate-900">{job.quoteCount || 0}</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Quotes</p>
+                      <p className="text-[11px] font-black text-slate-900 leading-none mt-0.5">{job.quoteCount || 0}</p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
                 </div>
               </Link>
             ))}
@@ -364,23 +255,19 @@ export default function BusinessDashboard() {
       </div>
 
       {/* Business Support Banner */}
-      <div className="bg-slate-900 rounded-[40px] p-8 text-white relative overflow-hidden">
-        <div className="relative z-10 space-y-4 max-w-md">
-          <div className="inline-flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+      <div className="bg-slate-900 rounded-xl p-3 border border-black shadow-sm text-white flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
             <Users2 className="w-4 h-4 text-blue-400" />
-            <span className="text-xs font-bold">Priority Business Support</span>
           </div>
-          <h2 className="text-3xl font-display font-black">Dedicated Account Management</h2>
-          <p className="text-slate-400 text-sm">
-            As a professional client, you have access to our priority support team for large-scale project coordination and dispute mediation.
-          </p>
-          <button className="bg-white text-slate-900 px-6 py-3 rounded-2xl font-bold hover:bg-slate-100 transition-all active:scale-95">
-            Contact My Manager
-          </button>
+          <div>
+            <h2 className="font-bold text-[12px] leading-tight">Priority Support</h2>
+            <p className="text-[10px] text-slate-400 leading-tight block">Dedicated Acc. Manager</p>
+          </div>
         </div>
-        <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none">
-          <Building2 className="w-64 h-64 -mr-12 -mb-12" />
-        </div>
+        <button className="bg-white text-slate-900 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-100 transition-all active:scale-95 text-[11px] whitespace-nowrap shadow-sm">
+          Contact Manager
+        </button>
       </div>
      </div>
     )}
