@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
-import { db, handleFirestoreError, OperationType, collection, query, where, onSnapshot, addDoc, doc, deleteDoc, updateDoc } from "@/src/firebase";
-import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store } from "lucide-react";
+import { db, handleFirestoreError, OperationType, collection, query, where, onSnapshot, addDoc, doc, deleteDoc } from "@/src/firebase";
+import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
-export default function Portfolio() {
+export function PropertyManager() {
   const { user } = useAuth();
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,9 +20,6 @@ export default function Portfolio() {
   const [propertyName, setPropertyName] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
   const [propertyType, setPropertyType] = useState("residential");
-  const [contactName, setContactName] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [accessInstructions, setAccessInstructions] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -41,54 +38,41 @@ export default function Portfolio() {
     return unsubscribe;
   }, [user]);
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  const handleAddProperty = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step < 3) {
-      setStep(step + 1);
-    } else {
-      if (!user) return;
-      try {
-        if (editingPropertyId) {
-          await updateDoc(doc(db, "properties", editingPropertyId), {
-            name: propertyName,
-            "address.line1": addressLine1,
-            propertyType: propertyType,
-            contactName,
-            contactPhone,
-            accessInstructions,
-            updatedAt: new Date().toISOString()
-          });
-        } else {
-          await addDoc(collection(db, "properties"), {
-            ownerId: user.uid,
-            name: propertyName,
-            address: {
-              line1: addressLine1,
-              city: "",
-              postcode: "",
-              country: ""
-            },
-            propertyType: propertyType,
-            contactName,
-            contactPhone,
-            accessInstructions,
-            status: "active",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
-        }
-        setIsAdding(false);
-        setEditingPropertyId(null);
-        setStep(1);
-        setPropertyName("");
-        setAddressLine1("");
-        setPropertyType("residential");
-        setContactName("");
-        setContactPhone("");
-        setAccessInstructions("");
-      } catch (error) {
-        handleFirestoreError(error, editingPropertyId ? OperationType.UPDATE : OperationType.CREATE, "properties");
+    if (!user) return;
+    try {
+      if (editingPropertyId) {
+        await updateDoc(doc(db, "properties", editingPropertyId), {
+          name: propertyName,
+          "address.line1": addressLine1,
+          propertyType: propertyType,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        await addDoc(collection(db, "properties"), {
+          ownerId: user.uid,
+          name: propertyName,
+          address: {
+            line1: addressLine1,
+            city: "",
+            postcode: "",
+            country: ""
+          },
+          propertyType: propertyType,
+          status: "active",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
       }
+      setIsAdding(false);
+      setEditingPropertyId(null);
+      setStep(1);
+      setPropertyName("");
+      setAddressLine1("");
+      setPropertyType("residential");
+    } catch (error) {
+      handleFirestoreError(error, editingPropertyId ? OperationType.UPDATE : OperationType.CREATE, "properties");
     }
   };
 
@@ -97,9 +81,6 @@ export default function Portfolio() {
     setPropertyName("");
     setAddressLine1("");
     setPropertyType("residential");
-    setContactName("");
-    setContactPhone("");
-    setAccessInstructions("");
     setStep(1);
     setIsAdding(true);
   };
@@ -108,9 +89,6 @@ export default function Portfolio() {
     setPropertyName(property.name || "");
     setAddressLine1(property.address?.line1 || "");
     setPropertyType(property.propertyType || "residential");
-    setContactName(property.contactName || "");
-    setContactPhone(property.contactPhone || "");
-    setAccessInstructions(property.accessInstructions || "");
     setEditingPropertyId(property.id);
     setIsAdding(true);
     setStep(1);
@@ -167,7 +145,7 @@ export default function Portfolio() {
                       ) : property.propertyType === "apartment" ? (
                         <Building2 className="w-5 h-5" strokeWidth={1.5} />
                       ) : property.propertyType === "retail" ? (
-                        <Store className="w-5 h-5" strokeWidth={1.5} />
+                        <Home className="w-5 h-5" strokeWidth={1.5} />
                       ) : (
                         <Home className="w-5 h-5" strokeWidth={1.5} />
                       )}
@@ -246,18 +224,8 @@ export default function Portfolio() {
           <div className="bg-white flex-1 sm:rounded-3xl sm:max-w-md sm:mx-auto w-full sm:shadow-xl flex flex-col h-full overflow-hidden relative">
             
             {/* Header */}
-            <div className="px-4 py-4 flex items-center justify-between border-b border-slate-100 bg-white shrink-0">
-              <button 
-                onClick={() => {
-                  if (step > 1) {
-                    setStep(step - 1);
-                  } else {
-                    setIsAdding(false);
-                    setEditingPropertyId(null);
-                  }
-                }} 
-                className="p-2 -ml-2 text-slate-900 hover:bg-slate-100 rounded-full transition"
-              >
+            <div className="px-4 py-4 flex items-center justify-between border-b border-slate-100 bg-white z-10 shrink-0">
+              <button onClick={() => { setIsAdding(false); setEditingPropertyId(null); }} className="p-2 -ml-2 text-slate-900 hover:bg-slate-100 rounded-full transition">
                 <ArrowLeft className="w-6 h-6" />
               </button>
               <h2 className="text-lg font-semibold text-slate-900">{editingPropertyId ? 'Edit Property' : 'Add New Property'}</h2>
@@ -278,133 +246,79 @@ export default function Portfolio() {
               </div>
 
               {/* Form Content */}
-              <form id="add-property-form" onSubmit={handleFormSubmit} className="p-6 space-y-6 flex-1">
+              <form id="add-property-form" onSubmit={handleAddProperty} className="p-6 space-y-6 flex-1">
                 
-                {step === 1 && (
-                  <>
-                    <div className="space-y-1.5">
-                      <label className="block text-[15px] font-medium text-slate-900">Property Name</label>
-                      <input 
-                        type="text" 
-                        value={propertyName}
-                        onChange={e => setPropertyName(e.target.value)}
-                        required
-                        placeholder="e.g., Sunrise Apartments"
-                        className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center">
-                        <label className="block text-[15px] font-medium text-slate-900">Full Address</label>
-                        <button type="button" className="text-[13px] font-medium text-slate-500 flex items-center gap-1 hover:text-slate-900 transition">
-                          <MapPin className="w-3.5 h-3.5" /> Locate on Map
-                        </button>
-                      </div>
-                      <input 
-                        type="text" 
-                        value={addressLine1}
-                        onChange={e => setAddressLine1(e.target.value)}
-                        required
-                        placeholder="Enter address"
-                        className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="block text-[15px] font-medium text-slate-900">Property Type</label>
-                      <div className="flex p-1 bg-white border border-black rounded-xl text-[14px]">
-                        {["Commercial", "Residential", "Industrial", "Retail"].map(type => {
-                          const value = type.toLowerCase();
-                          const isActive = propertyType === value;
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => setPropertyType(value)}
-                              className={cn(
-                                "flex-1 py-1.5 px-2 rounded-lg font-medium transition duration-200",
-                                isActive ? "bg-black text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
-                              )}
-                            >
-                              {type}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 pt-2">
-                       <h3 className="text-[16px] font-bold text-slate-900">Property Details</h3>
-                       <input 
-                         type="text" 
-                         placeholder="Total Area (sq ft)" 
-                         className="w-full px-4 py-3 rounded-xl border border-black bg-white shadow-sm placeholder:text-slate-400 text-[15px]" 
-                       />
-                       <input 
-                         type="text" 
-                         placeholder="Number of Units" 
-                         className="w-full px-4 py-3 rounded-xl border border-black bg-white shadow-sm placeholder:text-slate-400 text-[15px]" 
-                       />
-                    </div>
-                    
-                    <button type="button" className="w-full mt-2 border border-black rounded-xl py-8 flex flex-col items-center justify-center text-slate-500 hover:bg-slate-50 transition bg-white shadow-sm">
-                      <Camera className="w-8 h-8 text-slate-400 mb-2" strokeWidth={1.5} />
-                      <span className="font-semibold text-slate-800">Upload Photos</span>
-                      <p className="text-sm text-slate-500 mt-0.5">(Drag & Drop or Click)</p>
+                <div className="space-y-1.5">
+                  <label className="block text-[15px] font-medium text-slate-900">Property Name</label>
+                  <input 
+                    type="text" 
+                    value={propertyName}
+                    onChange={e => setPropertyName(e.target.value)}
+                    required
+                    placeholder="e.g., Sunrise Apartments"
+                    className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
+                  />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[15px] font-medium text-slate-900">Full Address</label>
+                    <button type="button" className="text-[13px] font-medium text-slate-500 flex items-center gap-1 hover:text-slate-900 transition">
+                      <MapPin className="w-3.5 h-3.5" /> Locate on Map
                     </button>
-                  </>
-                )}
-
-                {step === 2 && (
-                  <div className="space-y-5">
-                    <h3 className="text-[18px] font-bold text-slate-900">Contact & Management</h3>
-                    <p className="text-[15px] text-slate-600 mb-4">Who should tradespeople contact regarding this property?</p>
-                    
-                    <div className="space-y-1.5">
-                      <label className="block text-[15px] font-medium text-slate-900">Contact Name</label>
-                      <input 
-                        type="text" 
-                        value={contactName}
-                        onChange={e => setContactName(e.target.value)}
-                        required
-                        placeholder="e.g., Jane Doe"
-                        className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="block text-[15px] font-medium text-slate-900">Contact Phone</label>
-                      <input 
-                        type="text" 
-                        value={contactPhone}
-                        onChange={e => setContactPhone(e.target.value)}
-                        required
-                        placeholder="e.g., 07123 456789"
-                        className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
-                      />
-                    </div>
                   </div>
-                )}
+                  <input 
+                    type="text" 
+                    value={addressLine1}
+                    onChange={e => setAddressLine1(e.target.value)}
+                    required
+                    placeholder="Enter address"
+                    className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
+                  />
+                </div>
 
-                {step === 3 && (
-                  <div className="space-y-5">
-                    <h3 className="text-[18px] font-bold text-slate-900">Access & Instructions</h3>
-                    <p className="text-[15px] text-slate-600 mb-4">Provide any instructions for access or parking.</p>
-                    
-                    <div className="space-y-1.5">
-                      <label className="block text-[15px] font-medium text-slate-900">Access Instructions (Optional)</label>
-                      <textarea 
-                        value={accessInstructions}
-                        onChange={e => setAccessInstructions(e.target.value)}
-                        rows={4}
-                        placeholder="e.g., Lockbox code is 1234, or pick up keys from front desk..."
-                        className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
-                      />
-                    </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[15px] font-medium text-slate-900">Property Type</label>
+                  <div className="flex p-1 bg-white border border-black rounded-xl text-[14px]">
+                    {["Commercial", "Residential", "Industrial", "Retail"].map(type => {
+                      const value = type.toLowerCase();
+                      const isActive = propertyType === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setPropertyType(value)}
+                          className={cn(
+                            "flex-1 py-1.5 px-2 rounded-lg font-medium transition duration-200",
+                            isActive ? "bg-black text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          {type}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
 
+                <div className="space-y-3 pt-2">
+                   <h3 className="text-[16px] font-bold text-slate-900">Property Details</h3>
+                   <input 
+                     type="text" 
+                     placeholder="Total Area (sq ft)" 
+                     className="w-full px-4 py-3 rounded-xl border border-black bg-white shadow-sm placeholder:text-slate-400 text-[15px]" 
+                   />
+                   <input 
+                     type="text" 
+                     placeholder="Number of Units" 
+                     className="w-full px-4 py-3 rounded-xl border border-black bg-white shadow-sm placeholder:text-slate-400 text-[15px]" 
+                   />
+                </div>
+                
+                <button type="button" className="w-full mt-2 border border-black rounded-xl py-8 flex flex-col items-center justify-center text-slate-500 hover:bg-slate-50 transition bg-white shadow-sm">
+                  <Camera className="w-8 h-8 text-slate-400 mb-2" strokeWidth={1.5} />
+                  <span className="font-semibold text-slate-800">Upload Photos</span>
+                  <p className="text-sm text-slate-500 mt-0.5">(Drag & Drop or Click)</p>
+                </button>
               </form>
             </div>
 
@@ -420,9 +334,9 @@ export default function Portfolio() {
               <button 
                 type="submit" 
                 form="add-property-form"
-                className="flex-1 py-3.5 font-semibold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-full shadow-sm transition flex justify-center items-center gap-2"
+                className="flex-1 py-3.5 font-semibold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-full shadow-sm transition flex items-center justify-center gap-2"
               >
-                {step < 3 ? "Next Step" : "Add Property"}
+                Next Step
               </button>
             </div>
 

@@ -1699,7 +1699,7 @@ const libraries: any[] = ['places'];
     
     setIsUploadingBeforePhoto(true);
     try {
-      const files = Array.from(e.target.files);
+      const files = Array.from(e.target.files) as File[];
       const urls: string[] = [];
       
       for (const file of files) {

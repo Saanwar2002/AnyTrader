@@ -381,5 +381,32 @@ The prefix is determined by the user's primary registration role:
     *   *Refactor:* Shrunk the visual footprint of the "Driver Outside" indicator box by nearly 50% horizontally and vertically to comfortably fit the new quick tags without hiding crucial map visibility.
     *   *Outcome:* Passengers can now rapid-fire common conversational updates to the driver directly from the main view with a single tap.
 
+---
 
+## 📝 Phase 19: Business Sub-categories Expansion (In Progress)
+*   **The Mission:** Structure the business user environment into distinct, logic-driven subcategories that dynamically cater to different user profiles and needs.
+*   **To-Do List:**
+    *   [x] 19.0: Enhance `BusinessDashboard.tsx` to include 3 primary layout tabs: **Properties**, **Field Services**, and **Consultancy**.
+    *   [x] 19.0: Default the selected tab dynamically based on the user's primary category upon login/signup.
+    *   [x] 19.0: Establish the UI to switch between 'active' sub-category dashboards seamlessly.
+    *   [ ] **19.1: Properties Subcategory (Landlords, Estate Agents, Airbnb)**
+        *   [ ] Update schema & rules: Add `linkedPropertyId` to jobs. Ensure `Property` entity is fully secured.
+        *   [ ] Build Layout: Property Grid, individual Property details (Occupancy, related tasks).
+        *   [ ] Logic: "Add Property" modal, and "Dispatch Maintenance" (links directly to `PostJobWizard`).
+    *   [ ] **19.2: Field Services Subcategory (Mobile Teams, Fleet)**
+        *   [ ] Update schema & rules: Add `FieldAgent` and `DispatchRoute` schemas.
+        *   [ ] Build Layout: Team status list, dispatch queue, and daily scheduling timeline.
+        *   [ ] Logic: "Add Agent" and "Assign Job/Task" specific to off-site agents.
+    *   [ ] **19.3: Consultancy Subcategory (Virtual, Remote Advisors)**
+        *   [ ] Update schema & rules: Add `ConsultationSession` and `ClientCRM`.
+        *   [ ] Build Layout: Virtual appointments calendar, active client roster, earning stats.
+        *   [ ] Logic: "Book Appointment" flow, sync with calendar.
 
+## 📅 Phase 12: AI-Powered Trader Calendar + Smart Scheduling (In Progress)
+*   **The Mission:** Introduce a smart calendar system directly into the tradesperson persona. 
+*   **To-Do List:**
+    *   [x] 12.1: **Built-in Trader Calendar Foundation:** Created `TraderCalendar.tsx` and linked it directly to the root Navigation layout. Setup basic event ingestion from accepted quotes (`bidding_jobs`).
+    *   [x] 12.2: **AI Availability Engine:** Formulate routing heuristics and logic scoring to understand when a trader has time to execute a task based on previous tasks.
+    *   [x] 12.3: **AI Scheduling Assistant:** Build a widget overlay guiding the trader to inject matched gaps into their timeline.
+    *   [x] 12.4: **Enhanced Match Algorithm Integration:** Updated `instantMatchWorker.ts` algorithm to incorporate `smartScheduleFit` yielding up to +20 extra match points.
+    *   [x] 12.5: **External Calendar Sync:** Integration with Google Tasks/Apple Calendar via custom sync connections overlay.

@@ -276,6 +276,7 @@ export default function Layout() {
   const tradespersonNav = [
     { name: "Home", path: "/", icon: Home, isCta: false },
     { name: "Find Work", path: "/job-feed", icon: Search, isCta: false },
+    { name: "Calendar", path: "/trader/calendar", icon: Calendar, isCta: false },
     { name: "Hire Trades", path: "/find-trades", icon: HardHat, isCta: false },
     { name: "Quotes", path: "/my-quotes", icon: PoundSterling, isCta: false },
     { name: "Trade Jobs", path: "/trade-jobs", icon: Briefcase, isCta: false },

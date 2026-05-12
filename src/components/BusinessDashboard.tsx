@@ -15,6 +15,7 @@ import {
 import { Link } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { SEO } from "./SEO";
+import { PropertyManager } from "./PropertyManager";
 
 export default function BusinessDashboard() {
   const { user, profile, setIsTradeBotOpen } = useAuth();
@@ -22,6 +23,19 @@ export default function BusinessDashboard() {
   const [allJobs, setAllJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [recentQuotes, setRecentQuotes] = useState<any[]>([]);
+
+  const [activeTab, setActiveTab] = useState<"properties" | "field_services" | "consultancy">("properties");
+
+  useEffect(() => {
+    // Default the selected tab based on business category at load
+    if (profile?.businessCategory?.toLowerCase().includes("consult")) {
+      setActiveTab("consultancy");
+    } else if (profile?.businessCategory?.toLowerCase().includes("field")) {
+      setActiveTab("field_services");
+    } else {
+      setActiveTab("properties");
+    }
+  }, [profile]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -115,7 +129,47 @@ export default function BusinessDashboard() {
         </div>
       </div>
 
-      {/* Plan Status Banner */}
+      {/* Business Sub-Category Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide border-b border-slate-100">
+        {(["properties", "field_services", "consultancy"] as const).map((tab) => {
+          const isActive = activeTab === tab;
+          const displayNames = {
+            properties: "Properties",
+            field_services: "Field Services",
+            consultancy: "Consultancy"
+          };
+          
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "relative px-4 py-3 rounded-t-2xl font-bold text-sm transition-all whitespace-nowrap",
+                isActive 
+                  ? "text-blue-600 bg-blue-50/50" 
+                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+              )}
+            >
+              {displayNames[tab]}
+              {/* Optional Notifications Indicator for inactive tabs */}
+              {!isActive && tab === "field_services" && (
+                <span className="absolute top-2.5 right-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse ring-2 ring-white"></span>
+              )}
+              {isActive && (
+                <motion.div
+                  layoutId="activeBusinessTab"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Conditional Content Output Block */}
+      {activeTab === "properties" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* Plan Status Banner */}
       {!isSubscribed ? (
         <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-6 rounded-[32px] text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg shadow-orange-500/20">
           <div className="flex items-center gap-4">
@@ -238,6 +292,7 @@ export default function BusinessDashboard() {
       </div>
 
       {/* Active Portfolio Section */}
+      <PropertyManager />
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
@@ -327,6 +382,34 @@ export default function BusinessDashboard() {
           <Building2 className="w-64 h-64 -mr-12 -mb-12" />
         </div>
       </div>
+     </div>
+    )}
+
+      {/* Field Services Content */}
+      {activeTab === "field_services" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+           <div className="bg-white p-12 rounded-[40px] border border-slate-100 shadow-sm text-center">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Briefcase className="w-8 h-8 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Field Services</h2>
+              <p className="text-slate-500 max-w-md mx-auto">Manage your out-of-office teams, dispatches, and field schedules in one place. Comming soon in Phase 19.</p>
+           </div>
+        </div>
+      )}
+
+      {/* Consultancy Content */}
+      {activeTab === "consultancy" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+           <div className="bg-white p-12 rounded-[40px] border border-slate-100 shadow-sm text-center">
+              <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Users className="w-8 h-8 text-indigo-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Consultancy Services</h2>
+              <p className="text-slate-500 max-w-md mx-auto">Track virtual consultations, advisory bookings, and specialized project overviews. Coming soon in Phase 19.</p>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -224,6 +224,13 @@ service cloud.firestore {
       allow read: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid || isAdmin());
       allow write: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
     }
+    match /properties/{propertyId} {
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
     match /dispatches/{dispatchId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();

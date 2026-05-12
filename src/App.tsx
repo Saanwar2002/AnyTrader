@@ -24,6 +24,7 @@ import BusinessDashboard from "./components/BusinessDashboard";
 import JobFeed from "./components/JobFeed";
 import JobDetails from "./components/JobDetails";
 import JobTimeline from "./components/JobTimeline";
+import TraderCalendar from "./components/TraderCalendar";
 import Profile from "./components/Profile";
 import PublicProfile from "./components/PublicProfile";
 import Chat from "./components/Chat";
@@ -185,6 +186,7 @@ export default function App() {
                 <Route path="job-feed" element={<JobFeed />} />
                 <Route path="my-jobs" element={<MyJobs />} />
                 <Route path="trade-jobs" element={<TradeJobs />} />
+                <Route path="trader/calendar" element={<TraderCalendar />} />
                 <Route path="portfolio" element={<Portfolio />} />
                 <Route path="trader/banner-ads" element={<TradesBannerAdStudio />} />
                 <Route path="post-job" element={<PostJobWizard />} />
