@@ -60,7 +60,7 @@ const iconMap: Record<string, any> = {
 const libraries: any[] = ['places'];
 
 export default function PostJobWizard() {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const { categories } = useCategories();
   const location = useLocation();
   const navigate = useNavigate();
@@ -68,6 +68,7 @@ export default function PostJobWizard() {
   const targetTradespersonId = (location.state as any)?.targetTradespersonId;
   const targetTradespersonName = (location.state as any)?.targetTradespersonName;
   const targetTrades = (location.state as any)?.targetTrades;
+  const [isInitializing, setIsInitializing] = useState(!editJob);
   
   const JobReminder = () => {
     if (!formData.category && !formData.title) return null;
@@ -204,15 +205,30 @@ export default function PostJobWizard() {
   const [loadingAssets, setLoadingAssets] = useState(false);
   
   useEffect(() => {
+    if (editJob) return;
+    if (authLoading) return; // Wait for auth to be fully loaded
+
     if (profile?.subscriptionType === "business" && user) {
       setLoadingAssets(true);
-      getDocs(query(collection(db, "assets"), where("ownerId", "==", user.uid)))
+      getDocs(query(collection(db, "properties"), where("ownerId", "==", user.uid)))
         .then(snapshot => {
-          setUserAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          const assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setUserAssets(assets);
+          if (assets.length > 0) {
+            setStep(-0.5);
+          } else {
+            setStep(0);
+          }
         })
-        .finally(() => setLoadingAssets(false));
+        .finally(() => {
+          setLoadingAssets(false);
+          setIsInitializing(false);
+        });
+    } else {
+      setStep(0);
+      setIsInitializing(false);
     }
-  }, [user, profile]);
+  }, [user, profile, authLoading, editJob]);
   
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -400,8 +416,18 @@ export default function PostJobWizard() {
 
   const nextStep = () => setStep((s) => s + 1);
   const prevStep = () => {
-    if (step === 0) {
+    if (step === -0.5) {
       navigate(-1);
+    } else if (step === 0) {
+      if (profile?.subscriptionType === 'business' && userAssets.length > 0) {
+        setStep(-0.5);
+      } else {
+        navigate(-1);
+      }
+    } else if (step === 1) {
+      setStep(0);
+    } else if (step === 4) {
+      setStep(3); // skip 3.5
     } else {
       setStep((s) => s - 1);
     }
@@ -1331,7 +1357,20 @@ export default function PostJobWizard() {
         )}
 
         <AnimatePresence mode="wait">
-          {step === 0 && (
+          {isInitializing && (
+            <motion.div
+              key="initializing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-20 gap-4"
+            >
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0084a5]"></div>
+              <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Loading</p>
+            </motion.div>
+          )}
+
+          {!isInitializing && step === 0 && (
             <motion.div
               key="landing"
               initial={{ opacity: 0, y: 20 }}
@@ -1522,6 +1561,94 @@ export default function PostJobWizard() {
             </motion.div>
           )}
 
+          {!isInitializing && step === -0.5 && (
+            <motion.div
+              key="stepMinus05"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">Select Properties</h2>
+                <p className="text-slate-500 text-sm">Choose the properties from your portfolio for this job.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+                  {userAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      onClick={() => {
+                        const isSelected = formData.selectedAssets.some(a => a.id === asset.id);
+                        if (isSelected) {
+                          setFormData({ ...formData, selectedAssets: formData.selectedAssets.filter(a => a.id !== asset.id) });
+                        } else {
+                          setFormData({ ...formData, selectedAssets: [...formData.selectedAssets, asset] });
+                        }
+                      }}
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-xl border transition-all text-left",
+                        formData.selectedAssets.some(a => a.id === asset.id)
+                          ? "border-[#0084a5] bg-[#0084a5]/10 shadow-[0_0_15px_rgba(0,132,165,0.1)]"
+                          : "border-slate-200 bg-white hover:border-[#0084a5]/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                          formData.selectedAssets.some(a => a.id === asset.id) ? "bg-[#0084a5] text-white" : "bg-slate-100 text-slate-400"
+                        )}>
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{asset.name || asset.propertyName}</p>
+                          <p className="text-xs text-slate-500 line-clamp-1">
+                            {typeof asset.address === 'object' && asset.address !== null 
+                              ? [asset.address.line1, asset.address.city, asset.address.postcode].filter(Boolean).join(', ') 
+                              : (asset.address || asset.fullAddress)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={cn(
+                        "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
+                        formData.selectedAssets.some(a => a.id === asset.id)
+                          ? "border-[#0084a5] bg-[#0084a5] text-white"
+                          : "border-slate-300"
+                      )}>
+                        {formData.selectedAssets.some(a => a.id === asset.id) && <CheckCircle2 className="w-4 h-4" />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {formData.selectedAssets.length > 1 && (
+                  <div className="p-4 bg-[#0084a5]/10 rounded-xl border border-[#0084a5]/20 flex gap-3 items-start">
+                    <Info className="w-5 h-5 text-[#0084a5] shrink-0 mt-0.5" />
+                    <p className="text-sm text-[#0084a5]/80">
+                      Posting to <strong>{formData.selectedAssets.length}</strong> properties will count as <strong>{formData.selectedAssets.length}</strong> posts towards your allowance. You can manage the posts individually after they are created.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 flex flex-col gap-3">
+                <button
+                  onClick={() => setStep(0)}
+                  className={cn(
+                    "w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all",
+                    formData.selectedAssets.length > 0
+                      ? "bg-[#0084a5] text-white hover:bg-[#006e8a] shadow-lg shadow-[#0084a5]/20"
+                      : "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                  )}
+                >
+                  {formData.selectedAssets.length > 0 ? "Continue" : "Skip (Post without property)"}
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {step === 1 && (
             <motion.div
               key="step1"
@@ -1637,55 +1764,7 @@ export default function PostJobWizard() {
                 <p className="text-slate-500 text-sm">Be as descriptive as possible for a better estimate.</p>
               </div>
 
-              {/* Asset Selection for Business Users */}
-              {profile?.subscriptionType === "business" && userAssets.length > 0 && (
-                <div className="space-y-3">
-                  <label className="text-sm font-bold text-slate-700 block">Select Property(s) / Project (Optional)</label>
-                  <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-2 no-scrollbar">
-                    {userAssets.map((asset) => (
-                      <button
-                        key={asset.id}
-                        onClick={() => {
-                          const isSelected = formData.selectedAssets.some(a => a.id === asset.id);
-                          if (isSelected) {
-                            setFormData({ ...formData, selectedAssets: formData.selectedAssets.filter(a => a.id !== asset.id) });
-                          } else {
-                            setFormData({ ...formData, selectedAssets: [...formData.selectedAssets, asset] });
-                          }
-                        }}
-                        className={cn(
-                          "flex items-center justify-between p-3 rounded-xl border transition-all text-left",
-                          formData.selectedAssets.some(a => a.id === asset.id)
-                            ? "border-blue-600 bg-blue-50"
-                            : "border-slate-100 bg-white hover:border-slate-200"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center",
-                            formData.selectedAssets.some(a => a.id === asset.id) ? "bg-blue-600 text-white" : "bg-slate-50 text-slate-400"
-                          )}>
-                            <Building2 className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{asset.name}</p>
-                            <p className="text-[10px] text-slate-500">{asset.address}</p>
-                          </div>
-                        </div>
-                        {formData.selectedAssets.some(a => a.id === asset.id) && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-                      </button>
-                    ))}
-                  </div>
-                  {formData.selectedAssets.length > 1 && (
-                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 flex gap-2">
-                      <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-blue-700">
-                        Posting to <strong>{formData.selectedAssets.length}</strong> properties will count as <strong>{formData.selectedAssets.length}</strong> posts towards your allowance.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+
               <div className="space-y-4">
                 {formData.urgency === "emergency" && (
                   <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex gap-3">
