@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, handleFirestoreError, OperationType, collection, query, where, onSnapshot, addDoc, doc, deleteDoc, updateDoc } from "@/src/firebase";
-import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store, Users, FileText } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function Portfolio() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -16,6 +17,9 @@ export default function Portfolio() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   
+  const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
+  const [propertyJobs, setPropertyJobs] = useState<any[]>([]);
+
   // Form state
   const [propertyName, setPropertyName] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
@@ -40,6 +44,19 @@ export default function Portfolio() {
     
     return unsubscribe;
   }, [user]);
+
+  useEffect(() => {
+    if (!selectedProperty) return;
+    const q = query(collection(db, "jobs"), where("linkedPropertyId", "==", selectedProperty.id));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setPropertyJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      // It might fail if index is missing, handle gracefully
+      console.warn("Failed to fetch property jobs:", error);
+      setPropertyJobs([]);
+    });
+    return unsub;
+  }, [selectedProperty]);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,6 +146,93 @@ export default function Portfolio() {
 
   return (
     <div className="space-y-6">
+      <AnimatePresence>
+        {selectedProperty && (
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="fixed inset-0 z-[120] bg-slate-50 flex flex-col"
+          >
+            <div className="bg-white flex-1 flex flex-col h-full overflow-hidden w-full max-w-4xl mx-auto shadow-xl">
+              <div className="px-6 py-4 flex items-center justify-between border-b border-black bg-white shrink-0">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setSelectedProperty(null)} className="p-2 -ml-2 text-slate-900 hover:bg-slate-100 rounded-full transition">
+                    <ArrowLeft className="w-6 h-6" />
+                  </button>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">{selectedProperty.name || "Property Details"}</h2>
+                    <p className="text-sm font-medium text-slate-500">{selectedProperty.address?.line1}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <select 
+                    value={selectedProperty.occupancy || 'occupied'} 
+                    onChange={async (e) => {
+                       const v = e.target.value;
+                       await updateDoc(doc(db, "properties", selectedProperty.id), { occupancy: v });
+                       setSelectedProperty({ ...selectedProperty, occupancy: v });
+                    }}
+                    className="text-sm font-medium rounded-xl border border-black bg-white px-3 py-2 shadow-sm"
+                  >
+                    <option value="occupied">Occupied</option>
+                    <option value="vacant">Vacant</option>
+                  </select>
+                  <button 
+                    onClick={() => navigate("/post-job", { state: { linkedPropertyId: selectedProperty.id } })}
+                    className="px-4 py-2 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition flex shadow-sm border border-black items-center gap-2"
+                  >
+                    <Wrench className="w-4 h-4" /> Dispatch Maintenance
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                <div className="bg-white rounded-xl border border-black shadow-sm p-6 mb-6">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><FileText className="w-5 h-5 text-slate-400" /> Active Maintenance Tasks</h3>
+                  {propertyJobs.length === 0 ? (
+                    <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                      <p className="text-slate-500 font-medium">No active tasks for this property.</p>
+                      <p className="text-sm text-slate-400 mt-1">Click "Dispatch Maintenance" to create a new job.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {propertyJobs.map(job => (
+                        <div key={job.id} className="flex items-center justify-between p-4 border border-black rounded-xl hover:shadow-sm transition bg-white">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-900">{job.title || job.category}</span>
+                            <span className="text-sm font-medium text-slate-500 mt-0.5">Status: <span className="text-slate-700 uppercase tracking-widest text-[10px] bg-slate-100 px-1.5 py-0.5 rounded ml-1">{job.status}</span></span>
+                          </div>
+                          <Link to={`/admin/job/${job.id}`} className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-400 hover:text-slate-900">
+                            <ArrowLeft className="w-5 h-5 rotate-180" />
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {selectedProperty.contactName && (
+                  <div className="bg-white rounded-xl border border-black shadow-sm p-6">
+                     <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-slate-400" /> Management Contacts</h3>
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Point of Contact</p>
+                         <p className="font-semibold text-slate-900">{selectedProperty.contactName}</p>
+                       </div>
+                       <div>
+                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Phone Number</p>
+                         <p className="font-semibold text-slate-900">{selectedProperty.contactPhone}</p>
+                       </div>
+                     </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {!isAdding ? (
         <>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">
@@ -153,56 +257,53 @@ export default function Portfolio() {
           </div>
 
           <div className="pt-2 pb-6">
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {properties.length === 0 ? (
-                 <div className="text-center py-8 text-slate-500 text-sm bg-white rounded-3xl shadow-sm border border-slate-100">
+                 <div className="col-span-full text-center py-8 text-slate-500 text-sm bg-white rounded-xl shadow-sm border border-black">
                    No properties added yet. Click + to add your first property.
                  </div>
               ) : properties.map(property => (
-                <div key={property.id} className="flex items-stretch justify-between py-2 px-3 rounded-xl border border-black hover:bg-slate-50 transition group shadow-sm bg-white min-h-[72px]">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="text-blue-600/80 shrink-0">
+                <div key={property.id} className="flex relative flex-col justify-start py-4 px-4 rounded-xl border border-black hover:bg-slate-50 transition cursor-pointer group shadow-sm bg-white min-h-[100px]" onClick={() => setSelectedProperty(property)}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
                       {property.propertyType === "commercial" ? (
-                        <Briefcase className="w-5 h-5" strokeWidth={1.5} />
+                        <Briefcase className="w-5 h-5 text-blue-600" strokeWidth={1.5} />
                       ) : property.propertyType === "apartment" ? (
-                        <Building2 className="w-5 h-5" strokeWidth={1.5} />
+                        <Building2 className="w-5 h-5 text-blue-600" strokeWidth={1.5} />
                       ) : property.propertyType === "retail" ? (
-                        <Store className="w-5 h-5" strokeWidth={1.5} />
+                        <Store className="w-5 h-5 text-blue-600" strokeWidth={1.5} />
                       ) : (
-                        <Home className="w-5 h-5" strokeWidth={1.5} />
+                        <Home className="w-5 h-5 text-blue-600" strokeWidth={1.5} />
                       )}
                     </div>
-                    <div className="flex flex-col flex-1 min-w-0 justify-center py-1">
-                      <div className="flex items-center justify-between gap-2 w-full mb-1">
-                        <h3 className="font-semibold text-slate-900 text-[14px] leading-tight truncate">{property.name || "Unnamed Property"}</h3>
-                        <Link 
-                          to={`/my-jobs?propertyId=${property.id}`}
-                          className="text-[12px] text-blue-600 font-medium hover:text-blue-800 transition shrink-0"
-                        >
-                          History
-                        </Link>
+                    <div className="flex flex-col flex-1 min-w-0 pt-0.5">
+                      <div className="flex items-center flex-wrap gap-2 mb-1 pr-6">
+                        <h3 className="font-bold text-slate-900 text-base leading-tight truncate">{property.name || "Unnamed Property"}</h3>
+                        <span className={cn("text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border shrink-0", property.occupancy === 'vacant' ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200")}>
+                          {property.occupancy === 'vacant' ? 'Vacant' : 'Occupied'}
+                        </span>
                       </div>
                       {property.address?.line1 && (
-                        <div className="text-[11px] text-black font-bold w-full break-words whitespace-normal leading-snug pt-0.5">
+                        <div className="text-[12px] text-slate-500 font-medium break-words whitespace-normal leading-snug line-clamp-2 pr-6">
                           {property.address.line1}
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-center justify-start gap-1.5 ml-3 shrink-0 pt-0.5">
+                  <div className="absolute top-2 right-2 flex flex-col items-center justify-start gap-1">
                     <div className="relative">
                       {deletingId === property.id && (
-                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-black z-10">
+                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-black z-10" onClick={e => e.stopPropagation()}>
                           <p className="mb-2">Delete property?</p>
                           <div className="flex gap-2">
                             <button 
-                              onClick={() => setDeletingId(null)}
+                              onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
                               className="flex-1 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg transition"
                             >
                               No
                             </button>
                             <button 
-                              onClick={() => handleDeleteProperty(property.id)}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }}
                               className="flex-1 py-1 bg-red-500 hover:bg-red-600 rounded-lg transition"
                             >
                               Yes
@@ -212,18 +313,17 @@ export default function Portfolio() {
                         </div>
                       )}
                       <button 
-                        onClick={() => setDeletingId(property.id)}
-                        className="text-red-500 hover:text-red-700 transition p-1"
+                        onClick={(e) => { e.stopPropagation(); setDeletingId(property.id); }}
+                        className="text-red-500 hover:bg-red-50 rounded p-1.5 transition"
                       >
-                        <Trash2 className="w-[15px] h-[15px]" strokeWidth={1.5} />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                    
                     <button 
-                      onClick={() => handleEditClick(property)}
-                      className="text-blue-600 hover:text-blue-800 transition p-1"
+                      onClick={(e) => { e.stopPropagation(); handleEditClick(property); }}
+                      className="text-slate-400 hover:bg-slate-50 hover:text-blue-600 rounded p-1.5 transition"
                     >
-                      <Edit className="w-[15px] h-[15px]" strokeWidth={1.5} />
+                      <Edit className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

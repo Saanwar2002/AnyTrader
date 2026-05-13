@@ -1165,6 +1165,7 @@ export default function PostJobWizard() {
           quoteCount: editJob?.quoteCount || 0,
           assetId: asset?.id || null,
           assetName: asset?.name || null,
+          linkedPropertyId: asset?.id || (location.state as any)?.linkedPropertyId || null,
           isBoosted,
           boostTier,
           boostExpiresAt,
@@ -1604,9 +1605,13 @@ export default function PostJobWizard() {
                         <div>
                           <p className="font-bold text-slate-900">{asset.name || asset.propertyName}</p>
                           <p className="text-xs text-slate-500 line-clamp-1">
-                            {typeof asset.address === 'object' && asset.address !== null 
-                              ? [asset.address.line1, asset.address.city, asset.address.postcode].filter(Boolean).join(', ') 
-                              : (asset.address || asset.fullAddress)}
+                            {(() => {
+                              const addr = asset.address || asset.fullAddress;
+                              if (typeof addr === 'object' && addr !== null) {
+                                return [addr.line1, addr.city, addr.postcode].filter(Boolean).join(', ');
+                              }
+                              return String(addr || "Address pending");
+                            })()}
                           </p>
                         </div>
                       </div>
