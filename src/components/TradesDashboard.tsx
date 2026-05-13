@@ -56,42 +56,23 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
   const [confirmingIM, setConfirmingIM] = useState(false);
   const [showIMToast, setShowIMToast] = useState(false);
   const [isSavingIM, setIsSavingIM] = useState(false);
-  const [profitability, setProfitability] = useState<any>(null);
-  const [showProfitabilityInfo, setShowProfitabilityInfo] = useState(false);
-  const [showSavingsInfo, setShowSavingsInfo] = useState(true);
-  const [userInteractedWithSavings, setUserInteractedWithSavings] = useState(false);
-  const [activeInsightTab, setActiveInsightTab] = useState<"profitability" | "pulse" | "map">("profitability");
-  const [showInsights, setShowInsights] = useState(true);
-  const [userInteractedWithInsights, setUserInteractedWithInsights] = useState(false);
-  const [regionalDemand, setRegionalDemand] = useState<RegionalDemand[]>([]);
-  const [loadingDemand, setLoadingDemand] = useState(false);
+  const [showSavingsInfo, setShowSavingsInfo] = useState(false);
 
-  // Auto-dismiss the savings info section after 3 seconds, starting only after loading completes
+  // Auto-dismiss the savings info section after 5 seconds of being open
   useEffect(() => {
-    if (loading || userInteractedWithSavings) return;
-    
-    const timer = setTimeout(() => {
-      setShowSavingsInfo(false);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [loading, userInteractedWithSavings]);
+    if (showSavingsInfo) {
+      const timer = setTimeout(() => {
+        setShowSavingsInfo(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSavingsInfo]);
 
-  // Auto-dismiss the business insights section after 8 seconds
-  useEffect(() => {
-    if (loading || userInteractedWithInsights) return;
-    
-    const timer = setTimeout(() => {
-      setShowInsights(false);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, [loading, userInteractedWithInsights]);
-
-  // Auto-close business insights on scroll
+  // Auto-close savings info on scroll
   useEffect(() => {
     let lastY = 0;
     const handleScroll = () => {
       if (window.scrollY > 20) {
-        if (showInsights) setShowInsights(false);
         if (showSavingsInfo) setShowSavingsInfo(false);
       }
     };
@@ -99,7 +80,6 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
     const handleTouch = (e: TouchEvent) => {
       const currentY = e.touches[0].clientY;
       if (lastY > 0 && Math.abs(currentY - lastY) > 10) {
-        if (showInsights) setShowInsights(false);
         if (showSavingsInfo) setShowSavingsInfo(false);
       }
       lastY = currentY;
@@ -111,7 +91,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("touchmove", handleTouch);
     };
-  }, [showInsights, showSavingsInfo]);
+  }, [showSavingsInfo]);
 
   // Exclusive Job Offers State
   const [showExclusiveModal, setShowExclusiveModal] = useState(false);
@@ -157,6 +137,8 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
         setActiveIMAttempt(null);
         setActiveIMJob(null);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "instant_match_attempts");
     });
     return () => unsub();
   }, [user]);
@@ -266,269 +248,6 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
   };
 
   useEffect(() => {
-    if (user) {
-        fetch("/api/analytics/profitability", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uid: user.uid })
-        })
-        .then(res => res.json())
-        .then(data => setProfitability(data))
-        .catch(err => console.error("Profitability Fetch Error:", err));
-    }
-  }, [user]);
-
-  useEffect(() => {
-    const fetchDemand = async () => {
-      setLoadingDemand(true);
-      const data = await getRegionalDemandData(profile?.category);
-      setRegionalDemand(data);
-      setLoadingDemand(false);
-    };
-    if (user && profile) {
-      fetchDemand();
-    }
-  }, [user, profile]);
-
-  const BusinessInsightsWidget = () => {
-    if (!profitability) return null;
-
-    return (
-      <motion.div 
-        layout
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden"
-      >
-        <div className="bg-white px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <button 
-              onClick={() => {
-                setActiveInsightTab("profitability");
-                setUserInteractedWithInsights(true);
-              }}
-              className={cn(
-                "text-xs font-black uppercase tracking-widest pb-1 transition-all",
-                activeInsightTab === "profitability" ? "text-blue-600 border-b-2 border-blue-600" : "text-slate-400 hover:text-slate-900"
-              )}
-            >
-              Profitability
-            </button>
-            <button 
-              onClick={() => {
-                setActiveInsightTab("pulse");
-                setUserInteractedWithInsights(true);
-              }}
-              className={cn(
-                "text-xs font-black uppercase tracking-widest pb-1 transition-all flex items-center gap-1",
-                activeInsightTab === "pulse" ? "text-indigo-600 border-b-2 border-indigo-600" : "text-slate-400 hover:text-slate-900"
-              )}
-            >
-              Shop Pulse
-              {profitability.replenishmentAlert && <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" />}
-            </button>
-            <button 
-              onClick={() => {
-                setActiveInsightTab("map");
-                setUserInteractedWithInsights(true);
-              }}
-              className={cn(
-                "text-xs font-black uppercase tracking-widest pb-1 transition-all flex items-center gap-1",
-                activeInsightTab === "map" ? "text-rose-600 border-b-2 border-rose-600" : "text-slate-400 hover:text-slate-900"
-              )}
-            >
-              Demand Map
-              <div className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
-            </button>
-          </div>
-          <button 
-            onClick={() => {
-              setShowInsights(!showInsights);
-              setUserInteractedWithInsights(true);
-            }}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-          >
-            {showInsights ? <ChevronUp className="w-5 h-5 text-slate-500" /> : <ChevronDown className="w-5 h-5 text-slate-500" />}
-          </button>
-        </div>
-
-        <AnimatePresence mode="wait">
-          {showInsights && (
-            <motion.div
-              key={activeInsightTab}
-              initial={{ opacity: 0, x: activeInsightTab === "profitability" ? -10 : 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: activeInsightTab === "profitability" ? 10 : -10 }}
-              transition={{ duration: 0.2 }}
-              className="p-6"
-            >
-              {activeInsightTab === "profitability" ? (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-blue-600" />
-                      Profitability Insights
-                    </h3>
-                    <div className="text-right">
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Net Profit</p>
-                      <p className="text-xl font-black text-blue-600 leading-none">£{(profitability.netProfit || 0).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Total Revenue</p>
-                      <p className="text-lg font-black text-slate-900 leading-none">£{(profitability.totalRevenue || 0).toLocaleString()}</p>
-                    </div>
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Material Spend</p>
-                      <p className="text-lg font-black text-slate-900 leading-none">£{(profitability.totalSpend || 0).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-4 italic font-medium font-display">Daily average calculated from last 30 days of accepted quotes vs. shop orders.</p>
-                </div>
-              ) : activeInsightTab === "pulse" ? (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm shadow-indigo-100">
-                        <Activity className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-900 leading-none">Shop Vitality</h3>
-                        <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1">{profitability.pulse?.status || "Active"}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-2xl font-black text-slate-900 leading-none">{profitability.pulse?.score || 0}%</span>
-                    </div>
-                  </div>
-                  
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden mb-6">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${profitability.pulse?.score || 0}%` }}
-                      className="h-full bg-indigo-600 rounded-full"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="border border-slate-100 p-3 rounded-2xl bg-slate-50/50">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Total Orders</p>
-                      <p className="text-lg font-black text-slate-900 mt-1">{profitability.orderCount || 0}</p>
-                    </div>
-                    <div className="border border-slate-100 p-3 rounded-2xl bg-indigo-50/30">
-                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none">Trade Savings</p>
-                      <p className="text-lg font-black text-indigo-700 mt-1">£{(profitability.shopSavings || 0).toFixed(2)}</p>
-                    </div>
-                  </div>
-
-                  {profitability.replenishmentAlert && (
-                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center gap-4 mb-4">
-                      <Zap className="w-5 h-5 text-amber-600 shrink-0" />
-                      <p className="text-[10px] font-bold text-amber-900 leading-tight">Low Stock Alert: You've hit your shop spending threshold. Restock for exclusive Pro deals.</p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between text-[10px] font-bold text-indigo-600 border border-indigo-100 bg-indigo-50/5 px-4 py-2 rounded-xl">
-                    <span className="flex items-center gap-1">
-                      <Info className="w-3 h-3" />
-                      {profitability.pulse?.nextPerk || "Keep shopping to unlock perks"}
-                    </span>
-                    <button className="uppercase tracking-widest font-black text-indigo-700 hover:text-indigo-800 transition-colors">Shop Now</button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 shadow-sm shadow-rose-100">
-                        <MapPin className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-900 leading-none">Regional Demand</h3>
-                        <p className="text-[10px] text-rose-600 font-black uppercase tracking-widest mt-1">Real-time Hotspots</p>
-                      </div>
-                    </div>
-                    {loadingDemand && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
-                  </div>
-
-                  <div className="space-y-3">
-                    {regionalDemand.length === 0 && !loadingDemand ? (
-                      <div className="py-8 text-center bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
-                        <p className="text-xs font-medium text-slate-400">No active job clusters found in your area yet.</p>
-                      </div>
-                    ) : (
-                      regionalDemand.map((region, i) => (
-                        <div key={region.area} className="group relative bg-white border border-slate-100 rounded-2xl p-3 hover:border-rose-200 hover:shadow-md hover:shadow-rose-500/5 transition-all">
-                          <div className="absolute inset-y-0 left-0 w-1 bg-rose-500 rounded-l-full overflow-hidden">
-                            <motion.div 
-                              initial={{ height: 0 }}
-                              animate={{ height: `${region.intensity * 100}%` }}
-                              className="w-full bg-rose-600"
-                            />
-                          </div>
-                          <div className="pl-3 flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-black text-slate-900">{region.area}</span>
-                                <span className={cn(
-                                  "text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded",
-                                  region.intensity > 0.7 ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600"
-                                )}>
-                                  {region.intensity > 0.7 ? "High Heat" : "Steady"}
-                                </span>
-                              </div>
-                              <p className="text-[10px] font-medium text-slate-500 mt-1">
-                                <span className="text-rose-600 font-bold">{region.jobCount} jobs</span> in {region.topCategory}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Potential Value</p>
-                              <p className="text-sm font-black text-slate-900 mt-1">£{region.totalEstimate.toLocaleString()}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <p className="text-[8px] text-slate-400 mt-4 text-center font-bold uppercase tracking-widest">
-                    Clusters updated every 15 minutes based on active postings
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-        
-        {!showInsights && (
-          <div className="px-6 py-2 flex items-center justify-between bg-slate-50 border-t border-slate-100">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-                <BarChart3 className="w-3 h-3 text-blue-600" />
-                £{(profitability.netProfit || 0).toLocaleString()} Profit
-              </div>
-              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-                <Activity className="w-3 h-3 text-indigo-600" />
-                {profitability.pulse?.score || 0}% Vitality
-              </div>
-            </div>
-            <button 
-              onClick={() => {
-                setShowInsights(true);
-                setUserInteractedWithInsights(true);
-              }}
-              className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest transition-colors"
-            >
-              Expand Analytics
-            </button>
-          </div>
-        )}
-      </motion.div>
-    );
-  };
-
-  useEffect(() => {
     if (!user || !profile) return;
 
     // Fetch active quotes
@@ -621,12 +340,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
           );
         }
         
-        const snapshot = await new Promise<any>((resolve) => {
-          const unsub = onSnapshot(q, (snap) => {
-            unsub();
-            resolve(snap);
-          });
-        });
+        const snapshot = await getDocs(q);
 
         const jobs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
         if (jobs.length > 0) {
@@ -681,15 +395,6 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="space-y-4"
-      >
-        <BusinessInsightsWidget />
-      </motion.div>
-      
-      <motion.div 
-        layout
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
         className="bg-gradient-to-br from-[#1e3a5f] to-[#2c5282] py-3 px-4 rounded-3xl text-white shadow-xl relative overflow-hidden group"
       >
         {/* Decorative Elements */}
@@ -725,7 +430,6 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
             <button 
               onClick={() => {
                 setShowSavingsInfo(!showSavingsInfo);
-                setUserInteractedWithSavings(true);
               }}
               className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition-all shrink-0"
             >
@@ -791,30 +495,8 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
         </div>
       )}
 
-      {/* Greeting Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {!isSubView && (
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center text-white text-2xl font-bold overflow-hidden relative shadow-lg">
-              {profile?.photoURL ? (
-                <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                profile?.name?.charAt(0).toUpperCase()
-              )}
-              <BadgeOverlay 
-                badges={getTraderBadges(profile)} 
-                className="absolute -bottom-1 -left-1 -right-1 justify-center z-10 scale-75" 
-              />
-            </div>
-            <div>
-              <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">
-                Welcome back, <span className="text-primary">{profile?.name}</span>
-              </h1>
-              <p className="text-slate-500 font-medium mt-1">Manage your quotes and active projects.</p>
-            </div>
-          </div>
-        )}
-        <div className={cn("flex flex-col sm:items-end gap-2 w-full", !isSubView && "sm:w-auto")}>
+        <div className="flex flex-col sm:items-end gap-2 w-full">
           {/* Test Alert Toggle */}
           <button
             type="button"

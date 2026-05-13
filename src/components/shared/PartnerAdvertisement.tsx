@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ChevronRight, Zap, Briefcase, ShieldCheck, Star, Gift, ShieldAlert, Award, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../../firebase";
+import { db, handleFirestoreError, OperationType } from "../../firebase";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../AuthProvider";
 import { Link } from "react-router-dom";
@@ -71,6 +71,8 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
           setRotationSpeed(config.adRotationSpeedSeconds * 1000);
         }
       }
+    }, (error) => {
+      console.error("Platform Config Error:", error);
     });
 
     const unsubAdConfig = onSnapshot(doc(db, "platform_config", "advertising"), (docSnapshot) => {
@@ -78,6 +80,8 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
       if (docSnapshot.exists()) {
         setIsBannerAdsEnabled(docSnapshot.data().isBannerAdsEnabled !== false);
       }
+    }, (error) => {
+      console.error("Advertising Config Error:", error);
     });
 
     const unsubs = onSnapshot(query(collection(db, "advertisements")), (snapshot) => {
@@ -101,6 +105,8 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
         });
       
       setAdverts(activeAds.length ? activeAds : []);
+    }, (error) => {
+      console.error("Advertisements query error", error);
     });
     return () => {
       isMounted = false;

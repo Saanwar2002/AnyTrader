@@ -95,6 +95,8 @@ export default function PartnerPerks({ limit }: { limit?: number }) {
 
     const unsub = onSnapshot(q, (snap) => {
       setActiveCampaigns(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Campaigns listing error:", error);
     });
 
     return () => unsub();

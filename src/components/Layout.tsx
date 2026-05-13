@@ -50,7 +50,7 @@ export default function Layout() {
         setEmergencyContacts(data.emergencyContacts || []);
         setBlockedDrivers(data.blockedDrivers || []);
       }
-    });
+    }, (error) => console.error("User profile snapshot error", error));
   }, [user]);
 
   useEffect(() => {
@@ -166,7 +166,7 @@ export default function Layout() {
           setShowMaintenanceBanner(false);
         }
       }
-    });
+    }, (error) => console.error("Global config error:", error));
     return () => unsub();
   }, []);
 

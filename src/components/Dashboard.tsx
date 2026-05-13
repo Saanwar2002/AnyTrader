@@ -172,15 +172,6 @@ export default function Dashboard() {
         title="Homeowner Dashboard" 
         description="Manage your home improvement projects, view quotes, and hire tradespeople on AnyTrader."
       />
-      {/* Greeting Section */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-display font-black text-slate-900 tracking-tight">
-            Good day, <span className="text-primary">{profile?.name}</span> 👋
-          </h1>
-          <p className="text-slate-500 font-medium">Here's what's happening with your projects.</p>
-        </div>
-      </div>
 
       {/* Stats Bar */}
       <div className="grid grid-cols-3 gap-3">

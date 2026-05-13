@@ -25,7 +25,6 @@ service cloud.firestore {
     // Collection group rule for quotes
     match /{path=**}/quotes/{quoteId} {
       allow read, list: if isSignedIn() && (
-        resource == null || 
         resource.data.tradespersonId == request.auth.uid || 
         resource.data.homeownerId == request.auth.uid || 
         isAdmin()

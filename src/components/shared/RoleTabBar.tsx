@@ -116,7 +116,7 @@ export default function RoleTabBar() {
                   onClick={() => setActiveTab(tab)}
                   className={cn(
                     "flex-1 py-1 px-1 rounded-md font-medium transition duration-200 whitespace-nowrap text-center",
-                    isActive ? "bg-black text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                    isActive ? "bg-[#0066FF] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                   )}
                 >
                   {displayNames[tab]}
@@ -128,13 +128,13 @@ export default function RoleTabBar() {
       )}
 
       {activeRole === "business" && activeTab === "field_services" && (
-        <div className="flex justify-center w-full px-2 sm:px-0 pb-2 bg-surface">
-          <div className="flex bg-slate-50 border-x border-b border-black p-0.5 rounded-b-lg shadow-sm max-w-sm w-full mx-auto -mt-2 relative z-0">
+        <div className="flex justify-center w-full px-2 sm:px-0 pt-1 pb-2 bg-surface">
+          <div className="flex bg-blue-50/80 border border-blue-100 p-0.5 rounded-lg shadow-sm max-w-[70%] w-full mx-auto relative z-0 gap-1">
             <button
                onClick={() => setActiveSubTab("work_hub")}
                className={cn(
                  "py-1 px-3 rounded-md text-xs font-bold transition-all flex-1 text-center",
-                 activeSubTab === "work_hub" ? "bg-white shadow-sm border border-black text-slate-900" : "text-black hover:bg-slate-100"
+                 activeSubTab === "work_hub" ? "bg-[#0066FF] shadow-sm text-white" : "text-slate-600 hover:bg-blue-100"
                )}
             >
                Work Hub
@@ -143,7 +143,7 @@ export default function RoleTabBar() {
                onClick={() => setActiveSubTab("hire_b2b")}
                className={cn(
                  "py-1 px-3 rounded-md text-xs font-bold transition-all flex-1 text-center",
-                 activeSubTab === "hire_b2b" ? "bg-white shadow-sm border border-black text-slate-900" : "text-black hover:bg-slate-100"
+                 activeSubTab === "hire_b2b" ? "bg-[#0066FF] shadow-sm text-white" : "text-slate-600 hover:bg-blue-100"
                )}
             >
                Hire B2B Service
