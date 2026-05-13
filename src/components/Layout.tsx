@@ -50,7 +50,9 @@ export default function Layout() {
         setEmergencyContacts(data.emergencyContacts || []);
         setBlockedDrivers(data.blockedDrivers || []);
       }
-    }, (error) => console.error("User profile snapshot error", error));
+    }, (error) => {
+      console.error("Layout Snapshot Error (users):", error);
+    });
   }, [user]);
 
   useEffect(() => {
@@ -1078,8 +1080,12 @@ export default function Layout() {
       {/* Bottom Navigation (Mobile) */}
       {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && !location.pathname.startsWith('/profile') && (
         <nav className={cn(
-          "sm:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t pb-[env(safe-area-inset-bottom)] h-[calc(4.5rem+env(safe-area-inset-bottom))] flex items-center justify-between z-[100] transition-colors",
-          isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : "bg-white border-slate-200",
+          "sm:hidden fixed bottom-0 left-0 right-0 w-full backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t pb-[env(safe-area-inset-bottom)] h-[calc(4.5rem+env(safe-area-inset-bottom))] flex items-center justify-between z-[100] transition-colors duration-300",
+          isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : 
+            (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'properties') ? "bg-slate-100/95 border-slate-300" :
+            (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'field_services') ? "bg-blue-50/95 border-blue-200" :
+            (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'consultancy') ? "bg-purple-50/95 border-purple-200" :
+            "bg-white/95 border-slate-200",
           activePortal !== "anytrader" ? "pl-[3.5rem] pr-2" : "px-2"
         )}>
           {navItems.map((item, idx) => {
@@ -1101,7 +1107,7 @@ export default function Layout() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 transition-colors relative flex-1 min-w-0 mx-1 h-[60px] rounded-[16px] z-10",
                   isActive 
-                    ? (isDriverTerminal ? "text-white font-black" : "text-slate-900 font-black") 
+                    ? "text-white font-black"
                     : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-900 font-bold"),
                   item.isCta && !isActive && "text-blue-600"
                 )}
@@ -1119,7 +1125,16 @@ export default function Layout() {
                 {isActive && (
                    <motion.div 
                      layoutId="navActiveBg"
-                     className={cn("absolute inset-0 rounded-[16px] -z-10", isDriverTerminal ? "bg-white/10" : "bg-blue-100/80 border border-blue-500")}
+                     className={cn("absolute inset-0 rounded-[16px] -z-10 shadow-sm", 
+                        isDriverTerminal ? "bg-white/10" : 
+                        activePortal === "anyroller" ? "bg-[#0055DD]" :
+                        activeRole === 'business' ? (
+                          activeTab === 'properties' ? "bg-black" :
+                          activeTab === 'field_services' ? "bg-[#0055DD]" :
+                          activeTab === 'consultancy' ? "bg-purple-700" :
+                          "bg-[#0055DD]"
+                        ) : "bg-[#0055DD]"
+                     )}
                      transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                    />
                 )}

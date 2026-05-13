@@ -1284,7 +1284,7 @@ export default function DriverTerminal() {
   const lastSeenChatCountRef = useRef(0);
   const [showJobDetails, setShowJobDetails] = useState(false);
   const [quickMessageCooldown, setQuickMessageCooldown] = useState(0);
-  const [isCardCollapsed, setIsCardCollapsed] = useState(false);
+  const [isCardCollapsed, setIsCardCollapsed] = useState(true);
   const cardCollapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -1307,10 +1307,9 @@ export default function DriverTerminal() {
 
   useEffect(() => {
     if (['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) {
-      setIsCardCollapsed(false);
-      resetCardCollapseTimer();
+      // Intentionally removed auto-open here
     } else {
-      setIsCardCollapsed(false);
+      setIsCardCollapsed(true);
       if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
     }
     return () => {

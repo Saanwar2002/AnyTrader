@@ -18,8 +18,9 @@ export default function Onboarding() {
   const { categories } = useCategories();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
-  const [role, setRole] = useState<"homeowner" | "tradesperson" | "admin" | "fleet_driver" | null>(null);
-  const [homeownerType, setHomeownerType] = useState<"homeowner" | "business" | null>(null);
+  const [role, setRole] = useState<"homeowner" | "business" | "admin" | "fleet_driver" | null>(null);
+  const [businessLayer, setBusinessLayer] = useState<"properties" | "field_services" | "consultancy" | null>(null);
+  const [homeownerType, setHomeownerType] = useState<"homeowner" | "business" | null>(null); // Keep temporarily to not break types
   const [businessCategory, setBusinessCategory] = useState<string | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
   const [vehicleCategories, setVehicleCategories] = useState<string[]>(['standard']);
@@ -185,7 +186,7 @@ export default function Onboarding() {
     setError(null);
     const isTestAdmin = sessionStorage.getItem("is_test_admin") === "true";
 
-    const isBusiness = role === "tradesperson" || (role === "homeowner" && homeownerType === "business");
+    const isBusiness = role === "business";
 
     // Temporarily disabled for development testing
     if (false && isBusiness && !isTestAdmin && !confirmationResult && !user.phoneNumber && !bypassPhoneAuth) {
@@ -245,7 +246,7 @@ export default function Onboarding() {
     }
 
     try {
-      const finalRole = isTestAdmin ? "admin" : role;
+      const finalRole = isTestAdmin ? "admin" : (role === "business" && businessLayer === "field_services" ? "tradesperson" : role);
       const finalName = finalRole === "admin" && !name ? "System Admin" : name;
       const finalPhone = finalRole === "admin" && !phone ? "N/A" : cleanPhone;
       
@@ -311,7 +312,7 @@ export default function Onboarding() {
       const deviceId = btoa(navigator.userAgent + navigator.language + screen.width + screen.height);
       
       // Generate Member ID
-      const { memberId, memberSequence } = await generateMemberId(isBusiness ? (role === "tradesperson" ? "tradesperson" : "business") : "homeowner");
+      const { memberId, memberSequence } = await generateMemberId(isBusiness ? (role === "business" && businessLayer === "field_services" ? "tradesperson" : "business") : "homeowner");
 
       // Fraud Detection: Check for existing accounts with same Device ID or IP
       let accountFlags: string[] = [];
@@ -342,13 +343,14 @@ export default function Onboarding() {
         name: finalName,
         phone: finalPhone,
         role: finalRole,
+        businessLayer: role === "business" ? businessLayer : null,
         tierId: selectedTier || (
           role === "homeowner" 
             ? (homeownerType === "business" ? "Business Professional" : "Standard Homeowner")
             : (platformConfig?.feeTiers?.[0]?.name || "Free Explorer")
         ),
-        subscriptionType: role === "homeowner" ? homeownerType : null,
-        businessCategory: homeownerType === "business" ? businessCategory : null,
+        subscriptionType: role === "business" && businessLayer === "properties" ? "business" : null,
+        businessCategory: role === "business" ? businessCategory : null,
         permissions: finalPermissions,
         deviceId,
         ipAddress: detectedIp,
@@ -497,11 +499,11 @@ export default function Onboarding() {
               <div className="space-y-4 pt-10">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">I am a...</h2>
                 
+                
                 <div className="grid grid-cols-1 gap-4">
                   <button
                     onClick={() => {
                       setRole("homeowner");
-                      if (invitationId) setHomeownerType("homeowner");
                     }}
                     className={cn(
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
@@ -530,45 +532,42 @@ export default function Onboarding() {
 
                   <button
                     onClick={() => {
-                      setRole("tradesperson");
-                      setHomeownerType(null);
+                      setRole("business");
+                      setBusinessLayer(null);
                       setBusinessCategory(null);
                       setSelectedTier(null);
                     }}
                     className={cn(
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
-                      role === "tradesperson" 
+                      role === "business" 
                         ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
                         : "border-slate-100 bg-white hover:border-slate-200"
                     )}
                   >
                     <div className={cn(
                       "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                      role === "tradesperson" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                      role === "business" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
                     )}>
-                      <Briefcase className="w-7 h-7" />
+                      <Building2 className="w-7 h-7" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="font-black text-lg text-slate-900 block tracking-tight">Tradesperson</span>
-                      <span className="text-sm text-slate-500 block leading-tight">Browse local jobs, submit quotes, grow your business</span>
+                      <span className="font-black text-lg text-slate-900 block tracking-tight">Business</span>
+                      <span className="text-sm text-slate-500 block leading-tight">Properties, Services, and Consultancies</span>
                     </div>
                     <div className={cn(
                       "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "tradesperson" ? "border-orange-500" : "border-slate-200"
+                      role === "business" ? "border-orange-500" : "border-slate-200"
                     )}>
-                      {role === "tradesperson" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                      {role === "business" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                     </div>
                   </button>
 
                   <button
                     onClick={() => {
                       setRole("fleet_driver");
-                      setHomeownerType(null);
+                      setBusinessLayer(null);
                       setBusinessCategory(null);
                       setSelectedTier(null);
-                      // Force set trades so they can go to verification
-                      setSelectedTrades(["Transport & Rides"]);
-                      setSelectedSubcategories(["AnyTrader Rides"]);
                     }}
                     className={cn(
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
@@ -598,7 +597,7 @@ export default function Onboarding() {
                   <button
                     onClick={() => {
                       setRole("admin");
-                      setHomeownerType(null);
+                      setBusinessLayer(null);
                       setBusinessCategory(null);
                       setSelectedTier(null);
                     }}
@@ -627,43 +626,10 @@ export default function Onboarding() {
                     </div>
                   </button>
                 </div>
+
               </div>
-
-              {/* Homeowner Sub-selection (Individual vs Business) */}
-              {role === "homeowner" && !invitationId && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="space-y-4 pt-4 border-t border-slate-100"
-                >
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Select Account Type</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => setHomeownerType("homeowner")}
-                      className={cn(
-                        "p-4 rounded-2xl border-2 text-center transition-all",
-                        homeownerType === "homeowner" ? "border-primary bg-primary/5 text-primary" : "border-slate-100 text-slate-500 hover:border-slate-200"
-                      )}
-                    >
-                      <User className="w-5 h-5 mx-auto mb-2" />
-                      <span className="text-xs font-black">Individual</span>
-                    </button>
-                    <button
-                      onClick={() => setHomeownerType("business")}
-                      className={cn(
-                        "p-4 rounded-2xl border-2 text-center transition-all",
-                        homeownerType === "business" ? "border-primary bg-primary/5 text-primary" : "border-slate-100 text-slate-500 hover:border-slate-200"
-                      )}
-                    >
-                      <Building2 className="w-5 h-5 mx-auto mb-2" />
-                      <span className="text-xs font-black">Business</span>
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-
               {/* Personal Info Fields */}
-              {(role === "tradesperson" || role === "fleet_driver" || (role === "homeowner" && homeownerType)) && (
+              {(role === "business" || role === "fleet_driver" || role === "homeowner") && (
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -819,12 +785,11 @@ export default function Onboarding() {
                     // In beta mode, skip complex setup and go straight to submission
                     handleSubmit();
                   } else {
-                    if (role === "tradesperson") {
-                      toast.info("Select one or more categories and subcategories!", { duration: 5000 });
-                      setStep(2);
+                    if (role === "business") {
+                      setStep(1.5);
+                    } else {
+                      handleSubmit();
                     }
-                    else if (role === "homeowner" && homeownerType === "business") setStep(2); // Business homeowner also needs to select category/tier
-                    else handleSubmit();
                   }
                 }}
                 disabled={
@@ -840,7 +805,7 @@ export default function Onboarding() {
                   <Loader2 className="w-6 h-6 animate-spin" />
                 ) : (
                   <>
-                    {role === "tradesperson" || role === "fleet_driver" || (role === "homeowner" && homeownerType === "business") ? "Continue" : "Complete Setup"}
+                    {role === "business" || role === "fleet_driver" ? "Continue" : "Complete Setup"}
                     <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
@@ -848,8 +813,122 @@ export default function Onboarding() {
             </div>
           )}
 
+
+          {/* Step 1.5: Business Layer Selection */}
+          {step === 1.5 && role === "business" && (
+            <div className="space-y-8">
+              <div 
+                onClick={() => setStep(1)}
+                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2.5 z-[60] cursor-pointer bg-white rounded-2xl shadow hover:shadow-md transition-all group border border-slate-200"
+              >
+                  <ChevronLeft className="w-8 h-8 group-hover:-translate-x-0.5 transition-transform" />
+              </div>
+              <div className="text-center space-y-2 pt-10">
+                <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">
+                  Select Business Type
+                </h1>
+                <p className="text-slate-500 font-medium text-sm">
+                  Choose how you will use the platform.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <button
+                  onClick={() => {
+                     setBusinessLayer('properties');
+                     setStep(2);
+                  }}
+                  className={cn(
+                    "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
+                    businessLayer === 'properties' 
+                      ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
+                      : "border-slate-100 bg-white hover:border-slate-200"
+                  )}
+                >
+                  <div className={cn(
+                    "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
+                    businessLayer === 'properties' ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                  )}>
+                    <Building2 className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-black text-lg text-slate-900 block tracking-tight">Property & Asset Management</span>
+                    <span className="text-sm text-slate-500 block leading-tight">Landlords, agents, fleet managers</span>
+                  </div>
+                  <div className={cn(
+                    "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                    businessLayer === 'properties' ? "border-orange-500" : "border-slate-200"
+                  )}>
+                    {businessLayer === 'properties' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                     setBusinessLayer('field_services');
+                     setStep(2);
+                  }}
+                  className={cn(
+                    "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
+                    businessLayer === 'field_services' 
+                      ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
+                      : "border-slate-100 bg-white hover:border-slate-200"
+                  )}
+                >
+                  <div className={cn(
+                    "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
+                    businessLayer === 'field_services' ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                  )}>
+                    <Briefcase className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-black text-lg text-slate-900 block tracking-tight">Trade & Field Services</span>
+                    <span className="text-sm text-slate-500 block leading-tight">Plumbers, electricians, cleaners</span>
+                  </div>
+                  <div className={cn(
+                    "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                    businessLayer === 'field_services' ? "border-orange-500" : "border-slate-200"
+                  )}>
+                    {businessLayer === 'field_services' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                     setBusinessLayer('consultancy');
+                     setStep(2);
+                  }}
+                  className={cn(
+                    "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
+                    businessLayer === 'consultancy' 
+                      ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
+                      : "border-slate-100 bg-white hover:border-slate-200"
+                  )}
+                >
+                  <div className={cn(
+                    "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
+                    businessLayer === 'consultancy' ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                  )}>
+                    <Award className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-black text-lg text-slate-900 block tracking-tight">Professional & Consultancy</span>
+                    <span className="text-sm text-slate-500 block leading-tight">Tutors, accountants, event planners</span>
+                  </div>
+                  <div className={cn(
+                    "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                    businessLayer === 'consultancy' ? "border-orange-500" : "border-slate-200"
+                  )}>
+                    {businessLayer === 'consultancy' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                  </div>
+                </button>
+              </div>
+
+            </div>
+          )}
+
           {/* Step 2: Tradesperson - Select Trades */}
-          {step === 2 && role === "tradesperson" && (
+          {step === 2 && role === "business" && (businessLayer === "field_services" || businessLayer === "consultancy") && (
             <div className="space-y-8">
               <div className="text-center space-y-2">
                 <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">
@@ -961,7 +1040,7 @@ export default function Onboarding() {
           )}
 
           {/* Step 2: Business Homeowner - Category Setup */}
-          {step === 2 && role === "homeowner" && homeownerType === "business" && (
+          {step === 2 && role === "business" && businessLayer === "properties" && (
             <div className="space-y-8">
               <div className="text-center space-y-2">
                 <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">

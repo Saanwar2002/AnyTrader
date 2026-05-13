@@ -411,3 +411,4 @@ The prefix is determined by the user's primary registration role:
     *   [x] 12.3: **AI Scheduling Assistant:** Build a widget overlay guiding the trader to inject matched gaps into their timeline.
     *   [x] 12.4: **Enhanced Match Algorithm Integration:** Updated `instantMatchWorker.ts` algorithm to incorporate `smartScheduleFit` yielding up to +20 extra match points.
     *   [x] 12.5: **External Calendar Sync:** Integration with Google Tasks/Apple Calendar via custom sync connections overlay.
+- 2026-05-13: Onboarding updated: Replaced Tradesperson and Homeowner Business with unified Business role (Step 1.5). Handled Property, Field Services, and Consultancy layers mappings.
