@@ -49,6 +49,7 @@ import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { useBusinessTab } from "@/src/store/businessTabStore";
 import { toast } from "sonner";
 
 import { getInstantMatchCopy } from "@/src/lib/boosts";
@@ -68,6 +69,17 @@ export default function PostJobWizard() {
   const targetTradespersonId = (location.state as any)?.targetTradespersonId;
   const targetTradespersonName = (location.state as any)?.targetTradespersonName;
   const targetTrades = (location.state as any)?.targetTrades;
+  
+  // Backwards compatibility for single property
+  const legacyPropertyId = (location.state as any)?.linkedPropertyId;
+  const legacyPropertyName = (location.state as any)?.linkedPropertyName;
+  
+  const linkedProperties = (location.state as any)?.linkedProperties || (
+    legacyPropertyId ? [{ id: legacyPropertyId, name: legacyPropertyName }] : []
+  );
+  
+  const isB2B = (location.state as any)?.isB2B;
+  const { activeTab } = useBusinessTab();
   const [isInitializing, setIsInitializing] = useState(!editJob);
   
   const JobReminder = () => {
@@ -214,8 +226,14 @@ export default function PostJobWizard() {
         .then(snapshot => {
           const assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setUserAssets(assets);
-          if (assets.length > 0) {
+          if (assets.length > 0 && (!linkedProperties || linkedProperties.length === 0)) {
             setStep(-0.5);
+          } else if (linkedProperties && linkedProperties.length > 0) {
+            const preselectedAssets = assets.filter(a => linkedProperties.some((lp: any) => lp.id === a.id));
+            if (preselectedAssets.length > 0) {
+              setFormData(prev => ({ ...prev, selectedAssets: preselectedAssets }));
+            }
+            setStep(0);
           } else {
             setStep(0);
           }
@@ -1316,6 +1334,24 @@ export default function PostJobWizard() {
         </div>
       )}
 
+      {/* Linked Project/Properties Indicator */}
+      {linkedProperties && linkedProperties.length > 0 && (
+        <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between text-xs font-bold">
+          <div className="flex items-center gap-2 overflow-hidden mr-4">
+            <Building2 className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              Posting for: {linkedProperties.map((p: any) => p.name).join(", ")}
+            </span>
+          </div>
+          <button 
+            onClick={() => navigate(location.pathname, { state: { ...location.state, linkedProperties: null, linkedPropertyId: null, linkedPropertyName: null, isB2B: null } })}
+            className="hover:bg-white/10 p-1 rounded transition-colors shrink-0"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-30">
         <div className="flex items-center justify-between p-3 min-h-[48px]">
@@ -1571,8 +1607,8 @@ export default function PostJobWizard() {
               className="space-y-4"
             >
               <div className="space-y-1">
-                <h2 className="text-xl font-bold text-slate-900">Select Properties</h2>
-                <p className="text-slate-500 text-sm">Choose the properties from your portfolio for this job.</p>
+                <h2 className="text-xl font-bold text-slate-900">{isB2B || activeTab === 'field_services' ? "Select Projects" : "Select Properties"}</h2>
+                <p className="text-slate-500 text-sm">{isB2B || activeTab === 'field_services' ? "Choose the projects from your portfolio for this request." : "Choose the properties from your portfolio for this job."}</p>
               </div>
 
               <div className="space-y-3">
@@ -1589,39 +1625,34 @@ export default function PostJobWizard() {
                         }
                       }}
                       className={cn(
-                        "flex items-center justify-between p-4 rounded-xl border transition-all text-left",
+                        "flex items-center justify-between p-3 rounded-xl border border-black bg-white hover:bg-slate-50 transition-all text-left text-slate-900",
                         formData.selectedAssets.some(a => a.id === asset.id)
-                          ? "border-[#0084a5] bg-[#0084a5]/10 shadow-[0_0_15px_rgba(0,132,165,0.1)]"
-                          : "border-slate-200 bg-white hover:border-[#0084a5]/50"
+                          ? "ring-1 ring-black shadow-sm"
+                          : ""
                       )}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
-                          formData.selectedAssets.some(a => a.id === asset.id) ? "bg-[#0084a5] text-white" : "bg-slate-100 text-slate-400"
-                        )}>
-                          <Building2 className="w-5 h-5" />
+                      <div className="flex items-center gap-3">
+                        <div className="shrink-0 text-slate-700">
+                          <Building2 className="w-5 h-5" strokeWidth={1.5} />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{asset.name || asset.propertyName}</p>
-                          <p className="text-xs text-slate-500 line-clamp-1">
-                            {(() => {
-                              const addr = asset.address || asset.fullAddress;
-                              if (typeof addr === 'object' && addr !== null) {
-                                return [addr.line1, addr.city, addr.postcode].filter(Boolean).join(', ');
-                              }
-                              return String(addr || "Address pending");
-                            })()}
+                          <p className="font-bold text-[14px] text-black leading-tight">
+                            {asset.name || asset.propertyName || asset.address?.line1 || "Unnamed Project"}
                           </p>
+                          {(asset.name || asset.propertyName) && asset.address?.line1 && (
+                            <p className="font-bold text-[13px] text-black mt-0.5">
+                              {asset.address.line1}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className={cn(
-                        "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
+                        "w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0",
                         formData.selectedAssets.some(a => a.id === asset.id)
-                          ? "border-[#0084a5] bg-[#0084a5] text-white"
+                          ? "border-black bg-black"
                           : "border-slate-300"
                       )}>
-                        {formData.selectedAssets.some(a => a.id === asset.id) && <CheckCircle2 className="w-4 h-4" />}
+                        {formData.selectedAssets.some(a => a.id === asset.id) && <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />}
                       </div>
                     </button>
                   ))}
@@ -1631,7 +1662,7 @@ export default function PostJobWizard() {
                   <div className="p-4 bg-[#0084a5]/10 rounded-xl border border-[#0084a5]/20 flex gap-3 items-start">
                     <Info className="w-5 h-5 text-[#0084a5] shrink-0 mt-0.5" />
                     <p className="text-sm text-[#0084a5]/80">
-                      Posting to <strong>{formData.selectedAssets.length}</strong> properties will count as <strong>{formData.selectedAssets.length}</strong> posts towards your allowance. You can manage the posts individually after they are created.
+                      Posting to <strong>{formData.selectedAssets.length}</strong> {isB2B || activeTab === 'field_services' ? 'projects' : 'properties'} will count as <strong>{formData.selectedAssets.length}</strong> posts towards your allowance. You can manage the posts individually after they are created.
                     </p>
                   </div>
                 )}
@@ -1647,7 +1678,7 @@ export default function PostJobWizard() {
                       : "bg-slate-200 text-slate-500 hover:bg-slate-300"
                   )}
                 >
-                  {formData.selectedAssets.length > 0 ? "Continue" : "Skip (Post without property)"}
+                  {formData.selectedAssets.length > 0 ? "Continue" : `Skip (Post without ${isB2B || activeTab === 'field_services' ? 'project' : 'property'})`}
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>

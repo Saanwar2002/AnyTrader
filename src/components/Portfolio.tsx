@@ -155,17 +155,17 @@ export default function Portfolio() {
             className="fixed inset-0 z-[120] bg-slate-50 flex flex-col"
           >
             <div className="bg-white flex-1 flex flex-col h-full overflow-hidden w-full max-w-4xl mx-auto shadow-xl">
-              <div className="px-6 py-4 flex items-center justify-between border-b border-black bg-white shrink-0">
-                <div className="flex items-center gap-4">
-                  <button onClick={() => setSelectedProperty(null)} className="p-2 -ml-2 text-slate-900 hover:bg-slate-100 rounded-full transition">
+              <div className="px-4 py-4 flex flex-col md:flex-row md:items-center justify-between border-b border-black bg-white shrink-0 gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <button onClick={() => setSelectedProperty(null)} className="p-2 -ml-2 text-slate-900 hover:bg-slate-100 rounded-full transition shrink-0 mt-[-4px]">
                     <ArrowLeft className="w-6 h-6" />
                   </button>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">{selectedProperty.name || "Property Details"}</h2>
-                    <p className="text-sm font-medium text-slate-500">{selectedProperty.address?.line1}</p>
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-bold text-slate-900 truncate">{selectedProperty.name || "Property Details"}</h2>
+                    <p className="text-sm font-medium text-black truncate">{selectedProperty.address?.line1}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 self-stretch md:self-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar shrink-0">
                   <select 
                     value={selectedProperty.occupancy || 'occupied'} 
                     onChange={async (e) => {
@@ -173,14 +173,14 @@ export default function Portfolio() {
                        await updateDoc(doc(db, "properties", selectedProperty.id), { occupancy: v });
                        setSelectedProperty({ ...selectedProperty, occupancy: v });
                     }}
-                    className="text-sm font-medium rounded-xl border border-black bg-white px-3 py-2 shadow-sm"
+                    className="text-sm font-medium rounded-xl border border-black bg-white px-3 py-2 shadow-sm shrink-0"
                   >
                     <option value="occupied">Occupied</option>
                     <option value="vacant">Vacant</option>
                   </select>
                   <button 
                     onClick={() => navigate("/post-job", { state: { linkedPropertyId: selectedProperty.id } })}
-                    className="px-4 py-2 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition flex shadow-sm border border-black items-center gap-2"
+                    className="px-4 py-2 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition flex shadow-sm border border-black items-center gap-2 shrink-0 whitespace-nowrap"
                   >
                     <Wrench className="w-4 h-4" /> Dispatch Maintenance
                   </button>
@@ -263,7 +263,7 @@ export default function Portfolio() {
                    No properties added yet. Click + to add your first property.
                  </div>
               ) : properties.map(property => (
-                <div key={property.id} className="flex relative flex-col justify-start py-4 px-4 rounded-xl border border-black hover:bg-slate-50 transition cursor-pointer group shadow-sm bg-white min-h-[100px]" onClick={() => setSelectedProperty(property)}>
+                <div key={property.id} className="flex relative flex-col justify-start p-3 rounded-xl border border-black hover:bg-slate-50 transition cursor-pointer group shadow-sm bg-white" onClick={() => setSelectedProperty(property)}>
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
                       {property.propertyType === "commercial" ? (
@@ -284,7 +284,7 @@ export default function Portfolio() {
                         </span>
                       </div>
                       {property.address?.line1 && (
-                        <div className="text-[12px] text-slate-500 font-medium break-words whitespace-normal leading-snug line-clamp-2 pr-6">
+                        <div className="text-[12px] text-black font-medium break-words whitespace-normal leading-snug line-clamp-2 pr-6">
                           {property.address.line1}
                         </div>
                       )}

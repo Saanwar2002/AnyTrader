@@ -26,6 +26,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, isAnonymous, isTradeBotOpen, setIsTradeBotOpen } = useAuth();
+  const { activeTab, activeSubTab } = useBusinessTab();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadTypes, setUnreadTypes] = useState<Set<string>>(new Set());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -321,6 +322,15 @@ export default function Layout() {
     { name: "Menu", path: "/profile", icon: Menu, isCta: false },
   ];
 
+  const businessWorkHubNav = [
+    { name: "Home", path: "/", icon: Home, isCta: false },
+    { name: "Find Work", path: "/job-feed", icon: Search, isCta: false },
+    { name: "Calendar", path: "/trader/calendar", icon: Calendar, isCta: false },
+    { name: "Quotes", path: "/my-quotes", icon: PoundSterling, isCta: false },
+    { name: "Trade Jobs", path: "/trade-jobs", icon: Briefcase, isCta: false },
+    { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+  ];
+
   let navItems;
   if (activeRole === "admin") {
     navItems = adminNav;
@@ -330,7 +340,11 @@ export default function Layout() {
     navItems = activeRole === "driver" ? driverNav : passengerNav;
   } else {
     if (activeRole === "business") {
-      navItems = businessNav;
+      if (activeTab === "field_services" && activeSubTab === "work_hub") {
+        navItems = businessWorkHubNav;
+      } else {
+        navItems = businessNav;
+      }
     } else if (activeRole === "trader") {
       navItems = tradespersonNav;
     } else {

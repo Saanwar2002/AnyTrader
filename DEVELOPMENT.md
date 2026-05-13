@@ -389,14 +389,15 @@ The prefix is determined by the user's primary registration role:
     *   [x] 19.0: Enhance `BusinessDashboard.tsx` to include 3 primary layout tabs: **Properties**, **Field Services**, and **Consultancy**.
     *   [x] 19.0: Default the selected tab dynamically based on the user's primary category upon login/signup.
     *   [x] 19.0: Establish the UI to switch between 'active' sub-category dashboards seamlessly.
-    *   [ ] **19.1: Properties Subcategory (Landlords, Estate Agents, Airbnb)**
-        *   [ ] Update schema & rules: Add `linkedPropertyId` to jobs. Ensure `Property` entity is fully secured.
-        *   [ ] Build Layout: Property Grid, individual Property details (Occupancy, related tasks).
-        *   [ ] Logic: "Add Property" modal, and "Dispatch Maintenance" (links directly to `PostJobWizard`).
-    *   [ ] **19.2: Field Services Subcategory (Mobile Teams, Fleet)**
-        *   [ ] Update schema & rules: Add `FieldAgent` and `DispatchRoute` schemas.
-        *   [ ] Build Layout: Team status list, dispatch queue, and daily scheduling timeline.
-        *   [ ] Logic: "Add Agent" and "Assign Job/Task" specific to off-site agents.
+    *   [x] **19.1: Properties Subcategory (Landlords, Estate Agents, Airbnb)**
+        *   [x] Update schema & rules: Add `linkedPropertyId` to jobs. Ensure `Property` entity is fully secured.
+        *   [x] Build Layout: Property Grid, individual Property details (Occupancy, related tasks).
+        *   [x] Logic: "Add Property" modal, and "Dispatch Maintenance" (links directly to `PostJobWizard`).
+    *   [x] **19.2: Field Services Subcategory (Mobile Teams, Fleet)**
+        *   [x] Update schema & rules: Add `FieldAgent` and `DispatchRoute` schemas.
+        *   [x] Build Layout: Team status list, dispatch queue, and daily scheduling timeline.
+        *   [x] Logic: "Add Agent" and "Assign Job/Task" specific to off-site agents.
+        *   [x] Logic: "Hire B2B Service" workflow with persistent linked project header across posting wizards.
     *   [ ] **19.3: Consultancy Subcategory (Virtual, Remote Advisors)**
         *   [ ] Update schema & rules: Add `ConsultationSession` and `ClientCRM`.
         *   [ ] Build Layout: Virtual appointments calendar, active client roster, earning stats.

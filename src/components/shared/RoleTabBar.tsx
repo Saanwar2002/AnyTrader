@@ -9,7 +9,7 @@ import { useAuth } from "../AuthProvider";
 export default function RoleTabBar() {
   const { activePortal, activeRole, setActiveRole, availableRoles } = usePortal();
   const navigate = useNavigate();
-  const { activeTab, setActiveTab } = useBusinessTab();
+  const { activeTab, setActiveTab, activeSubTab, setActiveSubTab } = useBusinessTab();
   const { profile } = useAuth();
   const hasInitialized = useRef(false);
 
@@ -100,8 +100,8 @@ export default function RoleTabBar() {
       )}
 
       {activeRole === "business" && (
-        <div className="flex justify-center w-full px-2 sm:px-0 pb-2 bg-surface">
-          <div className="flex p-0.5 bg-white border border-black rounded-lg text-[13px] shadow-sm max-w-sm w-full mx-auto">
+        <div className="flex justify-center w-full px-2 sm:px-0 pt-2 pb-0 bg-surface">
+          <div className="flex p-0.5 bg-white border border-black rounded-lg text-[13px] shadow-sm max-w-sm w-full mx-auto z-10 relative">
             {(["properties", "field_services", "consultancy"] as const).map((tab) => {
               const isActive = activeTab === tab;
               const displayNames = {
@@ -123,6 +123,31 @@ export default function RoleTabBar() {
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {activeRole === "business" && activeTab === "field_services" && (
+        <div className="flex justify-center w-full px-2 sm:px-0 pb-2 bg-surface">
+          <div className="flex bg-slate-50 border-x border-b border-black p-0.5 rounded-b-lg shadow-sm max-w-sm w-full mx-auto -mt-2 relative z-0">
+            <button
+               onClick={() => setActiveSubTab("work_hub")}
+               className={cn(
+                 "py-1 px-3 rounded-md text-xs font-bold transition-all flex-1 text-center",
+                 activeSubTab === "work_hub" ? "bg-white shadow-sm border border-black text-slate-900" : "text-black hover:bg-slate-100"
+               )}
+            >
+               Work Hub
+            </button>
+            <button
+               onClick={() => setActiveSubTab("hire_b2b")}
+               className={cn(
+                 "py-1 px-3 rounded-md text-xs font-bold transition-all flex-1 text-center",
+                 activeSubTab === "hire_b2b" ? "bg-white shadow-sm border border-black text-slate-900" : "text-black hover:bg-slate-100"
+               )}
+            >
+               Hire B2B Service
+            </button>
           </div>
         </div>
       )}

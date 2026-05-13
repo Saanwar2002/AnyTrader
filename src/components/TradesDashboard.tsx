@@ -28,7 +28,7 @@ const iconMap: Record<string, any> = {
   Briefcase, Clock, MessageSquare, CheckCircle2, ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus, ImageIcon, VideoIcon
 };
 
-export default function TradesDashboard() {
+export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [showTestAlert, setShowTestAlert] = useState(false);
@@ -669,11 +669,13 @@ export default function TradesDashboard() {
   );
 
   return (
-    <div className="space-y-6 pb-12">
-      <SEO 
-        title="Tradesperson Dashboard" 
-        description="Manage your quotes, active jobs, and find new work opportunities on AnyTrader."
-      />
+    <div className={cn("space-y-6", !isSubView && "pb-12")}>
+      {!isSubView && (
+        <SEO 
+          title="Tradesperson Dashboard" 
+          description="Manage your quotes, active jobs, and find new work opportunities on AnyTrader."
+        />
+      )}
       
       <motion.div 
         layout
@@ -791,26 +793,28 @@ export default function TradesDashboard() {
 
       {/* Greeting Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center text-white text-2xl font-bold overflow-hidden relative shadow-lg">
-            {profile?.photoURL ? (
-              <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            ) : (
-              profile?.name?.charAt(0).toUpperCase()
-            )}
-            <BadgeOverlay 
-              badges={getTraderBadges(profile)} 
-              className="absolute -bottom-1 -left-1 -right-1 justify-center z-10 scale-75" 
-            />
+        {!isSubView && (
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center text-white text-2xl font-bold overflow-hidden relative shadow-lg">
+              {profile?.photoURL ? (
+                <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                profile?.name?.charAt(0).toUpperCase()
+              )}
+              <BadgeOverlay 
+                badges={getTraderBadges(profile)} 
+                className="absolute -bottom-1 -left-1 -right-1 justify-center z-10 scale-75" 
+              />
+            </div>
+            <div>
+              <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">
+                Welcome back, <span className="text-primary">{profile?.name}</span>
+              </h1>
+              <p className="text-slate-500 font-medium mt-1">Manage your quotes and active projects.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">
-              Welcome back, <span className="text-primary">{profile?.name}</span>
-            </h1>
-            <p className="text-slate-500 font-medium mt-1">Manage your quotes and active projects.</p>
-          </div>
-        </div>
-        <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
+        )}
+        <div className={cn("flex flex-col sm:items-end gap-2 w-full", !isSubView && "sm:w-auto")}>
           {/* Test Alert Toggle */}
           <button
             type="button"

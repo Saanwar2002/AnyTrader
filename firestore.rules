@@ -231,6 +231,22 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
+    match /field_agents/{agentId} {
+      allow get: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && resource.data.businessId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.businessId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+    }
+
+    match /dispatch_routes/{routeId} {
+      allow get: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && resource.data.businessId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.businessId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.businessId == request.auth.uid || isAdmin());
+    }
+
     match /dispatches/{dispatchId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();

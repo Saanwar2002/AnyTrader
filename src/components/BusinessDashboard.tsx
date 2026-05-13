@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { SEO } from "./SEO";
 import { PropertyManager } from "./PropertyManager";
+import { FieldServicesManager } from "./FieldServicesManager";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 
 export default function BusinessDashboard() {
@@ -89,31 +90,6 @@ export default function BusinessDashboard() {
         description="Manage your property portfolio and professional trade services on AnyTrader."
       />
       
-      {/* Business Name Header */}
-      <div className="flex items-center justify-between mt-4 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg uppercase shrink-0">
-            {profile?.name?.charAt(0) || "B"}
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">
-              Hello, {user?.displayName?.split(' ')[0] || "User"}!
-            </h1>
-            <p className="text-[13px] text-slate-600 font-medium leading-tight">
-              {profile?.businessCategory || profile?.name || "Business Dashboard HQ"}
-            </p>
-          </div>
-        </div>
-        {!isSubscribed && (
-          <div className="w-8 h-8 flex items-center justify-center rounded-full bg-orange-100">
-            <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-orange-500" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="8" r="6"/>
-              <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>
-            </svg>
-          </div>
-        )}
-      </div>
-
       {/* Conditional Content Output Block */}
       {activeTab === "properties" && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -274,14 +250,8 @@ export default function BusinessDashboard() {
 
       {/* Field Services Content */}
       {activeTab === "field_services" && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-           <div className="bg-white p-12 rounded-[40px] border border-slate-100 shadow-sm text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Briefcase className="w-8 h-8 text-blue-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Field Services</h2>
-              <p className="text-slate-500 max-w-md mx-auto">Manage your out-of-office teams, dispatches, and field schedules in one place. Comming soon in Phase 19.</p>
-           </div>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+           <FieldServicesManager />
         </div>
       )}
 

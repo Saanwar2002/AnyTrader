@@ -2384,6 +2384,64 @@
         "status",
         "createdAt"
       ]
+    },
+    "FieldAgent": {
+      "title": "FieldAgent",
+      "description": "An off-site worker/agent managed under the Field Services subcategory.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string", "description": "The UID of the business managing this agent" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["available", "en_route", "on_site", "offline"]
+        },
+        "currentLocation": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "updatedAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "businessId", "name", "status", "createdAt"]
+    },
+    "DispatchRoute": {
+      "title": "DispatchRoute",
+      "description": "A scheduled route or task sequence assigned to a FieldAgent.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "agentId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "stops": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "jobId": { "type": "string" },
+              "address": { "type": "string" },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "completed", "skipped"]
+              },
+              "estimatedArrival": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "active", "completed"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "businessId", "agentId", "date", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -2537,6 +2595,14 @@
     "/properties/{propertyId}": {
       "schema": "Property",
       "description": "Properties registered by landlords, Airbnb hosts, or estate agents"
+    },
+    "/field_agents/{agentId}": {
+      "schema": "FieldAgent",
+      "description": "Agents managed by a business"
+    },
+    "/dispatch_routes/{routeId}": {
+      "schema": "DispatchRoute",
+      "description": "Dispatch routes for Field Agents"
     }
   }
 }
