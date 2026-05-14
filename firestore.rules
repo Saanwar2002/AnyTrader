@@ -291,5 +291,95 @@ service cloud.firestore {
       allow create: if isSignedIn() && (request.resource.data.tradespersonId == request.auth.uid || request.resource.data.homeownerId == request.auth.uid || isAdmin());
       allow update: if isSignedIn() && (resource == null || resource.data.tradespersonId == request.auth.uid || resource.data.homeownerId == request.auth.uid || isAdmin());
     }
+
+    // --- Consultancy System ---
+    match /rateCards/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
+    }
+    match /availabilityWindows/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
+    }
+    match /calendarSyncs/{id} {
+      allow read: if isSignedIn() && (resource == null || resource.data.consultantId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
+    }
+    match /projects/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /clients/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /proposals/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /proposalTemplates/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /projectMilestones/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /teamMembers/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /projectAssignments/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /projectVenues/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /venues/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /projectSuppliers/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /supplierContacts/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /projectTimelineItems/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /invoices/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /expenses/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /portfolioItems/{id} {
+      allow read: if true;
+      allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
+    }
+    match /sessionNotes/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /calendarEvents/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /matchScores/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /enquiries/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
   }
 }

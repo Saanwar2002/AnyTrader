@@ -12,11 +12,12 @@ import {
   TrendingUp, Users2, FileText, Activity,
   CreditCard, ArrowUpCircle, Users
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { SEO } from "./SEO";
 import { PropertyManager } from "./PropertyManager";
 import { FieldServicesManager } from "./FieldServicesManager";
+import { ConsultancyManager } from "./ConsultancyManager";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 
 export default function BusinessDashboard() {
@@ -27,6 +28,13 @@ export default function BusinessDashboard() {
   const [recentQuotes, setRecentQuotes] = useState<any[]>([]);
 
   const { activeTab, setActiveTab } = useBusinessTab();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/consultancy")) {
+      setActiveTab("consultancy");
+    }
+  }, [location.pathname, setActiveTab]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -257,14 +265,8 @@ export default function BusinessDashboard() {
 
       {/* Consultancy Content */}
       {activeTab === "consultancy" && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-           <div className="bg-white p-12 rounded-[40px] border border-slate-100 shadow-sm text-center">
-              <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-indigo-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Consultancy Services</h2>
-              <p className="text-slate-500 max-w-md mx-auto">Track virtual consultations, advisory bookings, and specialized project overviews. Coming soon in Phase 19.</p>
-           </div>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+           <ConsultancyManager />
         </div>
       )}
     </div>

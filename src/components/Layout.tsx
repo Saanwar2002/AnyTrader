@@ -333,6 +333,15 @@ export default function Layout() {
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
   ];
 
+  const consultancyNav = [
+    { name: "HQ", path: "/", icon: Home, isCta: false },
+    { name: "Sessions", path: "/consultancy/calendar", icon: Calendar, isCta: false },
+    { name: "Clients", path: "/consultancy/clients", icon: Users, isCta: false },
+    { name: "New", path: "/consultancy/new", icon: PlusCircle, isCta: true },
+    { name: "Billing", path: "/consultancy/billing", icon: PoundSterling, isCta: false },
+    { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+  ];
+
   let navItems;
   if (activeRole === "admin") {
     navItems = adminNav;
@@ -344,6 +353,8 @@ export default function Layout() {
     if (activeRole === "business") {
       if (activeTab === "field_services" && activeSubTab === "work_hub") {
         navItems = businessWorkHubNav;
+      } else if (activeTab === "consultancy") {
+        navItems = consultancyNav;
       } else {
         navItems = businessNav;
       }

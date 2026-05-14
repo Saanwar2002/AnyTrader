@@ -398,10 +398,10 @@ The prefix is determined by the user's primary registration role:
         *   [x] Build Layout: Team status list, dispatch queue, and daily scheduling timeline.
         *   [x] Logic: "Add Agent" and "Assign Job/Task" specific to off-site agents.
         *   [x] Logic: "Hire B2B Service" workflow with persistent linked project header across posting wizards.
-    *   [ ] **19.3: Consultancy Subcategory (Virtual, Remote Advisors)**
-        *   [ ] Update schema & rules: Add `ConsultationSession` and `ClientCRM`.
-        *   [ ] Build Layout: Virtual appointments calendar, active client roster, earning stats.
-        *   [ ] Logic: "Book Appointment" flow, sync with calendar.
+    *   [x] **19.3: Consultancy Subcategory (Virtual, Remote Advisors)**
+        *   [x] Update schema & rules: Added 22 entities in C1 including Consultancy projects, session notes, proposals, etc.
+        *   [x] Build Layout: Virtual appointments calendar, active client roster, earning stats (`ConsultancyManager.tsx`).
+        *   [x] Logic: "Book Appointment" flow, creating `calendarEvents` via UI.
 
 ## 📅 Phase 12: AI-Powered Trader Calendar + Smart Scheduling (In Progress)
 *   **The Mission:** Introduce a smart calendar system directly into the tradesperson persona. 
@@ -412,3 +412,9 @@ The prefix is determined by the user's primary registration role:
     *   [x] 12.4: **Enhanced Match Algorithm Integration:** Updated `instantMatchWorker.ts` algorithm to incorporate `smartScheduleFit` yielding up to +20 extra match points.
     *   [x] 12.5: **External Calendar Sync:** Integration with Google Tasks/Apple Calendar via custom sync connections overlay.
 - 2026-05-13: Onboarding updated: Replaced Tradesperson and Homeowner Business with unified Business role (Step 1.5). Handled Property, Field Services, and Consultancy layers mappings.
+
+- Phase C1 Complete: Added 22 Consultancy Data collections to `firebase-blueprint.json` and deployed appended security rules to `firestore.rules`.
+
+- Phase C2 Complete: Configured bottom navigation routes for Consultancy tab and integrated location sync to fix unresponsive routing.
+
+- Phase C3 Complete: Designed a dedicated HQ dashboard view for the Consultancy module to prevent rendering overlaps with the Calendar, and instantiated a fully functional Invoice generation wizard with proper Firestore bindings.

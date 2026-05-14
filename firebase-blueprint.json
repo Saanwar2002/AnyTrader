@@ -2390,58 +2390,1089 @@
       "description": "An off-site worker/agent managed under the Field Services subcategory.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "businessId": { "type": "string", "description": "The UID of the business managing this agent" },
-        "name": { "type": "string" },
-        "phone": { "type": "string" },
-        "role": { "type": "string" },
+        "id": {
+          "type": "string"
+        },
+        "businessId": {
+          "type": "string",
+          "description": "The UID of the business managing this agent"
+        },
+        "name": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
         "status": {
           "type": "string",
-          "enum": ["available", "en_route", "on_site", "offline"]
+          "enum": [
+            "available",
+            "en_route",
+            "on_site",
+            "offline"
+          ]
         },
         "currentLocation": {
           "type": "object",
           "properties": {
-            "lat": { "type": "number" },
-            "lng": { "type": "number" },
-            "updatedAt": { "type": "string", "format": "date-time" }
+            "lat": {
+              "type": "number"
+            },
+            "lng": {
+              "type": "number"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "businessId", "name", "status", "createdAt"]
+      "required": [
+        "id",
+        "businessId",
+        "name",
+        "status",
+        "createdAt"
+      ]
     },
     "DispatchRoute": {
       "title": "DispatchRoute",
       "description": "A scheduled route or task sequence assigned to a FieldAgent.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "businessId": { "type": "string" },
-        "agentId": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
+        "id": {
+          "type": "string"
+        },
+        "businessId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
         "stops": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "jobId": { "type": "string" },
-              "address": { "type": "string" },
+              "jobId": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              },
               "status": {
                 "type": "string",
-                "enum": ["pending", "completed", "skipped"]
+                "enum": [
+                  "pending",
+                  "completed",
+                  "skipped"
+                ]
               },
-              "estimatedArrival": { "type": "string", "format": "date-time" }
+              "estimatedArrival": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           }
         },
         "status": {
           "type": "string",
-          "enum": ["draft", "active", "completed"]
+          "enum": [
+            "draft",
+            "active",
+            "completed"
+          ]
         },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "businessId", "agentId", "date", "status", "createdAt"]
+      "required": [
+        "id",
+        "businessId",
+        "agentId",
+        "date",
+        "status",
+        "createdAt"
+      ]
+    },
+    "RateCard": {
+      "title": "RateCard",
+      "description": "A rate card for a consultant.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "serviceType": {
+          "type": "string"
+        },
+        "hourlyRate": {
+          "type": "number"
+        },
+        "dailyRate": {
+          "type": "number"
+        },
+        "minimumHours": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "archived"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "consultantId",
+        "serviceType",
+        "status",
+        "createdAt"
+      ]
+    },
+    "AvailabilityWindow": {
+      "title": "AvailabilityWindow",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "dayOfWeek": {
+          "type": "integer"
+        },
+        "startTime": {
+          "type": "string"
+        },
+        "endTime": {
+          "type": "string"
+        },
+        "isRecurring": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "available",
+            "blocked"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "consultantId",
+        "dayOfWeek",
+        "startTime",
+        "endTime",
+        "isRecurring",
+        "status"
+      ]
+    },
+    "CalendarSync": {
+      "title": "CalendarSync",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "google",
+            "microsoft"
+          ]
+        },
+        "accountEmail": {
+          "type": "string"
+        },
+        "syncStatus": {
+          "type": "string",
+          "enum": [
+            "active",
+            "error"
+          ]
+        },
+        "lastSyncAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "consultantId",
+        "provider",
+        "accountEmail",
+        "syncStatus"
+      ]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A consultancy project.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "managerId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "active",
+            "completed",
+            "cancelled",
+            "paused"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "budget": {
+          "type": "number"
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "status",
+        "title",
+        "createdAt"
+      ]
+    },
+    "Client": {
+      "title": "Client",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "company": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "billingAddress": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "status",
+        "createdAt"
+      ]
+    },
+    "Proposal": {
+      "title": "Proposal",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "sent",
+            "accepted",
+            "rejected"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "totalAmount": {
+          "type": "number"
+        },
+        "validUntil": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "consultantId",
+        "status",
+        "createdAt"
+      ]
+    },
+    "ProposalTemplate": {
+      "title": "ProposalTemplate",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "authorId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "content",
+        "authorId",
+        "createdAt"
+      ]
+    },
+    "ProjectMilestone": {
+      "title": "ProjectMilestone",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "dueDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "in_progress",
+            "completed"
+          ]
+        },
+        "amount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "title",
+        "status",
+        "createdAt"
+      ]
+    },
+    "TeamMember": {
+      "title": "TeamMember",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "accessLevel": {
+          "type": "string",
+          "enum": [
+            "read",
+            "write",
+            "admin"
+          ]
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "consultantId",
+        "role",
+        "accessLevel",
+        "createdAt"
+      ]
+    },
+    "ProjectAssignment": {
+      "title": "ProjectAssignment",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "assignedHours": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "completed"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "consultantId",
+        "status",
+        "createdAt"
+      ]
+    },
+    "ProjectVenue": {
+      "title": "ProjectVenue",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "venueId": {
+          "type": "string"
+        },
+        "bookingStatus": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "confirmed",
+            "cancelled"
+          ]
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "venueId",
+        "bookingStatus",
+        "createdAt"
+      ]
+    },
+    "Venue": {
+      "title": "Venue",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "capacity": {
+          "type": "integer"
+        },
+        "address": {
+          "type": "string"
+        },
+        "contactEmail": {
+          "type": "string"
+        },
+        "contactPhone": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "unavailable"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "address",
+        "status",
+        "createdAt"
+      ]
+    },
+    "ProjectSupplier": {
+      "title": "ProjectSupplier",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "supplierId": {
+          "type": "string"
+        },
+        "serviceProvided": {
+          "type": "string"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "supplierId",
+        "status",
+        "createdAt"
+      ]
+    },
+    "SupplierContact": {
+      "title": "SupplierContact",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "supplierId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "supplierId",
+        "name",
+        "email",
+        "createdAt"
+      ]
+    },
+    "ProjectTimelineItem": {
+      "title": "ProjectTimelineItem",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "in_progress",
+            "completed",
+            "delayed"
+          ]
+        },
+        "assignedTo": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "title",
+        "status",
+        "createdAt"
+      ]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "sent",
+            "paid",
+            "overdue",
+            "cancelled"
+          ]
+        },
+        "dueDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "issueDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "clientId",
+        "amount",
+        "status",
+        "createdAt"
+      ]
+    },
+    "Expense": {
+      "title": "Expense",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "category": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "receiptUrl": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "reimbursed"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "consultantId",
+        "amount",
+        "category",
+        "status",
+        "createdAt"
+      ]
+    },
+    "PortfolioItem": {
+      "title": "PortfolioItem",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "imageUrls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "projectUrl": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "consultantId",
+        "title",
+        "createdAt"
+      ]
+    },
+    "SessionNote": {
+      "title": "SessionNote",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "noteType": {
+          "type": "string",
+          "enum": [
+            "meeting",
+            "observation",
+            "internal"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "isPrivate": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "consultantId",
+        "projectId",
+        "noteType",
+        "content",
+        "createdAt"
+      ]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "meeting",
+            "workshop",
+            "blocked"
+          ]
+        },
+        "location": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "consultantId",
+        "title",
+        "startTime",
+        "endTime",
+        "eventType",
+        "createdAt"
+      ]
+    },
+    "MatchScore": {
+      "title": "MatchScore",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "consultantId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "criteriaBreakdown": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion": {
+                "type": "string"
+              },
+              "score": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "consultantId",
+        "projectId",
+        "score",
+        "createdAt"
+      ]
+    },
+    "Enquiry": {
+      "title": "Enquiry",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "homeownerId": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "details": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "new",
+            "reviewed",
+            "closed"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "homeownerId",
+        "status",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -2603,6 +3634,138 @@
     "/dispatch_routes/{routeId}": {
       "schema": "DispatchRoute",
       "description": "Dispatch routes for Field Agents"
+    },
+    "/rateCards/{id}": {
+      "schema": {
+        "$ref": "#/entities/RateCard"
+      },
+      "description": "Consultant rate cards"
+    },
+    "/availabilityWindows/{id}": {
+      "schema": {
+        "$ref": "#/entities/AvailabilityWindow"
+      },
+      "description": "Consultant availability windows"
+    },
+    "/calendarSyncs/{id}": {
+      "schema": {
+        "$ref": "#/entities/CalendarSync"
+      },
+      "description": "Consultant calendar synchronization profiles"
+    },
+    "/projects/{id}": {
+      "schema": {
+        "$ref": "#/entities/Project"
+      },
+      "description": "Consultancy projects"
+    },
+    "/clients/{id}": {
+      "schema": {
+        "$ref": "#/entities/Client"
+      },
+      "description": "Client details"
+    },
+    "/proposals/{id}": {
+      "schema": {
+        "$ref": "#/entities/Proposal"
+      },
+      "description": "Project proposals"
+    },
+    "/proposalTemplates/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProposalTemplate"
+      },
+      "description": "Reusable proposal templates"
+    },
+    "/projectMilestones/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectMilestone"
+      },
+      "description": "Milestones within a project"
+    },
+    "/teamMembers/{id}": {
+      "schema": {
+        "$ref": "#/entities/TeamMember"
+      },
+      "description": "Members of project teams"
+    },
+    "/projectAssignments/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectAssignment"
+      },
+      "description": "Consultant assignment to a project"
+    },
+    "/projectVenues/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectVenue"
+      },
+      "description": "Venues assigned for a project"
+    },
+    "/venues/{id}": {
+      "schema": {
+        "$ref": "#/entities/Venue"
+      },
+      "description": "Global venue directory"
+    },
+    "/projectSuppliers/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectSupplier"
+      },
+      "description": "Suppliers assigned to a project"
+    },
+    "/supplierContacts/{id}": {
+      "schema": {
+        "$ref": "#/entities/SupplierContact"
+      },
+      "description": "Contacts for suppliers"
+    },
+    "/projectTimelineItems/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectTimelineItem"
+      },
+      "description": "Timeline events for a project"
+    },
+    "/invoices/{id}": {
+      "schema": {
+        "$ref": "#/entities/Invoice"
+      },
+      "description": "Invoices for projects"
+    },
+    "/expenses/{id}": {
+      "schema": {
+        "$ref": "#/entities/Expense"
+      },
+      "description": "Expenses incurred for projects"
+    },
+    "/portfolioItems/{id}": {
+      "schema": {
+        "$ref": "#/entities/PortfolioItem"
+      },
+      "description": "Consultant portfolio items"
+    },
+    "/sessionNotes/{id}": {
+      "schema": {
+        "$ref": "#/entities/SessionNote"
+      },
+      "description": "Session notes from meetings/workshops"
+    },
+    "/calendarEvents/{id}": {
+      "schema": {
+        "$ref": "#/entities/CalendarEvent"
+      },
+      "description": "Calendar events"
+    },
+    "/matchScores/{id}": {
+      "schema": {
+        "$ref": "#/entities/MatchScore"
+      },
+      "description": "Algorithmic match scores between projects and consultants"
+    },
+    "/enquiries/{id}": {
+      "schema": {
+        "$ref": "#/entities/Enquiry"
+      },
+      "description": "Client enquiries"
     }
   }
 }
