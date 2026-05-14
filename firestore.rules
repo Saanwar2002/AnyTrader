@@ -305,6 +305,18 @@ service cloud.firestore {
       allow read: if isSignedIn() && (resource == null || resource.data.consultantId == request.auth.uid || isAdmin());
       allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
     }
+    match /projectRoles/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /projectBids/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /projectShortlists/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
     match /projects/{id} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();

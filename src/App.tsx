@@ -188,8 +188,10 @@ export default function App() {
                 <Route path="trade-jobs" element={<TradeJobs />} />
                 <Route path="trader/calendar" element={<TraderCalendar />} />
                 <Route path="consultancy/calendar" element={<BusinessDashboard />} />
+                <Route path="consultancy/projects" element={<BusinessDashboard />} />
                 <Route path="consultancy/clients" element={<BusinessDashboard />} />
                 <Route path="consultancy/billing" element={<BusinessDashboard />} />
+                <Route path="consultancy/portfolio" element={<BusinessDashboard />} />
                 <Route path="consultancy/new" element={<BusinessDashboard />} />
                 <Route path="portfolio" element={<Portfolio />} />
                 <Route path="trader/banner-ads" element={<TradesBannerAdStudio />} />

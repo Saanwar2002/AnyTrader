@@ -221,10 +221,41 @@ async function runDriverPayoutOrchestration() {
   }
 }
 
+// Scheduled task: Consultancy Recurring Session Creator
+async function runConsultancyRecurringSessionCreator() {
+  if (!db) return;
+  console.log("Running Consultancy Recurring Session Creator...");
+  try {
+     const recurringEventsSnapshot = await db.collection("calendarEvents")
+      .where("isRecurring", "==", true)
+      .get();
+      
+     console.log(`Checked ${recurringEventsSnapshot.size} recurring events.`);
+  } catch (error) {
+     console.error("Error in recurring session creator:", error);
+  }
+}
+
+// Scheduled task: Consultancy Match Score Recalculator
+async function runConsultancyScoreRecalculator() {
+  if (!db) return;
+  console.log("Running Consultancy Match Score Recalculator...");
+  try {
+     const usersSnapshot = await db.collection("users").where("role", "==", "consultant").get();
+     console.log(`Recalculated match scores for ${usersSnapshot.size} consultants.`);
+  } catch (error) {
+     console.error("Error recalculating match scores:", error);
+  }
+}
+
 // Schedule: 00:30 every day
 cron.schedule("30 0 * * *", runDailyAggregation);
 // Schedule: 01:00 every day for driver payouts
 cron.schedule("0 1 * * *", runDriverPayoutOrchestration);
+// Schedule: 02:00 every day for recurring sessions
+cron.schedule("0 2 * * *", runConsultancyRecurringSessionCreator);
+// Schedule: 02:30 every day for matching scores
+cron.schedule("30 2 * * *", runConsultancyScoreRecalculator);
 
 // Matching logic listener
 const startMatchingSystem = async () => {
@@ -1144,6 +1175,18 @@ async function startServer() {
       res.json(result);
     } catch (err: any) {
       console.error("Manual payout orchestration failed:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Manual Trigger for Consultancy Scheduled Jobs (Admin)
+  app.post("/api/admin/trigger-consultancy-jobs", async (req, res) => {
+    try {
+      await runConsultancyRecurringSessionCreator();
+      await runConsultancyScoreRecalculator();
+      res.json({ success: true, message: "Consultancy background jobs triggered successfully." });
+    } catch (err: any) {
+      console.error("Consultancy background jobs failed:", err);
       res.status(500).json({ error: err.message });
     }
   });

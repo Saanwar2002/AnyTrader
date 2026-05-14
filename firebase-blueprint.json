@@ -2941,6 +2941,59 @@
         "createdAt"
       ]
     },
+    "ProjectRole": {
+      "title": "ProjectRole",
+      "description": "Specific functional role required within a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "roleName": { "type": "string", "description": "e.g. Caterer, DJ" },
+        "category": { "type": "string" },
+        "estimatedBudget": { "type": "number" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["open", "bidding", "filled", "cancelled"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "roleName", "status", "createdAt"]
+    },
+    "ProjectBid": {
+      "title": "ProjectBid",
+      "description": "A bid from a professional for a specific project role.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectRoleId": { "type": "string" },
+        "consultantId": { "type": "string" },
+        "amount": { "type": "number" },
+        "message": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "rejected", "withdrawn"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "projectRoleId", "consultantId", "amount", "status", "createdAt"]
+    },
+    "ProjectShortlist": {
+      "title": "ProjectShortlist",
+      "description": "Shortlisted professionals for a project role",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "roleId": { "type": "string" },
+        "consultantId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "roleId", "consultantId", "createdAt"]
+    },
     "ProjectVenue": {
       "title": "ProjectVenue",
       "type": "object",
@@ -3652,6 +3705,24 @@
         "$ref": "#/entities/CalendarSync"
       },
       "description": "Consultant calendar synchronization profiles"
+    },
+    "/projectRoles/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectRole"
+      },
+      "description": "Functional roles requested within a project"
+    },
+    "/projectBids/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectBid"
+      },
+      "description": "Bids placed by professionals to fulfill project roles"
+    },
+    "/projectShortlists/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProjectShortlist"
+      },
+      "description": "Professionals shortlisted for a project role"
     },
     "/projects/{id}": {
       "schema": {

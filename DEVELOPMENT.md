@@ -418,3 +418,17 @@ The prefix is determined by the user's primary registration role:
 - Phase C2 Complete: Configured bottom navigation routes for Consultancy tab and integrated location sync to fix unresponsive routing.
 
 - Phase C3 Complete: Designed a dedicated HQ dashboard view for the Consultancy module to prevent rendering overlaps with the Calendar, and instantiated a fully functional Invoice generation wizard with proper Firestore bindings.
+
+- Phase C3 (Team & Event) Actually Complete: Built `ProjectTeam`, `ProjectEventTimeline`, and `ProjectResources` components into the `ConsultancyProjects` expanded view, fully wiring up `teamMembers`, `projectTimelineItems`, `projectVenues`, and `projectSuppliers` collections to Firestore. Ready for Phase C4 (Financial System).
+
+- Phase C4 Complete: Added `ProjectFinancials` component to track `expenses` against `invoices` for real-time calculation of net profit on a per-project basis. Ready for Phase C5 (Calendar & Scheduling).
+
+- Phase C5 Complete: Added the `ConsultancyCalendar` view replacing the basic appointments list, with calendar synchronisation profiles simulated. Ready for Phase C6 (Background Jobs).
+
+- Phase C6 Complete: Created Express server cron tasks `runConsultancyRecurringSessionCreator` and `runConsultancyScoreRecalculator` and added the `/api/admin/trigger-consultancy-jobs` testing endpoint. Event-driven job logic handles `on_proposal_accepted` directly within `ConsultancyProposals`. Ready for Phase C7 (Portfolio & Profile).
+
+- Phase C7 Complete: Added `ConsultancyPortfolio.tsx` allowing rich portfolio items (images, titles, and descriptions), wired it to the main `ConsultancyManager` HQ dashboard, and updated `PublicProfile.tsx` to automatically query and display the `portfolioItems` collection alongside legacy imagery. Ready for Phase C8 (Signup Flow).
+
+- Phase C8 Complete: Introduced Professional & Consultancy path during Onboarding (`role=business`, `businessLayer=consultancy`). Isolated `CONSULTANCY_CATEGORIES` within `constants.ts` to present a non-trade focused category list during signup. Ensured `requiredCerts` handles dynamic consultancy fields, and patched `<BusinessDashboard />` to automatically load `<ConsultancyManager />` based on `profile.businessLayer`. Added missing `/consultancy/portfolio` route in `App.tsx` that routes back to `BusinessDashboard` ensuring nested views load properly. Ready for Phase C9 (Dashboard & Navigation).
+
+- Phase C9 Complete: Successfully mapped dynamic navigation routes (`consultancyNav` arrays in `Layout.tsx`) and the `<ConsultancyManager />` dashboard to dynamically respond based on the `depth` classification (SIMPLE, MEDIUM, COMPLEX) of the user's category (from `CONSULTANCY_CATEGORIES`). This completes all 30 tasks spanning 9 phases for effectively implementing the LAYOUT C (Consultancy & Professional Services) ecosystem layer. All systems operational.

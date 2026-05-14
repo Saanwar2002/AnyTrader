@@ -25,11 +25,12 @@ export default function PublicProfile() {
   const [profile, setProfile] = useState<any>(null);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isServicesExpanded, setIsServicesExpanded] = useState(false);
-  
+
   // Quote Request State
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [userJobs, setUserJobs] = useState<any[]>([]);
@@ -127,7 +128,21 @@ export default function PublicProfile() {
       setLoadingReviews(false);
     });
 
-    return () => unsubscribe();
+    const portfolioQ = query(
+      collection(db, "portfolioItems"),
+      where("consultantId", "==", id),
+      orderBy("createdAt", "desc")
+    );
+    const unsubPortfolio = onSnapshot(portfolioQ, (snapshot) => {
+      setPortfolioItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching portfolio items:", error);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubPortfolio();
+    };
   }, [id]);
 
   const handleMessage = async () => {
@@ -683,7 +698,7 @@ export default function PublicProfile() {
       </div>
 
       {/* Portfolio Section */}
-      {profile.portfolio && profile.portfolio.length > 0 && (
+      {((profile.portfolio && profile.portfolio.length > 0) || portfolioItems.length > 0) && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
           <div className="flex items-center gap-2 mb-6">
             <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
@@ -691,11 +706,28 @@ export default function PublicProfile() {
             </div>
             <h3 className="text-xl font-bold text-slate-900">Work Portfolio</h3>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {profile.portfolio.map((url: string, index: number) => (
-              <div key={index} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {profile.portfolio?.map((url: string, index: number) => (
+              <div key={`basic-${index}`} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
                 <img src={url} alt={`Portfolio ${index + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
+            ))}
+            {portfolioItems.map((item) => (
+               <div key={`complex-${item.id}`} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 relative group">
+                 {item.imageUrls?.[0] ? (
+                  <img src={item.imageUrls[0]} alt={item.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                 ) : (
+                  <div className="flex items-center justify-center h-full w-full bg-slate-100">
+                    <ImageIcon className="w-8 h-8 text-slate-300" />
+                  </div>
+                 )}
+                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4">
+                    <h4 className="text-white font-bold text-sm leading-tight mb-1">{item.title}</h4>
+                    {item.description && (
+                      <p className="text-white/80 text-[10px] line-clamp-2">{item.description}</p>
+                    )}
+                 </div>
+               </div>
             ))}
           </div>
         </div>

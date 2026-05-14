@@ -333,14 +333,46 @@ export default function Layout() {
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
   ];
 
-  const consultancyNav = [
-    { name: "HQ", path: "/", icon: Home, isCta: false },
-    { name: "Sessions", path: "/consultancy/calendar", icon: Calendar, isCta: false },
-    { name: "Clients", path: "/consultancy/clients", icon: Users, isCta: false },
-    { name: "New", path: "/consultancy/new", icon: PlusCircle, isCta: true },
-    { name: "Billing", path: "/consultancy/billing", icon: PoundSterling, isCta: false },
-    { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
-  ];
+  let consultancyDepth = "MEDIUM";
+  // The global CONSULTANCY_CATEGORIES mapping is used if possible
+  // For simplicity since Layout is large, we can derive depth heuristically if needed, 
+  // but better to import CONSULTANCY_CATEGORIES dynamically or heuristically matching
+  const catName = profile?.businessCategory || "";
+  if (catName === "Education & Coaching" || catName === "Health & Wellness") {
+    consultancyDepth = "SIMPLE";
+  } else if (catName === "Event & Production") {
+    consultancyDepth = "COMPLEX";
+  } else {
+    consultancyDepth = "MEDIUM";
+  }
+
+  let consultancyNav: any[] = [];
+  if (consultancyDepth === "SIMPLE") {
+    consultancyNav = [
+      { name: "HQ", path: "/", icon: Home, isCta: false },
+      { name: "Sessions", path: "/consultancy/calendar", icon: Calendar, isCta: false },
+      { name: "Clients", path: "/consultancy/clients", icon: Users, isCta: false },
+      { name: "Schedule", path: "/consultancy/new", icon: PlusCircle, isCta: true },
+      { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+    ];
+  } else if (consultancyDepth === "MEDIUM") {
+    consultancyNav = [
+      { name: "HQ", path: "/", icon: Home, isCta: false },
+      { name: "Clients", path: "/consultancy/clients", icon: Users, isCta: false },
+      { name: "Projects", path: "/consultancy/projects", icon: Briefcase, isCta: false },
+      { name: "Schedule", path: "/consultancy/new", icon: PlusCircle, isCta: true },
+      { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+    ];
+  } else { // COMPLEX
+    consultancyNav = [
+      { name: "HQ", path: "/", icon: Home, isCta: false },
+      { name: "Projects", path: "/consultancy/projects", icon: Briefcase, isCta: false },
+      { name: "Proposals", path: "/consultancy/proposals", icon: Clock, isCta: false },
+      { name: "Calendar", path: "/consultancy/calendar", icon: Calendar, isCta: false },
+      { name: "Schedule", path: "/consultancy/new", icon: PlusCircle, isCta: true },
+      { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+    ];
+  }
 
   let navItems;
   if (activeRole === "admin") {

@@ -1500,6 +1500,51 @@ export const UNSORTED_TRADE_CATEGORIES = [
 
 export const TRADE_CATEGORIES = [...UNSORTED_TRADE_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name));
 
+export const CONSULTANCY_CATEGORIES = [
+  {
+    id: 1001,
+    name: "Education & Coaching",
+    icon: "📚",
+    depth: "SIMPLE",
+    subcategories: ["Private Tutoring", "Music Teaching", "Language Teaching", "Life Coaching", "Business Mentoring"]
+  },
+  {
+    id: 1002,
+    name: "Financial & Legal",
+    icon: "⚖️",
+    depth: "MEDIUM",
+    subcategories: ["Accounting & Bookkeeping", "Tax Advisory", "Financial Planning", "Solicitors", "Conveyancing"]
+  },
+  {
+    id: 1003,
+    name: "Creative & Media",
+    icon: "🎨",
+    depth: "MEDIUM",
+    subcategories: ["Photography", "Graphic Design", "Web Design", "Interior Design", "Copywriting"]
+  },
+  {
+    id: 1004,
+    name: "Event & Production",
+    icon: "🎪",
+    depth: "COMPLEX",
+    subcategories: ["Wedding Planning", "Corporate Events", "Production & Staging", "Marquee Hire"]
+  },
+  {
+    id: 1005,
+    name: "Health & Wellness",
+    icon: "⚕️",
+    depth: "SIMPLE",
+    subcategories: ["Personal Training", "Yoga", "Counselling & Therapy", "Physiotherapy", "Osteopathy"]
+  },
+  {
+    id: 1006,
+    name: "Business & Technical",
+    icon: "💼",
+    depth: "MEDIUM",
+    subcategories: ["IT Consulting", "Management Consulting", "Marketing & PR", "Virtual Assistant", "Project Management"]
+  }
+];
+
 export const URGENCY_LEVELS = [
   { id: "emergency", name: "Emergency", description: "Within 24 hours", multiplier: 1.5 },
   { id: "asap", name: "ASAP", description: "Within 2-3 days", multiplier: 1.2 },

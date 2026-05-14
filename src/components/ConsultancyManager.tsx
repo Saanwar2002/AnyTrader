@@ -40,6 +40,12 @@ import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
 
+import { ConsultancyProposals } from "./ConsultancyProposals";
+import { ConsultancyProjects } from "./ConsultancyProjects";
+import { ConsultancyCalendar } from "./ConsultancyCalendar";
+import { ConsultancyPortfolio } from "./ConsultancyPortfolio";
+import { ConsultancyBids } from "./ConsultancyBids";
+
 enum OperationType {
   CREATE = "create",
   UPDATE = "update",
@@ -84,12 +90,13 @@ function handleFirestoreError(
 }
 
 export function ConsultancyManager() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
-    "hq" | "calendar" | "clients" | "stats" | "billing"
+    "hq" | "calendar" | "clients" | "stats" | "billing" | "projects" | "portfolio" | "proposals"
   >("hq");
+
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -97,6 +104,17 @@ export function ConsultancyManager() {
   const [clients, setClients] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Depth logic
+  let consultancyDepth = "MEDIUM";
+  const catName = profile?.businessCategory || "";
+  if (catName === "Education & Coaching" || catName === "Health & Wellness") {
+    consultancyDepth = "SIMPLE";
+  } else if (catName === "Event & Production") {
+    consultancyDepth = "COMPLEX";
+  } else {
+    consultancyDepth = "MEDIUM";
+  }
 
   // Sync tab with URL
   useEffect(() => {
@@ -107,6 +125,21 @@ export function ConsultancyManager() {
       setShowInvoiceModal(false);
     } else if (location.pathname.includes("/consultancy/billing")) {
       setActiveTab("billing");
+      setShowBookingModal(false);
+      setShowClientModal(false);
+      setShowInvoiceModal(false);
+    } else if (location.pathname.includes("/consultancy/projects")) {
+      setActiveTab("projects");
+      setShowBookingModal(false);
+      setShowClientModal(false);
+      setShowInvoiceModal(false);
+    } else if (location.pathname.includes("/consultancy/proposals")) {
+      setActiveTab("proposals");
+      setShowBookingModal(false);
+      setShowClientModal(false);
+      setShowInvoiceModal(false);
+    } else if (location.pathname.includes("/consultancy/portfolio")) {
+      setActiveTab("portfolio");
       setShowBookingModal(false);
       setShowClientModal(false);
       setShowInvoiceModal(false);
@@ -331,7 +364,7 @@ export function ConsultancyManager() {
       {/* Stats Header (Only visible on HQ to avoid repetition) */}
       {activeTab === "hq" && (
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 flex flex-col justify-center items-center text-center shadow-sm">
+          <div className="bg-indigo-50 rounded-xl p-4 border border-black flex flex-col justify-center items-center text-center shadow-sm">
             <CalendarIcon className="w-6 h-6 text-indigo-500 mb-2" />
             <div className="text-2xl font-black text-indigo-900 leading-none mb-1">
               {stats.upcomingSessions}
@@ -342,7 +375,7 @@ export function ConsultancyManager() {
               Sessions
             </div>
           </div>
-          <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 flex flex-col justify-center items-center text-center shadow-sm">
+          <div className="bg-emerald-50 rounded-xl p-4 border border-black flex flex-col justify-center items-center text-center shadow-sm">
             <Users className="w-6 h-6 text-emerald-500 mb-2" />
             <div className="text-2xl font-black text-emerald-900 leading-none mb-1">
               {stats.activeClients}
@@ -353,7 +386,7 @@ export function ConsultancyManager() {
               Clients
             </div>
           </div>
-          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex flex-col justify-center items-center text-center shadow-sm">
+          <div className="bg-amber-50 rounded-xl p-4 border border-black flex flex-col justify-center items-center text-center shadow-sm">
             <DollarSign className="w-6 h-6 text-amber-500 mb-2" />
             <div className="text-2xl font-black text-amber-900 leading-none mb-1">
               £{stats.totalEarnings.toLocaleString()}
@@ -371,104 +404,75 @@ export function ConsultancyManager() {
       <div className={activeTab === "hq" ? "mt-4" : "mt-0"}>
         {activeTab === "hq" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-4">
-                <LayoutDashboard className="w-5 h-5 text-blue-500" /> Welcome to Consultancy HQ
+            <div className="bg-white border border-black rounded-xl p-6 shadow-sm mb-4">
+              <h3 className="font-bold text-black flex items-center gap-2 mb-4">
+                <LayoutDashboard className="w-5 h-5 text-blue-500" /> 
+                {consultancyDepth === "SIMPLE" ? "Welcome to Your Virtual Practice" : 
+                 consultancyDepth === "COMPLEX" ? "Welcome to Your Agency Dashboard" : 
+                 "Welcome to Consultancy HQ"}
               </h3>
-              <p className="text-sm text-slate-600 leading-relaxed max-w-xl">
-                Here you can manage your virtual practice. Schedule remote sessions, track professional 
-                engagements with your clients, and handle invoicing. Use the tabs below to navigate.
+              <p className="text-sm text-black leading-relaxed max-w-xl">
+                {consultancyDepth === "SIMPLE" ? "Manage your sessions, respond to booking requests, and organize your daily work." : 
+                 consultancyDepth === "COMPLEX" ? "Manage your large-scale projects, organize milestones, and collaborate." : 
+                 "Here you can manage your professional practice. Schedule remote sessions, track professional engagements with your clients, and handle invoicing. Use the tabs below to navigate."}
               </p>
               
               <div className="mt-6 flex flex-wrap gap-3">
                 <button 
-                  onClick={() => navigate("/consultancy/calendar")}
+                  onClick={() => navigate(consultancyDepth === "SIMPLE" ? "/consultancy/calendar" : "/consultancy/projects")}
                   className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-100 transition shadow-sm"
                 >
-                  View Calendar
+                  {consultancyDepth === "SIMPLE" ? "View Calendar" : "View Projects"}
+                </button>
+                <button 
+                  onClick={() => navigate("/consultancy/portfolio")}
+                  className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-100 transition shadow-sm"
+                >
+                  Manage Portfolio
                 </button>
                 <button 
                   onClick={() => navigate("/consultancy/new")}
                   className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm"
                 >
-                  New Session
+                  {consultancyDepth === "COMPLEX" ? "New Project" : "New Session"}
                 </button>
               </div>
             </div>
+
+            {/* C2: Proposal Manager injected into HQ for now */}
+            <ConsultancyProposals />
           </div>
         )}
 
         {activeTab === "calendar" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="font-bold text-black flex items-center gap-2">
                 <CalendarCheck className="w-5 h-5 text-indigo-500" /> Virtual
                 Appointments
               </h3>
               <button
                 onClick={() => setShowBookingModal(true)}
-                className="bg-indigo-600 text-white p-2 rounded-xl text-[12px] font-bold flex items-center gap-1 hover:bg-indigo-700 transition"
+                className="bg-indigo-600 text-white p-2 rounded-xl text-[12px] font-bold flex items-center gap-1 hover:bg-indigo-700 transition shadow-sm"
               >
                 <Plus className="w-4 h-4" /> Book Slot
               </button>
             </div>
 
-            {appointments.length === 0 ? (
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
-                <Monitor className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium text-sm">
-                  No upcoming appointments.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {appointments
-                  .filter((a) => new Date(a.startTime) > new Date())
-                  .slice(0, 5)
-                  .map((apt) => (
-                    <div
-                      key={apt.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between"
-                    >
-                      <div className="flex gap-4 items-center">
-                        <div className="w-12 h-12 bg-indigo-50 rounded-xl flex flex-col items-center justify-center border border-indigo-100">
-                          <span className="text-[10px] font-bold text-indigo-500 uppercase leading-none">
-                            {format(new Date(apt.startTime), "MMM")}
-                          </span>
-                          <span className="text-lg font-black text-indigo-900 leading-none">
-                            {format(new Date(apt.startTime), "dd")}
-                          </span>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-900 text-sm leading-tight mb-1">
-                            {apt.title}
-                          </h4>
-                          <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />{" "}
-                              {format(new Date(apt.startTime), "HH:mm")}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />{" "}
-                              {apt.clientName || "Client"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <button className="bg-slate-100 p-2 rounded-xl text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition">
-                        <Video className="w-5 h-5" />
-                      </button>
-                    </div>
-                  ))}
-              </div>
-            )}
+            <ConsultancyCalendar />
+          </div>
+        )}
+
+        {activeTab === "projects" && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <ConsultancyProjects />
           </div>
         )}
 
         {activeTab === "clients" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="font-bold text-black flex items-center gap-2">
                 <Users className="w-5 h-5 text-emerald-500" /> Client Roster
               </h3>
               <button
@@ -480,9 +484,9 @@ export function ConsultancyManager() {
             </div>
 
             {clients.length === 0 ? (
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+              <div className="bg-white border border-black rounded-xl p-8 text-center shadow-sm">
                 <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium text-sm">
+                <p className="text-black font-medium text-sm">
                   Your roster is empty.
                 </p>
               </div>
@@ -491,30 +495,30 @@ export function ConsultancyManager() {
                 {clients.map((client) => (
                   <div
                     key={client.id}
-                    className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm"
+                    className="bg-white p-4 rounded-xl border border-black shadow-sm"
                   >
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white font-black text-lg">
                         {client.name?.charAt(0) || "C"}
                       </div>
                       <div>
-                        <h4 className="font-bold text-slate-900 leading-tight">
+                        <h4 className="font-bold text-black leading-tight">
                           {client.name}
                         </h4>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-black">
                           {client.company || "Independent"}
                         </p>
                       </div>
                     </div>
                     <div className="space-y-1.5 pt-3 border-t border-slate-100">
                       {client.email && (
-                        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium">
+                        <div className="flex items-center gap-2 text-[11px] text-black font-medium">
                           <Mail className="w-3.5 h-3.5 text-slate-400" />{" "}
                           {client.email}
                         </div>
                       )}
                       {client.phone && (
-                        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium">
+                        <div className="flex items-center gap-2 text-[11px] text-black font-medium">
                           <Phone className="w-3.5 h-3.5 text-slate-400" />{" "}
                           {client.phone}
                         </div>
@@ -529,7 +533,7 @@ export function ConsultancyManager() {
         {activeTab === "billing" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="font-bold text-black flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-amber-500" /> Invoices
               </h3>
               <button
@@ -541,10 +545,10 @@ export function ConsultancyManager() {
             </div>
 
             {invoices.length === 0 ? (
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+              <div className="bg-white border border-black rounded-xl p-8 text-center shadow-sm">
                 <DollarSign className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <h3 className="font-bold text-slate-900 mb-1">No Invoices Yet</h3>
-                <p className="text-slate-500 font-medium text-sm mb-4">
+                <h3 className="font-bold text-black mb-1">No Invoices Yet</h3>
+                <p className="text-black font-medium text-sm mb-4">
                   Create invoices and track your revenue here.
                 </p>
                 <button
@@ -559,23 +563,23 @@ export function ConsultancyManager() {
                 {invoices.map((inv) => (
                   <div
                     key={inv.id}
-                    className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between"
+                    className="bg-white p-4 rounded-xl border border-black shadow-sm flex items-center justify-between"
                   >
                     <div className="flex gap-4 items-center">
-                      <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center border border-amber-100">
+                      <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center border border-black">
                         <DollarSign className="w-6 h-6 text-amber-500" />
                       </div>
                       <div>
-                        <h4 className="font-bold text-slate-900 text-sm leading-tight mb-1">
+                        <h4 className="font-bold text-black text-sm leading-tight mb-1">
                           {inv.clientName || "Client"}
                         </h4>
-                        <p className="text-[11px] text-slate-500 font-medium">
+                        <p className="text-[11px] text-black font-medium">
                           {inv.description || "Consultancy Services"} • Due {inv.dueDate ? format(new Date(inv.dueDate), "MMM dd") : "N/A"}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-black text-slate-900 text-lg">£{inv.amount}</div>
+                      <div className="font-black text-black text-lg">£{inv.amount}</div>
                       <span className={cn(
                         "text-[10px] font-bold uppercase rounded-full px-2 py-0.5 inline-block mt-1",
                         inv.status === "paid" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
@@ -588,6 +592,12 @@ export function ConsultancyManager() {
               </div>
             )}
           </div>
+        )}
+        {activeTab === "portfolio" && (
+          <ConsultancyPortfolio />
+        )}
+        {activeTab === "proposals" && (
+          <ConsultancyBids />
         )}
       </div>
 
@@ -605,7 +615,7 @@ export function ConsultancyManager() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+              className="bg-white rounded-xl shadow-sm w-full max-w-md overflow-hidden border border-black"
             >
               <div className="p-6 bg-indigo-600 text-white">
                 <h3 className="font-black text-xl">Schedule Consultation</h3>
@@ -627,7 +637,7 @@ export function ConsultancyManager() {
                     onChange={(e) =>
                       setBookingForm({ ...bookingForm, title: e.target.value })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
                     placeholder="e.g. Discovery Call"
                   />
                 </div>
@@ -644,7 +654,7 @@ export function ConsultancyManager() {
                         clientName: e.target.value,
                       })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
                     placeholder="John Doe"
                   />
                 </div>
@@ -660,7 +670,7 @@ export function ConsultancyManager() {
                       onChange={(e) =>
                         setBookingForm({ ...bookingForm, date: e.target.value })
                       }
-                      className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                      className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <div>
@@ -674,7 +684,7 @@ export function ConsultancyManager() {
                       onChange={(e) =>
                         setBookingForm({ ...bookingForm, time: e.target.value })
                       }
-                      className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                      className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
@@ -690,7 +700,7 @@ export function ConsultancyManager() {
                         duration: e.target.value,
                       })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="15">15 Minutes</option>
                     <option value="30">30 Minutes</option>
@@ -703,7 +713,7 @@ export function ConsultancyManager() {
                   <button
                     type="button"
                     onClick={() => setShowBookingModal(false)}
-                    className="flex-1 py-3 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200"
+                    className="flex-1 py-3 text-sm font-bold text-black bg-slate-100 rounded-xl hover:bg-slate-200"
                   >
                     Cancel
                   </button>
@@ -732,7 +742,7 @@ export function ConsultancyManager() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+              className="bg-white rounded-xl shadow-sm w-full max-w-md overflow-hidden border border-black"
             >
               <div className="p-6 bg-emerald-600 text-white">
                 <h3 className="font-black text-xl">Add New Client</h3>
@@ -751,7 +761,7 @@ export function ConsultancyManager() {
                     onChange={(e) =>
                       setClientForm({ ...clientForm, name: e.target.value })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
                     placeholder="e.g. Jane Smith"
                   />
                 </div>
@@ -764,7 +774,7 @@ export function ConsultancyManager() {
                     onChange={(e) =>
                       setClientForm({ ...clientForm, company: e.target.value })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
                     placeholder="e.g. Acme Corp"
                   />
                 </div>
@@ -779,7 +789,7 @@ export function ConsultancyManager() {
                     onChange={(e) =>
                       setClientForm({ ...clientForm, email: e.target.value })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
                     placeholder="jane@example.com"
                   />
                 </div>
@@ -793,7 +803,7 @@ export function ConsultancyManager() {
                     onChange={(e) =>
                       setClientForm({ ...clientForm, phone: e.target.value })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
                     placeholder="+44 7000 000000"
                   />
                 </div>
@@ -802,7 +812,7 @@ export function ConsultancyManager() {
                   <button
                     type="button"
                     onClick={() => setShowClientModal(false)}
-                    className="flex-1 py-3 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200"
+                    className="flex-1 py-3 text-sm font-bold text-black bg-slate-100 rounded-xl hover:bg-slate-200"
                   >
                     Cancel
                   </button>
@@ -831,7 +841,7 @@ export function ConsultancyManager() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+              className="bg-white rounded-xl shadow-sm w-full max-w-md overflow-hidden border border-black"
             >
               <div className="p-6 bg-amber-500 text-white">
                 <h3 className="font-black text-xl">Create Invoice</h3>
@@ -850,7 +860,7 @@ export function ConsultancyManager() {
                     onChange={(e) =>
                       setInvoiceForm({ ...invoiceForm, clientId: e.target.value })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
                   >
                     <option value="" disabled>Choose a client...</option>
                     {clients.map(c => (
@@ -869,7 +879,7 @@ export function ConsultancyManager() {
                     onChange={(e) =>
                       setInvoiceForm({ ...invoiceForm, description: e.target.value })
                     }
-                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
+                    className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
                     placeholder="e.g. Website Strategy Session"
                   />
                 </div>
@@ -888,7 +898,7 @@ export function ConsultancyManager() {
                       onChange={(e) =>
                         setInvoiceForm({ ...invoiceForm, amount: e.target.value })
                       }
-                      className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
+                      className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
                       placeholder="0.00"
                     />
                   </div>
@@ -903,7 +913,7 @@ export function ConsultancyManager() {
                       onChange={(e) =>
                         setInvoiceForm({ ...invoiceForm, dueDate: e.target.value })
                       }
-                      className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
+                      className="w-full p-3 rounded-xl border border-black bg-slate-50 text-sm font-medium focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                 </div>
@@ -912,7 +922,7 @@ export function ConsultancyManager() {
                   <button
                     type="button"
                     onClick={() => setShowInvoiceModal(false)}
-                    className="flex-1 py-3 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200"
+                    className="flex-1 py-3 text-sm font-bold text-black bg-slate-100 rounded-xl hover:bg-slate-200"
                   >
                     Cancel
                   </button>

@@ -33,8 +33,10 @@ export default function BusinessDashboard() {
   useEffect(() => {
     if (location.pathname.startsWith("/consultancy")) {
       setActiveTab("consultancy");
+    } else if (profile?.businessLayer) {
+      setActiveTab(profile.businessLayer as "properties" | "field_services" | "consultancy");
     }
-  }, [location.pathname, setActiveTab]);
+  }, [location.pathname, setActiveTab, profile?.businessLayer]);
 
   useEffect(() => {
     if (!user || !profile) return;

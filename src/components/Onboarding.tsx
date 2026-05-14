@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useCategories } from "../lib/CategoryProvider";
 import { lookupPostcode } from "@/src/services/postcodeService";
 import { generateMemberId } from "@/src/services/memberIdService";
-import { BLOCKED_DOMAINS, UNSORTED_TRADE_CATEGORIES } from "@/src/constants";
+import { BLOCKED_DOMAINS, UNSORTED_TRADE_CATEGORIES, CONSULTANCY_CATEGORIES } from "@/src/constants";
 import { performInitialPublicRecordCheck } from "../services/verificationService";
 
 export default function Onboarding() {
@@ -55,14 +55,16 @@ export default function Onboarding() {
     return () => unsub();
   }, []);
 
-  const requiredCerts = categories
-    .filter(t => selectedTrades.includes(t.name))
-    .flatMap(t => {
+  const relevantCategories = businessLayer === "consultancy" ? CONSULTANCY_CATEGORIES : categories;
+
+  const requiredCerts = relevantCategories
+    .filter((t: any) => selectedTrades.includes(t.name))
+    .flatMap((t: any) => {
       const certs = [...(t.requiredCertifications || [])];
-      if ((t as any).subcategoryCertifications) {
-        t.subcategories?.forEach(sub => {
-          if (selectedSubcategories.includes(sub) && (t as any).subcategoryCertifications[sub]) {
-            certs.push(...(t as any).subcategoryCertifications[sub]);
+      if (t.subcategoryCertifications) {
+        t.subcategories?.forEach((sub: string) => {
+          if (selectedSubcategories.includes(sub) && t.subcategoryCertifications[sub]) {
+            certs.push(...t.subcategoryCertifications[sub]);
           }
         });
       }
@@ -349,7 +351,7 @@ export default function Onboarding() {
             ? (homeownerType === "business" ? "Business Professional" : "Standard Homeowner")
             : (platformConfig?.feeTiers?.[0]?.name || "Free Explorer")
         ),
-        subscriptionType: role === "business" && businessLayer === "properties" ? "business" : null,
+        subscriptionType: role === "business" && (businessLayer === "properties" || businessLayer === "consultancy") ? "business" : null,
         businessCategory: role === "business" ? businessCategory : null,
         permissions: finalPermissions,
         deviceId,
@@ -927,12 +929,12 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 2: Tradesperson - Select Trades */}
+          {/* Step 2: Tradesperson or Consultancy - Select Categories */}
           {step === 2 && role === "business" && (businessLayer === "field_services" || businessLayer === "consultancy") && (
             <div className="space-y-8">
               <div className="text-center space-y-2">
                 <h1 className="text-3xl font-display font-black text-slate-900 tracking-tight">
-                  Select Your Trades
+                  {businessLayer === "consultancy" ? "Select Your Professional Categories" : "Select Your Trades"}
                 </h1>
                 <p className="text-slate-500 font-medium text-sm">
                   Tell us what you're an expert in.
@@ -945,12 +947,12 @@ export default function Onboarding() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-black text-primary uppercase tracking-tight">Get More Job Offers</p>
-                  <p className="text-xs text-slate-600 leading-relaxed">Select multiple trades below to see more jobs. You can also add or edit your specializations later in your Profile.</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">Select multiple {businessLayer === "consultancy" ? "categories" : "trades"} below to see more jobs. You can also add or edit your specializations later in your Profile.</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                {categories.map(t => (
+                {(businessLayer === "consultancy" ? CONSULTANCY_CATEGORIES : categories).map((t: any) => (
                   <div key={t.id} className="space-y-2">
                     <button
                       onClick={() => {
@@ -988,7 +990,7 @@ export default function Onboarding() {
                       >
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Specific Services:</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {t.subcategories.map(sub => (
+                          {t.subcategories.map((sub: string) => (
                             <label key={sub} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-slate-200 group">
                               <div className="relative flex items-center">
                                 <input 
