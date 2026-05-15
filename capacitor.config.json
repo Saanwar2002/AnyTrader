@@ -1,5 +1,5 @@
 {
-  "appId": "uk.tradequote.anytrader",
+  "appId": "com.anytrader.app",
   "appName": "AnyTrader",
   "webDir": "dist",
   "bundledWebRuntime": false,

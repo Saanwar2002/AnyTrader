@@ -26,6 +26,7 @@ import {
   Phone,
   MapPin,
   LayoutDashboard,
+  X,
 } from "lucide-react";
 import {
   format,
@@ -609,16 +610,23 @@ export function ConsultancyManager() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl shadow-sm w-full max-w-md overflow-hidden border border-black"
+              className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-black relative"
             >
+              <button 
+                type="button" 
+                onClick={() => setShowBookingModal(false)} 
+                className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-full text-white transition z-10"
+              >
+                 <X className="w-5 h-5" />
+              </button>
               <div className="p-6 bg-indigo-600 text-white">
-                <h3 className="font-black text-xl">Schedule Consultation</h3>
+                <h3 className="font-black text-xl pr-8">Schedule Consultation</h3>
                 <p className="text-white/80 text-sm font-medium">
                   Block time in your calendar for a client session.
                 </p>
@@ -711,15 +719,8 @@ export function ConsultancyManager() {
 
                 <div className="pt-4 flex gap-3">
                   <button
-                    type="button"
-                    onClick={() => setShowBookingModal(false)}
-                    className="flex-1 py-3 text-sm font-bold text-black bg-slate-100 rounded-xl hover:bg-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
                     type="submit"
-                    className="flex-1 py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-200"
+                    className="w-full py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-200 uppercase"
                   >
                     Schedule
                   </button>
@@ -736,16 +737,23 @@ export function ConsultancyManager() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl shadow-sm w-full max-w-md overflow-hidden border border-black"
+              className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-black relative"
             >
+              <button 
+                type="button" 
+                onClick={() => setShowClientModal(false)} 
+                className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-full text-white transition z-10"
+              >
+                 <X className="w-5 h-5" />
+              </button>
               <div className="p-6 bg-emerald-600 text-white">
-                <h3 className="font-black text-xl">Add New Client</h3>
+                <h3 className="font-black text-xl pr-8">Add New Client</h3>
                 <p className="text-white/80 text-sm font-medium">
                   Add a client profile to your consultancy roster.
                 </p>
@@ -810,15 +818,8 @@ export function ConsultancyManager() {
 
                 <div className="pt-4 flex gap-3">
                   <button
-                    type="button"
-                    onClick={() => setShowClientModal(false)}
-                    className="flex-1 py-3 text-sm font-bold text-black bg-slate-100 rounded-xl hover:bg-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
                     type="submit"
-                    className="flex-1 py-3 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-md shadow-emerald-200"
+                    className="w-full py-3 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-md shadow-emerald-200 uppercase"
                   >
                     Save Client
                   </button>
@@ -835,16 +836,23 @@ export function ConsultancyManager() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl shadow-sm w-full max-w-md overflow-hidden border border-black"
+              className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-black relative"
             >
+              <button 
+                type="button" 
+                onClick={() => setShowInvoiceModal(false)} 
+                className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-full text-white transition z-10"
+              >
+                 <X className="w-5 h-5" />
+              </button>
               <div className="p-6 bg-amber-500 text-white">
-                <h3 className="font-black text-xl">Create Invoice</h3>
+                <h3 className="font-black text-xl pr-8">Create Invoice</h3>
                 <p className="text-white/80 text-sm font-medium">
                   Generate a new invoice for a client.
                 </p>
@@ -920,15 +928,8 @@ export function ConsultancyManager() {
 
                 <div className="pt-4 flex gap-3">
                   <button
-                    type="button"
-                    onClick={() => setShowInvoiceModal(false)}
-                    className="flex-1 py-3 text-sm font-bold text-black bg-slate-100 rounded-xl hover:bg-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
                     type="submit"
-                    className="flex-1 py-3 text-sm font-bold text-white bg-amber-500 rounded-xl hover:bg-amber-600 shadow-md shadow-amber-200"
+                    className="w-full py-3 text-sm font-bold text-white bg-amber-500 rounded-xl hover:bg-amber-600 shadow-md shadow-amber-200 uppercase"
                   >
                     Send Invoice
                   </button>

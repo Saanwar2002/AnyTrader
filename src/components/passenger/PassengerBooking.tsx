@@ -1768,6 +1768,20 @@ export default function PassengerBooking() {
              }
           }
 
+          // Working Zone filter
+          if (driver.zoneEnabled && driver.zoneMaxDistance > 0 && driver.homeLat && driver.homeLng) {
+             const distPickupToHome = dist(pickupCoords.lat, pickupCoords.lng, driver.homeLat, driver.homeLng);
+             if (distPickupToHome > driver.zoneMaxDistance) {
+                 return;
+             }
+             if (dropoffCoords) {
+                 const distDropoffToHome = dist(dropoffCoords.lat, dropoffCoords.lng, driver.homeLat, driver.homeLng);
+                 if (distDropoffToHome > driver.zoneMaxDistance) {
+                     return;
+                 }
+             }
+          }
+
           // Match closest driver within the radius limit
           if (d < bestDistance) {
             bestDistance = d;

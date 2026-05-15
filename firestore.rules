@@ -57,7 +57,7 @@ service cloud.firestore {
         isSignedIn() && (
           (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified'])) || 
           isAdmin() ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'cancellationCount'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'cancellationCount', 'abandonmentStrikes'])
         )
       ) || userId.matches('^mock-trader-.*$');
     }

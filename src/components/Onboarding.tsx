@@ -118,7 +118,7 @@ export default function Onboarding() {
     console.log("handleSubmit called. State:", { user: !!user, role, name, postcode, phone });
     // Administrators can skip providing phone/postcode initially if needed,
     // but the db still requires name to exist for users.
-    if (!user || !role || (role !== 'admin' && (!name || !postcode || !phone))) {
+    if (!user || !role || (role !== 'admin' && (!name || !postcode || (!user?.isAnonymous && !phone)))) {
       console.log("handleSubmit returning early: Missing required fields");
       return;
     }
@@ -134,7 +134,7 @@ export default function Onboarding() {
       }
 
       // 2. Phone Number Validation (Basic UK format check)
-      if (!/^(\+44|0)7\d{9}$/.test(cleanPhone)) {
+      if (!user?.isAnonymous && !/^(\+44|0)7\d{9}$/.test(cleanPhone)) {
         setError("Please enter a valid UK mobile number (e.g., 07123 456789).");
         return;
       }
@@ -797,8 +797,7 @@ export default function Onboarding() {
                 disabled={
                   !role || 
                   loading ||
-                  (role === "homeowner" && !homeownerType) ||
-                  (role !== "admin" && (!name || !postcode || !phone)) ||
+                  (role !== "admin" && (!name || !postcode || (!user?.isAnonymous && !phone))) ||
                   (role === "fleet_driver" && vehicleCategories.length === 0)
                 }
                 className="w-full flex items-center justify-center gap-3 bg-orange-500 text-white p-5 rounded-[2rem] font-black text-xl hover:bg-orange-600 transition-all shadow-2xl shadow-orange-500/30 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none active:scale-95 group"

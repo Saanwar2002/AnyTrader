@@ -19,6 +19,7 @@ import DriverJobs from "./DriverJobs";
 import DriverZones from "./DriverZones";
 import DriverAvailability from "./DriverAvailability";
 import { MapZoomControls } from "../shared/MapZoomControls";
+import { SwipeButton } from "../shared/SwipeButton";
 import RideChat from "./RideChat";
 import { MessageCircle } from "lucide-react";
 
@@ -926,6 +927,8 @@ export default function DriverTerminal() {
             destinationModeActive: profile?.destinationModeActive === true,
             homeLat: profile?.homeLat || null,
             homeLng: profile?.homeLng || null,
+            zoneEnabled: profile?.zoneEnabled === true,
+            zoneMaxDistance: profile?.zoneMaxDistance || 0,
             vehicleCategory: profile?.vehicleCategory || 'standard',
             vehicleCategories: profile?.vehicleCategories || [profile?.vehicleCategory || 'standard'],
             isPetFriendly: profile?.isPetFriendly === true
@@ -1302,12 +1305,16 @@ export default function DriverTerminal() {
     if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
     cardCollapseTimeoutRef.current = setTimeout(() => {
       setIsCardCollapsed(true);
-    }, 10000);
+    }, 8000);
   }, []);
 
   useEffect(() => {
-    if (['en_route_pickup', 'waiting', 'in_progress'].includes(rideState)) {
-      // Intentionally removed auto-open here
+    if (['en_route_pickup', 'waiting'].includes(rideState)) {
+      setIsCardCollapsed(false);
+      resetCardCollapseTimer();
+    } else if (rideState === 'in_progress') {
+      setIsCardCollapsed(true);
+      if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
     } else {
       setIsCardCollapsed(true);
       if (cardCollapseTimeoutRef.current) clearTimeout(cardCollapseTimeoutRef.current);
@@ -2203,7 +2210,7 @@ export default function DriverTerminal() {
       )}
 
       {/* Floating Map Controls & SOS */}
-      <div className="absolute top-[15%] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
+      <div className="absolute top-[100px] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
         <button 
           onClick={() => setShowHazardModal(true)}
           className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -2214,7 +2221,7 @@ export default function DriverTerminal() {
 
       {/* Floating Map Navigation (Left Side) */}
       {(rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress') && activeRide?.id && (
-        <div className="absolute top-[18%] left-4 z-50 pointer-events-auto flex flex-col gap-3">
+        <div className="absolute top-[100px] left-4 z-50 pointer-events-auto flex flex-col gap-3">
           <button 
             onClick={handleStartExternalNavigation}
             className="w-10 h-10 rounded-full flex items-center justify-center bg-[#007AFF] shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform"
@@ -3966,12 +3973,15 @@ export default function DriverTerminal() {
                       </span>
                     )}
                   </button>
-                  <button 
-                    onClick={onArrivedClick}
-                    className="flex-1 h-10 bg-[#FF9500] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-orange-950/20"
-                  >
-                    <MapPin className="w-4 h-4" /> MARK AS ARRIVED
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <SwipeButton 
+                      onComplete={onArrivedClick}
+                      text="MARK AS ARRIVED"
+                      bgClass="bg-[#FF9500]"
+                      icon={<MapPin className="w-5 h-5 text-white" />}
+                      resetToken={showEarlyArrivalConfirm}
+                    />
+                  </div>
                 </div>
 
                 <AnimatePresence initial={false}>
@@ -4085,12 +4095,14 @@ export default function DriverTerminal() {
                       </span>
                     )}
                   </button>
-                  <button 
-                    onClick={handleStartRide}
-                    className="flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-emerald-950/20"
-                  >
-                    <Zap className="w-4 h-4 fill-[#0D0D0F]" /> START TRIP
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <SwipeButton 
+                      onComplete={handleStartRide}
+                      text={<span className="text-[#0D0D0F]">START TRIP</span>}
+                      bgClass="bg-[#00D26A]"
+                      icon={<Zap className="w-5 h-5 fill-[#0D0D0F] text-[#0D0D0F]" />}
+                    />
+                  </div>
                 </div>
 
                 <AnimatePresence initial={false}>
@@ -4225,19 +4237,23 @@ export default function DriverTerminal() {
                     )}
                   </button>
                   {currentLegIndex < (activeRide?.stops?.length || 0) ? (
-                    <button 
-                      onClick={handleGoToNextLeg}
-                      className="flex-1 h-10 bg-[#FF9500] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-[#FF9500]/30"
-                    >
-                      GO NEXT
-                    </button>
+                    <div className="flex-1 min-w-0">
+                      <SwipeButton 
+                        onComplete={handleGoToNextLeg}
+                        text="GO NEXT"
+                        bgClass="bg-[#FF9500]"
+                      />
+                    </div>
                   ) : (
-                    <button 
-                      onClick={handleCompleteRideBtnClick}
-                      className="flex-1 h-10 bg-[#FF3B30] text-white rounded-[10px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-red-950/30"
-                    >
-                      <Check className="w-4 h-4 stroke-[3]" /> COMPLETE
-                    </button>
+                    <div className="flex-1 min-w-0">
+                      <SwipeButton 
+                        onComplete={handleCompleteRideBtnClick}
+                        text="COMPLETE"
+                        bgClass="bg-[#FF3B30]"
+                        icon={<Check className="w-5 h-5 stroke-[3] text-white" />}
+                        resetToken={showCompleteConfirm}
+                      />
+                    </div>
                   )}
                 </div>
               </>

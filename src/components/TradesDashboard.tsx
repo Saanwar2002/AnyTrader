@@ -1203,7 +1203,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[110] bg-[#1e293b] text-white px-6 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 whitespace-nowrap"
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] bg-[#1e293b] text-white px-6 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 whitespace-nowrap"
           >
             <Zap className="w-5 h-5 text-amber-500" />
             <p className="text-sm font-bold">Tap again to confirm Instant Match</p>

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../AuthProvider";
+import { usePortal } from "@/src/lib/PortalContext";
+import { useNavigate } from "react-router-dom";
 import { logout, db, doc, updateDoc } from "@/src/firebase";
 import { deleteField } from "firebase/firestore";
 import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2, VolumeX } from "lucide-react";
@@ -20,6 +22,8 @@ export default function DriverMenu({
   onClose?: () => void
 }) {
   const { profile, user } = useAuth();
+  const { switchPortal } = usePortal();
+  const navigate = useNavigate();
   const [showHomeModal, setShowHomeModal] = useState(false);
   const [homeInput, setHomeInput] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -116,7 +120,7 @@ export default function DriverMenu({
     {
       title: "AnyTrader Ecosystem",
       items: [
-        { icon: Zap, label: "My Trade Profile", desc: "Switch to trade leads", color: "text-[#AF52DE]", bg: "bg-[#AF52DE]/10", type: 'button' },
+        { icon: Zap, label: "Switch To AnyTrader", desc: "", color: "text-[#AF52DE]", bg: "bg-[#AF52DE]/10", type: 'button', action: 'switch-to-anytrader' },
         { icon: ShieldCheck, label: "Mechanic Quotes", desc: "Fix your vehicle", color: "text-[#FF9500]", bg: "bg-[#FF9500]/10", type: 'button' },
       ]
     },
@@ -145,7 +149,7 @@ export default function DriverMenu({
       {/* Header / Profile Summary */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-[#252529] rounded-full flex items-center justify-center font-black text-2xl text-white border border-[#2C2C30]">
+          <div className="w-16 h-16 bg-[#252529] rounded-full flex items-center justify-center font-black text-2xl text-white border border-white/20">
             {profile?.firstName?.[0] || "D"}
           </div>
           <div>
@@ -171,7 +175,7 @@ export default function DriverMenu({
             </button>
             
             {onClose && (
-              <button onClick={onClose} className="w-10 h-10 flex shrink-0 items-center justify-center bg-[#1A1A1E] rounded-full border border-[#2C2C30] text-[#A1A1AA] hover:text-white transition-colors cursor-pointer active:scale-95">
+              <button onClick={onClose} className="w-10 h-10 flex shrink-0 items-center justify-center bg-[#1A1A1E] rounded-full border border-white/20 text-[#A1A1AA] hover:text-white transition-colors cursor-pointer active:scale-95">
                 <X className="w-5 h-5" />
               </button>
             )}
@@ -184,10 +188,10 @@ export default function DriverMenu({
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors border",
                 profile?.isLastJob 
-                  ? "bg-[#FF3B30]/10 border-[#FF3B30]/30 text-[#FF3B30]" 
+                  ? "bg-[#FF3B30]/10 border-white/20 text-[#FF3B30]" 
                   : confirmLastJob
-                    ? "bg-[#FF9500]/10 border-[#FF9500]/30 text-[#FF9500]"
-                    : "bg-white/5 border-white/10 text-white/70 hover:text-white"
+                    ? "bg-[#FF9500]/10 border-white/20 text-[#FF9500]"
+                    : "bg-white/5 border-white/20 text-white/70 hover:text-white"
               )}
             >
               <Power className="w-3.5 h-3.5" />
@@ -203,10 +207,10 @@ export default function DriverMenu({
 
       {/* Stripe Connect Onboarding Wizard */}
       {!profile?.stripeAccountId ? (
-        <div className="bg-[#1A1A1E] border-2 border-[#AF52DE]/30 rounded-3xl p-6 mb-8 relative overflow-hidden">
+        <div className="bg-[#1A1A1E] border border-white/20 rounded-3xl p-6 mb-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#AF52DE]/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#AF52DE]/20 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#AF52DE]/20 flex items-center justify-center border border-white/20">
               <CreditCard className="w-6 h-6 text-[#AF52DE]" />
             </div>
             <div>
@@ -214,14 +218,14 @@ export default function DriverMenu({
               <p className="text-[11px] text-[#E4E4E7] font-bold">Connect Stripe to receive instant payouts</p>
             </div>
           </div>
-          <button className="w-full py-3.5 bg-[#AF52DE] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_4px_15px_rgba(175,82,222,0.3)] active:scale-95 transition-transform">
+          <button className="w-full py-3.5 bg-[#AF52DE] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_4px_15px_rgba(175,82,222,0.3)] active:scale-95 transition-transform border border-white/20">
             Start Setup Wizard
           </button>
         </div>
       ) : (
-        <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5 mb-8 flex items-center justify-between">
+        <div className="bg-[#1A1A1E] border border-white/20 rounded-3xl p-5 mb-8 flex items-center justify-between">
            <div className="flex items-center gap-4">
-             <div className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
+             <div className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center border border-white/20">
                <ShieldCheck className="w-5 h-5 text-[#007AFF]" />
              </div>
              <div>
@@ -229,19 +233,36 @@ export default function DriverMenu({
                <p className="text-sm font-black text-white tracking-tight">**** 4242</p>
              </div>
            </div>
-           <button className="text-[10px] font-black text-[#E4E4E7] uppercase tracking-widest border border-[#2C2C30] px-3 py-1.5 rounded-lg active:bg-[#252529]">
+           <button className="text-[10px] font-black text-[#E4E4E7] uppercase tracking-widest border border-white/20 px-3 py-1.5 rounded-lg active:bg-[#252529]">
              Manage
            </button>
         </div>
       )}
 
+      {/* Switch to AnyTrader Banner */}
+      <button 
+        onClick={() => {
+          switchPortal("anytrader");
+          setTimeout(() => navigate("/", { replace: true }), 50);
+        }}
+        className="w-full bg-[#007AFF] border border-white/20 hover:bg-blue-600 rounded-2xl p-4 mb-8 flex items-center justify-between active:scale-[0.98] transition-all group shadow-lg shadow-blue-500/20"
+      >
+        <div className="flex flex-col text-left">
+          <h3 className="font-black text-white uppercase tracking-tight text-sm">Switch To AnyTrader</h3>
+          <p className="text-xs text-white/90 font-bold mt-0.5">View leads & manage quotes</p>
+        </div>
+        <div className="bg-white/20 text-white p-2 rounded-xl group-hover:bg-white/30 transition-colors border border-white/20">
+          <Zap className="w-5 h-5" />
+        </div>
+      </button>
+
       {/* Referral Banner */}
-      <div className="bg-gradient-to-r from-[#00D26A]/20 to-[#007AFF]/20 border border-[#00D26A]/30 rounded-2xl p-4 mb-8 flex items-center justify-between active:scale-[0.98] transition-transform">
+      <div className="bg-gradient-to-r from-[#00D26A]/20 to-[#007AFF]/20 border border-white/20 rounded-2xl p-4 mb-8 flex items-center justify-between active:scale-[0.98] transition-transform">
         <div>
           <h3 className="font-black text-white uppercase tracking-tight">Earn £25</h3>
           <p className="text-xs text-[#E4E4E7] font-bold mt-0.5">Invite a driver or trader</p>
         </div>
-        <div className="bg-white text-[#0D0D0F] p-2 rounded-full">
+        <div className="bg-white text-[#0D0D0F] p-2 rounded-full border border-white/20">
           <Share2 className="w-5 h-5" />
         </div>
       </div>
@@ -251,7 +272,7 @@ export default function DriverMenu({
         {sections.map((section, idx) => (
           <div key={idx}>
             <p className="text-[10px] font-black uppercase text-[#A1A1AA] tracking-widest px-2 mb-2">{section.title}</p>
-            <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-[#1A1A1E] border border-white/20 rounded-2xl overflow-hidden shadow-sm">
               {section.items.map((item: any, idxi) => {
                 const Icon = item.icon;
                 return (
@@ -279,18 +300,21 @@ export default function DriverMenu({
                         if (item.action === 'toggle-last-job') {
                           updateDoc(doc(db, "users", user.uid), { isLastJob: !item.active });
                         }
+                      } else if (item.action === 'switch-to-anytrader') {
+                        switchPortal("anytrader");
+                        setTimeout(() => navigate("/", { replace: true }), 50);
                       } else {
                         item.id && onNavigate(item.id);
                       }
                     }}
                     className={cn(
                       "w-full flex items-center justify-between p-4 bg-transparent outline-none active:bg-[#252529] transition-colors text-left disabled:opacity-50",
-                      idxi !== section.items.length - 1 ? "border-b border-[#2C2C30]" : ""
+                      idxi !== section.items.length - 1 ? "border-b border-white/20" : ""
                     )}
                     disabled={item.type === 'text'}
                   >
                     <div className="flex items-center gap-4">
-                      <div className={cn("w-9 h-9 rounded-full flex items-center justify-center", item.bg)}>
+                      <div className={cn("w-9 h-9 rounded-full flex items-center justify-center border border-white/20", item.bg)}>
                         <Icon className={cn("w-5 h-5", item.color)} />
                       </div>
                       <div>
@@ -307,7 +331,7 @@ export default function DriverMenu({
                           <div className="flex items-center gap-2 mr-2">
                             <div 
                               onClick={(e) => { e.stopPropagation(); setShowHomeModal(true); setHomeInput(""); setSuggestions([]); }}
-                              className="p-1.5 bg-[#2C2C30] hover:bg-[#3F3F46] rounded flex items-center justify-center transition-colors cursor-pointer"
+                              className="p-1.5 bg-[#2C2C30] border border-white/20 hover:bg-[#3F3F46] rounded flex items-center justify-center transition-colors cursor-pointer"
                             >
                               <Edit2 className="w-3.5 h-3.5 text-[#A1A1AA] hover:text-white" />
                             </div>
@@ -327,13 +351,13 @@ export default function DriverMenu({
                                   console.error(err);
                                 }
                               }}
-                              className="p-1.5 bg-[#2C2C30] hover:bg-[#FF3B30]/20 rounded flex items-center justify-center transition-colors cursor-pointer"
+                              className="p-1.5 bg-[#2C2C30] border border-white/20 hover:bg-[#FF3B30]/20 rounded flex items-center justify-center transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5 text-[#A1A1AA] hover:text-[#FF3B30]" />
                             </div>
                           </div>
                         )}
-                        <div className="relative inline-block w-10 h-6 cursor-pointer rounded-full shrink-0 transition-colors" style={{ backgroundColor: item.active ? '#00D26A' : '#3F3F46' }}>
+                        <div className="relative inline-block w-10 h-6 cursor-pointer rounded-full shrink-0 transition-colors border border-white/20" style={{ backgroundColor: item.active ? '#00D26A' : '#3F3F46' }}>
                           <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all", item.active ? "right-1" : "left-1")}></div>
                         </div>
                       </div>
@@ -360,10 +384,10 @@ export default function DriverMenu({
 
       {showHomeModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1A1A1E] w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-[#2C2C30]">
+          <div className="bg-[#1A1A1E] w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-white/20">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-black text-white">Set Home Address</h3>
-              <button onClick={() => setShowHomeModal(false)} className="p-2 w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowHomeModal(false)} className="p-2 w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white border border-white/20"><X className="w-5 h-5" /></button>
             </div>
             <p className="text-sm font-medium text-[#A1A1AA] mb-4">
               Where are you heading? We'll prioritize rides going in this direction.
@@ -372,7 +396,7 @@ export default function DriverMenu({
               <input
                 type="text"
                 placeholder="Search home address..."
-                className="w-full bg-[#2C2C30] border-none rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500 transition-all pl-12 placeholder:text-[#A1A1AA]"
+                className="w-full bg-[#2C2C30] border border-white/20 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500 transition-all pl-12 placeholder:text-[#A1A1AA]"
                 value={homeInput}
                 onChange={(e) => setHomeInput(e.target.value)}
               />
@@ -380,13 +404,13 @@ export default function DriverMenu({
             </div>
 
             {suggestions.length > 0 && (
-              <div className="bg-[#252529] rounded-2xl overflow-hidden shadow-lg border border-[#3F3F46] max-h-[50vh] overflow-y-auto mb-4">
+              <div className="bg-[#252529] rounded-2xl overflow-hidden shadow-lg border border-white/20 max-h-[50vh] overflow-y-auto mb-4">
                 {suggestions.map((s, i) => (
                   <button
                     key={i}
                     onClick={() => handleSelectHome(s.place_id, s.description)}
                     disabled={isGeocoding}
-                    className="w-full text-left px-5 py-4 border-b border-[#3F3F46] hover:bg-[#2C2C30] transition-colors disabled:opacity-50 flex items-start gap-4 text-left"
+                    className="w-full text-left px-5 py-4 border-b border-white/20 hover:bg-[#2C2C30] transition-colors disabled:opacity-50 flex items-start gap-4 text-left"
                   >
                     <MapPin className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                     <div>

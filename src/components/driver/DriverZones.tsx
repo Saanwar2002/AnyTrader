@@ -94,8 +94,8 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
   return (
     <div className="absolute inset-0 z-50 bg-[#0E0E11] flex flex-col pointer-events-auto overflow-hidden animate-in slide-in-from-right duration-300">
       {/* Header */}
-      <div className="px-5 pt-12 pb-5 border-b border-[#2C2C30] flex items-center justify-between bg-[#1A1A1E] shadow-sm sticky top-0 z-10 shrink-0">
-        <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-[#252529] active:bg-[#2C2C30] border border-[#3F3F46] rounded-full transition-colors">
+      <div className="px-5 py-4 border-b border-white/20 flex items-center justify-between bg-[#1A1A1E] shadow-sm sticky top-0 z-10 shrink-0">
+        <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-[#252529] active:bg-[#2C2C30] border border-white/20 rounded-full transition-colors">
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
         <h2 className="text-lg font-bold text-white">My Zones</h2>
@@ -116,7 +116,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
           <div className="space-y-3">
             <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-2">Home Location</h3>
             {homeLocation ? (
-              <div className="bg-[#1A1A1E] border border-[#2C2C30] p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-[#1A1A1E] border border-white/20 p-4 rounded-xl flex items-center justify-between">
                 <div className="flex flex-col gap-1">
                   <span className="text-white font-medium">{homeLocation.address}</span>
                   <span className="text-xs text-slate-400">Lat: {homeLocation.lat.toFixed(4)}, Lng: {homeLocation.lng.toFixed(4)}</span>
@@ -132,19 +132,19 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
                   placeholder="Search postcode or address..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#1A1A1E] text-white px-12 py-4 rounded-xl border border-[#2C2C30] focus:border-[#007AFF] outline-none"
+                  className="w-full bg-[#1A1A1E] text-white px-12 py-4 rounded-xl border border-white/20 focus:border-[#007AFF] outline-none"
                 />
                 <Search className="w-5 h-5 text-[#A1A1AA] absolute left-4 top-1/2 -translate-y-1/2" />
               </div>
             )}
             
             {suggestions.length > 0 && !homeLocation && (
-              <div className="bg-[#252529] rounded-xl overflow-hidden shadow-lg border border-[#3F3F46] max-h-[50vh] overflow-y-auto mb-4">
+              <div className="bg-[#252529] rounded-xl overflow-hidden shadow-lg border border-white/20 max-h-[50vh] overflow-y-auto mb-4">
                 {suggestions.map((s, i) => (
                   <button
                     key={i}
                     onClick={() => handleSelectHome(s.place_id, s.description)}
-                    className="w-full text-left px-5 py-4 border-b border-[#3F3F46] hover:bg-[#2C2C30] transition-colors flex items-start gap-4"
+                    className="w-full text-left px-5 py-4 border-b border-white/20 hover:bg-[#2C2C30] transition-colors flex items-start gap-4"
                   >
                     <MapPin className="w-5 h-5 text-[#A1A1AA] shrink-0 mt-0.5" />
                     <span className="text-white text-sm">{s.description}</span>
@@ -156,7 +156,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
 
           {/* Map Preview */}
           {homeLocation && (
-             <div className="h-64 rounded-xl overflow-hidden border border-[#2C2C30] relative">
+             <div className="h-64 rounded-xl overflow-hidden border border-white/20 relative">
                 <GoogleMap
                   mapContainerClassName="w-full h-full"
                   center={{ lat: homeLocation.lat, lng: homeLocation.lng }}
@@ -190,7 +190,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
           )}
 
           {/* Toggle Enable */}
-          <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl p-4 flex items-center justify-between">
+          <div className="bg-[#1A1A1E] border border-white/20 rounded-xl p-4 flex items-center justify-between">
              <div className="flex flex-col gap-1 pr-4">
                 <span className="text-white font-bold">Enable Working Zone</span>
                 <span className="text-xs text-slate-400">Limit offers based on radius from home</span>
@@ -211,10 +211,10 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
                    <span className="text-[#007AFF] font-bold text-lg">{selectedDistance > 0 ? `${selectedDistance} mi` : "National"}</span>
                 </div>
                 
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl p-5 flex items-center justify-between">
+                <div className="bg-[#1A1A1E] border border-white/20 rounded-xl p-5 flex items-center justify-between">
                    <button 
                       onClick={() => setSelectedDistance(selectedDistance === 0 ? 10 : Math.max(1, selectedDistance - 1))}
-                      className="w-12 h-12 rounded-full border border-[#3F3F46] flex items-center justify-center text-white active:bg-[#2C2C30] transition-colors"
+                      className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white active:bg-[#2C2C30] transition-colors"
                    >
                       <Minus className="w-6 h-6" />
                    </button>
@@ -228,7 +228,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
 
                    <button 
                       onClick={() => setSelectedDistance(selectedDistance === 0 ? 10 : Math.min(50, selectedDistance + 1))}
-                      className="w-12 h-12 rounded-full border border-[#3F3F46] flex items-center justify-center text-white active:bg-[#2C2C30] transition-colors"
+                      className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white active:bg-[#2C2C30] transition-colors"
                    >
                       <Plus className="w-6 h-6" />
                    </button>
@@ -238,7 +238,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
                    onClick={() => setSelectedDistance(0)}
                    className={cn(
                       "w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left mt-2",
-                      selectedDistance === 0 ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-[#2C2C30]"
+                      selectedDistance === 0 ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20"
                    )}
                 >
                   <span className={cn("font-medium", selectedDistance === 0 ? "text-[#007AFF]" : "text-white")}>

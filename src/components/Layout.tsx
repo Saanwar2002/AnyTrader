@@ -10,7 +10,6 @@ import { Logo } from "./Logo";
 import { AnimatePresence, motion } from "motion/react";
 import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
 import { usePortal } from "../lib/PortalContext";
-import PlatformSwitcher from "./shared/PlatformSwitcher";
 import CrossPortalBanner from "./shared/CrossPortalBanner";
 import { getShopRecommendations } from "@/src/services/gemini";
 
@@ -267,7 +266,7 @@ export default function Layout() {
       setActiveRole("trader");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, activeRole, availableRoles]);
+  }, [location.pathname]);
 
   const homeownerNav = [
     { name: "Home", path: "/", icon: Home, isCta: false },
@@ -514,6 +513,7 @@ export default function Layout() {
                     if (item.path.startsWith("/my-quotes") && unreadTypes.has("quote")) hasUnread = true;
                     if (item.path === "/my-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
                     if (item.path === "/trade-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
+                    if (item.path === "/driver-terminal?tab=inbox" && (unreadCount > 0)) hasUnread = true;
 
                     return (
                       <Link
@@ -1129,7 +1129,7 @@ export default function Layout() {
             (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'field_services') ? "bg-blue-50/95 border-blue-200" :
             (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'consultancy') ? "bg-purple-50/95 border-purple-200" :
             "bg-white/95 border-slate-200",
-          activePortal !== "anytrader" ? "pl-[3.5rem] pr-2" : "px-2"
+          (activePortal !== "anytrader" && !isDriverTerminal) ? "pl-[3.5rem] pr-2" : "px-2"
         )}>
           {navItems.map((item, idx) => {
             const Icon = item.icon;
@@ -1142,6 +1142,7 @@ export default function Layout() {
             if (item.path.startsWith("/my-quotes") && unreadTypes.has("quote")) hasUnread = true;
             if (item.path === "/my-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
             if (item.path === "/trade-jobs" && (unreadTypes.has("quote") || unreadTypes.has("status"))) hasUnread = true;
+            if (item.path === "/driver-terminal?tab=inbox" && (unreadCount > 0)) hasUnread = true;
 
             return (
               <Link
@@ -1151,7 +1152,7 @@ export default function Layout() {
                   "flex flex-col items-center justify-center gap-1 transition-colors relative flex-1 min-w-0 mx-1 h-[60px] rounded-[16px] z-10",
                   isActive 
                     ? "text-white font-black"
-                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white" : "text-slate-900 font-bold"),
+                    : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white font-bold" : "text-slate-900 font-bold"),
                   item.isCta && !isActive && "text-blue-600"
                 )}
               >
@@ -1164,7 +1165,7 @@ export default function Layout() {
                     </span>
                   )}
                 </div>
-                <span className="text-[9px] min-[380px]:text-[10px] sm:text-[11px] font-black tracking-tight text-center leading-none truncate w-full">{item.name}</span>
+                <span className="text-[10px] min-[380px]:text-[11px] sm:text-[12px] tracking-tight text-center leading-none truncate w-full">{item.name}</span>
                 {isActive && (
                    <motion.div 
                      layoutId="navActiveBg"

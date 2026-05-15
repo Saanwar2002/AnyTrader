@@ -119,20 +119,29 @@ export default function DriverInbox({ onClose, onNavigate }: { onClose?: () => v
 
           {/* Filter Chips */}
           <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-            {(['all', 'rides', 'alerts', 'anytrader'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-colors border",
-                  filter === f 
-                    ? "bg-white text-[#0D0D0F] border-white" 
-                    : "bg-[#1A1A1E] text-[#E4E4E7] border-[#2C2C30] hover:border-[#A1A1AA]"
-                )}
-              >
-                {f}
-              </button>
-            ))}
+            {(['all', 'rides', 'alerts', 'anytrader'] as const).map(f => {
+              const hasUnread = messages.some(m => m.type === f && m.unread);
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-colors border relative",
+                    filter === f 
+                      ? "bg-white text-[#0D0D0F] border-white" 
+                      : "bg-[#1A1A1E] text-[#E4E4E7] border-[#2C2C30] hover:border-[#A1A1AA]"
+                  )}
+                >
+                  {f}
+                  {hasUnread && f !== 'all' && (
+                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#AF52DE] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#AF52DE] border border-[#1A1A1E]"></span>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Cross-Sell Call to Action in Alerts */}

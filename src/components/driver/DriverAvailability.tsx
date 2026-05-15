@@ -102,8 +102,8 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
      return (
         <div className="absolute inset-0 z-50 bg-[#0E0E11] flex flex-col pointer-events-auto overflow-hidden animate-in slide-in-from-right duration-200">
            {/* Header */}
-           <div className="px-5 pt-12 pb-5 border-b border-[#2C2C30] flex items-center justify-between bg-[#1A1A1E] shadow-sm shrink-0">
-             <button onClick={() => setEditingDay(null)} className="w-10 h-10 flex items-center justify-center bg-[#252529] active:bg-[#2C2C30] border border-[#3F3F46] rounded-full transition-colors">
+           <div className="px-5 py-4 border-b border-white/20 flex items-center justify-between bg-[#1A1A1E] shadow-sm shrink-0">
+             <button onClick={() => setEditingDay(null)} className="w-10 h-10 flex items-center justify-center bg-[#252529] active:bg-[#2C2C30] border border-white/20 rounded-full transition-colors">
                <ChevronLeft className="w-5 h-5 text-white" />
              </button>
              <h2 className="text-lg font-bold text-white">{editingDay} Schedule</h2>
@@ -114,7 +114,7 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
               <div className="space-y-3">
                  <button 
                     onClick={() => handleSaveSchedule(editingDay, { status: 'anytime' })}
-                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === 'anytime' ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-[#2C2C30]")}
+                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === 'anytime' ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}
                  >
                     <span className={cn("font-medium", dayData.status === 'anytime' ? "text-[#007AFF]" : "text-white")}>Anytime</span>
                     {dayData.status === 'anytime' && <Check className="w-5 h-5 text-[#007AFF]" />}
@@ -122,13 +122,13 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
                  
                  <button 
                     onClick={() => handleSaveSchedule(editingDay, { status: 'unavailable' })}
-                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === 'unavailable' ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-[#2C2C30]")}
+                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === 'unavailable' ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}
                  >
                     <span className={cn("font-medium", dayData.status === 'unavailable' ? "text-[#007AFF]" : "text-white")}>Unavailable</span>
                     {dayData.status === 'unavailable' && <Check className="w-5 h-5 text-[#007AFF]" />}
                  </button>
 
-                 <div className={cn("p-4 rounded-xl border transition-all", dayData.status === 'specific' ? "bg-[#007AFF]/5 border-[#007AFF]" : "bg-[#1A1A1E] border-[#2C2C30]")}>
+                 <div className={cn("p-4 rounded-xl border transition-all", dayData.status === 'specific' ? "bg-[#007AFF]/5 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}>
                     <div 
                        className="flex items-center justify-between mb-4 cursor-pointer"
                        onClick={() => handleSaveSchedule(editingDay, { status: 'specific', startTime: dayData.startTime || '09:00', endTime: dayData.endTime || '17:00' })}
@@ -189,8 +189,8 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
   return (
     <div className="absolute inset-0 z-50 bg-[#0E0E11] flex flex-col pointer-events-auto overflow-hidden animate-in slide-in-from-right duration-300">
       {/* Header */}
-      <div className="px-5 pt-12 pb-5 border-b border-[#2C2C30] flex items-center justify-between bg-[#1A1A1E] shadow-sm sticky top-0 z-10 shrink-0">
-        <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-[#252529] active:bg-[#2C2C30] border border-[#3F3F46] rounded-full transition-colors">
+      <div className="px-5 py-4 border-b border-white/20 flex items-center justify-between bg-[#1A1A1E] shadow-sm sticky top-0 z-10 shrink-0">
+        <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-[#252529] active:bg-[#2C2C30] border border-white/20 rounded-full transition-colors">
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
         <h2 className="text-lg font-bold text-white">Availability Hours</h2>
@@ -201,7 +201,7 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
         <div className="p-5 space-y-6">
 
           {/* Time Tracking Widget */}
-          <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-2xl p-6 shadow-sm relative overflow-hidden">
+          <div className="bg-[#1A1A1E] border border-white/20 rounded-2xl p-6 shadow-sm relative overflow-hidden">
              
              <div className="flex justify-between items-start mb-6 relative z-10">
                 <div>
@@ -240,7 +240,7 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
           {/* Schedular */}
           <div>
              <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-4 mt-6">My Weekly Schedule</h3>
-             <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-xl divide-y divide-[#2C2C30]">
+             <div className="bg-[#1A1A1E] border border-white/20 rounded-xl divide-y divide-white/20">
                 {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                    <button 
                       key={day} 

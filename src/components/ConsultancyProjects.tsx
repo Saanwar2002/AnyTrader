@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, collection, query, where, onSnapshot, orderBy, updateDoc, doc, addDoc, deleteDoc, serverTimestamp } from "@/src/firebase";
-import { FolderKanban, CheckCircle, Clock, Plus, ChevronDown, ChevronUp, Receipt, PoundSterling, Trash2, Edit2, PlayCircle, Archive, Settings } from "lucide-react";
+import { FolderKanban, CheckCircle, Clock, Plus, ChevronDown, ChevronUp, Receipt, PoundSterling, Trash2, Edit2, PlayCircle, Archive, Settings, X } from "lucide-react";
 import { format } from "date-fns";
 import { ProMatchmakerModal } from "./shared/ProMatchmakerModal";
 
@@ -709,76 +709,99 @@ export function ConsultancyProjects({ clientId }: { clientId?: string }) {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
       <div className="flex items-center justify-between">
          <h3 className="font-bold text-black flex items-center gap-2">
             <FolderKanban className="w-5 h-5 text-indigo-500" /> Projects
          </h3>
          <button 
-           onClick={() => setIsCreating(!isCreating)}
+           onClick={() => setIsCreating(true)}
            className="bg-black text-white p-2 rounded-xl text-[12px] font-bold flex items-center gap-1 hover:bg-slate-800 transition shadow-sm"
          >
            <Plus className="w-4 h-4" /> New Project
          </button>
       </div>
 
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-full overflow-x-auto text-[10px]">
+      <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl w-full text-[10px] justify-between sm:justify-start">
         <button 
           onClick={() => setFilter("all")}
-          className={`px-3 py-1.5 font-bold rounded-lg transition whitespace-nowrap ${filter === "all" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
+          className={`flex-1 sm:flex-none px-2 py-1 font-bold rounded-lg transition whitespace-nowrap text-center ${filter === "all" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
         >
           All
         </button>
         <button 
           onClick={() => setFilter("active")}
-          className={`px-3 py-1.5 font-bold rounded-lg transition whitespace-nowrap ${filter === "active" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
+          className={`flex-1 sm:flex-none px-2 py-1 font-bold rounded-lg transition whitespace-nowrap text-center ${filter === "active" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
         >
           Active
         </button>
         <button 
           onClick={() => setFilter("pending")}
-          className={`px-3 py-1.5 font-bold rounded-lg transition whitespace-nowrap ${filter === "pending" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
+          className={`flex-1 sm:flex-none px-2 py-1 font-bold rounded-lg transition whitespace-nowrap text-center ${filter === "pending" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
         >
           Pending
         </button>
         <button 
           onClick={() => setFilter("completed")}
-          className={`px-3 py-1.5 font-bold rounded-lg transition whitespace-nowrap ${filter === "completed" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
+          className={`flex-1 sm:flex-none px-2 py-1 font-bold rounded-lg transition whitespace-nowrap text-center ${filter === "completed" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
         >
           Completed
         </button>
         <button 
           onClick={() => setFilter("cancelled")}
-          className={`px-3 py-1.5 font-bold rounded-lg transition whitespace-nowrap ${filter === "cancelled" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
+          className={`flex-1 sm:flex-none px-2 py-1 font-bold rounded-lg transition whitespace-nowrap text-center ${filter === "cancelled" ? "bg-white shadow-sm border border-black/10 text-black" : "text-black/60 hover:text-black"}`}
         >
           Cancelled
         </button>
       </div>
 
       {isCreating && (
-        <form onSubmit={handleCreateProject} className="bg-slate-50 p-4 rounded-xl border border-black mb-4 flex flex-col sm:flex-row gap-2">
-          <input 
-            value={newTitle}
-            onChange={e => setNewTitle(e.target.value)}
-            placeholder="Project Title..."
-            autoFocus
-            className="flex-1 text-sm p-2 rounded-lg border border-black focus:ring-1 focus:ring-black bg-white"
-          />
-          <div className="relative w-full sm:w-1/4">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-black/50 font-bold">£</span>
-            <input 
-              type="number"
-              step="0.01"
-              value={newBudget}
-              onChange={e => setNewBudget(e.target.value)}
-              placeholder="Total Budget"
-              className="w-full pl-6 pr-2 py-2 text-sm rounded-xl border border-black focus:ring-1 focus:ring-black bg-white font-mono"
-            />
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm pointer-events-auto">
+          <div className="bg-white p-6 rounded-xl border border-black max-w-sm w-full relative shadow-2xl">
+            <button 
+              type="button" 
+              onClick={() => setIsCreating(false)} 
+              className="absolute top-3 right-3 p-1.5 bg-black/5 hover:bg-black/10 rounded-full text-black transition"
+            >
+               <X className="w-5 h-5" />
+            </button>
+            <div className="mb-4 text-sm font-black uppercase tracking-wider text-black">New Project</div>
+            <form onSubmit={handleCreateProject} className="flex flex-col gap-3">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Project Title</label>
+                <input 
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  placeholder="e.g. Kitchen Renovation"
+                  autoFocus
+                  className="w-full text-sm p-3 rounded-xl border border-black focus:ring-1 focus:ring-black bg-slate-50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Total Budget (£)</label>
+                <div className="relative w-full">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-black/50 font-bold">£</span>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={newBudget}
+                    onChange={e => setNewBudget(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-7 pr-3 py-3 text-sm rounded-xl border border-black focus:ring-1 focus:ring-black bg-slate-50 font-mono"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button type="button" onClick={() => setIsCreating(false)} className="flex-1 p-3 bg-slate-100 text-black rounded-xl hover:bg-slate-200 transition text-sm font-bold">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 p-3 bg-black text-white rounded-xl hover:bg-slate-800 transition text-sm font-bold">
+                  Save Project
+                </button>
+              </div>
+            </form>
           </div>
-          <button type="submit" className="p-2 bg-black text-white rounded-lg hover:bg-slate-800 transition px-4 text-sm font-bold">
-            Save
-          </button>
-        </form>
+        </div>
       )}
 
       {filteredProjects.length === 0 ? (
@@ -797,7 +820,7 @@ export function ConsultancyProjects({ clientId }: { clientId?: string }) {
       ) : (
          <div className="space-y-3">
             {filteredProjects.map(project => (
-               <div key={project.id} className="bg-white p-4 rounded-xl border border-black shadow-sm flex flex-col gap-3 group transition-all">
+               <div key={project.id} className="bg-white p-4 rounded-xl border border-black shadow-sm flex flex-col gap-3 group transition-all relative">
                   <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(expandedId === project.id ? null : project.id)}>
                      <div className="flex flex-col">
                         <span className="font-bold text-black">{project.title || "Untitled Project"}</span>
@@ -824,50 +847,7 @@ export function ConsultancyProjects({ clientId }: { clientId?: string }) {
                           <span className="text-xs font-bold text-black">{project.loggedHours || 0} hrs</span>
                         </div>
                       </div>
-                      
-                      <div className="relative">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setSettingsOpenId(settingsOpenId === project.id ? null : project.id); setDeleteConfirmId(null); }}
-                          className="text-slate-400 hover:text-black transition p-1 rounded-md hover:bg-slate-100"
-                        >
-                          <Settings className="w-4 h-4" />
-                        </button>
-                        
-                        {settingsOpenId === project.id && (
-                          <div className="absolute right-0 bottom-full mb-2 bg-white rounded-xl shadow-lg border border-black/10 p-2 min-w-[200px] z-10 flex flex-col gap-1">
-                            <select 
-                              value={project.status || "active"} 
-                              onChange={(e) => updateProjectStatus(project.id, e.target.value)}
-                              className="text-[10px] font-bold uppercase rounded p-2 bg-slate-50 border border-black/10 outline-none w-full cursor-pointer hover:bg-slate-100 transition"
-                            >
-                              <option value="pending">Mark Pending</option>
-                              <option value="active">Mark Active</option>
-                              <option value="completed">Mark Completed</option>
-                              <option value="cancelled">Mark Cancelled</option>
-                            </select>
-                            
-                            {["completed", "cancelled"].includes(project.status) && (
-                              deleteConfirmId === project.id ? (
-                                <div className="flex flex-col gap-2 p-2 bg-rose-50 rounded-lg border border-rose-200 mt-2">
-                                  <span className="text-[10px] font-bold text-rose-800 text-center uppercase">Are you absolutely sure?</span>
-                                  <div className="flex gap-2">
-                                     <button onClick={(e) => { e.stopPropagation(); deleteProject(project.id); }} className="flex-1 text-[10px] bg-rose-600 text-white py-1.5 rounded-lg font-bold hover:bg-rose-700 transition">Yes, Delete</button>
-                                     <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="flex-1 text-[10px] bg-slate-200 text-slate-800 py-1.5 rounded-lg font-bold hover:bg-slate-300 transition">Cancel</button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(project.id); }} 
-                                  className="text-rose-600 hover:bg-rose-50 text-[10px] font-bold uppercase py-2 px-2 mt-1 rounded-lg transition text-left flex items-center justify-between w-full"
-                                >
-                                  Delete Project
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      <div />
                     </div>
                     {expandedId === project.id && (
                       <div className="space-y-4 mt-4">
@@ -879,6 +859,53 @@ export function ConsultancyProjects({ clientId }: { clientId?: string }) {
                         <ProjectFinancials projectId={project.id} budget={project.budget} />
                       </div>
                     )}
+                  </div>
+                  
+                  {/* Bottom Right Settings Gear */}
+                  <div className="absolute bottom-3 right-3 flex items-end">
+                    <div className="relative flex flex-col items-end">
+                      {settingsOpenId === project.id && (
+                        <div className="mb-2 bg-white rounded-xl shadow-lg border border-black/10 p-2 min-w-[180px] z-[60] flex flex-col gap-1 origin-bottom-right animate-in zoom-in-95">
+                          <select 
+                            value={project.status || "active"} 
+                            onChange={(e) => updateProjectStatus(project.id, e.target.value)}
+                            className="text-[10px] font-bold uppercase rounded p-2 bg-slate-50 border border-black/10 outline-none w-full cursor-pointer hover:bg-slate-100 transition"
+                          >
+                            <option value="pending">Mark Pending</option>
+                            <option value="active">Mark Active</option>
+                            <option value="completed">Mark Completed</option>
+                            <option value="cancelled">Mark Cancelled</option>
+                          </select>
+                          
+                          {["completed", "cancelled"].includes(project.status) && (
+                            deleteConfirmId === project.id ? (
+                              <div className="flex flex-col gap-2 p-2 bg-rose-50 rounded-lg border border-rose-200 mt-2">
+                                <span className="text-[10px] font-bold text-rose-800 text-center uppercase">Are you absolutely sure?</span>
+                                <div className="flex flex-col gap-1 text-center">
+                                   <button onClick={(e) => { e.stopPropagation(); deleteProject(project.id); }} className="w-full text-[10px] bg-rose-600 text-white py-1.5 rounded-lg font-bold hover:bg-rose-700 transition">Double Confirm Delete</button>
+                                   <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="w-full text-[10px] bg-slate-200 text-slate-800 py-1.5 rounded-lg font-bold hover:bg-slate-300 transition">Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(project.id); }} 
+                                className="text-rose-600 hover:bg-rose-50 text-[10px] font-bold uppercase py-2 px-2 mt-1 rounded-lg transition text-left flex items-center justify-between w-full"
+                              >
+                                Delete Project
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )
+                          )}
+                        </div>
+                      )}
+                      
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setSettingsOpenId(settingsOpenId === project.id ? null : project.id); setDeleteConfirmId(null); }}
+                        className="text-slate-400 hover:text-black transition p-1.5 rounded-md hover:bg-slate-100 bg-white/80 backdrop-blur-sm border border-black/5"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                </div>
             ))}

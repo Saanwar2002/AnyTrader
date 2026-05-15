@@ -72,10 +72,6 @@ function IndexRoute() {
   }
 
   // AnyTrader context
-  if (activeRole === "driver") {
-    return <DriverTerminal />; // Fallback 
-  }
-  
   if (activeRole === "business") {
     return <BusinessDashboard />;
   }
