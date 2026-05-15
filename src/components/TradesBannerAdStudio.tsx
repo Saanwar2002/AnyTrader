@@ -161,7 +161,7 @@ export default function TradesBannerAdStudio() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white text-slate-900 rounded-3xl p-6 relative overflow-hidden shadow-sm border border-slate-200 col-span-1 md:col-span-2 flex flex-col justify-between">
+        <div className="bg-white text-slate-900 rounded-3xl p-6 relative overflow-hidden shadow-sm border border-black col-span-1 md:col-span-2 flex flex-col justify-between">
           <div className="absolute top-0 right-0 p-6 opacity-10">
             <CreditCard className="w-24 h-24 text-slate-900" />
           </div>
@@ -204,7 +204,7 @@ export default function TradesBannerAdStudio() {
       <h2 className="text-lg font-bold text-slate-900 pt-4">Your Advertising Campaigns</h2>
       
       {adverts.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center">
+        <div className="bg-white border border-black rounded-3xl p-12 text-center">
           <Zap className="w-12 h-12 text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-slate-900 mb-2">No campaigns yet</h3>
           <p className="text-slate-500 mb-6 max-w-md mx-auto">Create your first banner ad campaign.</p>
@@ -218,7 +218,7 @@ export default function TradesBannerAdStudio() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {adverts.map(ad => (
-            <div key={ad.id} className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm">
+            <div key={ad.id} className="bg-white rounded-3xl border border-black p-5 shadow-sm">
               <div className="flex justify-between items-start mb-4">
                 <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0", ad.bgColor)}>
                   <Zap className="w-5 h-5" />
@@ -292,7 +292,7 @@ export default function TradesBannerAdStudio() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Short Phrase / Tagline</label>
-                <input type="text" value={headline} onChange={e => setHeadline(e.target.value)} maxLength={40} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none focus:ring-2 focus:ring-blue-600/20" placeholder={profile?.trade || "e.g. Expert Plumbing Services"} />
+                <input type="text" value={headline} onChange={e => setHeadline(e.target.value)} maxLength={40} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none focus:ring-2 focus:ring-blue-600/20" placeholder={profile?.trade || "e.g. Expert Plumbing Services"} />
               </div>
               
               <div>
@@ -302,7 +302,7 @@ export default function TradesBannerAdStudio() {
                      <button
                        key={days}
                        onClick={() => setDurationDays(days)}
-                       className={cn("flex items-center justify-between p-4 rounded-xl border-2 transition-all", durationDays === days ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:border-slate-300")}
+                       className={cn("flex items-center justify-between p-4 rounded-xl border-2 transition-all", durationDays === days ? "border-amber-400 bg-amber-50" : "border-black bg-white hover:border-black")}
                      >
                        <span className="font-black text-slate-900">{days} Days</span>
                        <span className="font-bold text-slate-500">£{(days * DAILY_RATE).toFixed(2)} total</span>
@@ -311,7 +311,7 @@ export default function TradesBannerAdStudio() {
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center text-sm">
+              <div className="bg-slate-50 p-4 rounded-xl border border-black flex justify-between items-center text-sm">
                 <span className="font-bold text-slate-500">Total Cost:</span>
                 <span className="font-black text-slate-900 text-lg">£{(durationDays * DAILY_RATE).toFixed(2)}</span>
               </div>
@@ -341,7 +341,7 @@ export default function TradesBannerAdStudio() {
             
             <div className="relative mb-6">
               <span className="absolute left-6 top-4 text-slate-400 font-bold text-xl">£</span>
-              <input type="number" value={topupAmount} onChange={e => setTopupAmount(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 p-4 pl-12 text-2xl font-black rounded-2xl outline-none transition-all" />
+              <input type="number" value={topupAmount} onChange={e => setTopupAmount(e.target.value)} className="w-full bg-slate-50 border-2 border-black focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 p-4 pl-12 text-2xl font-black rounded-2xl outline-none transition-all" />
             </div>
             
             <button onClick={handleTopup} disabled={isSaving} className="w-full bg-slate-900 text-white h-14 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition shadow-sm disabled:opacity-50">

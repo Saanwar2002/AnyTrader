@@ -7,7 +7,7 @@ import {
 import { useAuth } from "./AuthProvider";
 import { 
   Star, MapPin, Calendar, Shield, Check, Briefcase, Clock, Zap, MessageSquare, ChevronLeft, Loader2, Image as ImageIcon, Users, ChevronDown,
-  ShieldCheck, CheckCircle, Heart, FileText, AlertTriangle, X, Send, ChevronRight, Award, Share2, UserPlus, HelpCircle, Medal
+  ShieldCheck, CheckCircle, Heart, FileText, AlertTriangle, X, Send, ChevronRight, Award, Share2, UserPlus, HelpCircle, Medal, CalendarClock
 } from "lucide-react";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -38,11 +38,63 @@ export default function PublicProfile() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Booking Appointments
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [bookingDate, setBookingDate] = useState("");
+  const [bookingTime, setBookingTime] = useState("");
+  const [bookingNotes, setBookingNotes] = useState("");
+
   const isBusyToday = () => {
     if (!profile?.dateOverrides) return false;
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const status = profile.dateOverrides[todayStr];
     return status === "busy" || status === "booked";
+  };
+
+  const handleSubmitBooking = async () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await addDoc(collection(db, "appointments"), {
+        customerId: currentUser.uid,
+        traderId: id,
+        serviceId: selectedService?.id || "general",
+        serviceName: selectedService?.name || "General Consultation",
+        price: selectedService?.price || 0,
+        durationMinutes: selectedService?.durationMinutes || 60,
+        date: bookingDate,
+        startTime: bookingTime,
+        notes: bookingNotes,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      // Send notification to trader
+      await sendNotification(
+        id!,
+        "New Appointment Request",
+        `You have a new appointment request from ${currentUserProfile?.name || 'a customer'} for ${bookingDate} at ${bookingTime}.`,
+        "system",
+        "#appointments"
+      );
+
+      setIsBookingModalOpen(false);
+      setBookingDate("");
+      setBookingTime("");
+      setBookingNotes("");
+      setSelectedService(null);
+      alert("Appointment request sent successfully! You will be notified when it is confirmed.");
+    } catch(err) {
+      handleFirestoreError(err, OperationType.CREATE, "appointments");
+      alert("Failed to send appointment request.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   useEffect(() => {
@@ -343,7 +395,7 @@ export default function PublicProfile() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4 relative z-50">
-          <button onClick={() => { console.log("Back button clicked"); navigate(-1); }} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group">
+          <button onClick={() => { console.log("Back button clicked"); navigate(-1); }} className="p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group">
             <ChevronLeft className="w-6 h-6 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <h1 className="text-2xl font-bold text-slate-900">Tradesperson Profile</h1>
@@ -388,9 +440,9 @@ export default function PublicProfile() {
       )}
 
       {/* Profile Card */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8 relative">
+      <div className="bg-white rounded-3xl border border-black shadow-sm p-8 mb-8 relative">
         <div className="flex flex-col items-center">
-          <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-4xl font-bold overflow-hidden border-4 border-white shadow-lg mb-4">
+          <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-4xl font-bold overflow-hidden border-4 border-black shadow-lg mb-4">
             {profile.photoURL || profile.avatarUrl ? (
               <img src={profile.photoURL || profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
@@ -515,7 +567,7 @@ export default function PublicProfile() {
                   return (
                     <div 
                       key={badgeId} 
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-bold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-black text-xs font-bold text-slate-700 shadow-sm transition-all hover:border-black hover:shadow-md"
                     >
                       <Icon className={cn("w-4 h-4", iconColorClasses[badge.color] || "text-slate-500")} />
                       {badge.name}
@@ -553,7 +605,7 @@ export default function PublicProfile() {
       </div>
 
       {/* Achievements */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-8">
+      <div className="bg-white rounded-3xl border border-black shadow-sm p-6 mb-8">
         <div 
           className="flex items-center justify-between cursor-pointer"
           onClick={() => setIsAchievementsExpanded(!isAchievementsExpanded)}
@@ -613,7 +665,7 @@ export default function PublicProfile() {
 
       {/* Products and Services */}
       {profile.services && profile.services.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
+        <div className="bg-white rounded-3xl border border-black shadow-sm p-8 mb-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
               <Briefcase className="w-5 h-5" />
@@ -643,7 +695,7 @@ export default function PublicProfile() {
       )}
 
       {/* About & Specializations */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
+      <div className="bg-white rounded-3xl border border-black shadow-sm p-8 mb-8">
         <h3 className="text-xl font-bold text-slate-900 mb-4">About</h3>
         <p className="text-slate-600 text-sm leading-relaxed mb-6">{profile.bio || "No bio provided."}</p>
         
@@ -667,7 +719,7 @@ export default function PublicProfile() {
               <MapPin className="w-4 h-4 text-slate-400" />
               Trader Location
             </h4>
-            <div className="aspect-video bg-slate-100 rounded-2xl relative flex items-center justify-center overflow-hidden border border-slate-200 pointer-events-none">
+            <div className="aspect-video bg-slate-100 rounded-2xl relative flex items-center justify-center overflow-hidden border border-black pointer-events-none">
               <iframe
                 width="100%"
                 height="100%"
@@ -699,7 +751,7 @@ export default function PublicProfile() {
 
       {/* Portfolio Section */}
       {((profile.portfolio && profile.portfolio.length > 0) || portfolioItems.length > 0) && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 mb-8">
+        <div className="bg-white rounded-3xl border border-black shadow-sm p-8 mb-8">
           <div className="flex items-center gap-2 mb-6">
             <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
               <ImageIcon className="w-5 h-5" />
@@ -708,12 +760,12 @@ export default function PublicProfile() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {profile.portfolio?.map((url: string, index: number) => (
-              <div key={`basic-${index}`} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+              <div key={`basic-${index}`} className="aspect-square rounded-2xl overflow-hidden border border-black bg-slate-100">
                 <img src={url} alt={`Portfolio ${index + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
             ))}
             {portfolioItems.map((item) => (
-               <div key={`complex-${item.id}`} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 relative group">
+               <div key={`complex-${item.id}`} className="aspect-square rounded-2xl overflow-hidden border border-black bg-slate-100 relative group">
                  {item.imageUrls?.[0] ? (
                   <img src={item.imageUrls[0]} alt={item.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                  ) : (
@@ -751,7 +803,7 @@ export default function PublicProfile() {
         ) : reviews.length > 0 ? (
           <div className="space-y-4">
             {reviews.map((review) => (
-              <div key={review.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <div key={review.id} className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
@@ -773,14 +825,14 @@ export default function PublicProfile() {
             ))}
           </div>
         ) : (
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center">
+          <div className="bg-white p-8 rounded-3xl border border-black text-center">
             <p className="text-slate-500 text-sm">No reviews yet.</p>
           </div>
         )}
       </div>
 
       {/* Fixed Bottom Action Bar */}
-      <div className="fixed bottom-4 sm:bottom-0 left-4 right-4 sm:left-0 sm:right-0 bg-white/95 backdrop-blur-xl border border-slate-200 sm:border-t p-4 z-[90] rounded-3xl sm:rounded-none shadow-2xl sm:shadow-none pb-safe sm:pb-4">
+      <div className="fixed bottom-4 sm:bottom-0 left-4 right-4 sm:left-0 sm:right-0 bg-white/95 backdrop-blur-xl border border-black sm:border-t p-4 z-[90] rounded-3xl sm:rounded-none shadow-2xl sm:shadow-none pb-safe sm:pb-4">
         {!currentUser ? (
           <div className="max-w-2xl mx-auto">
             <button 
@@ -804,26 +856,152 @@ export default function PublicProfile() {
             </div>
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto flex gap-3">
-            <button 
-              onClick={handleMessage}
-              disabled={isProcessing}
-              className="flex-1 bg-white border-2 border-blue-600 text-blue-600 py-3.5 rounded-2xl font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
-              Message
-            </button>
-            <button 
-              onClick={openQuoteModal}
-              disabled={isProcessing}
-              className="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
-              Request Quote
-            </button>
+          <div className="max-w-2xl mx-auto space-y-3">
+            <div className="flex gap-3">
+              <button 
+                onClick={handleMessage}
+                disabled={isProcessing}
+                className="flex-1 bg-white border-2 border-blue-600 text-blue-600 py-3.5 rounded-2xl font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
+                Message
+              </button>
+              <button 
+                onClick={openQuoteModal}
+                disabled={isProcessing}
+                className="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+                Request Quote
+              </button>
+            </div>
+            {profile.appointmentSettings?.enabled && (
+              <button 
+                onClick={() => setIsBookingModalOpen(true)}
+                disabled={isProcessing}
+                className="w-full bg-slate-900 border-2 border-black text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <CalendarClock className="w-5 h-5" />
+                Book an Appointment
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* Booking Appointment Modal */}
+      <AnimatePresence>
+        {isBookingModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsBookingModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                    <CalendarClock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Book Appointment</h2>
+                    <p className="text-xs text-slate-500">Pick a service and date</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsBookingModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Service Selection */}
+                  <div>
+                     <h3 className="text-sm font-bold text-slate-900 mb-3">1. Select a Service</h3>
+                     {(!profile.appointmentSettings?.services || profile.appointmentSettings.services.length === 0) ? (
+                        <div className="p-4 bg-slate-50 border border-black rounded-xl text-center">
+                          <p className="text-sm text-slate-500 font-medium">No specific services listed.</p>
+                          <p className="text-xs text-slate-400 mt-1">You will request a general consultation.</p>
+                        </div>
+                     ) : (
+                        <div className="space-y-2">
+                           {profile.appointmentSettings.services.map((svc: any) => (
+                             <button
+                               key={svc.id}
+                               onClick={() => setSelectedService(svc)}
+                               className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedService?.id === svc.id ? 'border-blue-600 bg-blue-50' : 'border-black hover:border-black bg-white'}`}
+                             >
+                               <div>
+                                  <p className="font-bold text-slate-900">{svc.name}</p>
+                                  <p className="text-xs text-slate-500">{svc.durationMinutes} minutes</p>
+                               </div>
+                               <p className="font-black text-slate-900">£{svc.price}</p>
+                             </button>
+                           ))}
+                        </div>
+                     )}
+                  </div>
+
+                  {/* Date & Time Selection */}
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 mb-3">2. Choose Date & Time</h3>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Date</label>
+                        <input 
+                          type="date" 
+                          min={new Date().toISOString().split("T")[0]}
+                          value={bookingDate}
+                          onChange={(e) => setBookingDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-black px-4 py-3 rounded-xl font-medium outline-none focus:border-blue-600 focus:bg-white transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Start Time</label>
+                        <input 
+                          type="time" 
+                          value={bookingTime}
+                          onChange={(e) => setBookingTime(e.target.value)}
+                          className="w-full bg-slate-50 border border-black px-4 py-3 rounded-xl font-medium outline-none focus:border-blue-600 focus:bg-white transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                     <h3 className="text-sm font-bold text-slate-900 mb-3">3. Notes (Optional)</h3>
+                     <textarea
+                       value={bookingNotes}
+                       onChange={(e) => setBookingNotes(e.target.value)}
+                       placeholder="Briefly describe what you need help with..."
+                       className="w-full bg-slate-50 border border-black px-4 py-3 rounded-xl font-medium outline-none focus:border-blue-600 focus:bg-white transition-colors resize-none h-24 text-sm placeholder:text-slate-400"
+                     />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
+                <button
+                  onClick={handleSubmitBooking}
+                  disabled={isProcessing || !bookingDate || !bookingTime}
+                  className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CalendarClock className="w-5 h-5" />}
+                  Confirm Appointment Request
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Quote Request Modal */}
       <AnimatePresence>
@@ -881,7 +1059,7 @@ export default function PublicProfile() {
                       </button>
                     ))
                   ) : (
-                    <div className="text-center py-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                    <div className="text-center py-12 bg-slate-50 rounded-3xl border-2 border-dashed border-black">
                       <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                       <p className="text-slate-500 font-medium mb-6">You don't have any active jobs yet.</p>
                       <Link 
@@ -901,7 +1079,7 @@ export default function PublicProfile() {
                     <Link 
                       to="/post-job"
                       state={{ targetTradespersonId: id, targetTradespersonName: profile.name, targetTrades: profile.trades }}
-                      className="w-full py-4 rounded-2xl border-2 border-slate-200 text-slate-600 font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
+                      className="w-full py-4 rounded-2xl border-2 border-black text-slate-600 font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
                     >
                       Post New Job
                     </Link>

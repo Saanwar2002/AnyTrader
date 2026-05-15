@@ -66,7 +66,7 @@ export default function MasterAdminLayout() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Universal Top Nav for Portals */}
-      <div className="bg-white border-b border-slate-200 px-4 h-16 flex items-center justify-between shadow-sm z-50 sticky top-0">
+      <div className="bg-white border-b border-black px-4 h-16 flex items-center justify-between shadow-sm z-50 sticky top-0">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
@@ -139,7 +139,7 @@ export default function MasterAdminLayout() {
                   <div className="p-12 text-center text-slate-500 font-medium">Aggregating platform data...</div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div className="bg-white p-6 rounded-2xl border border-black shadow-sm flex items-center justify-between">
                       <div>
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Network Users</p>
                         <p className="text-4xl font-black text-slate-900">{metrics.totalUsers}</p>
@@ -149,7 +149,7 @@ export default function MasterAdminLayout() {
                       </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div className="bg-white p-6 rounded-2xl border border-black shadow-sm flex items-center justify-between">
                       <div>
                         <p className="text-xs font-black text-orange-400 uppercase tracking-widest mb-1">AnyTrader Providers</p>
                         <p className="text-4xl font-black text-orange-600">{metrics.totalTraders}</p>
@@ -159,7 +159,7 @@ export default function MasterAdminLayout() {
                       </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div className="bg-white p-6 rounded-2xl border border-black shadow-sm flex items-center justify-between">
                       <div>
                         <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-1">AnyRoller Drivers</p>
                         <p className="text-4xl font-black text-emerald-600">{metrics.totalDrivers}</p>
@@ -169,7 +169,7 @@ export default function MasterAdminLayout() {
                       </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between mt-4">
+                    <div className="bg-white p-6 rounded-2xl border border-black shadow-sm flex items-center justify-between mt-4">
                       <div>
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Jobs Created</p>
                         <p className="text-3xl font-black text-slate-900">{metrics.totalJobs}</p>
@@ -179,7 +179,7 @@ export default function MasterAdminLayout() {
                       </div>
                     </div>
                     
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between mt-4">
+                    <div className="bg-white p-6 rounded-2xl border border-black shadow-sm flex items-center justify-between mt-4">
                       <div>
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Ride Requests</p>
                         <p className="text-3xl font-black text-slate-900">{metrics.totalRides}</p>

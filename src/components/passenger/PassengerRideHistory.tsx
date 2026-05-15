@@ -365,7 +365,7 @@ export default function PassengerRideHistory() {
                   
                   {ride.driverName && (
                     <div className="bg-slate-50 rounded-2xl p-3 flex items-center gap-3">
-                       <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName)}`} alt={ride.driverName} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
+                       <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(ride.driverName)}`} alt={ride.driverName} className="w-8 h-8 rounded-full border-2 border-black shadow-sm" />
                        <div>
                          <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Driver</p>
                          <p className="text-xs font-bold text-slate-700">{ride.driverName}</p>
@@ -514,7 +514,7 @@ export default function PassengerRideHistory() {
                 {/* Route */}
                 <div className="space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 border border-black flex items-center justify-center shrink-0 mt-0.5">
                       <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                     </div>
                     <div>
@@ -527,7 +527,7 @@ export default function PassengerRideHistory() {
                     <div key={index} className="relative">
                       <div className="absolute -top-4 left-4 w-0.5 h-4 bg-slate-200" />
                       <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 border border-black flex items-center justify-center shrink-0 mt-0.5">
                           <MapPin className="w-4 h-4 text-amber-500" />
                         </div>
                         <div>
@@ -541,7 +541,7 @@ export default function PassengerRideHistory() {
                   <div className="relative">
                      <div className="absolute -top-4 left-4 w-0.5 h-4 bg-slate-200" />
                      <div className="flex items-start gap-3">
-                       <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 mt-0.5">
+                       <div className="w-8 h-8 rounded-full bg-slate-100 border border-black flex items-center justify-center shrink-0 mt-0.5">
                          <MapPin className="w-4 h-4 text-emerald-500" />
                        </div>
                        <div>
@@ -557,7 +557,7 @@ export default function PassengerRideHistory() {
                   <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Driver & Vehicle</h3>
                   <div className="bg-slate-50 rounded-2xl p-4 flex items-center justify-between border border-slate-100">
                      <div className="flex items-center gap-3">
-                       <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRideDetails.driverName || 'Driver')}`} alt={selectedRideDetails.driverName} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+                       <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRideDetails.driverName || 'Driver')}`} alt={selectedRideDetails.driverName} className="w-10 h-10 rounded-full border-2 border-black shadow-sm" />
                        <div>
                          <p className="text-sm font-bold text-slate-900">{selectedRideDetails.driverName || 'Unknown Driver'}</p>
                          <p className="text-xs font-semibold text-slate-500">{selectedRideDetails.vehicleInfo || 'Vehicle Unknown'}</p>

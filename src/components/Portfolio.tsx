@@ -191,7 +191,7 @@ export default function Portfolio() {
                 <div className="bg-white rounded-xl border border-black shadow-sm p-6 mb-6">
                   <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><FileText className="w-5 h-5 text-slate-400" /> Active Maintenance Tasks</h3>
                   {propertyJobs.length === 0 ? (
-                    <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                    <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-black">
                       <p className="text-slate-500 font-medium">No active tasks for this property.</p>
                       <p className="text-sm text-slate-400 mt-1">Click "Dispatch Maintenance" to create a new job.</p>
                     </div>

@@ -128,7 +128,7 @@ export function HireB2BServiceManager() {
 
           <div className="space-y-4">
              {filteredProperties.length === 0 ? (
-                <div className="py-12 border-2 border-dashed border-slate-200 rounded-xl text-center">
+                <div className="py-12 border-2 border-dashed border-black rounded-xl text-center">
                   <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                   <p className="font-bold text-slate-900">No projects found</p>
                   <p className="text-sm font-medium text-black mt-1">Add a project or property first to hire B2B services.</p>
@@ -171,7 +171,7 @@ export function HireB2BServiceManager() {
                         </div>
                         <div className={cn(
                           "w-4 h-4 rounded-full border flex flex-shrink-0 items-center justify-center transition-colors shrink-0",
-                          isSelected ? "border-black bg-black" : "border-slate-300"
+                          isSelected ? "border-black bg-black" : "border-black"
                         )}>
                           {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_0_1px_black]" />}
                         </div>

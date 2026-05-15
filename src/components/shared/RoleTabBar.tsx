@@ -72,7 +72,7 @@ export default function RoleTabBar() {
   };
 
   return (
-    <div className="w-full bg-surface border-b border-slate-200 sticky top-16 z-40 sm:shadow-sm flex flex-col items-center justify-center pt-2 pb-0">
+    <div className="w-full bg-surface border-b border-black sticky top-16 z-40 sm:shadow-sm flex flex-col items-center justify-center pt-2 pb-0">
       {shouldShowMainRoles && (
         <div className="flex bg-slate-100/80 p-1 rounded-xl items-center shadow-inner max-w-sm w-full mx-auto relative mb-2 px-2 sm:px-0">
           {uniqueRoles.map((role) => (

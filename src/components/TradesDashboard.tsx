@@ -451,7 +451,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                     As a beta member, we've waived the standard 15% success fee on your completed jobs. Enjoy 100% of your earnings.
                   </p>
                   
-                  <div className="bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-white/10 flex items-center gap-4 shrink-0">
+                  <div className="bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-black/10 flex items-center gap-4 shrink-0">
                     <div className="w-12 h-12 rounded-2xl bg-orange-400 flex items-center justify-center shadow-lg shadow-orange-500/20">
                       <Award className="w-6 h-6 text-white" />
                     </div>
@@ -807,7 +807,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
               )})}
             </div>
           ) : !isRecommending && (
-            <div className="bg-slate-50 rounded-3xl p-8 border border-dashed border-slate-200 text-center">
+            <div className="bg-slate-50 rounded-3xl p-8 border border-dashed border-black text-center">
               <p className="text-sm text-slate-500">No specific recommendations right now. Check the main feed!</p>
             </div>
           )}
@@ -898,7 +898,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
 
               if (displayJobs.length === 0) {
                 return (
-                  <div className="bg-slate-50 p-8 rounded-2xl border border-dashed border-slate-200 text-center">
+                  <div className="bg-slate-50 p-8 rounded-2xl border border-dashed border-black text-center">
                     <p className="text-slate-500 text-sm">
                       {projectTab === "active" 
                         ? "No projects currently in progress." 
@@ -980,7 +980,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
           
           <div className="space-y-3">
             {activeQuotes.length === 0 ? (
-              <div className="bg-slate-50 p-8 rounded-2xl border border-dashed border-slate-200 text-center">
+              <div className="bg-slate-50 p-8 rounded-2xl border border-dashed border-black text-center">
                 <p className="text-slate-500 text-sm">You have no pending quotes.</p>
               </div>
             ) : (
@@ -1138,7 +1138,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                   </div>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-center">
+                <div className="bg-slate-50 border border-black rounded-2xl p-3 text-center">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Add-on Price</p>
                   <p className="text-3xl font-black text-slate-900">£{getExclusivePrice()}<span className="text-sm text-slate-500 font-medium">/mo</span></p>
                 </div>
@@ -1253,7 +1253,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                       value={imSetupData.callOutFee}
                       onChange={e => setImSetupData({ ...imSetupData, callOutFee: e.target.value })}
                       placeholder="e.g. 50"
-                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-2xl px-4 font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
+                      className="w-full h-12 bg-slate-50 border border-black rounded-2xl px-4 font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
                     />
                     <p className="text-xs text-slate-500 mt-1.5 px-1">Fixed fee just to arrive on site in an emergency.</p>
                   </div>
@@ -1265,7 +1265,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                       value={imSetupData.hourlyRate}
                       onChange={e => setImSetupData({ ...imSetupData, hourlyRate: e.target.value })}
                       placeholder="e.g. 80"
-                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-2xl px-4 font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
+                      className="w-full h-12 bg-slate-50 border border-black rounded-2xl px-4 font-bold text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
                     />
                     <p className="text-xs text-slate-500 mt-1.5 px-1">Charge per hour for subsequent emergency repair work.</p>
                   </div>
@@ -1276,7 +1276,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                       value={imSetupData.terms}
                       onChange={e => setImSetupData({ ...imSetupData, terms: e.target.value })}
                       placeholder="e.g. Rate excludes materials. Client must be present to provide access."
-                      className="w-full min-h-[100px] bg-slate-50 border border-slate-200 rounded-2xl p-4 font-medium text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors resize-y"
+                      className="w-full min-h-[100px] bg-slate-50 border border-black rounded-2xl p-4 font-medium text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors resize-y"
                     />
                   </div>
                 </div>

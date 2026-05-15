@@ -441,7 +441,7 @@ export default function Layout() {
 
       {/* Header */}
       {!isDriverTerminal && activePortal !== 'anyroller' && (
-      <header className="bg-slate-50/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
+      <header className="bg-slate-50/95 backdrop-blur-md border-b border-black sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
               {activePortal === "anyroller" && (
@@ -532,7 +532,7 @@ export default function Layout() {
                           {hasUnread && (
                             <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-black"></span>
                             </span>
                           )}
                         </div>
@@ -557,7 +557,7 @@ export default function Layout() {
                   title="Trade Equipment Shop"
                 >
                   <ShoppingCart className="w-4 h-4 fill-white stroke-white" />
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-pulse" />
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black animate-pulse" />
                 </button>
 
                 <AnimatePresence>
@@ -614,7 +614,7 @@ export default function Layout() {
                                     }}
                                     className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl hover:bg-blue-50 transition-colors group cursor-pointer w-full text-left border border-slate-100 shadow-sm"
                                   >
-                                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform group-hover:border-blue-300 group-hover:shadow-blue-200">
+                                    <div className="w-12 h-12 rounded-xl bg-white border border-black shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform group-hover:border-blue-300 group-hover:shadow-blue-200">
                                       <RecommendationIcon className="w-6 h-6 text-slate-600 group-hover:text-blue-600" />
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -673,7 +673,7 @@ export default function Layout() {
                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
                            animate={{ opacity: 1, y: 0, scale: 1 }}
                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                           className="absolute top-14 left-0 sm:left-auto sm:right-0 w-52 bg-white max-h-[80vh] overflow-y-auto rounded-2xl shadow-xl border border-slate-200 py-2 z-[60] origin-top-left sm:origin-top-right"
+                           className="absolute top-14 left-0 sm:left-auto sm:right-0 w-52 bg-white max-h-[80vh] overflow-y-auto rounded-2xl shadow-xl border border-black py-2 z-[60] origin-top-left sm:origin-top-right"
                          >
                            <Link onClick={() => setShowQuickActions(false)} to="/post-job" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Briefcase className="w-4 h-4"/></div>
@@ -712,7 +712,7 @@ export default function Layout() {
               title="AnyTrader Assistant"
             >
               <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-2 h-2 bg-primary rounded-full border-2 border-white group-hover:scale-125 transition-transform" />
+              <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-2 h-2 bg-primary rounded-full border-2 border-black group-hover:scale-125 transition-transform" />
             </button>
             <Link 
               to="/notifications" 
@@ -720,7 +720,7 @@ export default function Layout() {
             >
               <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
               {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 sm:top-1.5 sm:right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                <span className="absolute top-0 right-0 sm:top-1.5 sm:right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-black">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -771,7 +771,7 @@ export default function Layout() {
               <div className="flex gap-3 w-full pt-4">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}
-                  className="flex-1 p-3 rounded-xl border-2 border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                  className="flex-1 p-3 rounded-xl border-2 border-black text-slate-600 font-bold hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -936,7 +936,7 @@ export default function Layout() {
                                   onClick={() => navigate(`/profile/${driver.uid}`)}
                                   className="shrink-0 flex flex-col items-center gap-1.5 p-2 bg-slate-50 border border-slate-100 rounded-2xl min-w-[70px] hover:bg-slate-100 transition-colors"
                                 >
-                                  <img src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${driver.name}`} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt={driver.name} referrerPolicy="no-referrer" />
+                                  <img src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${driver.name}`} className="w-10 h-10 rounded-full border-2 border-black shadow-sm" alt={driver.name} referrerPolicy="no-referrer" />
                                   <span className="text-[10px] font-bold text-slate-700 truncate w-full text-center">{driver.name.split(' ')[0]}</span>
                                 </button>
                               ))}
@@ -1125,10 +1125,10 @@ export default function Layout() {
         <nav className={cn(
           "sm:hidden fixed bottom-0 left-0 right-0 w-full backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t pb-[env(safe-area-inset-bottom)] h-[calc(4.5rem+env(safe-area-inset-bottom))] flex items-center justify-between z-[100] transition-colors duration-300",
           isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : 
-            (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'properties') ? "bg-slate-100/95 border-slate-300" :
+            (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'properties') ? "bg-slate-100/95 border-black" :
             (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'field_services') ? "bg-blue-50/95 border-blue-200" :
             (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'consultancy') ? "bg-purple-50/95 border-purple-200" :
-            "bg-white/95 border-slate-200",
+            "bg-white/95 border-black",
           (activePortal !== "anytrader" && !isDriverTerminal) ? "pl-[3.5rem] pr-2" : "px-2"
         )}>
           {navItems.map((item, idx) => {
@@ -1161,7 +1161,7 @@ export default function Layout() {
                   {hasUnread && (
                     <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-black"></span>
                     </span>
                   )}
                 </div>

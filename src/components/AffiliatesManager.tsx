@@ -138,7 +138,7 @@ export default function AffiliatesManager() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-5 rounded-2xl border border-black shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Users className="w-5 h-5" />
@@ -150,7 +150,7 @@ export default function AffiliatesManager() {
           </div>
         </div>
         
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-5 rounded-2xl border border-black shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
@@ -162,7 +162,7 @@ export default function AffiliatesManager() {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-5 rounded-2xl border border-black shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <DollarSign className="w-5 h-5" />
@@ -187,7 +187,7 @@ export default function AffiliatesManager() {
                 type="text" 
                 value={formData.name} 
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
+                className="w-full bg-white border border-black rounded-xl px-4 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
                 placeholder="e.g. Ava"
               />
             </div>
@@ -199,7 +199,7 @@ export default function AffiliatesManager() {
                   type="text" 
                   value={formData.code} 
                   onChange={(e) => setFormData({...formData, code: e.target.value})}
-                  className="w-full pl-12 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
+                  className="w-full pl-12 bg-white border border-black rounded-xl px-4 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
                   placeholder="e.g. ava"
                 />
               </div>
@@ -210,7 +210,7 @@ export default function AffiliatesManager() {
                 type="number" 
                 value={formData.discountPercentage} 
                 onChange={(e) => setFormData({...formData, discountPercentage: Number(e.target.value)})}
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500 transition-all"
+                className="w-full bg-white border border-black rounded-xl px-4 py-2 outline-none focus:border-blue-500 transition-all"
               />
             </div>
             <div>
@@ -219,7 +219,7 @@ export default function AffiliatesManager() {
                 type="number" 
                 value={formData.commissionPercentage} 
                 onChange={(e) => setFormData({...formData, commissionPercentage: Number(e.target.value)})}
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500 transition-all"
+                className="w-full bg-white border border-black rounded-xl px-4 py-2 outline-none focus:border-blue-500 transition-all"
               />
             </div>
           </div>
@@ -242,7 +242,7 @@ export default function AffiliatesManager() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-black overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

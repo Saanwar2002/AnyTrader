@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { db, doc, getDoc, updateDoc, setDoc, handleFirestoreError, OperationType } from "@/src/firebase";
+import { db, doc, getDoc, updateDoc, setDoc, handleFirestoreError, OperationType, collection, query, where, orderBy, onSnapshot } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2, Save, Check, AlertCircle, Settings, CheckCircle2, Clock, CalendarDays, HelpCircle, X, Zap } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2, Save, Check, AlertCircle, Settings, CheckCircle2, Clock, CalendarDays, HelpCircle, X, Zap, CalendarClock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { 
@@ -25,7 +25,8 @@ export default function Availability() {
   const [error, setError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'calendar' | 'standard'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'standard' | 'appointments'>('calendar');
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [isAcceptingRequests, setIsAcceptingRequests] = useState(true);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -84,7 +85,34 @@ export default function Availability() {
     };
 
     fetchAvailability();
+
+    if (user) {
+      const q = query(
+        collection(db, "appointments"),
+        where("traderId", "==", user.uid),
+        orderBy("date", "desc")
+      );
+      const unsub = onSnapshot(q, (snapshot) => {
+        setAppointments(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
+      }, err => {
+        console.error("Error fetching appointments:", err);
+      });
+      return () => unsub();
+    }
   }, [user]);
+
+  const handleAppointmentAction = async (appointmentId: string, action: 'confirmed' | 'declined') => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, "appointments", appointmentId), {
+        status: action
+      });
+      alert(`Appointment ${action} successfully!`);
+    } catch(err) {
+      handleFirestoreError(err, OperationType.UPDATE, `appointments/${appointmentId}`);
+      alert("Action failed.");
+    }
+  };
 
   const handleSaveStandard = async () => {
     if (!user) return;
@@ -213,7 +241,7 @@ export default function Availability() {
   return (
     <div className="max-w-2xl mx-auto pb-24">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group">
+        <button onClick={() => navigate(-1)} className="p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group">
           <ChevronLeft className="w-6 h-6 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
         </button>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -229,7 +257,7 @@ export default function Availability() {
       </div>
 
       {/* Global Toggle */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-6">
+      <div className="bg-white rounded-3xl border border-black shadow-sm p-6 mb-6">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <h3 className="font-bold text-slate-900">Accepting New Work</h3>
@@ -321,11 +349,25 @@ export default function Availability() {
         >
           Standard Hours
         </button>
+        <button
+          onClick={() => setActiveTab('appointments')}
+          className={cn(
+            "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
+            activeTab === 'appointments' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+          )}
+        >
+          Appointments
+          {appointments?.filter(a => a.status === 'pending').length > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-[10px] w-4 h-4 rounded-full">
+              {appointments.filter(a => a.status === 'pending').length}
+            </span>
+          )}
+        </button>
       </div>
 
       {activeTab === 'calendar' ? (
         <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+          <div className="bg-white rounded-3xl border border-black shadow-sm p-6">
             {/* Calendar Header */}
             <div className="flex items-center justify-between mb-6">
               <button onClick={prevMonth} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
@@ -415,7 +457,7 @@ export default function Availability() {
 
           {/* Selected Date Actions */}
           {selectedDates.length > 0 && (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 animate-in slide-in-from-bottom-4">
+            <div className="bg-white rounded-3xl border border-black shadow-sm p-6 animate-in slide-in-from-bottom-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900">
                   {selectedDates.length} {selectedDates.length === 1 ? 'day' : 'days'} selected
@@ -427,21 +469,21 @@ export default function Availability() {
               <div className="flex gap-3">
                 <button
                   onClick={() => handleSetOverride('available')}
-                  className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border bg-white border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+                  className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border bg-white border-black text-slate-600 hover:bg-slate-50 transition-all"
                 >
                   <CheckCircle2 className="w-4 h-4 text-green-600" />
                   Available
                 </button>
                 <button
                   onClick={() => handleSetOverride('busy')}
-                  className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border bg-white border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+                  className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border bg-white border-black text-slate-600 hover:bg-slate-50 transition-all"
                 >
                   <Clock className="w-4 h-4 text-orange-600" />
                   Busy
                 </button>
                 <button
                   onClick={() => handleSetOverride('booked')}
-                  className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border bg-white border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+                  className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border bg-white border-black text-slate-600 hover:bg-slate-50 transition-all"
                 >
                   <CalendarDays className="w-4 h-4 text-slate-800" />
                   Booked
@@ -454,7 +496,7 @@ export default function Availability() {
             </div>
           )}
         </div>
-      ) : (
+      ) : activeTab === 'standard' ? (
         <div className="space-y-6">
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3">
@@ -470,7 +512,7 @@ export default function Availability() {
             </div>
           )}
 
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900">Standard Working Hours</h2>
               <p className="text-sm text-slate-500 mt-1">Set your regular working hours so homeowners know when you're available.</p>
@@ -508,7 +550,7 @@ export default function Availability() {
                           <select
                             value={dayData.start}
                             onChange={(e) => updateTime(key, "start", e.target.value)}
-                            className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-medium text-slate-700 appearance-none bg-white"
+                            className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-medium text-slate-700 appearance-none bg-white"
                           >
                             {timeOptions.map(time => (
                               <option key={`start-${time}`} value={time}>{time}</option>
@@ -523,7 +565,7 @@ export default function Availability() {
                           <select
                             value={dayData.end}
                             onChange={(e) => updateTime(key, "end", e.target.value)}
-                            className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-medium text-slate-700 appearance-none bg-white"
+                            className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-medium text-slate-700 appearance-none bg-white"
                           >
                             {timeOptions.map(time => (
                               <option key={`end-${time}`} value={time}>{time}</option>
@@ -554,7 +596,69 @@ export default function Availability() {
             Save Standard Hours
           </button>
         </div>
-      )}
+      ) : activeTab === 'appointments' ? (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl border-2 border-blue-600 shadow-sm p-6">
+             <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                  <CalendarClock className="w-5 h-5" />
+                </div>
+                <div>
+                   <h2 className="text-xl font-bold text-slate-900">Appointment Requests</h2>
+                   <p className="text-sm text-slate-500">Manage incoming bookings from your customers.</p>
+                </div>
+             </div>
+
+             {appointments.length === 0 ? (
+               <div className="text-center py-12 px-4 bg-slate-50 rounded-2xl border-2 border-dashed border-blue-200">
+                  <CalendarDays className="w-12 h-12 text-blue-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-slate-900">No appointments yet</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">When customers request an appointment from your profile, it will appear here for you to confirm or decline.</p>
+               </div>
+             ) : (
+               <div className="space-y-4">
+                  {appointments.map(apt => (
+                    <div key={apt.id} className="p-5 border-2 border-blue-600 rounded-2xl bg-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                       <div>
+                          <div className="flex items-center gap-2 mb-1">
+                             <span className={cn(
+                               "text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded",
+                               apt.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                               apt.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                               'bg-slate-100 text-slate-600'
+                             )}>{apt.status}</span>
+                             <p className="text-xs text-slate-500 font-medium">{format(new Date(apt.date), 'MMM d, yyyy')} at {apt.startTime}</p>
+                          </div>
+                          <h4 className="font-bold text-slate-900">{apt.serviceName}</h4>
+                          <p className="text-sm text-slate-500">{apt.durationMinutes} mins • £{apt.price}</p>
+                          {apt.notes && (
+                            <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded mt-2 border border-slate-100 italic">"{apt.notes}"</p>
+                          )}
+                       </div>
+                       
+                       {apt.status === 'pending' && (
+                         <div className="flex items-center gap-2 shrink-0">
+                           <button 
+                             onClick={() => handleAppointmentAction(apt.id, 'declined')}
+                             className="px-4 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
+                           >
+                             Decline
+                           </button>
+                           <button 
+                             onClick={() => handleAppointmentAction(apt.id, 'confirmed')}
+                             className="px-4 py-2 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors"
+                           >
+                             Confirm Setup
+                           </button>
+                         </div>
+                       )}
+                    </div>
+                  ))}
+               </div>
+             )}
+          </div>
+        </div>
+      ) : null}
 
       {/* Unsaved Changes Sticky Banner */}
       {hasUnsavedChanges && activeTab === 'standard' && (

@@ -202,7 +202,7 @@ export default function BillingManager() {
                 </div>
               ))}
               {savedCards.length === 0 && !isProcessing && (
-                <div className="text-center p-6 text-slate-500 text-sm border-2 border-dashed border-slate-200 rounded-2xl">
+                <div className="text-center p-6 text-slate-500 text-sm border-2 border-dashed border-black rounded-2xl">
                   No payment methods saved yet. Add a card to continue.
                 </div>
               )}
@@ -340,7 +340,7 @@ export default function BillingManager() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
           
           <div className="relative z-10 flex items-center gap-6">
-            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-black/20">
               <Package className="w-8 h-8 text-blue-300" />
             </div>
             <div>
@@ -357,11 +357,11 @@ export default function BillingManager() {
           </div>
 
           <div className="relative z-10 grid grid-cols-2 gap-4 md:gap-8 w-full md:w-auto">
-             <div className="bg-white/5 p-4 rounded-3xl border border-white/10">
+             <div className="bg-white/5 p-4 rounded-3xl border border-black/10">
                 <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Fees Paid</p>
                 <p className="text-xl font-black">£0.00</p>
              </div>
-             <div className="bg-white/5 p-4 rounded-3xl border border-white/10">
+             <div className="bg-white/5 p-4 rounded-3xl border border-black/10">
                 <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Credits Saved</p>
                 <p className="text-xl font-black">£{(profile?.phantomFeesSaved || 0).toFixed(2)}</p>
              </div>
@@ -378,7 +378,7 @@ export default function BillingManager() {
               transition={{ delay: 0.3 + (idx * 0.1) }}
               className={cn(
                 "relative bg-white p-8 rounded-[2.5rem] border-2 transition-all duration-300",
-                tier.isPopular ? "border-blue-600 shadow-2xl shadow-blue-600/10 scale-105 z-10" : "border-slate-100 hover:border-slate-200 shadow-lg shadow-slate-200/50"
+                tier.isPopular ? "border-blue-600 shadow-2xl shadow-blue-600/10 scale-105 z-10" : "border-slate-100 hover:border-black shadow-lg shadow-slate-200/50"
               )}
             >
               {tier.isPopular && (

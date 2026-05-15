@@ -175,15 +175,15 @@ export default function Dashboard() {
 
       {/* Stats Bar */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
+        <div className="bg-white rounded-2xl border border-black shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
           <p className="text-3xl font-display font-black text-slate-900">{stats.total}</p>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Total Jobs</p>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
+        <div className="bg-white rounded-2xl border border-black shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
           <p className="text-3xl font-display font-black text-slate-900">{stats.active}</p>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Active</p>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
+        <div className="bg-white rounded-2xl border border-black shadow-sm p-4 sm:p-6 text-center content-center transition-all hover:shadow-md">
           <p className="text-3xl font-display font-black text-slate-900">{stats.done}</p>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Done</p>
         </div>
@@ -211,7 +211,7 @@ export default function Dashboard() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-2.5">
-        <Link to="/find-trades" className="bg-white border border-slate-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square">
+        <Link to="/find-trades" className="bg-white border border-black p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square">
           <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-blue-50 transition-colors shrink-0">
             <Search className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
           </div>
@@ -219,7 +219,7 @@ export default function Dashboard() {
         </Link>
         <Link 
           to="/analytics" 
-          className="bg-white border border-slate-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
+          className="bg-white border border-black p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
         >
           <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors shrink-0">
             <BarChart3 className="w-4 h-4 text-green-500" />
@@ -330,7 +330,7 @@ export default function Dashboard() {
           </div>
           <div className="space-y-4">
             {activeJobs.length === 0 ? (
-              <div className="bg-slate-50 p-12 rounded-3xl border border-dashed border-slate-200 text-center space-y-3">
+              <div className="bg-slate-50 p-12 rounded-3xl border border-dashed border-black text-center space-y-3">
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-slate-100">
                   <Briefcase className="w-8 h-8 text-slate-300" />
                 </div>

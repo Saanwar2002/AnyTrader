@@ -35,7 +35,7 @@ export default function AdReport() {
   if (!ad) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="text-center bg-white p-8 rounded-3xl border border-slate-200 w-full max-w-sm shadow-xl">
+        <div className="text-center bg-white p-8 rounded-3xl border border-black w-full max-w-sm shadow-xl">
           <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-slate-900 mb-2">Campaign Not Found</h2>
           <p className="text-slate-500 mb-6">This advertisement campaign does not exist or has been deleted.</p>
@@ -48,7 +48,7 @@ export default function AdReport() {
   
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="bg-white border-b border-slate-200">
+      <div className="bg-white border-b border-black">
         <div className="max-w-4xl mx-auto px-4 py-8">
           <h1 className="text-2xl font-bold text-slate-900">Campaign Report</h1>
           <p className="text-slate-500">Live performance report for your advertising campaign</p>
@@ -57,7 +57,7 @@ export default function AdReport() {
 
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         {/* Campaign Info */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-6 rounded-3xl border border-black shadow-sm">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-xl font-bold text-slate-900">{ad.advertiserName || "Advertiser Campaign"}</h2>
@@ -110,11 +110,11 @@ export default function AdReport() {
         </div>
 
         {/* Live Preview */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-6 rounded-3xl border border-black shadow-sm">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Live Preview</h3>
           <p className="text-sm text-slate-500 mb-6">This is exactly how your banner appears to users on the platform.</p>
           
-          <div className="bg-slate-100 p-8 rounded-2xl max-w-sm mx-auto border border-slate-200 relative">
+          <div className="bg-slate-100 p-8 rounded-2xl max-w-sm mx-auto border border-black relative">
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center mb-4">App Mockup Viewer</div>
             
             {/* Direct preview rendering because PartnerAdvertisement pulls from DB list randomly */}
@@ -138,7 +138,7 @@ export default function AdReport() {
           </div>
         </div>
 
-        <div className="text-center border-t border-slate-200 pt-8 mt-8">
+        <div className="text-center border-t border-black pt-8 mt-8">
           <p className="text-xs text-slate-400 font-bold">POWERED BY</p>
           <p className="text-sm font-black text-slate-300 tracking-tight mt-1">ANYTRADER ADS</p>
         </div>

@@ -434,7 +434,7 @@ export default function JobFeed() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAiSearch()}
-                className="w-full pl-9 pr-24 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary text-sm bg-white shadow-sm transition-all"
+                className="w-full pl-9 pr-24 py-3 rounded-2xl border border-black focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary text-sm bg-white shadow-sm transition-all"
               />
               <button 
                 onClick={handleAiSearch}
@@ -457,7 +457,7 @@ export default function JobFeed() {
               onClick={() => setShowFilters(!showFilters)}
               className={cn(
                 "p-3 rounded-2xl border transition-all shadow-sm",
-                showFilters ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" : "bg-white border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                showFilters ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" : "bg-white border-black text-slate-500 hover:text-slate-900 hover:bg-slate-50"
               )}
             >
               <Filter className="w-5 h-5" />
@@ -465,7 +465,7 @@ export default function JobFeed() {
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-200 shadow-sm shrink-0">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-black shadow-sm shrink-0">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sort:</span>
               <select 
                 value={sortBy}
@@ -478,7 +478,7 @@ export default function JobFeed() {
               </select>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-200 shadow-sm shrink-0">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-black shadow-sm shrink-0">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Best Match Only</span>
               <button 
                 onClick={() => setShowMatchedOnly(!showMatchedOnly)}
@@ -502,7 +502,7 @@ export default function JobFeed() {
                   saveSection?.scrollIntoView({ behavior: 'smooth' });
                 }, 100);
               }}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-slate-200 shadow-sm text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all shrink-0"
+              className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-black shadow-sm text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all shrink-0"
             >
               <Save className="w-4 h-4" />
               <span className="text-xs font-bold">Save Feed</span>
@@ -541,7 +541,7 @@ export default function JobFeed() {
             <button
               key={filter.id}
               onClick={() => applyFilter(filter, false)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-600 hover:border-blue-600 hover:text-blue-600 transition-all whitespace-nowrap shadow-sm"
+              className="px-3 py-1.5 bg-white border border-black rounded-full text-xs font-bold text-slate-600 hover:border-blue-600 hover:text-blue-600 transition-all whitespace-nowrap shadow-sm"
             >
               {filter.name}
             </button>
@@ -614,7 +614,7 @@ export default function JobFeed() {
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl space-y-8 relative overflow-hidden"
+          className="bg-white p-6 rounded-3xl border border-black shadow-xl space-y-8 relative overflow-hidden"
         >
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black text-slate-900">Filter Jobs</h2>
@@ -696,7 +696,7 @@ export default function JobFeed() {
                     "px-4 py-2 rounded-full text-xs font-bold border transition-all flex items-center gap-2",
                     urgencyFilter === u.id 
                       ? "bg-slate-900 text-white border-slate-900 shadow-md" 
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                      : "bg-white text-slate-600 border-black hover:border-black"
                   )}
                 >
                   {u.icon && <span>{u.icon}</span>}
@@ -724,7 +724,7 @@ export default function JobFeed() {
                     "px-4 py-2 rounded-full text-xs font-bold border transition-all",
                     distanceFilter === d.id 
                       ? "bg-slate-900 text-white border-slate-900 shadow-md" 
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                      : "bg-white text-slate-600 border-black hover:border-black"
                   )}
                 >
                   {d.name}
@@ -751,7 +751,7 @@ export default function JobFeed() {
                     "px-4 py-2 rounded-full text-xs font-bold border transition-all",
                     priceFilter === p.id 
                       ? "bg-slate-900 text-white border-slate-900 shadow-md" 
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                      : "bg-white text-slate-600 border-black hover:border-black"
                   )}
                 >
                   {p.name}
@@ -778,7 +778,7 @@ export default function JobFeed() {
                   "px-4 py-2 rounded-full text-xs font-bold border transition-all",
                   selectedCategories.length === 0 
                     ? "bg-slate-900 text-white border-slate-900 shadow-md" 
-                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                    : "bg-white text-slate-600 border-black hover:border-black"
                 )}
               >
                 All
@@ -797,7 +797,7 @@ export default function JobFeed() {
                     "px-4 py-2 rounded-full text-xs font-bold border transition-all",
                     selectedCategories.includes(category.name) 
                       ? "bg-slate-900 text-white border-slate-900 shadow-md" 
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                      : "bg-white text-slate-600 border-black hover:border-black"
                   )}
                 >
                   {category.name}
@@ -815,7 +815,7 @@ export default function JobFeed() {
                 placeholder="e.g. Local Plumbing Jobs"
                 value={newFilterName}
                 onChange={(e) => setNewFilterName(e.target.value)}
-                className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 text-sm"
+                className="flex-1 px-4 py-3 rounded-2xl border border-black focus:outline-none focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 text-sm"
               />
               <button 
                 onClick={handleSaveFilter}
@@ -867,7 +867,7 @@ export default function JobFeed() {
               return (
                 <div
                   key={job.id}
-                  className="bg-white/80 rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden group relative"
+                  className="bg-white/80 rounded-[2rem] border border-black shadow-sm overflow-hidden group relative"
                 >
                   <div className="p-5 flex items-center gap-4 relative">
                     <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center p-4">
@@ -912,7 +912,7 @@ export default function JobFeed() {
               to={`/job/${job.id}`}
               className={cn(
                 "bg-white rounded-[2rem] border shadow-md hover:shadow-xl transition-all overflow-hidden group relative",
-                job.isBoosted ? "border-red-500 shadow-red-500/20" : "border-slate-300 hover:border-blue-300"
+                job.isBoosted ? "border-red-500 shadow-red-500/20" : "border-black hover:border-blue-300"
               )}
             >
               {job.isBoosted && (
@@ -946,7 +946,7 @@ export default function JobFeed() {
                           {job.category}
                         </span>
                         {job.subcategory && (
-                          <span className="text-[10px] font-bold uppercase text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
+                          <span className="text-[10px] font-bold uppercase text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-black">
                             {job.subcategory}
                           </span>
                         )}
@@ -1067,7 +1067,7 @@ export default function JobFeed() {
                   )}
                   {profile?.role === "tradesperson" && (
                     (job.quoteCount || 0) >= 5 ? (
-                      <div className="mt-4 w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 border border-slate-200">
+                      <div className="mt-4 w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 border border-black">
                         <FileText className="w-4 h-4" />
                         Quote Limit Reached
                       </div>

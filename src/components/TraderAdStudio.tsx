@@ -105,7 +105,7 @@ export default function TraderAdStudio() {
           </div>
 
           {adverts.length === 0 ? (
-            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-3xl p-12 text-center">
+            <div className="bg-slate-50 border border-dashed border-black rounded-3xl p-12 text-center">
               <Zap className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-slate-900 mb-2">No active campaigns</h3>
               <p className="text-slate-500 max-w-sm mx-auto">Get more leads by promoting your profile natively in the project feed and dashboard.</p>
@@ -116,7 +116,7 @@ export default function TraderAdStudio() {
                 const balancePct = ad.prepaidBalance && ad.totalBudget ? Math.max(0, Math.min(100, (ad.prepaidBalance / ad.totalBudget) * 100)) : 0;
                 
                 return (
-                <div key={ad.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                <div key={ad.id} className="bg-white border border-black rounded-2xl p-6 shadow-sm">
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="font-bold text-lg text-slate-900 leading-tight">{ad.title}</h3>
@@ -164,13 +164,13 @@ export default function TraderAdStudio() {
 
                   <div className="flex justify-between items-center pt-4 border-t border-slate-100 gap-2">
                     <div className="flex gap-2 w-full md:w-auto">
-                        <button onClick={() => handleTopup(ad.id, ad.prepaidBalance, 50)} className="flex-1 md:flex-none border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition">
+                        <button onClick={() => handleTopup(ad.id, ad.prepaidBalance, 50)} className="flex-1 md:flex-none border border-black bg-white text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition">
                         <CreditCard className="w-4 h-4" /> Top up £50
                         </button>
                         <button onClick={() => {
                             navigator.clipboard.writeText(`${window.location.origin}/ad-report/${ad.id}`);
                             alert("Report link copied!");
-                        }} className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition">
+                        }} className="border border-black bg-white text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition">
                         <LayoutGrid className="w-4 h-4" /> Report
                         </button>
                     </div>
@@ -197,7 +197,7 @@ export default function TraderAdStudio() {
             <p className="text-sm text-slate-600 mb-6">Your cost-per-click is discounted based on your current AnyTrader subscription tier.</p>
             
             <div className="space-y-3 mb-6">
-              <div className={`p-4 rounded-xl border ${profile?.subscriptionType === "premium" ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 my-4" : "bg-white border-slate-200 text-slate-600"}`}>
+              <div className={`p-4 rounded-xl border ${profile?.subscriptionType === "premium" ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 my-4" : "bg-white border-black text-slate-600"}`}>
                 <div className="flex justify-between items-center mb-1">
                   <span className={`text-xs font-black uppercase tracking-widest ${profile?.subscriptionType === "premium" ? "text-blue-200" : "text-slate-400"}`}>Premium Tier</span>
                   {profile?.subscriptionType === "premium" && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
@@ -208,7 +208,7 @@ export default function TraderAdStudio() {
                 </div>
               </div>
 
-              <div className={`p-4 rounded-xl border ${profile?.subscriptionType === "pro" ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 my-4" : "bg-white border-slate-200 text-slate-600"}`}>
+              <div className={`p-4 rounded-xl border ${profile?.subscriptionType === "pro" ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 my-4" : "bg-white border-black text-slate-600"}`}>
                 <div className="flex justify-between items-center mb-1">
                   <span className={`text-xs font-black uppercase tracking-widest ${profile?.subscriptionType === "pro" ? "text-blue-200" : "text-slate-400"}`}>Pro Tier</span>
                   {profile?.subscriptionType === "pro" && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
@@ -219,7 +219,7 @@ export default function TraderAdStudio() {
                 </div>
               </div>
 
-              <div className={`p-4 rounded-xl border ${profile?.subscriptionType === "free" || !profile?.subscriptionType ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 my-4" : "bg-white border-slate-200 text-slate-600"}`}>
+              <div className={`p-4 rounded-xl border ${profile?.subscriptionType === "free" || !profile?.subscriptionType ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 my-4" : "bg-white border-black text-slate-600"}`}>
                 <div className="flex justify-between items-center mb-1">
                   <span className={`text-xs font-black uppercase tracking-widest ${profile?.subscriptionType === "free" || !profile?.subscriptionType ? "text-blue-200" : "text-slate-400"}`}>Free Tier</span>
                   {(profile?.subscriptionType === "free" || !profile?.subscriptionType) && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
@@ -244,24 +244,24 @@ export default function TraderAdStudio() {
                 <h3 className="text-xl font-bold text-slate-900">Request Campaign</h3>
                 <p className="text-sm text-slate-500">Your ad will go live after admin approval.</p>
               </div>
-              <button type="button" onClick={() => setShowRequestModal(false)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-500 shadow-sm border border-slate-200 hover:text-slate-900 shrink-0">X</button>
+              <button type="button" onClick={() => setShowRequestModal(false)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-500 shadow-sm border border-black hover:text-slate-900 shrink-0">X</button>
             </div>
             
             <div className="p-6 space-y-5">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Display Title *</label>
-                <input name="title" required type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="E.g. Verified Electrician in London" defaultValue={`${profile?.name} - Professional Services`} />
+                <input name="title" required type="text" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="E.g. Verified Electrician in London" defaultValue={`${profile?.name} - Professional Services`} />
               </div>
               
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Short Description *</label>
-                <input name="description" required type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Available for 24/7 emergency callouts." />
+                <input name="description" required type="text" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Available for 24/7 emergency callouts." />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Show To</label>
-                    <select name="targetRole" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+                    <select name="targetRole" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
                         <option value="all">Everyone</option>
                         <option value="homeowner">Homeowners Only</option>
                         <option value="tradesperson">Tradespeople Only</option>
@@ -269,7 +269,7 @@ export default function TraderAdStudio() {
                  </div>
                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Initial Prepaid Budget (£)</label>
-                    <select name="budget" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-bold text-slate-900">
+                    <select name="budget" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-bold text-slate-900">
                         <option value="50">£50</option>
                         <option value="100">£100</option>
                         <option value="250">£250</option>

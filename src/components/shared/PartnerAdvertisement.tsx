@@ -188,7 +188,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
       <div className="absolute -inset-[2px] rounded-2xl bg-gradient-to-r from-blue-500 via-purple-500 to-amber-500 opacity-60 group-hover/banner:opacity-100 transition duration-500 shadow-[0_0_15px_rgba(168,85,247,0.4)] animate-pulse"></div>
       
       {/* Main Banner Container */}
-      <div className="relative overflow-hidden rounded-[14px] w-full h-20 sm:h-24 shadow-sm z-10 bg-slate-100 border border-white/40">
+      <div className="relative overflow-hidden rounded-[14px] w-full h-20 sm:h-24 shadow-sm z-10 bg-slate-100 border border-black/40">
         <AnimatePresence>
           <motion.a
             key={ad.id}
@@ -209,7 +209,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
             style={{ backgroundColor: !ad.imageUrl && ad.bgColor && !ad.bgColor.startsWith("bg-") && ad.type !== "trader_promo" ? ad.bgColor : undefined }}
           >
             {/* Ad Badge */}
-            <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-black text-white/90 uppercase tracking-widest z-20 border border-white/20">
+            <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-black text-white/90 uppercase tracking-widest z-20 border border-black/20">
               Ad
             </div>
 

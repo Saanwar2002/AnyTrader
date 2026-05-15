@@ -382,6 +382,60 @@
           },
           "description": "UIDs of favorite drivers."
         },
+        "appointmentSettings": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "subscriptionStatus": {
+              "type": "string",
+              "enum": [
+                "inactive",
+                "active",
+                "past_due",
+                "canceled"
+              ]
+            },
+            "services": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "durationMinutes": {
+                    "type": "integer"
+                  },
+                  "price": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "workingHours": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "start": {
+                    "type": "string"
+                  },
+                  "end": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "emergencyContacts": {
           "type": "array",
           "items": {
@@ -1515,6 +1569,72 @@
         "address",
         "postcode",
         "type"
+      ]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "An appointment requested by a customer for a tradesperson.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "traderId": {
+          "type": "string"
+        },
+        "serviceId": {
+          "type": "string"
+        },
+        "serviceName": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "startTime": {
+          "type": "string"
+        },
+        "durationMinutes": {
+          "type": "integer"
+        },
+        "price": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "confirmed",
+            "declined",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "customerId",
+        "traderId",
+        "serviceId",
+        "date",
+        "startTime",
+        "status",
+        "createdAt"
       ]
     },
     "PlatformConfig": {
@@ -3529,6 +3649,10 @@
     }
   },
   "firestore": {
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Appointment requests and bookings."
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profile documents."

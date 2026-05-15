@@ -6,7 +6,7 @@ import {
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
-  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList
+  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList, CalendarClock
 } from "lucide-react";
 import { GoogleGenAI } from "@google/genai";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -108,7 +108,7 @@ function ReferralCard({ profile }: { profile: any }) {
 
   return (
     <div className={cn(
-      "bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 rounded-[2rem] text-white shadow-2xl shadow-blue-600/20 relative overflow-hidden group transition-all duration-500 border border-white/10",
+      "bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 rounded-[2rem] text-white shadow-2xl shadow-blue-600/20 relative overflow-hidden group transition-all duration-500 border border-black/10",
       isExpanded ? "p-5" : "p-5"
     )}>
       {/* Animated background elements */}
@@ -122,7 +122,7 @@ function ReferralCard({ profile }: { profile: any }) {
         >
           <div className="flex items-center gap-4">
             <div className={cn(
-              "rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center transition-all duration-500 shadow-lg",
+              "rounded-2xl bg-white/10 backdrop-blur-xl border border-black/20 flex items-center justify-center transition-all duration-500 shadow-lg",
               isExpanded ? "w-14 h-14" : "w-12 h-12"
             )}>
               <Zap className={cn("text-yellow-300 fill-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.6)]", isExpanded ? "w-7 h-7" : "w-6 h-6")} />
@@ -138,7 +138,7 @@ function ReferralCard({ profile }: { profile: any }) {
             animate={{ rotate: isExpanded ? 180 : 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
             className={cn(
-              "rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors shadow-sm",
+              "rounded-full bg-white/10 backdrop-blur-md border border-black/20 flex items-center justify-center hover:bg-white/20 transition-colors shadow-sm",
               isExpanded ? "w-12 h-12" : "w-10 h-10"
             )}
           >
@@ -172,7 +172,7 @@ function ReferralCard({ profile }: { profile: any }) {
               </div>
 
               {isBoosted && (
-                <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl p-4 flex items-center justify-between">
+                <div className="bg-white/20 backdrop-blur-md border border-black/30 rounded-2xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center shadow-lg shadow-yellow-400/20">
                       <Zap className="w-5 h-5 text-slate-900 fill-slate-900" />
@@ -189,7 +189,7 @@ function ReferralCard({ profile }: { profile: any }) {
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-blue-200">Your Referral Link</label>
                 <div className="flex gap-2">
-                  <div className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 text-sm font-mono truncate">
+                  <div className="flex-1 bg-white/10 backdrop-blur-md border border-black/20 rounded-xl px-4 py-3 text-sm font-mono truncate">
                     {referralLink}
                   </div>
                   <button 
@@ -473,6 +473,39 @@ export default function Profile() {
       setSavedCards(cards => cards.filter(c => c.id !== paymentMethodId));
     } catch (err) {
       console.error("Delete Error:", err);
+    }
+  };
+
+  const handleSubscribeToAppointments = async () => {
+    if (!user) return;
+    setIsProcessingSetup(true);
+    try {
+      // Simulate Stripe checkout or backend logic
+      await new Promise(r => setTimeout(r, 1500));
+      await updateDoc(doc(db, "users", user.uid), {
+        "appointmentSettings.enabled": true,
+        "appointmentSettings.subscriptionStatus": "active"
+      });
+      alert("Successfully enabled Appointment Add-on! (Simulated)");
+    } catch(err) {
+      handleFirestoreError(err, OperationType.UPDATE, "users");
+    } finally {
+      setIsProcessingSetup(false);
+    }
+  };
+
+  const handleCancelAppointments = async () => {
+    if (!user || !confirm("Are you sure you want to cancel the Appointment Add-on? Customers will no longer be able to book slots.")) return;
+    setIsProcessingSetup(true);
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        "appointmentSettings.enabled": false,
+        "appointmentSettings.subscriptionStatus": "canceled"
+      });
+    } catch(err) {
+      handleFirestoreError(err, OperationType.UPDATE, "users");
+    } finally {
+      setIsProcessingSetup(false);
     }
   };
 
@@ -1024,6 +1057,7 @@ export default function Profile() {
         { icon: Briefcase, label: "My Jobs", path: "/trade-jobs" },
         { icon: BarChart3, label: "Job Analytics", path: "/analytics" },
         { icon: Calendar, label: "Availability Calendar", path: "/availability" },
+        { icon: CalendarClock, label: "Booking Appointments", path: "#appointments" },
         ...(isBannerAdsEnabled ? [{ icon: Zap, label: "Traders Banner Ad Studio", path: "/trader/banner-ads" }] : []),
       ]
     },
@@ -1297,7 +1331,7 @@ export default function Profile() {
         {/* Close Button Top Right */}
         <button 
           onClick={() => navigate("/")} 
-          className="fixed top-5 right-5 z-50 w-11 h-11 bg-white/40 hover:bg-white/70 backdrop-blur-md border border-white/50 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
+          className="fixed top-5 right-5 z-50 w-11 h-11 bg-white/40 hover:bg-white/70 backdrop-blur-md border border-black/50 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
           aria-label="Close Profile"
         >
           <X className="w-6 h-6 text-slate-800" strokeWidth={2.5} />
@@ -1306,13 +1340,13 @@ export default function Profile() {
         <div className="relative z-10 max-w-[420px] mx-auto pt-16 px-5">
           
           {/* Main User Card */}
-          <div className="bg-white rounded-[2rem] pt-14 pb-6 px-6 shadow-sm border border-white/50 flex flex-col items-center mb-8 relative">
+          <div className="bg-white rounded-[2rem] pt-14 pb-6 px-6 shadow-sm border border-black/50 flex flex-col items-center mb-8 relative">
             
             {/* Avatar overlapping top */}
             <div className="absolute -top-12">
                <div className="w-[104px] h-[104px] rounded-full bg-[#8ccaf5] p-1.5 relative shadow-md">
                  <img src={profile.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || "User")}&background=0D8ABC&color=fff`} className="w-full h-full rounded-full object-cover" />
-                 <div className="absolute bottom-1 right-2 w-5 h-5 bg-green-500 rounded-full border-[3px] border-white" />
+                 <div className="absolute bottom-1 right-2 w-5 h-5 bg-green-500 rounded-full border-[3px] border-black" />
                </div>
             </div>
             
@@ -1403,7 +1437,7 @@ export default function Profile() {
         <h1 className="text-3xl font-black text-slate-900 tracking-tight">Profile</h1>
         <button 
           onClick={() => navigate("/")} 
-          className="w-12 h-12 bg-white border border-slate-200 hover:bg-slate-50 border-slate-300 rounded-full flex items-center justify-center transition-all shadow-sm text-slate-600 hover:text-slate-900 focus:ring-2 focus:ring-slate-200"
+          className="w-12 h-12 bg-white border border-black hover:bg-slate-50 border-black rounded-full flex items-center justify-center transition-all shadow-sm text-slate-600 hover:text-slate-900 focus:ring-2 focus:ring-slate-200"
         >
           <X className="w-6 h-6" />
         </button>
@@ -1437,21 +1471,21 @@ export default function Profile() {
             )}
           </div>
 
-          <div className="space-y-4 mb-8 relative z-10 bg-white/20 backdrop-blur-sm p-4 rounded-3xl border border-white/30">
+          <div className="space-y-4 mb-8 relative z-10 bg-white/20 backdrop-blur-sm p-4 rounded-3xl border border-black/30">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-black/50">
                 <Zap className="w-4 h-4 text-amber-950 fill-amber-950" />
               </div>
               <p className="text-sm font-bold text-amber-950">Priority Matching during peak hours</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-black/50">
                 <Percent className="w-4 h-4 text-amber-950" />
               </div>
               <p className="text-sm font-bold text-amber-950">10% discount on every journey</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-white/50">
+              <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center shrink-0 shadow-sm border border-black/50">
                 <Award className="w-4 h-4 text-amber-950" />
               </div>
               <p className="text-sm font-bold text-amber-950">Exclusive Rider Plus badge on your profile</p>
@@ -1476,7 +1510,7 @@ export default function Profile() {
             ) : (
               <button
                 onClick={handleCancelSubscription}
-                className="w-full py-3 bg-white/30 border border-white/50 text-amber-950 rounded-2xl font-bold text-sm hover:bg-white/40 transition-colors"
+                className="w-full py-3 bg-white/30 border border-black/50 text-amber-950 rounded-2xl font-bold text-sm hover:bg-white/40 transition-colors"
               >
                 Cancel Subscription
               </button>
@@ -1654,7 +1688,7 @@ export default function Profile() {
       <div className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-4 sm:p-6 mb-3 relative">
         <div className="flex flex-col items-center">
           <div className="relative mb-4">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-slate-900 flex items-center justify-center text-white text-2xl md:text-3xl font-bold overflow-hidden border-4 border-white shadow-lg relative">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-slate-900 flex items-center justify-center text-white text-2xl md:text-3xl font-bold overflow-hidden border-4 border-black shadow-lg relative">
               {profile.photoURL ? (
                 <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
@@ -1806,7 +1840,7 @@ export default function Profile() {
                 </div>
               ))}
               {getTraderBadges(profile).length === 0 && (
-                <div className="col-span-full py-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                <div className="col-span-full py-6 text-center bg-slate-50 rounded-2xl border border-dashed border-black">
                   <p className="text-xs text-slate-400 font-medium italic">Complete more jobs to earn badges!</p>
                 </div>
               )}
@@ -2098,7 +2132,7 @@ export default function Profile() {
               ))}
             </div>
 
-            <div className="mt-6 pt-6 border-t-4 border-dotted border-slate-300">
+            <div className="mt-6 pt-6 border-t-4 border-dotted border-black">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Professional Badges</h4>
                 <button 
@@ -2110,7 +2144,7 @@ export default function Profile() {
                 </button>
               </div>
               {(!profile.badges || profile.badges.length === 0) ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                <div className="bg-slate-50 border border-black rounded-xl p-4 text-center">
                   <Award className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                   <p className="text-sm text-slate-500 font-medium">No professional badges selected yet.</p>
                   <button 
@@ -2133,7 +2167,7 @@ export default function Profile() {
                       green: "bg-green-50 text-green-700 border-green-100",
                       indigo: "bg-indigo-50 text-indigo-700 border-indigo-100",
                       amber: "bg-amber-50 text-amber-700 border-amber-100",
-                      slate: "bg-slate-50 text-slate-700 border border-slate-200",
+                      slate: "bg-slate-50 text-slate-700 border border-black",
                       rose: "bg-rose-50 text-rose-700 border-rose-100"
                     };
 
@@ -2156,7 +2190,7 @@ export default function Profile() {
               )}
             </div>
 
-            <div className="mt-6 pt-6 border-t-4 border-dotted border-slate-300">
+            <div className="mt-6 pt-6 border-t-4 border-dotted border-black">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Mini Profile Card Settings</h4>
                 <button 
@@ -2169,17 +2203,17 @@ export default function Profile() {
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                  <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Call-Out Fee</p>
                     <p className="text-2xl font-black text-slate-900 leading-none">£{profile.miniProfileSettings?.callOutFee || 0}</p>
                   </div>
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                  <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Hourly Rate</p>
                     <p className="text-2xl font-black text-slate-900 leading-none">£{profile.miniProfileSettings?.hourlyRate || 0}</p>
                   </div>
                 </div>
                 {profile.miniProfileSettings?.extraInfo && (
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+                  <div className="bg-slate-50 border border-black p-4 rounded-2xl">
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Extra Info</p>
                     <p className="text-sm text-slate-700 font-medium">{profile.miniProfileSettings.extraInfo}</p>
                   </div>
@@ -2187,7 +2221,7 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="mt-6 pt-6 border-t-4 border-dotted border-slate-300">
+            <div className="mt-6 pt-6 border-t-4 border-dotted border-black">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-slate-900">Instant Match Settings</h4>
                 <button 
@@ -2200,7 +2234,7 @@ export default function Profile() {
               </div>
               
               {!profile.isAvailableForInstantMatch ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                <div className="bg-slate-50 border border-black rounded-xl p-4 text-center">
                   <Zap className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                   <p className="text-sm text-slate-500 font-medium">Instant Match is currently disabled.</p>
                   <button 
@@ -2213,11 +2247,11 @@ export default function Profile() {
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                    <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Call-Out Fee</p>
                       <p className="text-2xl font-black text-slate-900 leading-none">£{profile.instantMatchPricing?.callOutFee || 0}</p>
                     </div>
-                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col items-center justify-center">
+                    <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Hourly Rate</p>
                       <p className="text-2xl font-black text-slate-900 leading-none">£{profile.instantMatchPricing?.hourlyRate || 0}</p>
                     </div>
@@ -2553,7 +2587,7 @@ export default function Profile() {
                                                <button 
                                                  onClick={handleAddPaymentMethod}
                                                  disabled={isProcessingSetup}
-                                                 className="w-full py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                                                 className="w-full py-3 bg-white border border-black rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
                                                >
                                                  {isProcessingSetup ? "Processing..." : "Add Another Card"}
                                                </button>
@@ -2633,7 +2667,7 @@ export default function Profile() {
                                           <button 
                                             onClick={handleAddPaymentMethod}
                                             disabled={isProcessingSetup}
-                                            className="w-full py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                                            className="w-full py-3 bg-white border border-black rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
                                           >
                                             {isProcessingSetup ? "Processing..." : "Add Another Card"}
                                           </button>
@@ -2659,6 +2693,62 @@ export default function Profile() {
                                       )}
                                     </div>
                                     )
+                                  ) : item.path === "#appointments" ? (
+                                    <div className="p-6 md:p-5 bg-slate-50/50 space-y-6">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                          <CalendarClock className="w-5 h-5 text-blue-600" />
+                                        </div>
+                                        <div>
+                                          <h3 className="text-lg font-bold text-slate-900">Appointment System (Add-on)</h3>
+                                          <p className="text-sm text-slate-500">Allow customers to book real-time appointments for your services.</p>
+                                        </div>
+                                      </div>
+
+                                      {profile?.appointmentSettings?.enabled ? (
+                                        <div className="space-y-4">
+                                          <div className="bg-white rounded-xl border-2 border-blue-600 shadow-sm p-5 flex items-center justify-between">
+                                            <div>
+                                              <p className="font-bold text-slate-900">Add-on Active</p>
+                                              <p className="text-xs text-slate-500">You are currently subscribed to the Appointment system.</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="bg-green-100 text-green-700 font-black text-[10px] uppercase px-2 py-1 rounded">£9.99/mo</span>
+                                              <button 
+                                                onClick={handleCancelAppointments}
+                                                className="text-xs font-bold text-red-600 hover:underline ml-2"
+                                                disabled={isProcessingSetup}
+                                              >
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          </div>
+                                          <div className="bg-white rounded-xl border-2 border-blue-600 shadow-sm p-5">
+                                            <h4 className="font-bold text-slate-900 mb-2">Services & Working Hours</h4>
+                                            <p className="text-sm text-slate-600 mb-4">Go to your Dashboard or Availability Calendar to manage your provided services, prices, and available appointment slots.</p>
+                                            <button 
+                                              onClick={() => navigate('/availability')}
+                                              className="w-full sm:w-auto px-4 py-2 bg-slate-900 text-white font-bold rounded-lg text-sm hover:bg-slate-800 transition-colors"
+                                            >
+                                              Manage Availability
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="bg-white rounded-xl border-2 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.2)] p-6 text-center">
+                                          <Sparkles className="w-8 h-8 text-amber-500 mx-auto mb-3" />
+                                          <h4 className="text-lg font-bold text-slate-900 mb-2">Unlock Automated Bookings</h4>
+                                          <p className="text-sm text-slate-600 mb-6">Reduce back-and-forth messaging. Let customers see your availability and request appointments directly from your profile. Only for £9.99/month.</p>
+                                          <button 
+                                            onClick={handleSubscribeToAppointments}
+                                            disabled={isProcessingSetup}
+                                            className="bg-black text-white px-6 py-3 rounded-xl font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all text-sm w-full md:w-auto"
+                                          >
+                                            {isProcessingSetup ? <Loader2 className="w-5 h-5 animate-spin mx-auto"/> : "Enable £9.99/mo Add-on"}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                   ) : item.path === "#business" ? (
                                      <div className="p-6 md:p-5 bg-slate-50/50">
                                        {profile.corporateAccountId ? (
@@ -3092,7 +3182,7 @@ export default function Profile() {
                         <input 
                           type="checkbox" 
                           id={`consent-base-${idx}`}
-                          className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          className="mt-0.5 rounded border-black text-blue-600 focus:ring-blue-500"
                           checked={privacyConsent[cert] || false}
                           onChange={(e) => setPrivacyConsent(prev => ({ ...prev, [cert]: e.target.checked }))}
                         />
@@ -3116,7 +3206,7 @@ export default function Profile() {
                             "w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-xs font-bold transition-all cursor-pointer",
                             isUploading ? "bg-slate-50 border-black text-slate-400 cursor-wait" :
                             privacyConsent[cert] 
-                              ? "border-slate-300 text-slate-500 hover:bg-white hover:border-blue-400 hover:text-blue-600" 
+                              ? "border-black text-slate-500 hover:bg-white hover:border-blue-400 hover:text-blue-600" 
                               : "border-black text-slate-300 cursor-not-allowed bg-slate-50"
                           )}
                         >
@@ -3197,7 +3287,7 @@ export default function Profile() {
                           <input 
                             type="checkbox" 
                             id={`consent-${cert}`}
-                            className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            className="mt-0.5 rounded border-black text-blue-600 focus:ring-blue-500"
                             checked={privacyConsent[cert] || false}
                             onChange={(e) => setPrivacyConsent(prev => ({ ...prev, [cert]: e.target.checked }))}
                           />
@@ -3221,7 +3311,7 @@ export default function Profile() {
                               "w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-xs font-bold transition-all cursor-pointer",
                               isUploading ? "bg-slate-50 border-black text-slate-400 cursor-wait" :
                               privacyConsent[cert] 
-                                ? "border-slate-300 text-slate-500 hover:bg-white hover:border-blue-400 hover:text-blue-600" 
+                                ? "border-black text-slate-500 hover:bg-white hover:border-blue-400 hover:text-blue-600" 
                                 : "border-black text-slate-300 cursor-not-allowed bg-slate-50"
                             )}
                           >
@@ -3696,12 +3786,12 @@ export default function Profile() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-5">
-                <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-black">
                   <div>
                     <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Call-Out Fee (£)</label>
                     <input 
                       type="number"
-                      className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                      className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
                       value={editData.miniProfileSettings?.callOutFee || ''}
                       onChange={(e) => setEditData({ 
                         ...editData, 
@@ -3714,7 +3804,7 @@ export default function Profile() {
                     <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Hourly Rate (£/hr)</label>
                     <input 
                       type="number"
-                      className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                      className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
                       value={editData.miniProfileSettings?.hourlyRate || ''}
                       onChange={(e) => setEditData({ 
                         ...editData, 
@@ -3726,7 +3816,7 @@ export default function Profile() {
                   <div>
                     <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Extra Info</label>
                     <textarea 
-                      className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm resize-y"
+                      className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm resize-y"
                       value={editData.miniProfileSettings?.extraInfo || ''}
                       onChange={(e) => setEditData({ 
                         ...editData, 
@@ -3746,7 +3836,7 @@ export default function Profile() {
               <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-slate-100 bg-white">
                 <button 
                   onClick={() => setIsEditingMiniProfile(false)}
-                  className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+                  className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-black hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
@@ -3790,7 +3880,7 @@ export default function Profile() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-5">
-                <label className="flex items-center justify-between p-3 border border-slate-300 rounded-xl mb-4 hover:bg-slate-50 cursor-pointer transition-colors">
+                <label className="flex items-center justify-between p-3 border border-black rounded-xl mb-4 hover:bg-slate-50 cursor-pointer transition-colors">
                   <div className="flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
                     <span className="text-sm font-bold text-slate-700">Available for Instant Match</span>
@@ -3804,12 +3894,12 @@ export default function Profile() {
                 </label>
                 
                 {editData.isAvailableForInstantMatch && (
-                  <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                  <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-black">
                     <div>
                       <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Call-Out Fee (£)</label>
                       <input 
                         type="number"
-                        className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                        className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
                         value={editData.instantMatchPricing?.callOutFee || ''}
                         onChange={(e) => setEditData({ 
                           ...editData, 
@@ -3822,7 +3912,7 @@ export default function Profile() {
                       <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Hourly Rate (£/hr)</label>
                       <input 
                         type="number"
-                        className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
+                        className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
                         value={editData.instantMatchPricing?.hourlyRate || ''}
                         onChange={(e) => setEditData({ 
                           ...editData, 
@@ -3834,7 +3924,7 @@ export default function Profile() {
                     <div>
                       <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Terms & Conditions</label>
                       <textarea 
-                        className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm resize-y"
+                        className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm resize-y"
                         value={editData.instantMatchPricing?.terms || ''}
                         onChange={(e) => setEditData({ 
                           ...editData, 
@@ -3851,7 +3941,7 @@ export default function Profile() {
               <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-slate-100 bg-white">
                 <button 
                   onClick={() => setIsEditingIM(false)}
-                  className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+                  className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-black hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>

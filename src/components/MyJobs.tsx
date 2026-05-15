@@ -217,7 +217,7 @@ export default function MyJobs() {
                   "px-6 py-2.5 rounded-2xl text-sm font-bold transition-all shrink-0 border",
                   filter === tab.id 
                     ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200" 
-                    : "bg-white text-slate-500 border-slate-100 hover:border-slate-200"
+                    : "bg-white text-slate-500 border-slate-100 hover:border-black"
                 )}
               >
                 {tab.label}

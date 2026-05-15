@@ -395,7 +395,7 @@ export default function EmergencyJobWizard() {
           <h2 className="text-xl font-bold">What is the emergency?</h2>
           <input 
             type="text"
-            className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            className="w-full p-4 border border-black rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             placeholder="Search category (e.g. Plumbing)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -436,7 +436,7 @@ export default function EmergencyJobWizard() {
 
           <h2 className="text-xl font-bold">Describe the emergency</h2>
           <textarea 
-            className="w-full p-4 border-2 border-slate-300 shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal h-32 resize-none"
+            className="w-full p-4 border-2 border-black shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal h-32 resize-none"
             placeholder="e.g. Pipe burst in kitchen..."
             rows={4}
             value={formData.description}
@@ -459,7 +459,7 @@ export default function EmergencyJobWizard() {
             <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl hover:border-red-500 hover:bg-red-50 transition-all flex items-center justify-center gap-2 text-slate-600 font-medium disabled:opacity-50"
+              className="w-full p-4 border-2 border-dashed border-black rounded-2xl hover:border-red-500 hover:bg-red-50 transition-all flex items-center justify-center gap-2 text-slate-600 font-medium disabled:opacity-50"
             >
               {isUploading ? (
                 <>
@@ -477,7 +477,7 @@ export default function EmergencyJobWizard() {
             {formData.photos.length > 0 && (
               <div className="grid grid-cols-3 gap-3 pt-2">
                 {formData.photos.map((url, i) => (
-                  <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 group shadow-sm">
+                  <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-black group shadow-sm">
                     <img src={url} alt={`Emergency photo ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     <button 
                       onClick={() => setFormData({ ...formData, photos: formData.photos.filter((_, idx) => idx !== i) })}
@@ -495,7 +495,7 @@ export default function EmergencyJobWizard() {
             <div className="relative">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input 
-                className="w-full p-4 pl-12 pr-12 border-2 border-slate-300 shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
+                className="w-full p-4 pl-12 pr-12 border-2 border-black shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
                 placeholder="Start typing your address or postcode..."
                 value={addressInput}
                 onChange={(e) => {
@@ -666,10 +666,10 @@ export default function EmergencyJobWizard() {
             <div className="space-y-2">
               {formData.fullAddress && (
                 <div 
-                  className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", !useRegisteredAddress ? "border-red-200 bg-red-50/50" : "border-slate-200 hover:bg-slate-50")}
+                  className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", !useRegisteredAddress ? "border-red-200 bg-red-50/50" : "border-black hover:bg-slate-50")}
                   onClick={() => setUseRegisteredAddress(false)}
                 >
-                  <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", !useRegisteredAddress ? "border-red-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
+                  <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", !useRegisteredAddress ? "border-red-600 border-4 bg-white" : "border-black bg-white")}></div>
                   <div>
                     <div className="font-bold text-sm text-slate-900">Use selected address</div>
                     <div className="text-xs text-slate-600">
@@ -681,7 +681,7 @@ export default function EmergencyJobWizard() {
 
               {userProfile?.postcode && (
                 <div 
-                  className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", useRegisteredAddress ? "border-red-200 bg-red-50/50" : "border-slate-200 hover:bg-slate-50")}
+                  className={cn("flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors", useRegisteredAddress ? "border-red-200 bg-red-50/50" : "border-black hover:bg-slate-50")}
                   onClick={() => {
                     setUseRegisteredAddress(true);
                     setAddressInput("");
@@ -695,7 +695,7 @@ export default function EmergencyJobWizard() {
                     }));
                   }}
                 >
-                  <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", useRegisteredAddress ? "border-red-600 border-4 bg-white" : "border-slate-300 bg-white")}></div>
+                  <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors", useRegisteredAddress ? "border-red-600 border-4 bg-white" : "border-black bg-white")}></div>
                   <div>
                     <div className="font-bold text-sm text-slate-900">Use my registered address</div>
                     <div className="text-xs text-slate-600">
@@ -708,7 +708,7 @@ export default function EmergencyJobWizard() {
           </div>
           
           <input 
-            className="w-full p-4 border-2 border-slate-300 shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
+            className="w-full p-4 border-2 border-black shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
             placeholder="Mobile Number"
             value={formData.mobileNumber}
             onChange={(e) => setFormData({...formData, mobileNumber: e.target.value})}
@@ -721,13 +721,13 @@ export default function EmergencyJobWizard() {
               
               <div className={cn(
                 "relative p-3 rounded-lg border-2 transition-all cursor-pointer flex items-start gap-3",
-                isEmergencyBoost ? "border-red-500 bg-red-50/50 shadow-sm shadow-red-500/10" : "border-slate-300 hover:border-slate-400 bg-white"
+                isEmergencyBoost ? "border-red-500 bg-red-50/50 shadow-sm shadow-red-500/10" : "border-black hover:border-slate-400 bg-white"
               )}
             onClick={() => setIsEmergencyBoost(!isEmergencyBoost)}
             >
                <div className={cn(
                 "w-5 h-5 rounded-full border-2 flex shrink-0 mt-0.5 transition-colors items-center justify-center",
-                isEmergencyBoost ? "border-red-500 bg-red-500" : "border-slate-300"
+                isEmergencyBoost ? "border-red-500 bg-red-500" : "border-black"
               )}>
                 {isEmergencyBoost && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
               </div>
@@ -748,13 +748,13 @@ export default function EmergencyJobWizard() {
 
             <div className={cn(
               "relative p-3 rounded-lg border-2 transition-all cursor-pointer flex items-start gap-3",
-              isInstantMatch ? "border-amber-500 bg-amber-50/50 shadow-sm shadow-amber-500/10" : "border-slate-300 hover:border-slate-400 bg-white"
+              isInstantMatch ? "border-amber-500 bg-amber-50/50 shadow-sm shadow-amber-500/10" : "border-black hover:border-slate-400 bg-white"
             )}
             onClick={() => setIsInstantMatch(!isInstantMatch)}
             >
                <div className={cn(
                 "w-5 h-5 shrink-0 rounded-full border-2 flex mt-0.5 transition-colors items-center justify-center",
-                isInstantMatch ? "border-amber-500 bg-amber-500" : "border-slate-300"
+                isInstantMatch ? "border-amber-500 bg-amber-500" : "border-black"
               )}>
                 {isInstantMatch && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
               </div>
@@ -776,7 +776,7 @@ export default function EmergencyJobWizard() {
             </div>
 
             {(isEmergencyBoost || isInstantMatch) && (
-              <div className="bg-white p-3 rounded-lg border border-slate-300 text-xs text-black flex items-start gap-2 shadow-sm font-semibold">
+              <div className="bg-white p-3 rounded-lg border border-black text-xs text-black flex items-start gap-2 shadow-sm font-semibold">
                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
                  <span>You have selected {(isEmergencyBoost && isInstantMatch) ? "both Premium Upgrades" : (isEmergencyBoost ? "the Emergency Boost" : "the Instant Match")}. By continuing, you agree to pay the additional charges upon job posting.</span>
               </div>

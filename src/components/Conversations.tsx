@@ -157,7 +157,7 @@ export default function Conversations() {
       </div>
 
       {conversations.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-4">
+        <div className="bg-white p-12 rounded-2xl border border-black text-center space-y-4">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
             <MessageSquare className="w-8 h-8" />
           </div>
@@ -190,13 +190,13 @@ export default function Conversations() {
                   }}
                   className={cn(
                     "bg-white p-4 rounded-xl border transition-all flex items-center gap-4 cursor-pointer",
-                    isSelectMode ? (isSelected ? "border-blue-600 bg-blue-50/30" : "border-slate-200") : "border-slate-200 hover:border-blue-600 shadow-sm"
+                    isSelectMode ? (isSelected ? "border-blue-600 bg-blue-50/30" : "border-black") : "border-black hover:border-blue-600 shadow-sm"
                   )}
                 >
                   {isSelectMode && (
                     <div className={cn(
                       "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
-                      isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 bg-white"
+                      isSelected ? "bg-blue-600 border-blue-600" : "border-black bg-white"
                     )}>
                       {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
                     </div>

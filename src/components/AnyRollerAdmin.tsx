@@ -117,7 +117,7 @@ export default function AnyRollerAdmin() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50">
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
+        <header className="h-16 bg-white border-b border-black flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
           <h2 className="text-lg font-bold text-slate-900">
             {SIDEBAR_ITEMS.find(i => i.id === activeScreen)?.label || "Dashboard"}
           </h2>
@@ -132,7 +132,7 @@ export default function AnyRollerAdmin() {
             </div>
             <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors">
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-black"></span>
             </button>
           </div>
         </header>

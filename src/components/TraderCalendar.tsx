@@ -67,7 +67,7 @@ export default function TraderCalendar() {
           </button>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-3xl border border-black overflow-hidden shadow-sm">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex gap-2 w-full justify-between overflow-x-auto">
             {days.map((date, idx) => {

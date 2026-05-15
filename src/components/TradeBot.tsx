@@ -94,13 +94,13 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
               >
                 <div className={cn(
                   "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                  msg.role === "user" ? "bg-blue-100 text-blue-600" : "bg-white border border-slate-200 text-slate-400"
+                  msg.role === "user" ? "bg-blue-100 text-blue-600" : "bg-white border border-black text-slate-400"
                 )}>
                   {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                 </div>
                 <div className={cn(
                   "p-3 rounded-2xl text-sm leading-relaxed",
-                  msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-700 rounded-tl-none shadow-sm"
+                  msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white border border-black text-slate-700 rounded-tl-none shadow-sm"
                 )}>
                   {msg.text}
                 </div>
@@ -108,10 +108,10 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
             ))}
             {isLoading && (
               <div className="flex gap-3 max-w-[85%] mr-auto">
-                <div className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-white border border-black text-slate-400 flex items-center justify-center shrink-0">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-tl-none shadow-sm">
+                <div className="bg-white border border-black p-3 rounded-2xl rounded-tl-none shadow-sm">
                   <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                 </div>
               </div>

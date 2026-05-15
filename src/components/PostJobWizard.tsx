@@ -1451,7 +1451,7 @@ export default function PostJobWizard() {
                 
                 {isListening || voiceText ? (
                   <div className="space-y-4">
-                    <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-50 rounded-xl border border-black overflow-hidden">
                       <textarea 
                         className="w-full min-h-[120px] p-4 bg-transparent border-none focus:ring-0 resize-y text-slate-700 placeholder:text-slate-400"
                         placeholder="Listening..."
@@ -1498,7 +1498,7 @@ export default function PostJobWizard() {
                 ) : (
                   <button 
                     onClick={handleToggleListening}
-                    className="w-full p-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 font-bold hover:border-blue-600 hover:text-blue-600 transition-all"
+                    className="w-full p-3 rounded-xl border-2 border-dashed border-black text-slate-500 font-bold hover:border-blue-600 hover:text-blue-600 transition-all"
                   >
                     Tap to speak
                   </button>
@@ -1650,7 +1650,7 @@ export default function PostJobWizard() {
                         "w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0",
                         formData.selectedAssets.some(a => a.id === asset.id)
                           ? "border-black bg-black"
-                          : "border-slate-300"
+                          : "border-black"
                       )}>
                         {formData.selectedAssets.some(a => a.id === asset.id) && <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />}
                       </div>
@@ -1822,7 +1822,7 @@ export default function PostJobWizard() {
                     placeholder="e.g. Fix leaking kitchen tap"
                     className={cn(
                       "w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white",
-                      titleError ? "border-red-500" : "border-slate-200"
+                      titleError ? "border-red-500" : "border-black"
                     )}
                     value={formData.title}
                     onChange={(e) => {
@@ -1886,25 +1886,25 @@ export default function PostJobWizard() {
                   <div className="flex flex-wrap gap-2 mt-3">
                     <button 
                       onClick={() => handleStartCamera("photo")}
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
                     >
                       <Camera className="w-4 h-4 text-[#0084a5]" /> Add Photo
                     </button>
                     <button 
                       onClick={() => handleStartCamera("video")}
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
                     >
                       <Video className="w-4 h-4 text-[#0084a5]" /> Add Video
                     </button>
                     <button 
                       onClick={() => docInputRef.current?.click()}
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
                     >
                       <FileText className="w-4 h-4 text-[#0084a5]" /> Add PDF
                     </button>
                     <button 
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
                     >
                       <PenTool className="w-4 h-4 text-[#0084a5]" /> Add Drawing
                     </button>
@@ -1914,7 +1914,7 @@ export default function PostJobWizard() {
                   {(formData.photos.length > 0 || formData.videos.length > 0 || formData.documents.length > 0) && (
                     <div className="flex flex-wrap gap-3 pt-2">
                       {formData.photos.map((url, i) => (
-                        <div key={`photo-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                        <div key={`photo-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-black shadow-sm">
                           <img src={url} alt={`Job photo ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           <button 
                             onClick={() => setFormData({ ...formData, photos: formData.photos.filter((_, idx) => idx !== i) })}
@@ -1925,7 +1925,7 @@ export default function PostJobWizard() {
                         </div>
                       ))}
                       {formData.videos.map((url, i) => (
-                        <div key={`video-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center shadow-sm">
+                        <div key={`video-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-black bg-slate-900 flex items-center justify-center shadow-sm">
                           <video src={url} className="w-full h-full object-cover opacity-60" />
                           <Video className="w-6 h-6 text-white absolute" />
                           <button 
@@ -1937,7 +1937,7 @@ export default function PostJobWizard() {
                         </div>
                       ))}
                       {formData.documents.map((doc, i) => (
-                        <div key={`doc-${i}`} className="flex items-center gap-2 p-2 w-16 h-16 bg-slate-50 flex-col justify-center rounded-xl border border-slate-200 shadow-sm relative">
+                        <div key={`doc-${i}`} className="flex items-center gap-2 p-2 w-16 h-16 bg-slate-50 flex-col justify-center rounded-xl border border-black shadow-sm relative">
                           <FileText className="w-6 h-6 text-indigo-600 shrink-0" />
                           <span className="text-[9px] text-slate-700 truncate w-full text-center font-medium">{doc.name}</span>
                           <button 
@@ -2138,7 +2138,7 @@ export default function PostJobWizard() {
                 <div className="relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input 
-                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all text-sm font-medium placeholder:font-normal placeholder:text-slate-400"
+                    className="w-full p-4 pl-12 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all text-sm font-medium placeholder:font-normal placeholder:text-slate-400"
                     placeholder="Enter job address..."
                     value={addressInput}
                     onChange={(e) => {
@@ -2268,7 +2268,7 @@ export default function PostJobWizard() {
                     <input 
                       type="text" 
                       placeholder="e.g. 42 or Flat 3B"
-                      className="w-full p-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white text-sm font-medium placeholder:text-slate-300"
+                      className="w-full p-3.5 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white text-sm font-medium placeholder:text-slate-300"
                       value={formData.houseNumber}
                       onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
                     />
@@ -2319,7 +2319,7 @@ export default function PostJobWizard() {
                         "px-5 py-3 text-sm rounded-2xl border transition-all font-bold",
                         formData.urgency === level.id 
                           ? "border-[#0084a5] bg-[#0084a5] text-white shadow-[0_4px_12px_rgba(0,132,165,0.2)]" 
-                          : "border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-200 hover:bg-slate-100"
+                          : "border-slate-100 bg-slate-50 text-slate-600 hover:border-black hover:bg-slate-100"
                       )}
                     >
                       {level.name}
@@ -2335,7 +2335,7 @@ export default function PostJobWizard() {
                   >
                     <input 
                       type="date" 
-                      className="w-full p-4 rounded-2xl border border-slate-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium text-slate-700"
+                      className="w-full p-4 rounded-2xl border border-black shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all font-medium text-slate-700"
                       value={formData.jobDate}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setFormData({ ...formData, jobDate: e.target.value })}
@@ -2398,7 +2398,7 @@ export default function PostJobWizard() {
                       </div>
                       <h3 className="text-4xl sm:text-5xl font-black">£{estimate.min} - £{estimate.max}</h3>
                       
-                      <div className="bg-white/10 rounded-xl p-4 mt-4 border border-white/20">
+                      <div className="bg-white/10 rounded-xl p-4 mt-4 border border-black/20">
                         <p className="text-cyan-50 text-xs leading-relaxed">
                           <strong>Note:</strong> This is an AI estimate, not a guaranteed quote. Tradespeople will see this as your target budget, but their actual quotes may vary based on specific job requirements, materials, and their rates.
                         </p>
@@ -2418,7 +2418,7 @@ export default function PostJobWizard() {
                           "w-full mt-4 font-bold py-4 rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2",
                           formData.selectedBudget === `£${estimate.min} - £${estimate.max}`
                             ? "bg-white text-[#0084a5]"
-                            : "bg-white/20 hover:bg-white/30 text-white border border-white/30"
+                            : "bg-white/20 hover:bg-white/30 text-white border border-black/30"
                         )}
                       >
                         {formData.selectedBudget === `£${estimate.min} - £${estimate.max}` ? "Selected" : "Set as My Budget"}
@@ -2446,7 +2446,7 @@ export default function PostJobWizard() {
                         type="number"
                         placeholder="0.00"
                         onWheel={(e) => (e.target as HTMLElement).blur()}
-                        className="w-full py-4 pl-12 pr-24 rounded-xl border border-slate-300 bg-white font-bold text-xl text-center focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
+                        className="w-full py-4 pl-12 pr-24 rounded-xl border border-black bg-white font-bold text-xl text-center focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
                         value={formData.selectedBudget && formData.selectedBudget !== `£${estimate?.min} - £${estimate?.max}` ? formData.selectedBudget : ""}
                         onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
                       />
@@ -2521,13 +2521,13 @@ export default function PostJobWizard() {
                   )}
 
                   {estimate?.pricingInsights && (
-                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                    <div className="rounded-2xl border border-black bg-white overflow-hidden shadow-sm">
                       <div className="p-4 bg-slate-50/50 border-b border-slate-100">
                         <h3 className="font-extrabold text-slate-900">Dynamic Pricing Insights</h3>
                       </div>
                       <div className="divide-y divide-slate-100">
                         <div className="p-4 flex gap-4">
-                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
                             <Clock className="w-4 h-4 text-slate-600" />
                           </div>
                           <div>
@@ -2536,7 +2536,7 @@ export default function PostJobWizard() {
                           </div>
                         </div>
                         <div className="p-4 flex gap-4">
-                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
                             <MapPin className="w-4 h-4 text-slate-600" />
                           </div>
                           <div>
@@ -2545,7 +2545,7 @@ export default function PostJobWizard() {
                           </div>
                         </div>
                         <div className="p-4 flex gap-4">
-                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
                             <ZapIcon className="w-4 h-4 text-slate-600" />
                           </div>
                           <div>
@@ -2607,7 +2607,7 @@ export default function PostJobWizard() {
                   >
                      <div className={cn(
                       "w-5 h-5 rounded-full border-2 flex shrink-0 mt-0.5 transition-colors items-center justify-center",
-                      formData.isEmergencyBoost ? "border-slate-900" : "border-slate-300"
+                      formData.isEmergencyBoost ? "border-slate-900" : "border-black"
                     )}>
                       {formData.isEmergencyBoost && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
                     </div>
@@ -2634,7 +2634,7 @@ export default function PostJobWizard() {
                   >
                      <div className={cn(
                       "w-5 h-5 shrink-0 rounded-full border-2 flex mt-0.5 transition-colors items-center justify-center",
-                      formData.isInstantMatch ? "border-slate-900" : "border-slate-300"
+                      formData.isInstantMatch ? "border-slate-900" : "border-black"
                     )}>
                       {formData.isInstantMatch && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
                     </div>
@@ -2656,7 +2656,7 @@ export default function PostJobWizard() {
                   </div>
 
                   {(formData.isEmergencyBoost || formData.isInstantMatch) && (
-                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-300 text-xs text-black flex items-start gap-2 shadow-sm font-semibold">
+                    <div className="bg-slate-50 p-3 rounded-lg border border-black text-xs text-black flex items-start gap-2 shadow-sm font-semibold">
                        <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
                        <span>You have selected {(formData.isEmergencyBoost && formData.isInstantMatch) ? "both Premium Upgrades" : (formData.isEmergencyBoost ? "the Emergency Boost" : "the Instant Match")}. By continuing, you agree to pay the additional charges upon job posting.</span>
                     </div>
@@ -2811,7 +2811,7 @@ export default function PostJobWizard() {
                 </svg>
               </div>
 
-              <div className="absolute top-10 right-10 w-16 h-16 bg-[#a5dbc2] rounded-full border-4 border-white flex items-center justify-center z-20 shadow-md">
+              <div className="absolute top-10 right-10 w-16 h-16 bg-[#a5dbc2] rounded-full border-4 border-black flex items-center justify-center z-20 shadow-md">
                 <CheckCircle2 className="w-10 h-10 text-[#21855a]" />
               </div>
             </div>
@@ -2927,7 +2927,7 @@ export default function PostJobWizard() {
                 <button 
                   onClick={handleCapturePhoto}
                   disabled={isUploading}
-                  className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center group disabled:opacity-50"
+                  className="w-20 h-20 rounded-full border-4 border-black flex items-center justify-center group disabled:opacity-50"
                 >
                   <div className="w-16 h-16 bg-white rounded-full group-hover:scale-95 transition-transform flex items-center justify-center">
                     {isUploading && <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />}
@@ -2939,7 +2939,7 @@ export default function PostJobWizard() {
                   disabled={isUploading}
                   className={cn(
                     "w-20 h-20 rounded-full border-4 flex items-center justify-center group disabled:opacity-50",
-                    isRecording ? "border-red-600" : "border-white"
+                    isRecording ? "border-red-600" : "border-black"
                   )}
                 >
                   {isRecording ? (

@@ -1679,7 +1679,7 @@ export default function AnyTraderAdmin() {
                   </div>
                   <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between px-8">
                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Tip: Press ESC to clear search</p>
-                     <div className="flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-slate-200 text-[10px] font-black text-slate-500 uppercase">
+                     <div className="flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-black text-[10px] font-black text-slate-500 uppercase">
                         Administrative Console
                       </div>
                   </div>
@@ -1850,7 +1850,7 @@ export default function AnyTraderAdmin() {
                       <th className="p-4 w-10">
                         <input 
                           type="checkbox" 
-                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                          className="rounded border-black text-blue-600 focus:ring-blue-600"
                           checked={selectedUserIds.length > 0 && (isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3)).every(u => selectedUserIds.includes(u.id))}
                           onChange={(e) => {
                             const visibleUsers = isUsersExpanded ? filteredUsers : filteredUsers.slice(0, 3);
@@ -1902,7 +1902,7 @@ export default function AnyTraderAdmin() {
                         return (
                           <input 
                             type="checkbox" 
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                            className="rounded border-black text-blue-600 focus:ring-blue-600"
                             checked={selectedUserIds.includes(u.id)}
                             onChange={(e) => {
                               if (e.target.checked) {
@@ -1917,7 +1917,7 @@ export default function AnyTraderAdmin() {
                     </td>
                         <td className="p-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-100 overflow-hidden shadow-sm border border-white">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-100 overflow-hidden shadow-sm border border-black">
                               {u.avatarUrl ? (
                                 <img src={u.avatarUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
@@ -2141,7 +2141,7 @@ export default function AnyTraderAdmin() {
                         </div>
                         <input 
                           type="checkbox" 
-                          className="rounded-[8px] w-6 h-6 border-slate-300 text-blue-600 focus:ring-blue-600 shadow-sm"
+                          className="rounded-[8px] w-6 h-6 border-black text-blue-600 focus:ring-blue-600 shadow-sm"
                           checked={selectedUserIds.includes(u.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
@@ -2399,19 +2399,19 @@ export default function AnyTraderAdmin() {
                       </button>
                     </div>
                   </div>
-                  <div className="bg-white p-4 rounded-xl border border-slate-200">
+                  <div className="bg-white p-4 rounded-xl border border-black">
                     <p className="text-sm text-slate-700 italic">"{j.dispute?.reason}"</p>
                   </div>
                   {j.dispute?.photos && (
                     <div className="flex gap-2">
                       {j.dispute.photos.map((url: string, i: number) => (
-                        <img key={i} src={url} className="w-20 h-20 rounded-lg object-cover border border-slate-200" referrerPolicy="no-referrer" />
+                        <img key={i} src={url} className="w-20 h-20 rounded-lg object-cover border border-black" referrerPolicy="no-referrer" />
                       ))}
                     </div>
                   )}
                   
                   {/* AI Dispute Summarizer */}
-                  <div className="pt-4 border-t border-slate-200">
+                  <div className="pt-4 border-t border-black">
                     {!disputeSummaries[j.id] && !isSummarizingDispute[j.id] && (
                       <button 
                         onClick={() => handleSummarizeDispute(j)}
@@ -2504,7 +2504,7 @@ export default function AnyTraderAdmin() {
               {riskAlerts.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
                   {riskAlerts.map((alert, idx) => (
-                    <div key={`risk-alert-${alert.targetId}-${idx}`} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-5">
+                    <div key={`risk-alert-${alert.targetId}-${idx}`} className="bg-white border border-black rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-5">
                       <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-xl min-w-[100px]">
                         <div className={cn(
                           "text-2xl font-black",
@@ -2564,7 +2564,7 @@ export default function AnyTraderAdmin() {
                   ))}
                 </div>
               ) : (
-                <div className="py-16 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                <div className="py-16 text-center bg-slate-50 rounded-3xl border border-dashed border-black">
                   <ShieldCheck className="w-16 h-16 text-green-500 mx-auto mb-4" />
                   <h3 className="text-lg font-bold text-slate-900">Platform is Secure</h3>
                   <p className="text-slate-500 text-sm max-w-md mx-auto mt-2">
@@ -2630,7 +2630,7 @@ export default function AnyTraderAdmin() {
                             await updateDoc(doc(db, "security_alerts", alert.id), { resolved: true });
                             showToast("Success", "Alert resolved.");
                           }}
-                          className="bg-white text-slate-900 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 hover:bg-slate-50"
+                          className="bg-white text-slate-900 px-4 py-2 rounded-xl text-xs font-bold border border-black hover:bg-slate-50"
                         >
                           Resolve
                         </button>
@@ -2895,7 +2895,7 @@ export default function AnyTraderAdmin() {
                     </div>
                   ))}
                   {broadcasts.length === 0 && (
-                    <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                    <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-black">
                       <Megaphone className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                       <p className="text-slate-500 font-medium">No broadcasts sent yet.</p>
                     </div>
@@ -3051,7 +3051,7 @@ export default function AnyTraderAdmin() {
                               href={doc.fileUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 p-2 rounded-xl text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                              className="flex-1 flex items-center justify-center gap-2 bg-white border border-black p-2 rounded-xl text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition-all"
                             >
                               <Eye className="w-3 h-3" /> View Document
                             </a>
@@ -3167,7 +3167,7 @@ export default function AnyTraderAdmin() {
                           {!doc.autoCheck && doc.status === "pending" && (
                             <button 
                               onClick={() => performInitialPublicRecordCheck(u.id, doc.type)}
-                              className="w-full mt-2 py-2 rounded-xl border border-dashed border-slate-200 text-[10px] font-bold text-slate-400 hover:bg-white hover:border-blue-400 hover:text-blue-600 transition-all flex items-center justify-center gap-2"
+                              className="w-full mt-2 py-2 rounded-xl border border-dashed border-black text-[10px] font-bold text-slate-400 hover:bg-white hover:border-blue-400 hover:text-blue-600 transition-all flex items-center justify-center gap-2"
                             >
                               <Zap className="w-3 h-3" /> Run Initial Check
                             </button>
@@ -3179,7 +3179,7 @@ export default function AnyTraderAdmin() {
                 ))}
 
                 {users.filter(u => u.verificationStatus === "pending" || (u.verificationDocs && u.verificationDocs.some((d: any) => d.status === "pending"))).length === 0 && (
-                  <div className="text-center py-20 bg-slate-50 rounded-[40px] border border-dashed border-slate-200">
+                  <div className="text-center py-20 bg-slate-50 rounded-[40px] border border-dashed border-black">
                     <CheckCircle2 className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                     <h4 className="text-slate-900 font-bold">Queue is Empty</h4>
                     <p className="text-slate-500 text-sm">All pending verifications have been processed.</p>
@@ -3219,7 +3219,7 @@ export default function AnyTraderAdmin() {
             ) : categorySuggestions.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {categorySuggestions.map((suggestion) => (
-                  <div key={`suggestion-${suggestion.category}`} className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
+                  <div key={`suggestion-${suggestion.category}`} className="bg-white rounded-3xl p-6 border border-black shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h3 className="font-bold text-slate-900 text-lg leading-tight">{suggestion.category}</h3>
@@ -3260,7 +3260,7 @@ export default function AnyTraderAdmin() {
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Top Search Terms</p>
                           <div className="flex flex-wrap gap-1.5">
                             {suggestion.topKeywords.map((keyword, kIndex) => (
-                              <span key={kIndex} className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-medium border border-slate-200">
+                              <span key={kIndex} className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-medium border border-black">
                                 {keyword}
                               </span>
                             ))}
@@ -3290,7 +3290,7 @@ export default function AnyTraderAdmin() {
                 ))}
               </div>
             ) : (
-              <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-3xl">
+              <div className="py-12 text-center border-2 border-dashed border-black rounded-3xl">
                 <Sparkles className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-lg font-bold text-slate-900 mb-1">No Suggestions Yet</h3>
                 <p className="text-slate-500 text-sm max-w-md mx-auto mb-4">
@@ -3729,21 +3729,21 @@ export default function AnyTraderAdmin() {
           return (
             <div className="p-6 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
                   <p className="text-slate-500 text-sm font-bold uppercase tracking-tight">Trades MRR</p>
                   <p className="text-3xl font-black text-slate-900 mt-1">£{mrr.toFixed(2)}</p>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
                   <p className="text-slate-500 text-sm font-bold uppercase tracking-tight">Active Trade Subs</p>
                   <p className="text-3xl font-black text-slate-900 mt-1">{activeSubscribers.length}</p>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
                   <p className="text-slate-500 text-sm font-bold uppercase tracking-tight">Pro Landlords</p>
                   <p className="text-3xl font-black text-slate-900 mt-1">{proHomeowners.length}</p>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
                 <h3 className="font-bold text-lg text-slate-900 mb-4">Homeowner/Landlord Tiers</h3>
                 <div className="space-y-2">
                   <div className="flex justify-between p-3 bg-slate-50 rounded-lg font-bold text-sm">
@@ -4101,7 +4101,7 @@ export default function AnyTraderAdmin() {
               </div>
 
               {categories.length === 0 ? (
-                <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-black">
                   <Tag className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                   <p className="text-slate-500 font-medium">No categories found in Firestore.</p>
                   <p className="text-xs text-slate-400 mt-1">Click "Sync from Constants" to populate the database.</p>
@@ -4204,7 +4204,7 @@ export default function AnyTraderAdmin() {
                 </div>
                 <button 
                   onClick={() => handleTabChange("monetization")}
-                  className="shrink-0 inline-flex items-center gap-2 bg-white px-6 py-3 rounded-2xl border border-slate-200 text-slate-900 font-bold text-sm hover:border-blue-600 hover:text-blue-600 transition-all shadow-sm group"
+                  className="shrink-0 inline-flex items-center gap-2 bg-white px-6 py-3 rounded-2xl border border-black text-slate-900 font-bold text-sm hover:border-blue-600 hover:text-blue-600 transition-all shadow-sm group"
                 >
                   Open Tiers Tab
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -4482,7 +4482,7 @@ export default function AnyTraderAdmin() {
                                 max="5"
                                 value={tempConfig.fairness_complainerThreshold || 2.5}
                                 onChange={(e) => setTempConfig({ ...tempConfig, fairness_complainerThreshold: parseFloat(e.target.value) })}
-                                className="w-24 px-4 py-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 text-sm font-bold text-slate-900"
+                                className="w-24 px-4 py-2 rounded-lg border border-black bg-white focus:outline-none focus:border-emerald-500 text-sm font-bold text-slate-900"
                               />
                               <span className="text-xs text-slate-500">stars or lower</span>
                             </div>
@@ -4503,7 +4503,7 @@ export default function AnyTraderAdmin() {
                             min="0"
                             value={tempConfig.fairness_newcomerBoostDays || 30}
                             onChange={(e) => setTempConfig({ ...tempConfig, fairness_newcomerBoostDays: parseInt(e.target.value) })}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 text-sm font-bold text-slate-900"
+                            className="w-full px-4 py-2 rounded-lg border border-black bg-white focus:outline-none focus:border-emerald-500 text-sm font-bold text-slate-900"
                           />
                         </div>
                       </div>
@@ -4671,7 +4671,7 @@ export default function AnyTraderAdmin() {
                           <select 
                             value={tempConfig.aiModel || "gemini-2.5-flash"}
                             onChange={(e) => setTempConfig({...tempConfig, aiModel: e.target.value})}
-                            className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
+                            className="w-full bg-white border-2 border-black rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
                           >
                             <option value="gemini-1.5-flash">Gemini 1.5 Flash (Legacy Fast)</option>
                             <option value="gemini-2.5-flash">Gemini 2.5 Flash (Current Fast)</option>
@@ -4705,7 +4705,7 @@ export default function AnyTraderAdmin() {
                         </div>
 
                         {tempConfig.aiBudgetEnabled && (
-                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/50">
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-black/50">
                             <div>
                               <label className="text-xs font-bold text-slate-700 block mb-1">Monthly Limit (£)</label>
                               <div className="relative">
@@ -4715,7 +4715,7 @@ export default function AnyTraderAdmin() {
                                   placeholder="200"
                                   value={tempConfig.aiBudgetLimit || ""}
                                   onChange={(e) => setTempConfig({...tempConfig, aiBudgetLimit: Number(e.target.value)})}
-                                  className="w-full bg-white border-2 border-slate-200 rounded-xl py-2 pl-7 pr-3 text-sm focus:border-blue-500 outline-none transition-colors"
+                                  className="w-full bg-white border-2 border-black rounded-xl py-2 pl-7 pr-3 text-sm focus:border-blue-500 outline-none transition-colors"
                                 />
                               </div>
                             </div>
@@ -4728,7 +4728,7 @@ export default function AnyTraderAdmin() {
                                   placeholder="0"
                                   value={tempConfig.aiCurrentSpend || ""}
                                   onChange={(e) => setTempConfig({...tempConfig, aiCurrentSpend: Number(e.target.value)})}
-                                  className="w-full bg-white border-2 border-slate-200 rounded-xl py-2 pl-7 pr-3 text-sm focus:border-blue-500 outline-none transition-colors"
+                                  className="w-full bg-white border-2 border-black rounded-xl py-2 pl-7 pr-3 text-sm focus:border-blue-500 outline-none transition-colors"
                                 />
                               </div>
                               <p className="text-[9px] text-slate-400 mt-1 pl-1">For demo: Sync manual API billing here.</p>
@@ -4742,7 +4742,7 @@ export default function AnyTraderAdmin() {
               </div>
               
               {/* Global Master Command Center */}
-                  <div id="quick-actions" className="bg-white/95 backdrop-blur-2xl p-8 sm:p-10 rounded-[48px] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.1)] space-y-10 scroll-mt-20 border border-slate-200/60 overflow-hidden relative group">
+                  <div id="quick-actions" className="bg-white/95 backdrop-blur-2xl p-8 sm:p-10 rounded-[48px] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.1)] space-y-10 scroll-mt-20 border border-black/60 overflow-hidden relative group">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -4752,7 +4752,7 @@ export default function AnyTraderAdmin() {
                         <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">Administrative Data oversight & specialized global exports</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="px-4 py-2 bg-slate-100 rounded-2xl border border-slate-200/50 flex items-center gap-2">
+                        <div className="px-4 py-2 bg-slate-100 rounded-2xl border border-black/50 flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-emerald-600" />
                           <span className="text-[10px] font-black text-slate-600 uppercase">Superuser Mode</span>
                         </div>
@@ -4858,7 +4858,7 @@ export default function AnyTraderAdmin() {
                               <select 
                                 value={exportRole}
                                 onChange={(e) => setExportRole(e.target.value)}
-                                className="flex-1 bg-white border border-slate-200 text-slate-900 text-xs font-bold rounded-2xl px-5 py-3 focus:ring-4 focus:ring-blue-500/5 focus:border-blue-600 outline-none appearance-none cursor-pointer shadow-sm"
+                                className="flex-1 bg-white border border-black text-slate-900 text-xs font-bold rounded-2xl px-5 py-3 focus:ring-4 focus:ring-blue-500/5 focus:border-blue-600 outline-none appearance-none cursor-pointer shadow-sm"
                               >
                                 <option value="homeowner">🏡 Homeowners</option>
                                 <option value="tradesperson">🛠️ Tradespeople</option>
@@ -4889,7 +4889,7 @@ export default function AnyTraderAdmin() {
                               <select 
                                 value={exportCategory}
                                 onChange={(e) => setExportCategory(e.target.value)}
-                                className="flex-1 bg-white border border-slate-200 text-slate-900 text-xs font-bold rounded-2xl px-5 py-3 focus:ring-4 focus:ring-purple-500/5 focus:border-purple-600 outline-none appearance-none cursor-pointer shadow-sm"
+                                className="flex-1 bg-white border border-black text-slate-900 text-xs font-bold rounded-2xl px-5 py-3 focus:ring-4 focus:ring-purple-500/5 focus:border-purple-600 outline-none appearance-none cursor-pointer shadow-sm"
                               >
                                 {TRADE_CATEGORIES.map(cat => (
                                   <option key={cat.id} value={cat.name}>{cat.name}</option>
@@ -4911,7 +4911,7 @@ export default function AnyTraderAdmin() {
                        <div className="flex items-center gap-3">
                          <div className="flex -space-x-2">
                             {[1,2,3].map(i => (
-                              <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200" />
+                              <div key={i} className="w-6 h-6 rounded-full border-2 border-black bg-slate-200" />
                             ))}
                          </div>
                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Auto-purging inactive accounts</p>
@@ -5487,7 +5487,7 @@ export default function AnyTraderAdmin() {
                       <span key={index} className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-700 rounded-xl border border-slate-100 text-sm group">
                         {sub}
                         {deleteSubcategoryConfirm === index ? (
-                          <div className="flex items-center gap-2 ml-2 border-l border-slate-200 pl-2">
+                          <div className="flex items-center gap-2 ml-2 border-l border-black pl-2">
                             <button 
                               onClick={() => {
                                 setCatSubcategories(catSubcategories.filter((_, i) => i !== index));
@@ -5622,7 +5622,7 @@ export default function AnyTraderAdmin() {
                   value={syncConfirmText}
                   onChange={(e) => setSyncConfirmText(e.target.value)}
                   placeholder="Type SYNC here"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full bg-white border border-black rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
 
@@ -5695,7 +5695,7 @@ export default function AnyTraderAdmin() {
                             onClick={() => setBroadcastType(t as any)}
                             className={cn(
                               "p-3 rounded-xl border text-xs font-bold capitalize transition-all",
-                              broadcastType === t ? "bg-green-50 border-green-200 text-green-700" : "bg-white border-slate-100 text-slate-500 hover:border-slate-200"
+                              broadcastType === t ? "bg-green-50 border-green-200 text-green-700" : "bg-white border-slate-100 text-slate-500 hover:border-black"
                             )}
                           >
                             {t}
@@ -5725,7 +5725,7 @@ export default function AnyTraderAdmin() {
                             }}
                             className={cn(
                               "p-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between group",
-                              broadcastSegments.includes(s.id) ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-slate-100 text-slate-500 hover:border-slate-200"
+                              broadcastSegments.includes(s.id) ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-slate-100 text-slate-500 hover:border-black"
                             )}
                           >
                             <div className="flex items-center gap-3">
@@ -5756,7 +5756,7 @@ export default function AnyTraderAdmin() {
                               }}
                               className={cn(
                                 "w-full p-2 rounded-lg border text-[10px] font-bold transition-all text-left flex items-center justify-between group",
-                                broadcastTrades.includes(t.name) ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-white border-slate-100 text-slate-500 hover:border-slate-200"
+                                broadcastTrades.includes(t.name) ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-white border-slate-100 text-slate-500 hover:border-black"
                               )}
                             >
                               <div className="flex items-center gap-2">
@@ -5782,7 +5782,7 @@ export default function AnyTraderAdmin() {
                       <input 
                         type="text" 
                         placeholder="e.g. Spring Discount Code!"
-                        className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600 transition-all font-medium"
+                        className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600 transition-all font-medium"
                         value={broadcastTitle}
                         onChange={(e) => setBroadcastTitle(e.target.value)}
                       />
@@ -5803,7 +5803,7 @@ export default function AnyTraderAdmin() {
                       <textarea 
                         placeholder="Write your message here or use AI Draft..."
                         rows={5}
-                        className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600 transition-all font-medium resize-none"
+                        className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600 transition-all font-medium resize-none"
                         value={broadcastContent}
                         onChange={(e) => setBroadcastContent(e.target.value)}
                       />
@@ -5879,7 +5879,7 @@ export default function AnyTraderAdmin() {
                       <input 
                         type="email" 
                         placeholder="colleague@tradequote.co.uk"
-                        className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all font-medium"
+                        className="w-full pl-12 pr-4 py-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all font-medium"
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
                       />
@@ -5901,7 +5901,7 @@ export default function AnyTraderAdmin() {
                             "flex items-center gap-4 p-4 rounded-2xl border transition-all text-left group",
                             invitePermissions.includes(p.id) 
                               ? "bg-blue-50 border-blue-200" 
-                              : "bg-white border-slate-100 hover:border-slate-200"
+                              : "bg-white border-slate-100 hover:border-black"
                           )}
                         >
                           <div className={cn(
@@ -5970,7 +5970,7 @@ export default function AnyTraderAdmin() {
                     <input 
                       type="password"
                       placeholder="Enter new key value..."
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all font-mono text-sm"
+                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all font-mono text-sm"
                       value={editingKey.value}
                       onChange={(e) => setEditingKey({ ...editingKey, value: e.target.value })}
                     />
@@ -6046,7 +6046,7 @@ export default function AnyTraderAdmin() {
                             "flex items-center justify-between p-3 rounded-2xl border transition-all text-left",
                             isRecommended 
                               ? "bg-orange-50 border-orange-200 text-orange-700 ring-1 ring-orange-200" 
-                              : "bg-slate-50 border-slate-100 text-slate-600 hover:border-slate-200"
+                              : "bg-slate-50 border-slate-100 text-slate-600 hover:border-black"
                           )}
                         >
                           <div className="flex items-center gap-2">

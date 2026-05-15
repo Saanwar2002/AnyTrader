@@ -47,7 +47,7 @@ export function ReviewForm({ jobId, reviewerId, revieweeId, type = "tradesperson
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xl space-y-6"
+      className="bg-white p-6 rounded-2xl border border-black shadow-xl space-y-6"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-bold text-slate-900">
@@ -90,7 +90,7 @@ export function ReviewForm({ jobId, reviewerId, revieweeId, type = "tradesperson
               ? "Leave a comment (optional)... Tell others about your experience with this tradesperson."
               : "Leave a comment (optional)... Tell others about your experience with this homeowner."
             }
-            className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none min-h-[120px] resize-none text-sm"
+            className="w-full p-4 rounded-xl border border-black focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none min-h-[120px] resize-none text-sm"
           />
         </div>
 

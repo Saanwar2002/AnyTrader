@@ -641,7 +641,7 @@ export default function RidesCommandCenter() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <AlertCircle className="w-3 h-3 text-red-500" /> Rider Abandonment Protection
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-slate-200 transition-colors">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-black transition-colors">
                     <div className="relative">
                       <input 
                         type="checkbox" 
@@ -649,7 +649,7 @@ export default function RidesCommandCenter() {
                         onChange={(e) => setConfig({ ...config, allowRiderAbandonment: e.target.checked })}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-black after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                     </div>
                     <span className="text-sm font-bold text-slate-900">Enable abandonment fee collection & termination</span>
                   </label>
@@ -661,7 +661,7 @@ export default function RidesCommandCenter() {
                   <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">Auto-Dispatch Engine</h4>
                   
                   <div className="space-y-4">
-                    <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-slate-200 transition-colors">
+                    <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-black transition-colors">
                       <div className="relative">
                         <input 
                           type="checkbox" 
@@ -669,7 +669,7 @@ export default function RidesCommandCenter() {
                           onChange={(e) => setConfig({ ...config, autoDispatchEnabled: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-black after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                       </div>
                       <span className="text-sm font-bold text-slate-900">Enable algorithmic Auto-Dispatch</span>
                     </label>
@@ -875,7 +875,7 @@ export default function RidesCommandCenter() {
               <div className="space-y-6 pt-6 border-t border-slate-50">
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Live Demand Surge Engine</h4>
                 <div className="space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-slate-200 transition-colors">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 hover:border-black transition-colors">
                     <div className="relative">
                       <input 
                         type="checkbox" 
@@ -883,7 +883,7 @@ export default function RidesCommandCenter() {
                         onChange={(e) => setConfig({ ...config, surgeEnabled: e.target.checked })}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-black after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                     </div>
                     <div>
                         <span className="text-sm font-bold text-slate-900 block">Enable Dynamic Surging</span>
@@ -893,7 +893,7 @@ export default function RidesCommandCenter() {
 
                   {(config.surgeEnabled ?? true) && (
                     <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-4">
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                        <div className="flex items-center justify-between pb-3 border-b border-black">
                            <div>
                                <span className="text-xs font-bold text-slate-900 block">Surge Model</span>
                                <span className="text-[10px] text-slate-500 font-medium">Use fixed additions or multipliers.</span>
@@ -977,7 +977,7 @@ export default function RidesCommandCenter() {
             exit={{ opacity: 0, y: -10 }}
             className="flex justify-center"
           >
-            <div className="bg-slate-900 rounded-[32px] sm:rounded-[40px] shadow-2xl p-6 sm:p-10 text-white overflow-hidden max-w-2xl w-full border border-white/5 relative">
+            <div className="bg-slate-900 rounded-[32px] sm:rounded-[40px] shadow-2xl p-6 sm:p-10 text-white overflow-hidden max-w-2xl w-full border border-black/5 relative">
                 <div className="absolute top-0 right-0 p-8 opacity-10 hidden sm:block">
                    <TrendingUp className="w-32 h-32 text-emerald-500" />
                 </div>
@@ -994,7 +994,7 @@ export default function RidesCommandCenter() {
                         <select 
                           value={simVehicleType} 
                           onChange={e => setSimVehicleType(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white font-bold focus:border-emerald-500 outline-none transition-all appearance-none cursor-pointer"
+                          className="w-full bg-white/5 border border-black/10 rounded-2xl p-4 text-sm text-white font-bold focus:border-emerald-500 outline-none transition-all appearance-none cursor-pointer"
                         >
                           {config.vehicleTypes?.map((v: any, idx: number) => (
                             <option key={`sim-vt-${idx}`} value={v.id} className="bg-slate-900">{v.name} (x{v.multiplier})</option>
@@ -1005,11 +1005,11 @@ export default function RidesCommandCenter() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Distance (Mi)</label>
-                          <input type="number" value={simDistance} onChange={e => setSimDistance(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white font-bold focus:border-emerald-500 outline-none transition-all" />
+                          <input type="number" value={simDistance} onChange={e => setSimDistance(e.target.value)} className="w-full bg-white/5 border border-black/10 rounded-2xl p-4 text-white font-bold focus:border-emerald-500 outline-none transition-all" />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Duration (Min)</label>
-                          <input type="number" value={simTime} onChange={e => setSimTime(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white font-bold focus:border-emerald-500 outline-none transition-all" />
+                          <input type="number" value={simTime} onChange={e => setSimTime(e.target.value)} className="w-full bg-white/5 border border-black/10 rounded-2xl p-4 text-white font-bold focus:border-emerald-500 outline-none transition-all" />
                         </div>
                       </div>
 
@@ -1045,7 +1045,7 @@ export default function RidesCommandCenter() {
                                 "py-3 px-4 rounded-xl text-[10px] font-bold border transition-all",
                                 simPeakMode === mode.id 
                                   ? "bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20" 
-                                  : "bg-white/5 border-white/5 text-slate-400 hover:bg-white/10"
+                                  : "bg-white/5 border-black/5 text-slate-400 hover:bg-white/10"
                               )}
                             >
                               {mode.label}
@@ -1069,7 +1069,7 @@ export default function RidesCommandCenter() {
                                 "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
                                 simSelectedSurcharges.includes(s.id)
                                   ? "bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/20"
-                                  : "bg-white/5 border-white/5 text-slate-400 hover:bg-white/10"
+                                  : "bg-white/5 border-black/5 text-slate-400 hover:bg-white/10"
                               )}
                             >
                               {s.name} (£{s.amount})
@@ -1082,7 +1082,7 @@ export default function RidesCommandCenter() {
                       </div>
                     </div>
                     
-                    <div className="flex flex-col justify-center gap-10 bg-white/5 rounded-[32px] p-8 border border-white/10">
+                    <div className="flex flex-col justify-center gap-10 bg-white/5 rounded-[32px] p-8 border border-black/10">
                        <div className="space-y-1">
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Passenger Estimates
@@ -1101,9 +1101,9 @@ export default function RidesCommandCenter() {
                           </div>
                        </div>
                        
-                       <div className="space-y-1 pt-8 border-t border-white/10 relative">
+                       <div className="space-y-1 pt-8 border-t border-black/10 relative">
                           <div className="absolute -top-3 left-0 right-0 flex justify-center">
-                            <div className="bg-slate-900 px-3 py-1 text-[9px] font-black text-slate-500 border border-white/10 rounded-full">
+                            <div className="bg-slate-900 px-3 py-1 text-[9px] font-black text-slate-500 border border-black/10 rounded-full">
                               - {config.commission}% PLATFORM FEE
                             </div>
                           </div>
@@ -1125,7 +1125,7 @@ export default function RidesCommandCenter() {
               exit={{ y: 100, opacity: 0 }}
               className="fixed bottom-24 left-0 right-0 z-[100] px-4 flex justify-center pointer-events-none"
             >
-              <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-[28px] p-2 pl-6 shadow-2xl flex items-center gap-6 pointer-events-auto max-w-sm w-full">
+              <div className="bg-slate-900/90 backdrop-blur-xl border border-black/10 rounded-[28px] p-2 pl-6 shadow-2xl flex items-center gap-6 pointer-events-auto max-w-sm w-full">
                 <div className="flex-1">
                   <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Unsaved Changes</p>
                   <p className="text-xs font-bold text-white">Pricing engine is out of sync.</p>
@@ -1204,7 +1204,7 @@ export default function RidesCommandCenter() {
                         </button>
                       ))}
                       {drivers.filter(d => d.status === 'online').length === 0 && (
-                        <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-[24px]">
+                        <div className="p-8 text-center text-slate-400 border border-dashed border-black rounded-[24px]">
                           <Users className="w-8 h-8 mx-auto mb-2 opacity-20" />
                           <p className="text-[10px] font-black uppercase tracking-widest">No available drivers found</p>
                         </div>

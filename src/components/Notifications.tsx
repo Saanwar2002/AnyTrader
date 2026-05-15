@@ -101,7 +101,7 @@ export default function Notifications() {
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-4"
+              className="bg-white p-12 rounded-2xl border border-black text-center space-y-4"
             >
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
                 <Bell className="w-8 h-8" />

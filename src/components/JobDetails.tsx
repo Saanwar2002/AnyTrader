@@ -1966,7 +1966,7 @@ const libraries: any[] = ['places'];
               } else {
                 navigate("/");
               }
-            }} className="w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group shrink-0">
+            }} className="w-10 h-10 bg-white/10 border border-black/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group shrink-0">
               <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
             </button>
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
@@ -2096,12 +2096,12 @@ const libraries: any[] = ['places'];
                   <span className="text-slate-900 font-medium group-hover:text-black transition-colors text-lg pt-0.5 leading-snug">Isolate Water Supply</span>
                 </label>
                 <label className="flex items-start gap-4 cursor-pointer group">
-                  <div className="w-7 h-7 rounded-lg border-2 border-slate-300 flex items-center justify-center shrink-0 mt-0.5 bg-white group-hover:border-blue-500 transition-colors">
+                  <div className="w-7 h-7 rounded-lg border-2 border-black flex items-center justify-center shrink-0 mt-0.5 bg-white group-hover:border-blue-500 transition-colors">
                   </div>
                   <span className="text-slate-900 font-medium group-hover:text-black transition-colors text-lg pt-0.5 leading-snug">Initial Assessment & Risk Check</span>
                 </label>
                 <label className="flex items-start gap-4 cursor-pointer group">
-                  <div className="w-7 h-7 rounded-lg border-2 border-slate-300 flex items-center justify-center shrink-0 mt-0.5 bg-white group-hover:border-blue-500 transition-colors">
+                  <div className="w-7 h-7 rounded-lg border-2 border-black flex items-center justify-center shrink-0 mt-0.5 bg-white group-hover:border-blue-500 transition-colors">
                   </div>
                   <span className="text-slate-900 font-medium group-hover:text-black transition-colors text-lg pt-0.5 leading-snug">Commence Repair Work</span>
                 </label>
@@ -2114,17 +2114,17 @@ const libraries: any[] = ['places'];
               <p className="text-slate-600 font-medium mb-5">During Work</p>
               
               <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar">
-                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-slate-200">
+                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-black">
                    <img src="https://images.unsplash.com/photo-1581092921461-7031e4bfb83e?auto=format&fit=crop&w=300&q=80" alt="Work 1" className="w-full h-full object-cover opacity-90" />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
                    <span className="absolute bottom-3 left-0 right-0 text-center text-white text-xs font-semibold tracking-wide shadow-black">10:02 AM</span>
                 </div>
-                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-slate-200">
+                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-black">
                    <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=300&q=80" alt="Work 2" className="w-full h-full object-cover opacity-90" />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
                    <span className="absolute bottom-3 left-0 right-0 text-center text-white text-xs font-semibold tracking-wide shadow-black">10:10 AM</span>
                 </div>
-                <button className="w-32 h-32 border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 transition-colors rounded-[1.5rem] shrink-0 flex flex-col items-center justify-center gap-3 text-slate-500 snap-start">
+                <button className="w-32 h-32 border-2 border-dashed border-black bg-slate-50 hover:bg-slate-100 transition-colors rounded-[1.5rem] shrink-0 flex flex-col items-center justify-center gap-3 text-slate-500 snap-start">
                   <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400">
                     <Plus className="w-6 h-6" />
                   </div>
@@ -2134,7 +2134,7 @@ const libraries: any[] = ['places'];
             </div>
 
             {/* Bottom Actions Fixed Area */}
-            <div className="fixed bottom-[100px] sm:bottom-[80px] left-0 right-0 p-4 bg-slate-50/90 backdrop-blur-md border-t border-slate-200/50 z-40">
+            <div className="fixed bottom-[100px] sm:bottom-[80px] left-0 right-0 p-4 bg-slate-50/90 backdrop-blur-md border-t border-black/50 z-40">
               <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
                 <button className="flex-1 bg-slate-500 text-white py-4 rounded-[1.2rem] font-bold shadow-sm active:scale-95 transition-all text-[17px] tracking-tight">
                   Pause
@@ -2156,7 +2156,7 @@ const libraries: any[] = ['places'];
 
             {/* Trader Tools for Dispute/Revision */}
             {isAssignedTrader && (
-              <div className="space-y-3 pt-6 border-t border-slate-200 mt-8 mb-16 px-4">
+              <div className="space-y-3 pt-6 border-t border-black mt-8 mb-16 px-4">
                 <button 
                   onClick={() => setShowDisputeModal(true)}
                   className="w-full bg-white border border-red-200 text-red-600 p-4 rounded-[1.5rem] font-bold hover:bg-red-50 transition-all flex items-center justify-center gap-2"
@@ -2173,30 +2173,30 @@ const libraries: any[] = ['places'];
                         setIsEditingRevision(true);
                       }
                     }}
-                    className="w-full bg-white border border-slate-200 text-slate-700 p-4 rounded-[1.5rem] font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-white border border-black text-slate-700 p-4 rounded-[1.5rem] font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                   >
                     <Edit2 className="w-5 h-5" /> Request Job Revision
                   </button>
                 ) : (
-                  <div className="bg-white border border-slate-200 p-5 rounded-[1.5rem] space-y-4">
+                  <div className="bg-white border border-black p-5 rounded-[1.5rem] space-y-4">
                     <p className="font-bold text-sm text-slate-900">Request Revision</p>
                     <input
                       type="number"
                       value={revisionAmount}
                       onChange={(e) => setRevisionAmount(e.target.value)}
                       placeholder="New total amount"
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full px-4 py-3 rounded-xl border border-black focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                     />
                     <textarea
                       value={revisionReason}
                       onChange={(e) => setRevisionReason(e.target.value)}
                       placeholder="Reason for revision (e.g. additional parts needed)"
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 resize-none h-24 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full px-4 py-3 rounded-xl border border-black resize-none h-24 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                     />
                     <div className="flex gap-2">
                        <button 
                          onClick={() => setIsEditingRevision(false)}
-                         className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50"
+                         className="flex-1 px-4 py-3 border border-black text-slate-600 rounded-xl font-bold hover:bg-slate-50"
                        >
                          Cancel
                        </button>
@@ -2268,7 +2268,7 @@ const libraries: any[] = ['places'];
             {/* Job Location */}
             <div className="space-y-3 mt-6">
               <h2 className="font-bold text-lg text-slate-900 tracking-tight">Job Location</h2>
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              <div className="bg-white rounded-2xl border border-black shadow-sm overflow-hidden flex flex-col">
                 <div className="h-40 w-full relative pointer-events-none overflow-hidden">
                   <iframe 
                     width="100%" 
@@ -2301,7 +2301,7 @@ const libraries: any[] = ['places'];
               <p className="text-slate-800 leading-relaxed text-[15px]">{job.description}</p>
               
               <div className="grid grid-cols-2 gap-3 mt-5">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div className="bg-white p-4 rounded-xl border border-black shadow-sm flex flex-col justify-between">
                   <h3 className="font-bold text-[13px] text-slate-900 mb-4 tracking-tight">Job Checklist</h3>
                   <div className="space-y-3.5 w-full">
                     <label className="flex items-center gap-2.5 text-[14px] text-slate-700 font-medium cursor-pointer relative group">
@@ -2328,7 +2328,7 @@ const libraries: any[] = ['places'];
                   </div>
                 </div>
                 
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col text-center">
+                <div className="bg-white p-4 rounded-xl border border-black shadow-sm flex flex-col text-center">
                   <h3 className="font-bold text-[13px] text-slate-900 mb-3 tracking-tight leading-tight">Upload Before Photos</h3>
                   {job.beforePhotos && job.beforePhotos.length > 0 && (
                     <div className="grid grid-cols-2 gap-2 mb-3">
@@ -2479,7 +2479,7 @@ const libraries: any[] = ['places'];
                 {['Mike P.', 'Sarah L.', 'David K.'].map((name, i) => (
                   <div key={i} className="bg-white rounded-[1.25rem] p-4 flex items-center justify-between shadow-lg">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-slate-200 overflow-hidden shrink-0 border-2 border-white shadow-sm">
+                      <div className="w-12 h-12 rounded-full bg-slate-200 overflow-hidden shrink-0 border-2 border-black shadow-sm">
                          <img src={`https://i.pravatar.cc/150?u=${name}`} alt={name} className="w-full h-full object-cover" />
                       </div>
                       <div className="text-left">
@@ -2536,7 +2536,7 @@ const libraries: any[] = ['places'];
                   Reschedule
                 </button>
               </div>
-              <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="mt-4 pt-4 border-t border-black/10">
                 <a 
                   href="/availability" 
                   className="text-[10px] font-bold uppercase tracking-widest text-indigo-200 hover:text-white flex items-center gap-1"
@@ -2604,11 +2604,11 @@ const libraries: any[] = ['places'];
                   <OverlayViewF position={{ lat: 51.5074, lng: -0.1278 }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                     <div className="absolute -translate-x-1/2 -translate-y-1/2">
                       {job.trackingStatus === "on_route" ? (
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 animate-pulse border-2 border-white">
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 animate-pulse border-2 border-black">
                           <Navigation className="w-4 h-4 text-white" />
                         </div>
                       ) : (
-                        <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-green-500/50 border-2 border-white">
+                        <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-green-500/50 border-2 border-black">
                           <MapPin className="w-4 h-4" />
                         </div>
                       )}
@@ -2661,7 +2661,7 @@ const libraries: any[] = ['places'];
 
         {/* Waiting for Confirmation Banner (Homeowner) */}
         {isHomeowner && job.status === "accepted" && !job.isConfirmedByTradesperson && job.scheduledDate && (
-          <div className="bg-slate-50 border border-slate-200 p-6 rounded-3xl space-y-3">
+          <div className="bg-slate-50 border border-black p-6 rounded-3xl space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
                 <Clock className="w-5 h-5 text-slate-500" />
@@ -2716,7 +2716,7 @@ const libraries: any[] = ['places'];
                 <button 
                   onClick={handleRejectReschedule}
                   disabled={isProcessing}
-                  className="px-6 border border-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors"
+                  className="px-6 border border-black text-slate-600 py-3 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors"
                 >
                   Decline
                 </button>
@@ -2933,7 +2933,7 @@ const libraries: any[] = ['places'];
                       href={generateGoogleCalendarLink(job, quotes.find(q => q.status === "accepted") || {})}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1 bg-white border border-slate-200 rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
+                      className="p-1 bg-white border border-black rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
                       title="Add to Google Calendar"
                     >
                       <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" className="w-3 h-3" alt="Google" referrerPolicy="no-referrer" />
@@ -2942,14 +2942,14 @@ const libraries: any[] = ['places'];
                       href={generateOutlookCalendarLink(job, quotes.find(q => q.status === "accepted") || {})}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1 bg-white border border-slate-200 rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
+                      className="p-1 bg-white border border-black rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
                       title="Add to Outlook"
                     >
                       <img src="https://res-1.cdn.office.net/assets/bookwithme/v1/outlook_calendar_24x24.png" className="w-3 h-3" alt="Outlook" referrerPolicy="no-referrer" />
                     </a>
                     <button 
                       onClick={() => downloadICS(job, quotes.find(q => q.status === "accepted") || {})}
-                      className="p-1 bg-white border border-slate-200 rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
+                      className="p-1 bg-white border border-black rounded-md text-slate-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
                       title="Download iCal (.ics)"
                     >
                       <Download className="w-3 h-3" />
@@ -3054,7 +3054,7 @@ const libraries: any[] = ['places'];
                 <button onClick={async () => {
                   await updateDoc(doc(db, "jobs", id!), { status: "cancelled", expiryAcknowledged: true });
                   navigate("/my-jobs");
-                }} className="bg-white text-slate-600 border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold">Delete Post</button>
+                }} className="bg-white text-slate-600 border border-black px-4 py-2 rounded-xl text-sm font-bold">Delete Post</button>
               </div>
             </div>
           )}
@@ -3078,7 +3078,7 @@ const libraries: any[] = ['places'];
             
             {canSeeFullDetails && (job.fullAddress || job.houseNumber || job.locationInstructions) && (
               <div className="mt-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col gap-3">
-                <div className="font-bold flex items-center gap-2 text-slate-900 border-b border-slate-200 pb-2 mb-1">
+                <div className="font-bold flex items-center gap-2 text-slate-900 border-b border-black pb-2 mb-1">
                   <Home className="w-4 h-4 text-blue-500" /> Exact Location Details
                 </div>
                 {job.houseNumber && (
@@ -3094,7 +3094,7 @@ const libraries: any[] = ['places'];
                   </div>
                 )}
                 {job.locationInstructions && (
-                  <div className="flex flex-col gap-1 mt-1 pt-3 border-t border-slate-200/60">
+                  <div className="flex flex-col gap-1 mt-1 pt-3 border-t border-black/60">
                     <span className="text-sm font-bold text-slate-500 flex items-center gap-1">
                       <Info className="w-3.5 h-3.5" /> Instructions:
                     </span>
@@ -3138,7 +3138,7 @@ const libraries: any[] = ['places'];
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="aspect-video bg-slate-100 rounded-2xl relative flex items-center justify-center overflow-hidden border border-slate-200 pointer-events-none">
+                <div className="aspect-video bg-slate-100 rounded-2xl relative flex items-center justify-center overflow-hidden border border-black pointer-events-none">
                   <iframe
                     width="100%"
                     height="100%"
@@ -3448,7 +3448,7 @@ const libraries: any[] = ['places'];
                       ))}
                     </ul>
                   ) : (
-                    <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200 text-center text-slate-500 text-xs">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-black text-center text-slate-500 text-xs">
                       No materials added yet. Add items below or generate an AI list if Labour Only.
                     </div>
                   )}
@@ -3460,7 +3460,7 @@ const libraries: any[] = ['places'];
                     value={editableMaterialItem}
                     onChange={(e) => setEditableMaterialItem(e.target.value)}
                     placeholder="E.g. 5x Plasterboard sheets..."
-                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 outline-none"
+                    className="flex-1 border border-black rounded-xl px-3 py-2 text-sm focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 outline-none"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && editableMaterialItem.trim()) {
                         setMaterialList(prev => [...prev, editableMaterialItem.trim()]);
@@ -3563,7 +3563,7 @@ const libraries: any[] = ['places'];
               // Hide detailed info from the homeowner if the window is open
               if (isHomeowner && isInFinalizationWindow) {
                  return (
-                  <div key={quote.id} className="bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm flex items-start justify-between gap-4 animate-pulse">
+                  <div key={quote.id} className="bg-slate-50 p-6 rounded-3xl border border-black shadow-sm flex items-start justify-between gap-4 animate-pulse">
                      <div className="flex-1 space-y-3">
                        <div className="flex items-center gap-3">
                          <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center">
@@ -3583,7 +3583,7 @@ const libraries: any[] = ['places'];
                 <div key={quote.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-slate-100 rounded-full overflow-hidden border border-slate-200 relative">
+                      <div className="w-10 h-10 bg-slate-100 rounded-full overflow-hidden border border-black relative">
                         {tpProfile?.avatarUrl ? (
                           <img src={tpProfile.avatarUrl} alt={tpProfile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         ) : (
@@ -4006,7 +4006,7 @@ const libraries: any[] = ['places'];
 
                     {quote.status === "withdrawn" && quote.withdrawReason && (
                       <div className="mt-4 pt-4 border-t border-slate-100">
-                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1">
+                        <div className="bg-slate-50 p-3 rounded-2xl border border-black space-y-1">
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Withdrawal Reason</p>
                           <p className="text-sm text-slate-700 italic">"{quote.withdrawReason}"</p>
                         </div>
@@ -4042,7 +4042,7 @@ const libraries: any[] = ['places'];
                         {activeQuoteId === quote.id ? (
                           <div className="space-y-2">
                             <textarea
-                              className="w-full p-2 border border-slate-200 rounded-xl text-xs"
+                              className="w-full p-2 border border-black rounded-xl text-xs"
                               placeholder="Enter requote details..."
                               value={requoteMessage}
                               onChange={(e) => setRequoteMessage(e.target.value)}
@@ -4056,7 +4056,7 @@ const libraries: any[] = ['places'];
                               </button>
                               <button
                                 onClick={() => setActiveQuoteId(null)}
-                                className="flex-1 border border-slate-200 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                                className="flex-1 border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
                               >
                                 Cancel
                               </button>
@@ -4072,13 +4072,13 @@ const libraries: any[] = ['places'];
                             </button>
                             <button 
                               onClick={() => handleRejectQuote(quote)}
-                              className="w-full border border-slate-200 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                              className="w-full border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
                             >
                               Decline
                             </button>
                             <button 
                               onClick={() => setActiveQuoteId(quote.id)}
-                              className="w-full border border-slate-200 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                              className="w-full border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
                             >
                               Request Requote
                             </button>
@@ -4094,13 +4094,13 @@ const libraries: any[] = ['places'];
                             <div className="space-y-2">
                               <input
                                 type="number"
-                                className="w-full p-2 border border-slate-200 rounded-xl text-xs"
+                                className="w-full p-2 border border-black rounded-xl text-xs"
                                 placeholder="New Amount (£)"
                                 value={revisionAmount}
                                 onChange={(e) => setRevisionAmount(e.target.value)}
                               />
                               <textarea
-                                className="w-full p-2 border border-slate-200 rounded-xl text-xs"
+                                className="w-full p-2 border border-black rounded-xl text-xs"
                                 placeholder="Reason for revision..."
                                 value={revisionMessage}
                                 onChange={(e) => setRevisionMessage(e.target.value)}
@@ -4115,7 +4115,7 @@ const libraries: any[] = ['places'];
                                 </button>
                                 <button
                                   onClick={() => setIsEditingRevision(false)}
-                                  className="flex-1 border border-slate-200 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                                  className="flex-1 border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
                                 >
                                   Cancel
                                 </button>
@@ -4155,7 +4155,7 @@ const libraries: any[] = ['places'];
             {!isHomeowner && (job.quoteCount || 0) > quotes.length && (
               <div className="space-y-4">
                 {Array.from({ length: Math.max(0, (job.quoteCount || 0) - quotes.length) }).map((_, i) => (
-                  <div key={`blind-${i}`} className="bg-slate-50/50 p-6 rounded-3xl border border-dashed border-slate-200 flex items-center justify-between gap-4 opacity-70">
+                  <div key={`blind-${i}`} className="bg-slate-50/50 p-6 rounded-3xl border border-dashed border-black flex items-center justify-between gap-4 opacity-70">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-300">
                         <UserIcon className="w-5 h-5" />
@@ -4254,7 +4254,7 @@ const libraries: any[] = ['places'];
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500 uppercase">Payment Preference</label>
                     <select 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm bg-white"
+                      className="w-full p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm bg-white"
                       value={paymentPreference}
                       onChange={(e) => setPaymentPreference(e.target.value)}
                     >
@@ -4266,7 +4266,7 @@ const libraries: any[] = ['places'];
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500 uppercase">Quote Scope</label>
                     <select 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm bg-white"
+                      className="w-full p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm bg-white"
                       value={quoteScope}
                       onChange={(e) => setQuoteScope(e.target.value)}
                     >
@@ -4283,7 +4283,7 @@ const libraries: any[] = ['places'];
                       onClick={() => setIsImmediateStart(!isImmediateStart)}
                       className={cn(
                         "text-[10px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1",
-                        isImmediateStart ? "bg-green-50 text-green-600 border-green-200" : "bg-slate-50 text-slate-500 border-slate-200"
+                        isImmediateStart ? "bg-green-50 text-green-600 border-green-200" : "bg-slate-50 text-slate-500 border-black"
                       )}
                     >
                       <Zap className={cn("w-3 h-3", isImmediateStart && "fill-current")} />
@@ -4295,7 +4295,7 @@ const libraries: any[] = ['places'];
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
                         type="date" 
-                        className="w-full p-3 pl-9 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
+                        className="w-full p-3 pl-9 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
                         value={quoteStartDate}
                         min={new Date().toISOString().split('T')[0]}
                         onChange={(e) => setQuoteStartDate(e.target.value)}
@@ -4314,7 +4314,7 @@ const libraries: any[] = ['places'];
                         "py-2 text-[10px] font-bold rounded-xl border transition-all",
                         estimatedTimeline === time 
                           ? "bg-blue-600 text-white border-blue-600 shadow-sm" 
-                          : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                          : "bg-white text-slate-600 border-black hover:border-blue-300"
                       )}
                     >
                       {time}
@@ -4328,7 +4328,7 @@ const libraries: any[] = ['places'];
                   <PoundSterling className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
                     type="number" 
-                    className="w-full p-3 pl-9 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                    className="w-full p-3 pl-9 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
                     value={quoteAmount}
                     onChange={(e) => setQuoteAmount(e.target.value)}
                   />
@@ -4389,7 +4389,7 @@ const libraries: any[] = ['places'];
                 </div>
                 <textarea 
                   rows={3}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none text-sm"
+                  className="w-full p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none text-sm"
                   placeholder="Tell the homeowner why you're the best fit..."
                   value={quoteMessage}
                   onChange={(e) => setQuoteMessage(e.target.value)}
@@ -4509,7 +4509,7 @@ const libraries: any[] = ['places'];
                   setIsEditingRevision(true);
                 }}
                 disabled={(myQuote.revisionCount || 0) >= 4}
-                className="w-full bg-white border-2 border-dashed border-slate-200 text-slate-600 p-5 rounded-2xl font-bold hover:border-blue-600 hover:text-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-600"
+                className="w-full bg-white border-2 border-dashed border-black text-slate-600 p-5 rounded-2xl font-bold hover:border-blue-600 hover:text-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-black disabled:hover:text-slate-600"
               >
                 <Edit2 className="w-5 h-5" />
                 {(myQuote.revisionCount || 0) >= 4 ? "Max Revisions Reached" : "Request Quote/Scope Change"}
@@ -4529,7 +4529,7 @@ const libraries: any[] = ['places'];
                       <PoundSterling className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
                         type="number" 
-                        className="w-full p-3 pl-9 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                        className="w-full p-3 pl-9 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
                         value={revisionAmount}
                         onChange={(e) => setRevisionAmount(e.target.value)}
                       />
@@ -4539,7 +4539,7 @@ const libraries: any[] = ['places'];
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-500 uppercase">Scope</label>
                       <select 
-                        className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
+                        className="w-full p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
                         value={revisionScope}
                         onChange={(e) => setRevisionScope(e.target.value as any)}
                       >
@@ -4550,7 +4550,7 @@ const libraries: any[] = ['places'];
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-500 uppercase">Payment</label>
                       <select 
-                        className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
+                        className="w-full p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
                         value={revisionPaymentPreference}
                         onChange={(e) => setRevisionPaymentPreference(e.target.value as any)}
                       >
@@ -4564,7 +4564,7 @@ const libraries: any[] = ['places'];
                     <label className="text-xs font-bold text-slate-500 uppercase">Reason for Change</label>
                     <textarea 
                       rows={3}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none text-sm"
+                      className="w-full p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none text-sm"
                       placeholder="Explain why the price or scope needs to change..."
                       value={revisionMessage}
                       onChange={(e) => setRevisionMessage(e.target.value)}
@@ -4610,7 +4610,7 @@ const libraries: any[] = ['places'];
                    <span className="text-[#1e3a8a] font-medium text-[15px]">VAT (20%):</span>
                    <span className="text-slate-900 font-medium text-[15px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.20).toFixed(2)}</span>
                 </div>
-                <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-slate-200"></div>
+                <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-black"></div>
                 <div className="flex justify-between items-center pt-1">
                    <span className="text-black font-black text-[18px]">Total Paid:</span>
                    <span className="text-black font-black text-[18px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 1.20).toFixed(2)}</span>
@@ -4657,7 +4657,7 @@ const libraries: any[] = ['places'];
             {myQuote?.status === "accepted" && (
               <button 
                 onClick={handleDownloadInvoice}
-                className="w-full bg-white border-2 border-slate-200 text-slate-700 p-5 rounded-2xl font-bold hover:border-blue-600 hover:text-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95"
+                className="w-full bg-white border-2 border-black text-slate-700 p-5 rounded-2xl font-bold hover:border-blue-600 hover:text-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95"
               >
                 <FileText className="w-5 h-5" />
                 Download Invoice PDF
@@ -4680,7 +4680,7 @@ const libraries: any[] = ['places'];
                 </div>
 
                 {marketingPost ? (
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 space-y-3">
+                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-black/20 space-y-3">
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{marketingPost}</p>
                     <div className="flex gap-2">
                       <button 
@@ -4814,7 +4814,7 @@ const libraries: any[] = ['places'];
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Summary of Issue</label>
                     <textarea 
                       rows={3}
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 resize-none text-sm leading-relaxed"
+                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 resize-none text-sm leading-relaxed"
                       placeholder="High-level reason for this dispute..."
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
@@ -4825,7 +4825,7 @@ const libraries: any[] = ['places'];
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Technical Fault Description (Mandatory)</label>
                     <textarea 
                       rows={4}
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 resize-none text-sm leading-relaxed"
+                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 resize-none text-sm leading-relaxed"
                       placeholder="Describe exactly what isn't working. Frivolous or non-technical claims will be rejected..."
                       value={technicalFaultReport}
                       onChange={(e) => setTechnicalFaultReport(e.target.value)}
@@ -4838,7 +4838,7 @@ const libraries: any[] = ['places'];
                       id="mediationStake"
                       checked={mediationStakePaid}
                       onChange={(e) => setMediationStakePaid(e.target.checked)}
-                      className="mt-1 w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                      className="mt-1 w-4 h-4 text-blue-600 border-black rounded focus:ring-blue-500"
                     />
                     <label htmlFor="mediationStake" className="space-y-1 cursor-pointer">
                       <p className="text-sm font-bold text-blue-900 leading-tight">Authorize £15 Mediation Stake</p>
@@ -4854,7 +4854,7 @@ const libraries: any[] = ['places'];
                       id="propertyDamage"
                       checked={isPropertyDamage}
                       onChange={(e) => setIsPropertyDamage(e.target.checked)}
-                      className="mt-1 w-4 h-4 text-red-600 border-slate-300 rounded focus:ring-red-500"
+                      className="mt-1 w-4 h-4 text-red-600 border-black rounded focus:ring-red-500"
                     />
                     <label htmlFor="propertyDamage" className="space-y-1 cursor-pointer">
                       <p className="text-sm font-bold text-red-900 leading-tight">This involves Physical Property Damage</p>
@@ -4883,7 +4883,7 @@ const libraries: any[] = ['places'];
                         </div>
                       ))}
                       {disputePhotos.length < 4 && (
-                        <label className="aspect-square rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-red-600 hover:bg-red-50 transition-all group">
+                        <label className="aspect-square rounded-xl border-2 border-dashed border-black flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-red-600 hover:bg-red-50 transition-all group">
                           <Camera className="w-6 h-6 text-slate-300 group-hover:text-red-600" />
                           <span className="text-[8px] font-bold text-slate-400 group-hover:text-red-600 uppercase">Add Photo</span>
                           <input 
@@ -4968,7 +4968,7 @@ const libraries: any[] = ['places'];
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Frequency</label>
                     <select 
-                      className="w-full p-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 text-sm bg-white"
+                      className="w-full p-4 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 text-sm bg-white"
                       value={recurringFrequency}
                       onChange={(e) => setRecurringFrequency(e.target.value)}
                     >
@@ -5171,7 +5171,7 @@ const libraries: any[] = ['places'];
                     value={withdrawReason}
                     onChange={(e) => setWithdrawReason(e.target.value)}
                     placeholder="e.g., No longer available, fully booked..."
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm resize-none h-24"
+                    className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm resize-none h-24"
                   />
                 </div>
 
@@ -5181,7 +5181,7 @@ const libraries: any[] = ['places'];
                       setWithdrawingQuote(null);
                       setWithdrawReason("");
                     }}
-                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors"
+                    className="flex-1 px-4 py-3 border border-black text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -5192,7 +5192,7 @@ const libraries: any[] = ['places'];
                   >
                     {isProcessing ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <div className="w-4 h-4 border-2 border-black/30 border-t-white rounded-full animate-spin" />
                         Withdrawing...
                       </>
                     ) : (
@@ -5243,7 +5243,7 @@ const libraries: any[] = ['places'];
                     setEnteredPin(e.target.value.replace(/[^0-9]/g, ''));
                   }}
                   placeholder="0000"
-                  className="w-full text-center text-4xl font-mono tracking-[0.25em] font-black p-4 border-2 border-slate-200 rounded-2xl outline-none focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 transition-all"
+                  className="w-full text-center text-4xl font-mono tracking-[0.25em] font-black p-4 border-2 border-black rounded-2xl outline-none focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 transition-all"
                 />
                 {pinError && <p className="text-red-500 font-bold text-center text-sm">{pinError}</p>}
               </div>
@@ -5325,7 +5325,7 @@ const libraries: any[] = ['places'];
                          <span className="text-[#1e3a8a] font-medium text-[17px]">VAT (20%):</span>
                          <span className="text-slate-900 font-medium text-[17px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.20).toFixed(2)}</span>
                       </div>
-                      <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-slate-200"></div>
+                      <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-black"></div>
                       <div className="flex justify-between items-center pt-1">
                          <span className="text-black font-black text-[20px]">Total:</span>
                          <span className="text-black font-black text-[20px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 1.20).toFixed(2)}</span>
@@ -5476,7 +5476,7 @@ const libraries: any[] = ['places'];
                   </div>
 
                   {/* Certification Badge Box */}
-                  <div className="mx-3 mb-3 bg-slate-50 border border-slate-200 rounded-md p-2.5 flex items-center justify-between shadow-sm">
+                  <div className="mx-3 mb-3 bg-slate-50 border border-black rounded-md p-2.5 flex items-center justify-between shadow-sm">
                      <div className="flex flex-col items-start min-w-0 pr-2">
                        <p className="font-bold text-slate-900 text-[11px] leading-tight truncate w-full">
                          {profile?.category === 'Plumbing' ? 'Gas Safe Registered' : 

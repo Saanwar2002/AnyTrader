@@ -96,7 +96,7 @@ export default function Analytics() {
         <div className="flex items-center justify-between">
           <button 
             onClick={() => navigate(-1)}
-            className="w-10 h-10 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group"
+            className="w-10 h-10 bg-white/10 border border-black/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group"
           >
             <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
           </button>
@@ -290,13 +290,13 @@ export default function Analytics() {
 
         {/* Bottom Buttons */}
         <div className="grid grid-cols-2 gap-4">
-          <Link to="/post-job" className="bg-white border border-slate-200 p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
+          <Link to="/post-job" className="bg-white border border-black p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
             <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
               <Plus className="w-4 h-4 text-slate-600" />
             </div>
             <span className="font-bold text-slate-900 text-sm">Post New Job</span>
           </Link>
-          <button className="bg-white border border-slate-200 p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
+          <button className="bg-white border border-black p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
             <div className="w-8 h-8 bg-orange-50 rounded-full flex items-center justify-center">
               <Lightbulb className="w-4 h-4 text-orange-500" />
             </div>

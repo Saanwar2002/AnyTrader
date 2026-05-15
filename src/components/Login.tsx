@@ -130,7 +130,7 @@ export default function Login() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="max-w-md w-full bg-white/95 backdrop-blur-xl p-6 sm:p-10 rounded-[40px] border border-white/20 shadow-2xl shadow-black/20 text-center space-y-6 sm:space-y-8 relative z-10"
+          className="max-w-md w-full bg-white/95 backdrop-blur-xl p-6 sm:p-10 rounded-[40px] border border-black/20 shadow-2xl shadow-black/20 text-center space-y-6 sm:space-y-8 relative z-10"
         >
         <div className="space-y-4">
           <div className="w-24 h-24 bg-primary rounded-[32px] flex items-center justify-center mx-auto shadow-2xl shadow-primary/40 transform -rotate-6 hover:rotate-0 transition-transform duration-700 ease-out group">
@@ -210,7 +210,7 @@ export default function Login() {
                   placeholder="Email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none font-medium bg-slate-50/50 focus:bg-white"
+                  className="w-full pl-12 pr-4 py-4.5 rounded-2xl border border-black focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none font-medium bg-slate-50/50 focus:bg-white"
                 />
               </div>
               {!isResetPassword && (
@@ -221,7 +221,7 @@ export default function Login() {
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-12 pr-12 py-4.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none font-medium bg-slate-50/50 focus:bg-white"
+                    className="w-full pl-12 pr-12 py-4.5 rounded-2xl border border-black focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none font-medium bg-slate-50/50 focus:bg-white"
                   />
                   <button
                     onClick={() => setShowPassword(!showPassword)}
@@ -317,7 +317,7 @@ export default function Login() {
               }
             }}
             disabled={loading || guestLoading}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 p-4 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-3 bg-white border border-black p-4 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]"
           >
             <img 
               src="https://www.google.com/favicon.ico" 

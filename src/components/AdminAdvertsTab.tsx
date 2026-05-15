@@ -203,21 +203,21 @@ export default function AdminAdvertsTab() {
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">
+      <div className="bg-white p-4 rounded-2xl border border-black shadow-sm flex flex-col md:flex-row gap-4">
         <div className="flex-1">
           <input 
             type="text" 
             placeholder="Search by advertiser name, title, or tier..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-10 outline-none text-sm placeholder:text-slate-400"
+            className="w-full bg-slate-50 border border-black rounded-xl px-4 h-10 outline-none text-sm placeholder:text-slate-400"
           />
         </div>
         <div className="flex gap-4">
           <select 
             value={statusFilter} 
             onChange={e => setStatusFilter(e.target.value)} 
-            className="bg-slate-50 border border-slate-200 rounded-xl px-4 h-10 outline-none text-sm font-bold text-slate-700"
+            className="bg-slate-50 border border-black rounded-xl px-4 h-10 outline-none text-sm font-bold text-slate-700"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active Only</option>
@@ -227,7 +227,7 @@ export default function AdminAdvertsTab() {
           <select 
             value={targetFilter} 
             onChange={e => setTargetFilter(e.target.value)} 
-            className="bg-slate-50 border border-slate-200 rounded-xl px-4 h-10 outline-none text-sm font-bold text-slate-700"
+            className="bg-slate-50 border border-black rounded-xl px-4 h-10 outline-none text-sm font-bold text-slate-700"
           >
             <option value="all">All Targets</option>
             <option value="tradesperson">Tradespeople</option>
@@ -237,7 +237,7 @@ export default function AdminAdvertsTab() {
       </div>
 
       {filteredAdverts.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-3xl border border-slate-200">
+        <div className="text-center py-12 bg-white rounded-3xl border border-black">
           <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
           <p className="text-slate-500 font-bold">No campaigns found matching criteria.</p>
         </div>
@@ -246,7 +246,7 @@ export default function AdminAdvertsTab() {
         {filteredAdverts.map((ad) => {
           const AdIcon = iconMap[ad.iconName] || Zap;
           return (
-          <div key={ad.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm relative group overflow-hidden">
+          <div key={ad.id} className="bg-white rounded-2xl border border-black p-4 shadow-sm relative group overflow-hidden">
              {/* Preview block */}
              {ad.imageUrl ? (
                <div className="w-full h-16 rounded-xl mb-4 relative overflow-hidden bg-slate-100 flex items-center justify-center">
@@ -343,29 +343,29 @@ export default function AdminAdvertsTab() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Advert Title *</label>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none font-medium" placeholder="Screwfix Trade Exclusive" />
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none font-medium" placeholder="Screwfix Trade Exclusive" />
               </div>
               
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Description</label>
-                <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none" placeholder="Apply now for exclusive trade prices" />
+                <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none" placeholder="Apply now for exclusive trade prices" />
               </div>
               
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Target URL *</label>
-                <input type="url" value={url} onChange={e => setUrl(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none text-blue-600" placeholder="https://..." />
+                <input type="url" value={url} onChange={e => setUrl(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none text-blue-600" placeholder="https://..." />
               </div>
               
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Image URL (Optional Custom Banner)</label>
-                <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none" placeholder="https://example.com/banner.png" />
+                <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none" placeholder="https://example.com/banner.png" />
                 <p className="text-[10px] text-slate-500 mt-1">If provided, this image will be displayed instead of the color-block design. Standard ad banner sizes (e.g. 320x50, 320x100) are recommended.</p>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Background Color</label>
-                  <select value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none">
+                  <select value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none">
                     <option value="bg-blue-600">Blue</option>
                     <option value="bg-red-600">Red</option>
                     <option value="bg-emerald-600">Green</option>
@@ -376,7 +376,7 @@ export default function AdminAdvertsTab() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Icon Name</label>
-                  <select value={iconName} onChange={e => setIconName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none">
+                  <select value={iconName} onChange={e => setIconName(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none">
                     <option value="Zap">Zap (Lightning)</option>
                     <option value="Briefcase">Briefcase</option>
                     <option value="ShieldCheck">Shield</option>
@@ -389,7 +389,7 @@ export default function AdminAdvertsTab() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Target Audience</label>
-                  <select value={targetRole} onChange={e => setTargetRole(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none">
+                  <select value={targetRole} onChange={e => setTargetRole(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none">
                     <option value="all">Everyone</option>
                     <option value="tradesperson">Tradespeople Only</option>
                     <option value="homeowner">Homeowners Only</option>
@@ -397,7 +397,7 @@ export default function AdminAdvertsTab() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Status</label>
-                  <select value={isActive ? "active" : "inactive"} onChange={e => setIsActive(e.target.value === "active")} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 outline-none">
+                  <select value={isActive ? "active" : "inactive"} onChange={e => setIsActive(e.target.value === "active")} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none">
                     <option value="active">Active</option>
                     <option value="inactive">Paused / Inactive</option>
                   </select>
@@ -418,7 +418,7 @@ export default function AdminAdvertsTab() {
                             setTargetCategories(selected.filter(x => x !== "all"));
                         }
                     }} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 min-h-[140px] outline-none scrollbar-thin scrollbar-thumb-slate-300"
+                    className="w-full bg-slate-50 border border-black rounded-xl px-4 py-3 min-h-[140px] outline-none scrollbar-thin scrollbar-thumb-slate-300"
                   >
                     <option value="all">All Categories</option>
                     {categories.map((c: any) => (
@@ -434,17 +434,17 @@ export default function AdminAdvertsTab() {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Advertiser Name</label>
-                    <input type="text" value={advertiserName} onChange={e => setAdvertiserName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-11 outline-none" placeholder="Company Name" />
+                    <input type="text" value={advertiserName} onChange={e => setAdvertiserName(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-11 outline-none" placeholder="Company Name" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Advertiser Email</label>
-                    <input type="email" value={advertiserEmail} onChange={e => setAdvertiserEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-11 outline-none" placeholder="contact@company.com" />
+                    <input type="email" value={advertiserEmail} onChange={e => setAdvertiserEmail(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-4 h-11 outline-none" placeholder="contact@company.com" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Billing Cycle</label>
-                    <select value={billingCycle} onChange={e => setBillingCycle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 outline-none">
+                    <select value={billingCycle} onChange={e => setBillingCycle(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-3 h-11 outline-none">
                       <option value="fixed">Fixed Duration / Prepaid</option>
                       <option value="monthly">Recurring Monthly</option>
                       <option value="quarterly">Recurring Quarterly</option>
@@ -453,7 +453,7 @@ export default function AdminAdvertsTab() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Recurring Price / Budget (£)</label>
-                    <input type="number" step="0.01" value={recurringPrice} onChange={e => setRecurringPrice(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 outline-none" min="0" />
+                    <input type="number" step="0.01" value={recurringPrice} onChange={e => setRecurringPrice(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-3 h-11 outline-none" min="0" />
                   </div>
                 </div>
               </div>
@@ -463,15 +463,15 @@ export default function AdminAdvertsTab() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cost/Click (£)</label>
-                    <input type="number" step="0.01" value={costPerDisplay} onChange={e => setCostPerDisplay(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 outline-none" min="0" />
+                    <input type="number" step="0.01" value={costPerDisplay} onChange={e => setCostPerDisplay(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-3 h-11 outline-none" min="0" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Clicks/Day</label>
-                    <input type="number" value={dailyDisplayLimit} onChange={e => setDailyDisplayLimit(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 outline-none" min="1" />
+                    <input type="number" value={dailyDisplayLimit} onChange={e => setDailyDisplayLimit(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-3 h-11 outline-none" min="1" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Duration (Days)</label>
-                    <input type="number" value={durationDays} onChange={e => setDurationDays(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 outline-none" min="1" />
+                    <input type="number" value={durationDays} onChange={e => setDurationDays(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-3 h-11 outline-none" min="1" />
                   </div>
                 </div>
               </div>

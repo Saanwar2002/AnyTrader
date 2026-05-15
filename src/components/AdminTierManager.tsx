@@ -82,7 +82,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
       leadFee: 0,
       description: "New tier description",
       features: ["Feature 1"],
-      color: "bg-white border-slate-200"
+      color: "bg-white border-black"
     };
 
     setConfig((prev: any) => ({
@@ -130,7 +130,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
 
   if (!config) {
     return (
-      <div className="p-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+      <div className="p-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-black">
         <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-slate-700 mb-2">Tier Configuration Not Found</h3>
         <p className="text-slate-500 mb-6 max-w-md mx-auto">
@@ -200,7 +200,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                           type="text" 
                           value={editing.data.description ?? ""} 
                           onChange={(e) => setEditing({...editing, data: {...editing.data, description: e.target.value}})}
-                          className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
+                          className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
@@ -214,7 +214,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                               const val = parseFloat(e.target.value);
                               setEditing({...editing, data: {...editing.data, price: isNaN(val) ? 0 : val}});
                             }}
-                            className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
+                            className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
                           />
                         </div>
                         <div>
@@ -227,7 +227,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                               const val = parseFloat(e.target.value);
                               setEditing({...editing, data: {...editing.data, commission: isNaN(val) ? 0 : val / 100}});
                             }}
-                            className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
+                            className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
                           />
                         </div>
                       </div>
@@ -240,7 +240,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                             const val = parseInt(e.target.value);
                             setEditing({...editing, data: {...editing.data, maxQuotes: isNaN(val) ? 0 : val}});
                           }}
-                          className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500"
+                          className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
                         />
                       </div>
                       <div>
@@ -248,7 +248,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                         <textarea 
                           value={(editing.data.features || []).join(", ")} 
                           onChange={(e) => setEditing({...editing, data: {...editing.data, features: e.target.value.split(",").map(f => f.trim())}})}
-                          className="w-full text-sm border-b border-slate-200 py-1 focus:outline-none focus:border-blue-500 h-16"
+                          className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500 h-16"
                         />
                       </div>
                     </div>
@@ -257,7 +257,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
               }
 
               return (
-                <div key={tierKey} className={cn("group flex flex-col p-6 rounded-[24px] border shadow-sm transition-all hover:shadow-lg relative overflow-hidden bg-white/50 backdrop-blur-sm", tier.color || "bg-white border-slate-200")}>
+                <div key={tierKey} className={cn("group flex flex-col p-6 rounded-[24px] border shadow-sm transition-all hover:shadow-lg relative overflow-hidden bg-white/50 backdrop-blur-sm", tier.color || "bg-white border-black")}>
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <h4 className="font-extrabold text-xl text-slate-900 uppercase tracking-tight">{tierKey}</h4>
@@ -265,14 +265,14 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                     <div className="flex gap-2 transition-opacity">
                       <button 
                         onClick={() => setEditing({ model, tierKey, data: { ...tier } })}
-                        className="p-1.5 bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 shadow-sm"
+                        className="p-1.5 bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-black shadow-sm"
                         title="Edit Tier"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDeleteTier(model, tierKey)}
-                        className="p-1.5 bg-white text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200 shadow-sm"
+                        className="p-1.5 bg-white text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-black shadow-sm"
                         title="Delete Tier"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -324,7 +324,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
             })}
             <button 
               onClick={() => handleAddTier(model)}
-              className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 bg-slate-50/50 rounded-[24px] hover:bg-slate-50 hover:border-slate-300 hover:shadow-inner text-slate-400 hover:text-slate-600 p-6 min-h-[420px] transition-all group"
+              className="flex flex-col items-center justify-center border-2 border-dashed border-black bg-slate-50/50 rounded-[24px] hover:bg-slate-50 hover:border-black hover:shadow-inner text-slate-400 hover:text-slate-600 p-6 min-h-[420px] transition-all group"
             >
               <div className="w-12 h-12 bg-white rounded-full shadow-sm border border-slate-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Plus className="w-5 h-5" />

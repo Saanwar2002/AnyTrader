@@ -197,7 +197,7 @@ export default function MyQuotes() {
                 "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border",
                 filter === f.id 
                   ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" 
-                  : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                  : "bg-white text-slate-600 border-black hover:border-blue-300"
               )}
             >
               {f.label}
@@ -212,7 +212,7 @@ export default function MyQuotes() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         ) : recurringSchedules.length === 0 ? (
-          <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-4">
+          <div className="bg-white p-12 rounded-2xl border border-black text-center space-y-4">
             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
               <Calendar className="w-8 h-8" />
             </div>
@@ -224,7 +224,7 @@ export default function MyQuotes() {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {recurringSchedules.map((schedule) => (
-              <div key={schedule.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 group relative">
+              <div key={schedule.id} className="bg-white p-5 rounded-xl border border-black shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 group relative">
                 <div className={cn(
                   "w-14 h-14 rounded-xl flex items-center justify-center shrink-0",
                   schedule.status === "active" ? "bg-green-50 text-green-600" :
@@ -261,7 +261,7 @@ export default function MyQuotes() {
                 <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                   <Link
                     to={`/profile`}
-                    className="flex-1 sm:flex-none text-center bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50 transition-colors"
+                    className="flex-1 sm:flex-none text-center bg-white border border-black text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50 transition-colors"
                   >
                     Manage in Profile
                   </Link>
@@ -271,7 +271,7 @@ export default function MyQuotes() {
           </div>
         )
       ) : filteredQuotes.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-4">
+        <div className="bg-white p-12 rounded-2xl border border-black text-center space-y-4">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
             <PoundSterling className="w-8 h-8" />
           </div>
@@ -300,7 +300,7 @@ export default function MyQuotes() {
             <Link
               key={quote.id}
               to={`/job/${quote.jobId}`}
-              className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:border-blue-600 transition-all flex flex-col sm:flex-row sm:items-center gap-4 group relative"
+              className="bg-white p-5 rounded-xl border border-black shadow-sm hover:border-blue-600 transition-all flex flex-col sm:flex-row sm:items-center gap-4 group relative"
             >
               <div className={cn(
                 "w-14 h-14 rounded-xl flex items-center justify-center shrink-0",
@@ -453,7 +453,7 @@ export default function MyQuotes() {
                   >
                     {isDeleting ? (
                       <>
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <div className="w-5 h-5 border-2 border-black/30 border-t-white rounded-full animate-spin" />
                         Deleting...
                       </>
                     ) : (
@@ -496,7 +496,7 @@ export default function MyQuotes() {
                     value={withdrawReason}
                     onChange={(e) => setWithdrawReason(e.target.value)}
                     placeholder="e.g., No longer available, fully booked..."
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm resize-none h-24"
+                    className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm resize-none h-24"
                   />
                 </div>
 
@@ -506,7 +506,7 @@ export default function MyQuotes() {
                       setWithdrawingQuote(null);
                       setWithdrawReason("");
                     }}
-                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors"
+                    className="flex-1 px-4 py-3 border border-black text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -517,7 +517,7 @@ export default function MyQuotes() {
                   >
                     {isWithdrawing ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <div className="w-4 h-4 border-2 border-black/30 border-t-white rounded-full animate-spin" />
                         Withdrawing...
                       </>
                     ) : (

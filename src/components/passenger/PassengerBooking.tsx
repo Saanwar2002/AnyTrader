@@ -2260,7 +2260,7 @@ export default function PassengerBooking() {
 
           {isMapFullScreen && assignedDriverInfo && (
             <div className="absolute bottom-[env(safe-area-inset-bottom,1.5rem)] left-6 right-6 lg:left-auto lg:right-6 lg:w-96 z-[210] pointer-events-none flex justify-center">
-              <div className="bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl rounded-[20px] p-3 flex items-center justify-between pointer-events-auto w-full max-w-[280px]">
+              <div className="bg-white/95 backdrop-blur-md border border-black shadow-xl rounded-[20px] p-3 flex items-center justify-between pointer-events-auto w-full max-w-[280px]">
                  <div className="flex items-center gap-3 w-full">
                      <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
                         <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo.name || "driver"}`} alt="Driver" className="w-full h-full object-cover rounded-full" />
@@ -2361,7 +2361,7 @@ export default function PassengerBooking() {
               <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                 <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
                   <div className="absolute inset-0 bg-[#007AFF] rounded-full opacity-30 animate-ping"></div>
-                  <div className="bg-[#007AFF] border-2 border-white w-4 h-4 rounded-full shadow-lg z-10"></div>
+                  <div className="bg-[#007AFF] border-2 border-black w-4 h-4 rounded-full shadow-lg z-10"></div>
                 </div>
               </OverlayViewF>
             )}
@@ -2379,7 +2379,7 @@ export default function PassengerBooking() {
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                 <div className="relative flex items-center justify-center w-10 h-10 -ml-5 -mt-5">
                   <div className="absolute inset-0 bg-zinc-900 rounded-full opacity-20 animate-pulse blur-[2px]"></div>
-                  <div className="bg-white border-2 border-slate-200 w-8 h-8 rounded-full shadow-xl z-10 flex items-center justify-center">
+                  <div className="bg-white border-2 border-black w-8 h-8 rounded-full shadow-xl z-10 flex items-center justify-center">
                      <Car className="w-4 h-4 text-slate-800" />
                   </div>
                   <div className="absolute -top-6 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5">
@@ -2427,7 +2427,7 @@ export default function PassengerBooking() {
                 className="bg-card rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] pointer-events-auto flex flex-col h-full w-full border-t border-border-main overflow-hidden"
               >
                 {detailsView === "address" && (
-                    <button onClick={toggleListening} disabled={isAiProcessing} className="w-full bg-slate-900 border-b border-white/10 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-1 px-4 flex items-center justify-center gap-1.5 font-bold shadow-sm active:scale-95 transition-all text-[11px] uppercase tracking-wider shrink-0 z-10 relative rounded-none h-8">
+                    <button onClick={toggleListening} disabled={isAiProcessing} className="w-full bg-slate-900 border-b border-black/10 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-1 px-4 flex items-center justify-center gap-1.5 font-bold shadow-sm active:scale-95 transition-all text-[11px] uppercase tracking-wider shrink-0 z-10 relative rounded-none h-8">
                       {isListening ? (
                         <>
                           <div className="relative flex items-center justify-center">
@@ -2498,14 +2498,14 @@ export default function PassengerBooking() {
 
                         <AnimatePresence>
                           {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
-                              <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                              <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                               </div>
                               <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                               {suggestions.length === 0 && isLoadingAddress && (
-                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
+                                <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-black bg-white">
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
                                 </div>
                               )}
@@ -2532,7 +2532,7 @@ export default function PassengerBooking() {
                           <div className="w-6 flex justify-center shrink-0">
                              <div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-surface z-10" />
                           </div>
-                          <div className="flex-1 flex bg-slate-50 border border-slate-200 rounded-2xl group-focus-within:bg-white group-focus-within:border-amber-500 group-focus-within:ring-4 group-focus-within:ring-amber-500/10 transition-all pr-1 shadow-sm min-w-0">
+                          <div className="flex-1 flex bg-slate-50 border border-black rounded-2xl group-focus-within:bg-white group-focus-within:border-amber-500 group-focus-within:ring-4 group-focus-within:ring-amber-500/10 transition-all pr-1 shadow-sm min-w-0">
                             <input 
                               type="text" 
                               className="flex-1 w-full bg-transparent px-4 font-bold text-text-main outline-none placeholder:text-text-muted/60 text-[15px] py-3.5 focus:bg-amber-500/5 rounded-l-2xl transition-colors min-w-0" 
@@ -2555,14 +2555,14 @@ export default function PassengerBooking() {
                         
                         <AnimatePresence>
                           {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
-                              <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                              <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                               </div>
                               <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                 {suggestions.length === 0 && isLoadingAddress && (
-                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
+                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-black bg-white">
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
                                   </div>
                                 )}
@@ -2614,14 +2614,14 @@ export default function PassengerBooking() {
 
                         <AnimatePresence>
                           {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
-                              <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                              <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                               </div>
                               <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                 {suggestions.length === 0 && isLoadingAddress && (
-                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-slate-200 bg-white">
+                                  <div className="py-4 flex items-center justify-center text-text-muted text-sm border-t border-black bg-white">
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" /> Searching...
                                   </div>
                                 )}
@@ -2713,7 +2713,7 @@ export default function PassengerBooking() {
                             exit={{ opacity: 0, height: 0 }} 
                             className="ml-6 overflow-hidden pr-1"
                           >
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm relative">
+                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm relative">
                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowHomeBlank(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                                 <div className="text-center py-4">
                                   <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No home address saved.</p>
@@ -2732,7 +2732,7 @@ export default function PassengerBooking() {
                             exit={{ opacity: 0, height: 0 }} 
                             className="ml-6 overflow-hidden pr-1"
                           >
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm relative">
+                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm relative">
                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowWorkBlank(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                                 <div className="text-center py-4">
                                   <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No work address saved.</p>
@@ -2751,7 +2751,7 @@ export default function PassengerBooking() {
                             exit={{ opacity: 0, height: 0 }} 
                             className="ml-6 overflow-hidden pr-1"
                           >
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
+                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
                               <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowFavorites(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                               {favoriteAddresses && favoriteAddresses.length > 0 ? (
                                 favoriteAddresses.map((fav: any, idx: number) => (
@@ -2793,7 +2793,7 @@ export default function PassengerBooking() {
                             exit={{ opacity: 0, height: 0 }} 
                             className="ml-6 overflow-hidden pr-1"
                           >
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
+                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
                               <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowRegularJourneys(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                               {profile?.regularJourneys && profile.regularJourneys.length > 0 ? (
                                 profile.regularJourneys.map((j: any, idx: number) => (
@@ -2859,12 +2859,12 @@ export default function PassengerBooking() {
                 <>
                   <div className="flex flex-col bg-white rounded-[16px] border border-black mb-2 shrink-0 shadow-sm">
                     <div className="flex flex-1 items-center gap-3 p-3 overflow-hidden">
-                      <button onClick={() => setDetailsView("address")} className="p-1 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-300 transition-colors shrink-0 aspect-square flex flex-col items-center justify-center h-10 w-10 shadow-sm">
+                      <button onClick={() => setDetailsView("address")} className="p-1 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 border border-black transition-colors shrink-0 aspect-square flex flex-col items-center justify-center h-10 w-10 shadow-sm">
                         <ChevronLeft className="w-4 h-4 mb-0.5" />
                         <span className="text-[9px] font-black text-black leading-none tracking-tight">Edit</span>
                       </button>
                       <div className="flex flex-col flex-1 overflow-hidden relative pl-2 space-y-1.5">
-                        <div className="absolute left-3 top-2.5 bottom-2.5 w-0.5 border-l-[1.5px] border-dotted border-slate-300" />
+                        <div className="absolute left-3 top-2.5 bottom-2.5 w-0.5 border-l-[1.5px] border-dotted border-black" />
                         <div className="flex items-center gap-3 relative z-10">
                           <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                           <span className="text-[13px] font-semibold text-slate-800 truncate">{pickup || "Current Location"}</span>
@@ -3013,7 +3013,7 @@ export default function PassengerBooking() {
                                  {((assignedDriverInfo?.tipAmount || 0) > 0) && <div className="flex justify-between text-emerald-600 font-bold"><span>Driver Tip:</span><span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span></div>}
                                  {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600 font-bold"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
                                </div>
-                               <div className="border-t border-slate-300 pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
+                               <div className="border-t border-black pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
                                  <div className="flex items-center justify-between">
                                    <span>Total estimate:</span>
                                    <span className="text-[20px]">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
@@ -3101,7 +3101,7 @@ export default function PassengerBooking() {
             )}
 
             {step === "searching" && (
-              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 flex flex-col items-center border-t border-slate-200 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)] relative z-20">
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 flex flex-col items-center border-t border-black pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)] relative z-20">
                 <div className="w-10 h-[5px] bg-slate-200 rounded-full mb-5"/>
                 <p className="text-slate-800 text-sm font-semibold mb-1">Searching for drivers...</p>
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Requesting...</h2>
@@ -3139,7 +3139,7 @@ export default function PassengerBooking() {
                       </motion.div>
                     )}
                     {showPriorityPrompt && (
-                      <motion.div key="priority-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-3 p-4 bg-white border border-slate-200 shadow-xl rounded-2xl z-20">
+                      <motion.div key="priority-prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute bottom-full left-0 right-0 mb-3 p-4 bg-white border border-black shadow-xl rounded-2xl z-20">
                         <p className="text-sm font-bold text-slate-800 text-center mb-3">Add Priority Boost for <span className="text-amber-600 font-black">£3.00</span>?</p>
                         <div className="flex gap-2">
                            <button onClick={() => setShowPriorityPrompt(false)} className="flex-1 py-2.5 bg-slate-100 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
@@ -3204,7 +3204,7 @@ export default function PassengerBooking() {
                      )}
                   </motion.div>
                 )}
-                <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 border-t border-slate-200/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
+                <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 border-t border-black/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
                 <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-3"/>
                 <div className="flex justify-center mb-4">
                    <button onClick={() => setShowRideInfo(true)} className="bg-blue-600 rounded-xl px-4 py-1 flex items-center justify-center font-bold text-[13px] text-white tracking-wider border border-blue-500 shadow-sm shadow-blue-500/20 active:scale-95 transition-transform uppercase">
@@ -3245,7 +3245,7 @@ export default function PassengerBooking() {
                         key={i} 
                         onClick={() => handleSendQuickMessage(msg)}
                         disabled={isOnCooldown}
-                        className={`whitespace-nowrap px-4 py-2 ${isOnCooldown ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed opacity-60' : 'bg-slate-800 border-slate-700 text-white shadow-sm active:scale-95 transition-transform'} font-bold text-[13px] rounded-[12px]`}
+                        className={`whitespace-nowrap px-4 py-2 ${isOnCooldown ? 'bg-slate-300 border-black text-slate-500 cursor-not-allowed opacity-60' : 'bg-slate-800 border-slate-700 text-white shadow-sm active:scale-95 transition-transform'} font-bold text-[13px] rounded-[12px]`}
                       >
                         {msg} {isOnCooldown && "⏳"}
                       </button>
@@ -3291,7 +3291,7 @@ export default function PassengerBooking() {
                 )}
 
                 <div className="flex items-start gap-2.5">
-                  <div className="w-[48px] h-[48px] bg-slate-100 rounded-full border border-slate-200 shadow-sm shrink-0 overflow-hidden">
+                  <div className="w-[48px] h-[48px] bg-slate-100 rounded-full border border-black shadow-sm shrink-0 overflow-hidden">
                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${assignedDriverInfo?.name || "driver"}`} alt="Driver" className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0 pt-0.5">
@@ -3375,7 +3375,7 @@ export default function PassengerBooking() {
                     }}
                     className={cn(
                       "w-full py-2.5 mt-3 rounded-xl font-bold text-[15px] transition-all flex items-center justify-center gap-2 border border-black",
-                      assignedDriverInfo?.status === "awaiting_payment" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:bg-emerald-600 animate-[pulse_2s_ease-in-out_infinite]" : "bg-slate-100 text-slate-400 border border-slate-200"
+                      assignedDriverInfo?.status === "awaiting_payment" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:bg-emerald-600 animate-[pulse_2s_ease-in-out_infinite]" : "bg-slate-100 text-slate-400 border border-black"
                     )}
                   >
                      <Zap className="w-4 h-4 fill-current" /> Pay by Card / Scan QR
@@ -3428,7 +3428,7 @@ export default function PassengerBooking() {
                     {unreadChatCount > 0 && (
                       <span className="absolute -top-1 -right-1 flex h-4 w-4">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white items-center justify-center text-[8px] font-bold text-white shadow-sm">
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-black items-center justify-center text-[8px] font-bold text-white shadow-sm">
                           {unreadChatCount}
                         </span>
                       </span>
@@ -3460,7 +3460,7 @@ export default function PassengerBooking() {
                 <AnimatePresence>
                   {showCancelPrompt && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-[2px]">
-                      <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white w-full max-w-sm rounded-[24px] p-6 shadow-2xl border border-slate-200">
+                      <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white w-full max-w-sm rounded-[24px] p-6 shadow-2xl border border-black">
                         <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4">
                           <AlertCircle className="w-6 h-6 text-red-500" />
                         </div>
@@ -3493,7 +3493,7 @@ export default function PassengerBooking() {
                       </div>
                       
                       <div className="flex-1 flex flex-col px-6 pt-6 relative overflow-hidden">
-                        <div className="bg-white border text-center border-slate-200 rounded-[20px] py-10 shadow-sm mb-12">
+                        <div className="bg-white border text-center border-black rounded-[20px] py-10 shadow-sm mb-12">
                            <span className="text-6xl font-black tracking-tight text-[#0a1930]">£{customTip || "0.00"}</span>
                         </div>
                         
@@ -3638,7 +3638,7 @@ export default function PassengerBooking() {
                 </div>
                 
                 {!hasSubmittedReview ? (
-                   <div className="mb-6 bg-slate-50 rounded-xl p-3 border border-slate-200 shadow-sm mx-auto w-full max-w-[280px]">
+                   <div className="mb-6 bg-slate-50 rounded-xl p-3 border border-black shadow-sm mx-auto w-full max-w-[280px]">
                      <p className="text-center text-xs font-bold text-slate-600 mb-2">Rate your driver</p>
                      <div className="flex justify-center gap-1 mb-2">
                        {[1, 2, 3, 4, 5].map((star) => (
@@ -3658,7 +3658,7 @@ export default function PassengerBooking() {
                               <button 
                                 key={tag} 
                                 onClick={() => setSelectedReviewTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
-                                className={cn("px-2.5 border whitespace-nowrap flex-none py-1 rounded-full text-xs font-bold transition-colors shadow-sm", selectedReviewTags.includes(tag) ? (rideRating >= 4 ? "bg-[#f0f9ff] text-[#0369a1] border-[#bae6fd]" : "bg-rose-50 text-rose-700 border-rose-200") : "bg-white text-slate-600 border-slate-200")}
+                                className={cn("px-2.5 border whitespace-nowrap flex-none py-1 rounded-full text-xs font-bold transition-colors shadow-sm", selectedReviewTags.includes(tag) ? (rideRating >= 4 ? "bg-[#f0f9ff] text-[#0369a1] border-[#bae6fd]" : "bg-rose-50 text-rose-700 border-rose-200") : "bg-white text-slate-600 border-black")}
                               >
                                 {tag}
                               </button>
@@ -3669,7 +3669,7 @@ export default function PassengerBooking() {
                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
                               <p className="text-[11px] font-black text-slate-500 mb-1.5 ml-1 uppercase tracking-widest pl-1">Add a comment</p>
                               <textarea 
-                                className="w-full bg-white border border-slate-200 rounded-xl p-3.5 text-[15px] font-medium text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none transition-all shadow-sm"
+                                className="w-full bg-white border border-black rounded-xl p-3.5 text-[15px] font-medium text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none transition-all shadow-sm"
                                 rows={3}
                                 placeholder="Tell us more about your experience..."
                                 value={reviewComment}
@@ -3837,7 +3837,7 @@ export default function PassengerBooking() {
                   <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 shrink-0"/>
                   
                   {/* Header */}
-                  <div className="p-4 pt-3 flex items-center justify-center border-b border-slate-200 shrink-0 bg-white relative shadow-sm z-10">
+                  <div className="p-4 pt-3 flex items-center justify-center border-b border-black shrink-0 bg-white relative shadow-sm z-10">
                      <h3 className="font-black text-[20px] text-[#0a1930]">
                         Ride Info
                      </h3>
@@ -3967,7 +3967,7 @@ export default function PassengerBooking() {
                         value={favoriteNameInput}
                         onChange={(e) => setFavoriteNameInput(e.target.value)}
                         placeholder="e.g. Home, Work, Sarah's House"
-                        className="w-full border border-slate-300 rounded-[12px] px-4 py-3.5 text-[15px] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 mb-5 font-medium placeholder:text-slate-400"
+                        className="w-full border border-black rounded-[12px] px-4 py-3.5 text-[15px] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 mb-5 font-medium placeholder:text-slate-400"
                      />
                      <div className="flex flex-wrap gap-2 mb-8 justify-center">
                         {["Home", "Work", "Gym", "Other"].map(tag => (
@@ -4018,7 +4018,7 @@ export default function PassengerBooking() {
         <AnimatePresence>
           {isEditingJourney && (
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col max-h-[85vh]">
-                <div className="p-4 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div className="p-4 border-b border-black flex items-center justify-between shrink-0">
                     <h2 className="text-2xl font-black text-[#0a1930] tracking-tight">Edit Journey</h2>
                     <button onClick={() => setIsEditingJourney(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
                         <X className="w-5 h-5" />
@@ -4027,10 +4027,10 @@ export default function PassengerBooking() {
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
                    {/* Addresses */}
-                   <div className="bg-slate-50 rounded-[20px] border border-slate-200 p-2 space-y-2">
+                   <div className="bg-slate-50 rounded-[20px] border border-black p-2 space-y-2">
                        {/* Pickup */}
                        <div className="flex flex-col relative w-full">
-                         <div className={`flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 transition-all ${assignedDriverInfo?.status === 'in_progress' ? 'opacity-70' : 'focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100'}`}>
+                         <div className={`flex bg-white border border-black rounded-xl px-2 py-1 items-center relative gap-2 transition-all ${assignedDriverInfo?.status === 'in_progress' ? 'opacity-70' : 'focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100'}`}>
                              <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-white" /></div>
                              {assignedDriverInfo?.status === 'in_progress' ? (
                                  <div className="flex-1 min-w-0 font-bold text-[15px] text-slate-800 py-3 ml-2 truncate">{pickup}</div>
@@ -4050,8 +4050,8 @@ export default function PassengerBooking() {
                          </div>
                          <AnimatePresence>
                            {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
-                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
-                               <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                               <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                                </div>
@@ -4075,7 +4075,7 @@ export default function PassengerBooking() {
                        {/* Stops */}
                        {stops.map((stop, i) => (
                          <div key={i} className="flex flex-col relative w-full">
-                           <div className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative gap-2 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition-all">
+                           <div className="flex bg-white border border-black rounded-xl px-2 py-1 items-center relative gap-2 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition-all">
                                <div className="w-6 shrink-0 flex justify-center"><div className="w-2 h-2 rounded-full border-2 border-amber-500 bg-white" /></div>
                                <input 
                                    type="text" 
@@ -4096,8 +4096,8 @@ export default function PassengerBooking() {
                            </div>
                            <AnimatePresence>
                              {activeField === `stop-${i}` && (suggestions.length > 0 || isLoadingAddress) && (
-                               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
-                                 <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                                 <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                                  </div>
@@ -4121,7 +4121,7 @@ export default function PassengerBooking() {
 
                        {/* Dropoff */}
                        <div className="flex flex-col relative w-full mt-1">
-                         <div className="flex bg-white border border-slate-200 rounded-xl px-2 py-1 items-center relative focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100 transition-all">
+                         <div className="flex bg-white border border-black rounded-xl px-2 py-1 items-center relative focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100 transition-all">
                              <div className="w-6 shrink-0 flex justify-center"><div className="w-2.5 h-2.5 bg-red-500 rounded-sm" /></div>
                              <input 
                                  type="text" 
@@ -4137,8 +4137,8 @@ export default function PassengerBooking() {
                          </div>
                          <AnimatePresence>
                            {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
-                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-white origin-top flex flex-col">
-                               <div className="flex justify-between items-center bg-slate-50 border-b border-slate-200 px-3 py-2 shrink-0">
+                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                               <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
                                </div>
@@ -4199,7 +4199,7 @@ export default function PassengerBooking() {
                    </div>
                 </div>
                 
-                <div className="p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] border-t border-slate-200 shrink-0 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                <div className="p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] border-t border-black shrink-0 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
                     <button 
                        onClick={async () => {
                            await handleConfirmBooking();

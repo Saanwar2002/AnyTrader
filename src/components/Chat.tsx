@@ -283,11 +283,11 @@ export default function Chat() {
   if (loading) return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-12rem)] bg-white rounded-2xl border border-black shadow-sm overflow-hidden">
       {/* Header */}
       <div className="p-3 sm:p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <button onClick={() => navigate(-1)} className="p-2 sm:p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0">
+          <button onClick={() => navigate(-1)} className="p-2 sm:p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0">
             <ChevronLeft className="w-5 h-5 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <div className="flex flex-col min-w-0">
@@ -378,7 +378,7 @@ export default function Chat() {
                   : "bg-slate-100 text-slate-900 rounded-tl-none"
               )}>
                 {msg.imageUrl && (
-                  <div className="mb-2 rounded-lg overflow-hidden border border-white/10">
+                  <div className="mb-2 rounded-lg overflow-hidden border border-black/10">
                     <img 
                       src={msg.imageUrl} 
                       alt="Shared photo" 
@@ -454,7 +454,7 @@ export default function Chat() {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type a message..."
-              className="flex-1 p-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
+              className="flex-1 p-2 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
             />
             <button
               type="submit"

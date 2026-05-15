@@ -459,7 +459,7 @@ export default function Onboarding() {
           className="relative z-10 space-y-4 max-w-2xl"
         >
           <div className="flex justify-center mb-2">
-            <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20">
+            <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-black/20">
               <Shield className="w-7 h-7 text-white" />
             </div>
           </div>
@@ -494,7 +494,7 @@ export default function Onboarding() {
             <div className="space-y-6">
               <div 
                 onClick={() => logout()}
-                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2.5 z-[60] cursor-pointer bg-white rounded-2xl shadow hover:shadow-md transition-all group border border-slate-200"
+                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2.5 z-[60] cursor-pointer bg-white rounded-2xl shadow hover:shadow-md transition-all group border border-black"
               >
                   <ChevronLeft className="w-8 h-8 group-hover:-translate-x-0.5 transition-transform" />
               </div>
@@ -511,7 +511,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                       role === "homeowner" 
                         ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-slate-100 bg-white hover:border-slate-200"
+                        : "border-slate-100 bg-white hover:border-black"
                     )}
                   >
                     <div className={cn(
@@ -526,7 +526,7 @@ export default function Onboarding() {
                     </div>
                     <div className={cn(
                       "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "homeowner" ? "border-orange-500" : "border-slate-200"
+                      role === "homeowner" ? "border-orange-500" : "border-black"
                     )}>
                       {role === "homeowner" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                     </div>
@@ -543,7 +543,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                       role === "business" 
                         ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-slate-100 bg-white hover:border-slate-200"
+                        : "border-slate-100 bg-white hover:border-black"
                     )}
                   >
                     <div className={cn(
@@ -558,7 +558,7 @@ export default function Onboarding() {
                     </div>
                     <div className={cn(
                       "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "business" ? "border-orange-500" : "border-slate-200"
+                      role === "business" ? "border-orange-500" : "border-black"
                     )}>
                       {role === "business" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                     </div>
@@ -575,7 +575,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                       role === "fleet_driver" 
                         ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-slate-100 bg-white hover:border-slate-200"
+                        : "border-slate-100 bg-white hover:border-black"
                     )}
                   >
                     <div className={cn(
@@ -590,7 +590,7 @@ export default function Onboarding() {
                     </div>
                     <div className={cn(
                       "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "fleet_driver" ? "border-orange-500" : "border-slate-200"
+                      role === "fleet_driver" ? "border-orange-500" : "border-black"
                     )}>
                       {role === "fleet_driver" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                     </div>
@@ -607,7 +607,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group hover:border-red-500/50",
                       role === "admin" 
                         ? "border-red-500 bg-red-50/30 ring-4 ring-red-500/10" 
-                        : "border-slate-100 bg-white hover:border-slate-200 border-dashed"
+                        : "border-slate-100 bg-white hover:border-black border-dashed"
                     )}
                   >
                     <div className={cn(
@@ -622,7 +622,7 @@ export default function Onboarding() {
                     </div>
                     <div className={cn(
                       "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "admin" ? "border-red-500" : "border-slate-200"
+                      role === "admin" ? "border-red-500" : "border-black"
                     )}>
                       {role === "admin" && <div className="w-3 h-3 rounded-full bg-red-500" />}
                     </div>
@@ -722,7 +722,7 @@ export default function Onboarding() {
                             if (e.target.checked) setVehicleCategories(prev => [...prev, cat.id]);
                             else setVehicleCategories(prev => prev.filter(c => c !== cat.id));
                           }} />
-                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", vehicleCategories.includes(cat.id) ? "bg-primary border-primary" : "border-slate-300")}>
+                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", vehicleCategories.includes(cat.id) ? "bg-primary border-primary" : "border-black")}>
                             {vehicleCategories.includes(cat.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
                           </div>
                           <span className="text-xs font-black">{cat.name}</span>
@@ -732,7 +732,7 @@ export default function Onboarding() {
                   </div>
 
                   <div className="pt-2">
-                    <label className={cn("p-4 rounded-xl border-2 flex items-center justify-between transition-colors cursor-pointer", isPetFriendly ? "border-primary bg-primary/5" : "border-slate-100 hover:border-slate-200")}>
+                    <label className={cn("p-4 rounded-xl border-2 flex items-center justify-between transition-colors cursor-pointer", isPetFriendly ? "border-primary bg-primary/5" : "border-slate-100 hover:border-black")}>
                       <div>
                         <p className="text-sm font-black text-slate-900">Pet Friendly Vehicle</p>
                         <p className="text-xs text-slate-500">Allow passengers to travel with pets (+£3 fare bonus)</p>
@@ -820,7 +820,7 @@ export default function Onboarding() {
             <div className="space-y-8">
               <div 
                 onClick={() => setStep(1)}
-                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2.5 z-[60] cursor-pointer bg-white rounded-2xl shadow hover:shadow-md transition-all group border border-slate-200"
+                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2.5 z-[60] cursor-pointer bg-white rounded-2xl shadow hover:shadow-md transition-all group border border-black"
               >
                   <ChevronLeft className="w-8 h-8 group-hover:-translate-x-0.5 transition-transform" />
               </div>
@@ -843,7 +843,7 @@ export default function Onboarding() {
                     "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                     businessLayer === 'properties' 
                       ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                      : "border-slate-100 bg-white hover:border-slate-200"
+                      : "border-slate-100 bg-white hover:border-black"
                   )}
                 >
                   <div className={cn(
@@ -858,7 +858,7 @@ export default function Onboarding() {
                   </div>
                   <div className={cn(
                     "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                    businessLayer === 'properties' ? "border-orange-500" : "border-slate-200"
+                    businessLayer === 'properties' ? "border-orange-500" : "border-black"
                   )}>
                     {businessLayer === 'properties' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                   </div>
@@ -873,7 +873,7 @@ export default function Onboarding() {
                     "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                     businessLayer === 'field_services' 
                       ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                      : "border-slate-100 bg-white hover:border-slate-200"
+                      : "border-slate-100 bg-white hover:border-black"
                   )}
                 >
                   <div className={cn(
@@ -888,7 +888,7 @@ export default function Onboarding() {
                   </div>
                   <div className={cn(
                     "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                    businessLayer === 'field_services' ? "border-orange-500" : "border-slate-200"
+                    businessLayer === 'field_services' ? "border-orange-500" : "border-black"
                   )}>
                     {businessLayer === 'field_services' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                   </div>
@@ -903,7 +903,7 @@ export default function Onboarding() {
                     "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                     businessLayer === 'consultancy' 
                       ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                      : "border-slate-100 bg-white hover:border-slate-200"
+                      : "border-slate-100 bg-white hover:border-black"
                   )}
                 >
                   <div className={cn(
@@ -918,7 +918,7 @@ export default function Onboarding() {
                   </div>
                   <div className={cn(
                     "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                    businessLayer === 'consultancy' ? "border-orange-500" : "border-slate-200"
+                    businessLayer === 'consultancy' ? "border-orange-500" : "border-black"
                   )}>
                     {businessLayer === 'consultancy' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                   </div>
@@ -963,7 +963,7 @@ export default function Onboarding() {
                         "w-full p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all duration-300 group",
                         selectedTrades.includes(t.name) 
                           ? "bg-primary/5 border-primary text-primary shadow-lg shadow-primary/5" 
-                          : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
+                          : "bg-white border-slate-100 text-slate-600 hover:border-black"
                       )}
                     >
                       <div className="flex items-center gap-4">
@@ -990,11 +990,11 @@ export default function Onboarding() {
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Specific Services:</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {t.subcategories.map((sub: string) => (
-                            <label key={sub} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-slate-200 group">
+                            <label key={sub} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-black group">
                               <div className="relative flex items-center">
                                 <input 
                                   type="checkbox" 
-                                  className="w-5 h-5 rounded-md border-2 border-slate-300 text-primary focus:ring-primary focus:ring-offset-0 transition-all cursor-pointer peer"
+                                  className="w-5 h-5 rounded-md border-2 border-black text-primary focus:ring-primary focus:ring-offset-0 transition-all cursor-pointer peer"
                                   checked={selectedSubcategories.includes(sub)}
                                   onChange={(e) => {
                                     if (e.target.checked) setSelectedSubcategories(prev => [...prev, sub]);
@@ -1060,7 +1060,7 @@ export default function Onboarding() {
                     placeholder="e.g. Landlord, Fleet, Garden..."
                     value={categorySearch}
                     onChange={(e) => setCategorySearch(e.target.value)}
-                    className="w-full p-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
+                    className="w-full p-4 rounded-xl border border-black focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
                   />
                   <div className="max-h-60 overflow-y-auto grid grid-cols-1 gap-2 custom-scrollbar">
                     {UNSORTED_TRADE_CATEGORIES
@@ -1073,7 +1073,7 @@ export default function Onboarding() {
                             "p-3 rounded-lg border text-left font-bold text-sm transition-all flex items-center gap-3",
                             businessCategory === cat.name 
                               ? "bg-primary/5 border-primary text-primary" 
-                              : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
+                              : "bg-white border-slate-100 text-slate-600 hover:border-black"
                           )}
                         >
                           <span className="text-xl">{cat.icon}</span>
@@ -1118,7 +1118,7 @@ export default function Onboarding() {
                             "p-4 rounded-2xl border-2 text-left transition-all relative",
                             selectedTier === tier.name 
                               ? "bg-primary/5 border-primary shadow-sm" 
-                              : "bg-white border-slate-100 hover:border-slate-200"
+                              : "bg-white border-slate-100 hover:border-black"
                           )}
                         >
                           <div className="flex justify-between items-start mb-1">
@@ -1216,7 +1216,7 @@ export default function Onboarding() {
                         const mockUrl = `https://example.com/docs/${(cert as string).replace(/\s/g, '_')}.pdf`;
                         setVerificationDocs(prev => [...prev.filter(d => d.type !== cert), { type: cert, fileUrl: mockUrl }]);
                       }}
-                      className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-slate-200 bg-white text-xs font-black text-slate-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all group"
+                      className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-black bg-white text-xs font-black text-slate-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all group"
                     >
                       <Upload className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
                       Upload Document
@@ -1239,7 +1239,7 @@ export default function Onboarding() {
                       handleSubmit();
                     }}
                     disabled={loading}
-                    className="flex-1 bg-white border-2 border-slate-200 text-slate-600 p-5 rounded-[2rem] font-black text-sm sm:text-lg hover:border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                    className="flex-1 bg-white border-2 border-black text-slate-600 p-5 rounded-[2rem] font-black text-sm sm:text-lg hover:border-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                   >
                     I'll do this later
                   </button>
@@ -1289,7 +1289,7 @@ export default function Onboarding() {
                   maxLength={6}
                   value={verificationCode}
                   onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                  className="w-full text-center text-3xl tracking-[1em] p-6 rounded-[2rem] border-2 border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-mono"
+                  className="w-full text-center text-3xl tracking-[1em] p-6 rounded-[2rem] border-2 border-black focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-mono"
                 />
               </div>
 

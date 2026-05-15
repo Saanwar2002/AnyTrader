@@ -587,7 +587,7 @@ export default function FindTrades() {
                         tp.name.charAt(0)
                       )}
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center border-2 border-white">
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center border-2 border-black">
                       <SlidersHorizontal className="w-3 h-3 text-white" />
                     </div>
                   </div>
