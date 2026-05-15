@@ -1,0 +1,9 @@
+{
+	"appId": "com.anytrader.app",
+	"appName": "AnyTrader",
+	"webDir": "dist",
+	"bundledWebRuntime": false,
+	"server": {
+		"androidScheme": "https"
+	}
+}

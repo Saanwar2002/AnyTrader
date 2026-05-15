@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AnyTrader</string>
+    <string name="title_activity_main">AnyTrader</string>
+    <string name="package_name">com.anytrader.app</string>
+    <string name="custom_url_scheme">com.anytrader.app</string>
+</resources>
