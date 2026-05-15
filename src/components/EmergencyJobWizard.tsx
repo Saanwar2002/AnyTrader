@@ -760,7 +760,7 @@ export default function EmergencyJobWizard() {
               </div>
               <div className="flex-1 pr-6">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">£{(instantMatchCopy?.price || 2.99).toFixed(2)}</span></h4>
+                  <h4 className="text-base font-extrabold text-black tracking-tight">Instant Match <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="text-amber-600 font-black ml-0.5">From £{(instantMatchCopy?.price || 2.99).toFixed(2)}</span></h4>
                 </div>
                 <p className="text-xs text-black font-semibold line-clamp-2">
                   {instantMatchCopy?.bullets?.map((b: any) => b.text).join(" • ")}
@@ -787,7 +787,7 @@ export default function EmergencyJobWizard() {
                 <div className="flex items-center justify-between px-2">
                   <span className="text-xs font-extrabold text-black uppercase">Total Fee</span>
                   <span className="text-lg font-black text-red-600">
-                    £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
+                    {isInstantMatch ? 'From ' : ''}£{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
                   </span>
                 </div>
               )}
@@ -854,7 +854,7 @@ export default function EmergencyJobWizard() {
                   <div className="text-right">
                     <p className="text-xs font-bold text-slate-500 uppercase">One-time</p>
                     <p className="text-xl font-black text-red-600">
-                      £{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
+                      {isInstantMatch ? 'From ' : ''}£{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
                     </p>
                   </div>
                 </div>

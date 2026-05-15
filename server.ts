@@ -988,6 +988,118 @@ async function startServer() {
     }
   });
 
+  // Stripe Setup Session (Save Card)
+  app.post("/api/create-setup-session", async (req, res) => {
+    try {
+      const { userId, successUrl, cancelUrl } = req.body;
+      const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
+
+      const finalSuccessUrl = successUrl || `${appUrl}/profile?setup=success`;
+      const finalCancelUrl = cancelUrl || `${appUrl}/profile`;
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        console.warn("Stripe is not configured. Mocking successful setup flow.");
+        return res.json({ url: finalSuccessUrl });
+      }
+
+      let customerId: string | undefined;
+      if (userId && db) {
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          if (userData?.stripeCustomerId) {
+            customerId = userData.stripeCustomerId;
+          } else {
+            const customer = await stripe.customers.create({
+              email: userData?.email,
+              metadata: { firebaseUid: userId }
+            });
+            customerId = customer.id;
+            await db.collection("users").doc(userId).set({ stripeCustomerId: customerId }, { merge: true });
+          }
+        }
+      }
+
+      if (!customerId) {
+        return res.status(400).json({ error: "Could not identify or create Stripe customer." });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'setup',
+        payment_method_types: ['card'],
+        customer: customerId,
+        success_url: finalSuccessUrl,
+        cancel_url: finalCancelUrl,
+        client_reference_id: userId,
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Stripe Setup Error:", error);
+      res.status(500).json({ error: error.message || "Failed to create setup session" });
+    }
+  });
+
+  // List Saved Cards
+  app.get("/api/payment-methods/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      if (!db) return res.json({ paymentMethods: [], mock: true });
+
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+
+      const stripeCustomerId = userDoc.data()?.stripeCustomerId;
+      if (!stripeCustomerId) return res.json({ paymentMethods: [] });
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ paymentMethods: [], mock: true });
+      }
+
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: stripeCustomerId,
+        type: 'card',
+      });
+
+      const formattedMethods = paymentMethods.data.map(pm => ({
+        id: pm.id,
+        brand: pm.card?.brand,
+        last4: pm.card?.last4,
+        expMonth: pm.card?.exp_month,
+        expYear: pm.card?.exp_year,
+      }));
+
+      res.json({ paymentMethods: formattedMethods });
+    } catch (error: any) {
+      console.error("Fetch Payment Methods Error:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch payment methods" });
+    }
+  });
+
+  // Delete Saved Card
+  app.delete("/api/payment-methods/:userId/:paymentMethodId", async (req, res) => {
+    try {
+      const { paymentMethodId } = req.params;
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ success: true, mock: true });
+      }
+      await stripe.paymentMethods.detach(paymentMethodId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete Payment Method Error:", error);
+      res.status(500).json({ error: error.message || "Failed to delete payment method" });
+    }
+  });
+
   // NEW: Direct-to-Driver Taxi Payment (QR Handshake)
   app.post("/api/rides/create-trip-payment", async (req, res) => {
     try {

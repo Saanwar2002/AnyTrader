@@ -277,6 +277,8 @@ export default function Profile() {
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [showCheckoutForTier, setShowCheckoutForTier] = useState<any | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [savedCards, setSavedCards] = useState<any[]>([]);
+  const [isProcessingSetup, setIsProcessingSetup] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [cvc, setCvc] = useState("");
@@ -419,6 +421,60 @@ export default function Profile() {
       return () => unsubscribe();
     }
   }, [user?.uid, profile?.role]);
+
+  useEffect(() => {
+    if (user?.uid) {
+      fetchPaymentMethods(user.uid);
+    }
+  }, [user?.uid]);
+
+  const fetchPaymentMethods = async (userId: string) => {
+    try {
+      const res = await fetch(`/api/payment-methods/${userId}`);
+      const data = await res.json();
+      if (data.paymentMethods) {
+        setSavedCards(data.paymentMethods);
+      }
+    } catch (err) {
+      console.error("Error fetching payment methods:", err);
+    }
+  };
+
+  const handleAddPaymentMethod = async () => {
+    if (!user) return;
+    setIsProcessingSetup(true);
+    try {
+      const response = await fetch("/api/create-setup-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.uid,
+          successUrl: `${window.location.origin}/profile?setup=success`,
+          cancelUrl: `${window.location.origin}/profile`
+        })
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error("Setup Error:", err);
+    } finally {
+      setIsProcessingSetup(false);
+    }
+  };
+
+  const handleDeletePaymentMethod = async (paymentMethodId: string) => {
+    if (!user) return;
+    try {
+      await fetch(`/api/payment-methods/${user.uid}/${paymentMethodId}`, {
+        method: "DELETE",
+      });
+      setSavedCards(cards => cards.filter(c => c.id !== paymentMethodId));
+    } catch (err) {
+      console.error("Delete Error:", err);
+    }
+  };
 
   useEffect(() => {
     if (profile?.role === "tradesperson" && user?.uid && platformConfig) {
@@ -2472,20 +2528,34 @@ export default function Profile() {
                                           </div>
                                           <p className="text-sm text-slate-500 mb-4">Add a card to securely pay other tradespeople for projects. This card can also be used to automatically pay for your AnyRoller taxi journeys.</p>
                                           
-                                          {profile?.stripeCustomerId ? (
-                                             <div className="bg-white border text-left border-blue-200 rounded-2xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
-                                               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-                                               <div className="flex items-center gap-4 relative z-10">
-                                                 <div className="w-12 h-8 rounded bg-slate-800 text-white flex items-center justify-center font-black text-xs tracking-widest shadow-sm">
-                                                   VISA
+                                          {savedCards.length > 0 ? (
+                                             <div className="space-y-3">
+                                               {savedCards.map((card: any) => (
+                                                 <div key={card.id} className="bg-white border text-left border-blue-200 rounded-2xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
+                                                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                                   <div className="flex items-center gap-4 relative z-10">
+                                                     <div className="w-12 h-8 rounded bg-slate-800 text-white flex items-center justify-center font-black text-xs tracking-widest shadow-sm uppercase">
+                                                       {card.brand || "CARD"}
+                                                     </div>
+                                                     <div>
+                                                       <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• {card.last4}</h4>
+                                                       <p className="text-xs text-slate-500">Expires {card.expMonth}/{card.expYear}</p>
+                                                     </div>
+                                                   </div>
+                                                   <button 
+                                                     onClick={() => handleDeletePaymentMethod(card.id)}
+                                                     className="relative z-10 text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                                                   >
+                                                     Remove Card
+                                                   </button>
                                                  </div>
-                                                 <div>
-                                                   <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• 4242</h4>
-                                                   <p className="text-xs text-slate-500">Expires 12/28</p>
-                                                 </div>
-                                               </div>
-                                               <button className="relative z-10 text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
-                                                 Remove Card
+                                               ))}
+                                               <button 
+                                                 onClick={handleAddPaymentMethod}
+                                                 disabled={isProcessingSetup}
+                                                 className="w-full py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                                               >
+                                                 {isProcessingSetup ? "Processing..." : "Add Another Card"}
                                                </button>
                                              </div>
                                           ) : (
@@ -2497,12 +2567,11 @@ export default function Profile() {
                                                <p className="text-xs text-slate-500 mb-4">Add a credit or debit card securely via Stripe.</p>
                                                
                                                <button 
-                                                 onClick={() => {
-                                                   alert("Stripe Checkout Modal would open here to securely tokenize card.");
-                                                 }}
-                                                 className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all"
+                                                 onClick={handleAddPaymentMethod}
+                                                 disabled={isProcessingSetup}
+                                                 className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all disabled:opacity-50"
                                                >
-                                                 Add Credit or Debit Card
+                                                 {isProcessingSetup ? "Processing..." : "Add Credit or Debit Card"}
                                                </button>
                                              </div>
                                           )}
@@ -2539,20 +2608,34 @@ export default function Profile() {
                                       </details>
 
                                       {/* Saved Cards / Add Card */}
-                                      {profile?.stripeCustomerId ? (
-                                        <div className="bg-white border text-left border-emerald-200 rounded-2xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
-                                          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-                                          <div className="flex items-center gap-4 relative z-10">
-                                            <div className="w-12 h-8 rounded bg-slate-800 text-white flex items-center justify-center font-black text-xs tracking-widest shadow-sm">
-                                              VISA
+                                      {savedCards.length > 0 ? (
+                                        <div className="space-y-3">
+                                          {savedCards.map((card: any) => (
+                                            <div key={card.id} className="bg-white border text-left border-emerald-200 rounded-2xl p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
+                                              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                              <div className="flex items-center gap-4 relative z-10">
+                                                <div className="w-12 h-8 rounded bg-slate-800 text-white flex items-center justify-center font-black text-xs tracking-widest shadow-sm uppercase">
+                                                  {card.brand || "CARD"}
+                                                </div>
+                                                <div>
+                                                  <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• {card.last4}</h4>
+                                                  <p className="text-xs text-slate-500">Expires {card.expMonth}/{card.expYear}</p>
+                                                </div>
+                                              </div>
+                                              <button 
+                                                onClick={() => handleDeletePaymentMethod(card.id)}
+                                                className="relative z-10 text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                                              >
+                                                Remove Card
+                                              </button>
                                             </div>
-                                            <div>
-                                              <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• 4242</h4>
-                                              <p className="text-xs text-slate-500">Expires 12/28</p>
-                                            </div>
-                                          </div>
-                                          <button className="relative z-10 text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
-                                            Remove Card
+                                          ))}
+                                          <button 
+                                            onClick={handleAddPaymentMethod}
+                                            disabled={isProcessingSetup}
+                                            className="w-full py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                                          >
+                                            {isProcessingSetup ? "Processing..." : "Add Another Card"}
                                           </button>
                                         </div>
                                       ) : (
@@ -2565,12 +2648,11 @@ export default function Profile() {
                                             <p className="text-xs text-slate-500 mb-4">Add a card to quickly and securely pay for home repairs or taxi rides.</p>
                                             
                                             <button 
-                                              onClick={() => {
-                                                alert("Stripe Checkout Modal would open here to securely tokenize card.");
-                                              }}
-                                              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all"
+                                              onClick={handleAddPaymentMethod}
+                                              disabled={isProcessingSetup}
+                                              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all disabled:opacity-50"
                                             >
-                                              Add Credit or Debit Card
+                                              {isProcessingSetup ? "Processing..." : "Add Credit or Debit Card"}
                                             </button>
                                           </div>
                                         </div>

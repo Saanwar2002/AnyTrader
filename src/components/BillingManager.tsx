@@ -28,9 +28,7 @@ export default function BillingManager() {
   const [globalTiers, setGlobalTiers] = useState<any>(null);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [savedCards, setSavedCards] = useState([
-    { id: "1", last4: "4242", brand: "Visa", expMonth: 12, expYear: 2028, isDefault: true },
-  ]);
+  const [savedCards, setSavedCards] = useState<any[]>([]);
 
   useEffect(() => {
     const unsubGlobal = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
@@ -44,11 +42,31 @@ export default function BillingManager() {
       }
       setLoading(false);
     });
+
+    if (user?.uid) {
+      fetchPaymentMethods(user.uid);
+    }
+
     return () => {
       unsubGlobal();
       unsubTiers();
     };
-  }, []);
+  }, [user]);
+
+  const fetchPaymentMethods = async (userId: string) => {
+    try {
+      const res = await fetch(`/api/payment-methods/${userId}`);
+      const data = await res.json();
+      if (data.paymentMethods) {
+        setSavedCards(data.paymentMethods.map((pm: any, index: number) => ({
+          ...pm,
+          isDefault: index === 0 // Making the first one default for display purposes
+        })));
+      }
+    } catch (err) {
+      console.error("Error fetching payment methods:", err);
+    }
+  };
 
   const handleSelectPlan = async (tier: SubscriptionTier) => {
     if (!user) return;
@@ -91,8 +109,41 @@ export default function BillingManager() {
     }
   };
 
-  const handleAddPaymentMethod = () => {
-    alert("In a production environment, this would open Stripe Elements to securely add a new card or bank account.");
+  const handleAddPaymentMethod = async () => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const response = await fetch("/api/create-setup-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.uid,
+          successUrl: `${window.location.origin}/billing`,
+          cancelUrl: `${window.location.origin}/billing`
+        })
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error("Setup Error:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeletePaymentMethod = async (paymentMethodId: string) => {
+    if (!user) return;
+    try {
+      await fetch(`/api/payment-methods/${user.uid}/${paymentMethodId}`, {
+        method: "DELETE",
+      });
+      // Removing locally
+      setSavedCards(cards => cards.filter(c => c.id !== paymentMethodId));
+    } catch (err) {
+      console.error("Delete Error:", err);
+    }
   };
 
   if (loading) return (
@@ -144,12 +195,17 @@ export default function BillingManager() {
                     {card.isDefault && (
                       <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Default</span>
                     )}
-                    <button className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                    <button onClick={() => handleDeletePaymentMethod(card.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               ))}
+              {savedCards.length === 0 && !isProcessing && (
+                <div className="text-center p-6 text-slate-500 text-sm border-2 border-dashed border-slate-200 rounded-2xl">
+                  No payment methods saved yet. Add a card to continue.
+                </div>
+              )}
             </div>
             
             <div className="mt-6 flex items-start gap-3 bg-blue-50/50 p-4 rounded-2xl">

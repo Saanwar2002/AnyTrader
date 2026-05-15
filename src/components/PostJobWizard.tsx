@@ -2640,7 +2640,7 @@ export default function PostJobWizard() {
                     </div>
                     <div className="flex-1 pr-6">
                       <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-base font-extrabold text-slate-900 tracking-tight">Instant Match <span className="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="font-black ml-0.5">£{(instantMatchCopy.price || 2.49).toFixed(2)}</span></h4>
+                        <h4 className="text-base font-extrabold text-slate-900 tracking-tight">Instant Match <span className="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="font-black ml-0.5">From £{(instantMatchCopy.price || 2.49).toFixed(2)}</span></h4>
                       </div>
                       <p className="text-sm text-slate-600 leading-snug">
                         Instant Match premium value gets you started and connects you to a record number of tradespeople.
