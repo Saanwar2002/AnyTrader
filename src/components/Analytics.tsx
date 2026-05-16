@@ -114,7 +114,7 @@ export default function Analytics() {
       <div className="bg-white rounded-t-[40px] p-6 space-y-8 min-h-screen text-slate-900">
         {/* Overview Grid */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-2">
+          <div className="bg-slate-50 p-4 rounded-3xl border border-black space-y-2">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
               <Receipt className="w-4 h-4" />
             </div>
@@ -122,7 +122,7 @@ export default function Analytics() {
             <p className="text-2xl font-bold text-slate-900">£{totalSpent.toLocaleString()}</p>
             <p className="text-[10px] text-slate-400">Last 6 months</p>
           </div>
-          <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-2">
+          <div className="bg-slate-50 p-4 rounded-3xl border border-black space-y-2">
             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
               <Briefcase className="w-4 h-4" />
             </div>
@@ -133,7 +133,7 @@ export default function Analytics() {
             </div>
             <p className="text-[10px] text-slate-400">{statusCounts.completed} completed</p>
           </div>
-          <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-2">
+          <div className="bg-slate-50 p-4 rounded-3xl border border-black space-y-2">
             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
               <PiggyBank className="w-4 h-4" />
             </div>
@@ -144,7 +144,7 @@ export default function Analytics() {
             </div>
             <p className="text-[10px] text-slate-400">vs avg market price</p>
           </div>
-          <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-2">
+          <div className="bg-slate-50 p-4 rounded-3xl border border-black space-y-2">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
               <Clock className="w-4 h-4" />
             </div>
@@ -155,7 +155,7 @@ export default function Analytics() {
         </div>
 
         {/* Job Status Breakdown */}
-        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-4">
+        <div className="bg-slate-50 p-6 rounded-3xl border border-black space-y-4">
           <h3 className="font-bold text-slate-900">Job Status Breakdown</h3>
           <div className="flex justify-between items-center px-2">
             <div className="text-center">
@@ -245,7 +245,7 @@ export default function Analytics() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+          <div className="flex justify-between items-center pt-2 border-t border-black">
             <span className="text-slate-500 font-bold">Total this period</span>
             <span className="text-xl font-bold text-slate-900">£9,700</span>
           </div>

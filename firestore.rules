@@ -9,7 +9,7 @@ service cloud.firestore {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         (request.auth.token != null && 'email' in request.auth.token && request.auth.token.email != null && request.auth.token.email.lower() == "saanwar2002@gmail.com") ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'ecosystem_manager'])
       ); 
     }
     
@@ -77,21 +77,21 @@ service cloud.firestore {
     match /ride_requests/{rideId} {
       allow get: if isSignedIn() && (
         resource == null || 
-        resource.data.get('riderId', '') == request.auth.uid || 
-        resource.data.get('driverId', '') == request.auth.uid || 
-        resource.data.get('assignedDriverId', '') == request.auth.uid || 
+        resource.data.riderId == request.auth.uid || 
+        resource.data.driverId == request.auth.uid || 
+        resource.data.assignedDriverId == request.auth.uid || 
         isAdmin()
       );
-      allow create: if isSignedIn() && (request.resource.data.get('riderId', '') == request.auth.uid || request.resource.data.get('driverId', '') == request.auth.uid);
+      allow create: if isSignedIn() && (request.resource.data.riderId == request.auth.uid || request.resource.data.driverId == request.auth.uid);
       allow update: if isSignedIn() && (
         resource == null ||
-        resource.data.get('riderId', '') == request.auth.uid || 
-        resource.data.get('driverId', '') == request.auth.uid || 
-        request.resource.data.get('driverId', '') == request.auth.uid || 
-        request.resource.data.get('assignedDriverId', '') == request.auth.uid || 
+        resource.data.riderId == request.auth.uid || 
+        resource.data.driverId == request.auth.uid || 
+        request.resource.data.driverId == request.auth.uid || 
+        request.resource.data.assignedDriverId == request.auth.uid || 
         isAdmin()
       );
-      allow delete: if isSignedIn() && (resource == null || resource.data.get('riderId', '') == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource == null || resource.data.riderId == request.auth.uid || isAdmin());
       allow list: if isSignedIn();
 
       match /chat/{messageId} {
@@ -260,17 +260,17 @@ service cloud.firestore {
 
     // --- Instant Match and Scores ---
     match /instant_matches/{matchId} {
-      allow get: if isSignedIn(); // Allow get for matched traders and customers
-      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || resource.data.matchedTraderId == request.auth.uid);
-      allow create: if isSignedIn() && (request.resource.data.customerId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('matchedTraderId', '') == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.matchedTraderId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('customerId', '') == request.auth.uid || isAdmin());
       allow update: if isSignedIn(); // Allow traders to respond to attempts, update match status
     }
 
     match /instant_match_attempts/{attemptId} {
-      allow get: if isSignedIn();
+      allow get: if isSignedIn() && (resource.data.get('traderId', '') == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.traderId == request.auth.uid || isAdmin());
       allow create: if isAdmin() || (isSignedIn() && (request.auth.uid == get(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId || request.auth.uid == getAfter(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId));
-      allow update: if isSignedIn() && (resource.data.traderId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource.data.get('traderId', '') == request.auth.uid || isAdmin());
     }
 
     match /users/{userId}/trader_match_scores/{categoryId} {
@@ -394,9 +394,10 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     match /appointments/{appointmentId} {
-      allow read, list: if isSignedIn() && (resource == null || resource.data.customerId == request.auth.uid || resource.data.traderId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.customerId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.traderId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('traderId', '') == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.traderId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('customerId', '') == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('traderId', '') == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
     }
   }

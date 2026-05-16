@@ -428,7 +428,7 @@ export default function MyQuotes() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden border border-slate-100"
+              className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden border border-black"
             >
               <div className="p-6">
                 <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
@@ -475,7 +475,7 @@ export default function MyQuotes() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden border border-slate-100"
+              className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden border border-black"
             >
               <div className="p-6 space-y-6">
                 <div className="flex items-center gap-4">

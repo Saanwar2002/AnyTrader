@@ -92,7 +92,7 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="fixed inset-4 md:inset-10 z-50 bg-slate-50 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20"
           >
-            <div className="p-6 bg-white border-b border-slate-100 flex items-center justify-between">
+            <div className="p-6 bg-white border-b border-black flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-black text-slate-900">Compare Quotes</h2>
                 <p className="text-sm text-slate-500 font-medium">Review and compare all received offers side-by-side</p>
@@ -123,7 +123,7 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                       key={quote.id} 
                       className={cn(
                         "w-80 bg-white rounded-[2rem] p-8 border transition-all flex flex-col relative",
-                        quote.status === "accepted" ? "border-green-500 ring-2 ring-green-500/20" : "border-slate-100 shadow-sm hover:shadow-md"
+                        quote.status === "accepted" ? "border-green-500 ring-2 ring-green-500/20" : "border-black shadow-sm hover:shadow-md"
                       )}
                     >
                       <div className="absolute -top-3 left-8 flex gap-2">
@@ -201,7 +201,7 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                           </div>
                         )}
 
-                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                        <div className="bg-slate-50 p-5 rounded-2xl border border-black">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Quote Amount</p>
                           <div className="flex items-baseline gap-1">
                             <span className="text-3xl font-black text-slate-900">£{quote.amount}</span>
@@ -236,7 +236,7 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                             <MessageSquare className="w-3 h-3" />
                             Message
                           </p>
-                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 min-h-[100px] max-h-[150px] overflow-y-auto no-scrollbar">
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-black min-h-[100px] max-h-[150px] overflow-y-auto no-scrollbar">
                             <p className="text-xs text-slate-600 font-medium leading-relaxed italic">
                               "{quote.message}"
                             </p>
@@ -244,7 +244,7 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                         </div>
                       </div>
 
-                      <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+                      <div className="mt-6 pt-6 border-t border-black space-y-3">
                         {requestingRevisionId === quote.id ? (
                           <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
                             <textarea

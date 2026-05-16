@@ -608,7 +608,7 @@ export default function EmergencyJobWizard() {
               </button>
               
               {addressSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-64 overflow-y-auto z-50">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-black max-h-64 overflow-y-auto z-50">
                   {addressSuggestions.map((suggestion, idx) => (
                     <div 
                       key={idx}
@@ -822,9 +822,9 @@ export default function EmergencyJobWizard() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-black"
             >
-              <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div className="p-6 border-b border-black bg-slate-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-200">
                     <CreditCard className="w-5 h-5" />
@@ -844,7 +844,7 @@ export default function EmergencyJobWizard() {
               </div>
               
               <div className="p-8 space-y-6">
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-black flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase">Selected Plan</p>
                     <p className="text-lg font-black text-slate-900">
@@ -904,7 +904,7 @@ export default function EmergencyJobWizard() {
               <div className="flex justify-between items-start mb-6">
                  <div className={cn(
                    "w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner",
-                   showBoostInfo === 'emergency' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                   showBoostInfo === "emergency" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
                  )}>
                    {showBoostInfo === 'emergency' ? <Zap className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
                  </div>
@@ -924,7 +924,7 @@ export default function EmergencyJobWizard() {
                   }
                 </p>
                 
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-6 space-y-2">
+                <div className="bg-slate-50 p-4 rounded-xl border border-black mt-6 space-y-2">
                    <h4 className="font-bold text-xs uppercase tracking-widest text-slate-400">Why choose this?</h4>
                    <ul className="space-y-2">
                      {showBoostInfo === 'emergency' ? (
@@ -950,7 +950,7 @@ export default function EmergencyJobWizard() {
                 onClick={() => setShowBoostInfo(null)}
                 className={cn(
                   "mt-6 w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 text-white shadow-lg",
-                  showBoostInfo === 'emergency' ? "bg-red-600 shadow-red-600/20 hover:bg-red-700" : "bg-amber-500 shadow-amber-500/20 hover:bg-amber-600"
+                  showBoostInfo === "emergency" ? "bg-red-600 shadow-red-600/20 hover:bg-red-700" : "bg-amber-500 shadow-amber-500/20 hover:bg-amber-600"
                 )}
               >
                 Got it

@@ -285,7 +285,7 @@ export default function Chat() {
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)] bg-white rounded-2xl border border-black shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-2">
+      <div className="p-3 sm:p-4 border-b border-black flex items-center justify-between bg-slate-50/50 gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button onClick={() => navigate(-1)} className="p-2 sm:p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0">
             <ChevronLeft className="w-5 h-5 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
@@ -407,7 +407,7 @@ export default function Chat() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-100 flex gap-2 items-center">
+      <form onSubmit={handleSendMessage} className="p-4 border-t border-black flex gap-2 items-center">
         <input
           type="file"
           accept="image/*"

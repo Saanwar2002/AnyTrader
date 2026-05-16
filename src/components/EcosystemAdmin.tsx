@@ -279,7 +279,7 @@ export default function EcosystemAdmin() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {expiringTraders.map((trader) => (
-                <div key={trader.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-md transition-all space-y-4">
+                <div key={trader.id} className="bg-white p-6 rounded-[32px] border border-black shadow-sm hover:shadow-md transition-all space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-slate-100 overflow-hidden">
                       {trader.photoURL ? (
@@ -304,7 +304,7 @@ export default function EcosystemAdmin() {
                       if (daysLeft > 30) return null;
 
                       return (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-black">
                           <div>
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{doc.type}</p>
                             <p className={cn(
@@ -344,7 +344,7 @@ export default function EcosystemAdmin() {
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
             {partners.map((partner) => (
-              <div key={partner.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <div key={partner.id} className="bg-white p-6 rounded-[32px] border border-black shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-primary">
@@ -409,7 +409,7 @@ export default function EcosystemAdmin() {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {campaigns.map((campaign) => (
-                <div key={campaign.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                <div key={campaign.id} className="bg-white p-6 rounded-[32px] border border-black shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-4">
                     <div className="w-12 h-12 bg-primary/5 rounded-2xl flex items-center justify-center text-primary">
                       <Zap className="w-6 h-6" />
@@ -483,12 +483,12 @@ export default function EcosystemAdmin() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden"
+            className="bg-white rounded-[32px] border border-black shadow-sm overflow-hidden"
           >
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
+                  <tr className="bg-slate-50 border-b border-black">
                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">User</th>
                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Partner</th>
                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Campaign</th>
@@ -592,7 +592,7 @@ export default function EcosystemAdmin() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {aiInsights.length > 0 ? aiInsights.map((insight, idx) => (
-                <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4 group">
+                <div key={idx} className="bg-white p-6 rounded-[32px] border border-black shadow-sm space-y-4 group">
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -668,32 +668,32 @@ export default function EcosystemAdmin() {
                 <>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Partner Name</label>
-                    <input name="name" defaultValue={editingItem?.name} required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    <input name="name" defaultValue={editingItem?.name} required className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category</label>
-                    <select name="category" defaultValue={editingItem?.category} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                    <select name="category" defaultValue={editingItem?.category} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
                       {["Insurance", "Finance", "Vehicle", "Health", "Supplies", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Description</label>
-                    <textarea name="description" defaultValue={editingItem?.description} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all h-24" />
+                    <textarea name="description" defaultValue={editingItem?.description} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all h-24" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tracking URL</label>
-                    <input name="trackingUrl" defaultValue={editingItem?.trackingUrl} required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    <input name="trackingUrl" defaultValue={editingItem?.trackingUrl} required className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                   </div>
                   
                   {/* Rating, Total Drivers */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rating</label>
-                      <input name="rating" type="number" step="0.1" defaultValue={editingItem?.rating} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                      <input name="rating" type="number" step="0.1" defaultValue={editingItem?.rating} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Total Drivers</label>
-                      <input name="totalDrivers" type="number" defaultValue={editingItem?.totalDrivers} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                      <input name="totalDrivers" type="number" defaultValue={editingItem?.totalDrivers} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                     </div>
                   </div>
 
@@ -701,28 +701,28 @@ export default function EcosystemAdmin() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starting Price (Text)</label>
-                      <input name="startingPrice" defaultValue={editingItem?.startingPrice} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                      <input name="startingPrice" defaultValue={editingItem?.startingPrice} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Highlight (e.g. Exclusive)</label>
-                      <input name="highlight" defaultValue={editingItem?.highlight} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                      <input name="highlight" defaultValue={editingItem?.highlight} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                     </div>
                   </div>
 
                   {/* Benefits */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Benefits (Comma Separated)</label>
-                    <input name="benefits" defaultValue={editingItem?.benefits?.join(", ")} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    <input name="benefits" defaultValue={editingItem?.benefits?.join(", ")} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                   </div>
 
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Commission (%)</label>
-                      <input name="commissionRate" type="number" defaultValue={editingItem?.commissionRate} required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                      <input name="commissionRate" type="number" defaultValue={editingItem?.commissionRate} required className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tier</label>
-                      <select name="tier" defaultValue={editingItem?.tier || "basic"} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                      <select name="tier" defaultValue={editingItem?.tier || "basic"} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
                         <option value="basic">Basic</option>
                         <option value="featured">Featured</option>
                         <option value="exclusive">Exclusive</option>
@@ -730,7 +730,7 @@ export default function EcosystemAdmin() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>
-                      <select name="status" defaultValue={editingItem?.status} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                      <select name="status" defaultValue={editingItem?.status} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                       </select>
@@ -741,22 +741,22 @@ export default function EcosystemAdmin() {
                 <>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Campaign Title</label>
-                    <input name="title" defaultValue={editingItem?.title} required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
+                    <input name="title" defaultValue={editingItem?.title} required className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Partner</label>
-                    <select name="partnerId" defaultValue={editingItem?.partnerId} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                    <select name="partnerId" defaultValue={editingItem?.partnerId} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
                       {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Content</label>
-                    <textarea name="content" defaultValue={editingItem?.content} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all h-24" />
+                    <textarea name="content" defaultValue={editingItem?.content} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all h-24" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Target Role</label>
-                      <select name="targetRole" defaultValue={editingItem?.targetRole} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                      <select name="targetRole" defaultValue={editingItem?.targetRole} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
                         <option value="homeowner">Homeowner</option>
                         <option value="tradesperson">Tradesperson</option>
                         <option value="both">Both</option>
@@ -764,7 +764,7 @@ export default function EcosystemAdmin() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Trigger</label>
-                      <select name="triggerType" defaultValue={editingItem?.triggerType} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                      <select name="triggerType" defaultValue={editingItem?.triggerType} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
                         <option value="manual">Manual</option>
                         <option value="expiry">Expiry</option>
                         <option value="behavior">Behavior</option>
@@ -774,7 +774,7 @@ export default function EcosystemAdmin() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>
-                    <select name="status" defaultValue={editingItem?.status} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
+                    <select name="status" defaultValue={editingItem?.status} className="w-full bg-slate-50 border-2 border-black rounded-2xl px-4 py-3 focus:border-primary outline-none transition-all">
                       <option value="draft">Draft</option>
                       <option value="active">Active</option>
                       <option value="paused">Paused</option>
@@ -845,7 +845,7 @@ export default function EcosystemAdmin() {
                   <p className="text-sm text-slate-500 leading-relaxed">
                     Manage relationships with external companies (Insurance, Finance, Tool Suppliers) who want access to your audience.
                   </p>
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-start gap-3">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-black flex items-start gap-3">
                     <Info className="w-4 h-4 text-slate-600 mt-0.5 shrink-0" />
                     <p className="text-xs text-slate-700 font-medium">
                       <strong>Best Practice:</strong> Ensure "Tracking URLs" are accurate to correctly attribute leads. Use the commission rate field to calculate expected revenue.
@@ -869,7 +869,7 @@ export default function EcosystemAdmin() {
                       { t: "Behavior", d: "Action-based triggers" },
                       { t: "Seasonal", d: "Date-range promotions" }
                     ].map((item, i) => (
-                      <li key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                      <li key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-black">
                         <ArrowRight className="w-3 h-3 text-primary" />
                         <div>
                           <p className="text-[10px] font-black text-slate-900 uppercase">{item.t}</p>
@@ -903,7 +903,7 @@ export default function EcosystemAdmin() {
                 </div>
               </div>
 
-              <div className="p-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <div className="p-8 bg-slate-50 border-t border-black flex items-center justify-between">
                 <p className="text-xs text-slate-400 font-bold">Version 1.2 • Monetization Center</p>
                 <button 
                   onClick={() => setShowManual(false)}

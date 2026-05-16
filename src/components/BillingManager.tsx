@@ -164,7 +164,7 @@ export default function BillingManager() {
             <p className="text-slate-500 font-medium">Manage your cards and bank accounts for seamless booking and rides.</p>
           </div>
 
-          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50 p-6 mb-6">
+          <div className="bg-white rounded-[2rem] border border-black shadow-xl shadow-slate-200/50 p-6 mb-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-blue-600" /> Saved Cards
@@ -179,7 +179,7 @@ export default function BillingManager() {
 
             <div className="space-y-4">
               {savedCards.map((card) => (
-                <div key={card.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors bg-slate-50/50">
+                <div key={card.id} className="flex items-center justify-between p-4 rounded-2xl border border-black hover:border-blue-200 transition-colors bg-slate-50/50">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-8 bg-slate-900 rounded-md flex items-center justify-center">
                       <CreditCard className="w-5 h-5 text-white" />
@@ -378,7 +378,7 @@ export default function BillingManager() {
               transition={{ delay: 0.3 + (idx * 0.1) }}
               className={cn(
                 "relative bg-white p-8 rounded-[2.5rem] border-2 transition-all duration-300",
-                tier.isPopular ? "border-blue-600 shadow-2xl shadow-blue-600/10 scale-105 z-10" : "border-slate-100 hover:border-black shadow-lg shadow-slate-200/50"
+                tier.isPopular ? "border-blue-600 shadow-2xl shadow-blue-600/10 scale-105 z-10" : "border-black hover:border-black shadow-lg shadow-slate-200/50"
               )}
             >
               {tier.isPopular && (
@@ -398,7 +398,7 @@ export default function BillingManager() {
                   <span className="text-slate-400 font-bold text-sm">/mo</span>
                 </div>
 
-                <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                <div className="bg-slate-50/50 p-4 rounded-2xl border border-black">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Platform Fee</span>
                     <span className="text-sm font-black text-blue-600">{tier.commission}%</span>
@@ -454,7 +454,7 @@ export default function BillingManager() {
             transition={{ delay: 0.6 }}
             className="mt-16 text-center"
         >
-            <div className="inline-flex items-center gap-2 text-slate-500 text-xs bg-white px-6 py-3 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="inline-flex items-center gap-2 text-slate-500 text-xs bg-white px-6 py-3 rounded-2xl border border-black shadow-sm">
                 <ShieldCheck className="w-4 h-4 text-emerald-500" />
                 Payments secured by <span className="font-bold text-slate-900">Stripe</span>. Cancel anytime.
             </div>

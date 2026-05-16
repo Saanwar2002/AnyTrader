@@ -209,7 +209,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
             style={{ backgroundColor: !ad.imageUrl && ad.bgColor && !ad.bgColor.startsWith("bg-") && ad.type !== "trader_promo" ? ad.bgColor : undefined }}
           >
             {/* Ad Badge */}
-            <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-black text-white/90 uppercase tracking-widest z-20 border border-black/20">
+            <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-black text-white/90 uppercase tracking-widest z-20 border border-white/20/20">
               Ad
             </div>
 

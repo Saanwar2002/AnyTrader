@@ -279,7 +279,7 @@ export default function Portfolio() {
                     <div className="flex flex-col flex-1 min-w-0 pt-0.5">
                       <div className="flex items-center flex-wrap gap-2 mb-1 pr-6">
                         <h3 className="font-bold text-slate-900 text-base leading-tight truncate">{property.name || "Unnamed Property"}</h3>
-                        <span className={cn("text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border shrink-0", property.occupancy === 'vacant' ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200")}>
+                        <span className={cn("text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border shrink-0", property.occupancy === "vacant" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200")}>
                           {property.occupancy === 'vacant' ? 'Vacant' : 'Occupied'}
                         </span>
                       </div>
@@ -293,7 +293,7 @@ export default function Portfolio() {
                   <div className="absolute top-2 right-2 flex flex-col items-center justify-start gap-1">
                     <div className="relative">
                       {deletingId === property.id && (
-                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-black z-10" onClick={e => e.stopPropagation()}>
+                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-white/20 z-10" onClick={e => e.stopPropagation()}>
                           <p className="mb-2">Delete property?</p>
                           <div className="flex gap-2">
                             <button 
@@ -309,7 +309,7 @@ export default function Portfolio() {
                               Yes
                             </button>
                           </div>
-                          <div className="absolute -top-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-t border-l border-black"></div>
+                          <div className="absolute -top-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-t border-l border-white/20"></div>
                         </div>
                       )}
                       <button 
@@ -336,7 +336,7 @@ export default function Portfolio() {
           <div className="bg-white flex-1 sm:rounded-3xl sm:max-w-md sm:mx-auto w-full sm:shadow-xl flex flex-col h-full overflow-hidden relative">
             
             {/* Header */}
-            <div className="px-4 py-4 flex items-center justify-between border-b border-slate-100 bg-white shrink-0">
+            <div className="px-4 py-4 flex items-center justify-between border-b border-black bg-white shrink-0">
               <button 
                 onClick={() => {
                   if (step > 1) {
@@ -499,7 +499,7 @@ export default function Portfolio() {
             </div>
 
             {/* Static Footer */}
-            <div className="p-4 bg-white border-t border-slate-100 flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="p-4 bg-white border-t border-black flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               <button 
                 type="button" 
                 onClick={() => setIsAdding(false)} 

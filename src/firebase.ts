@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
-import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot as originalOnSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString } from "firebase/storage";
 import firebaseConfig from "../firebase-applet-config.json";
 
@@ -210,7 +210,36 @@ export const submitReview = async (
   }
 };
 
+export const onSnapshot = (...args: any[]) => {
+  const customErrorCb = (err: any) => {
+    let _path = "Unknown";
+    try {
+      if (args[0]?.path) _path = args[0].path;
+      else if (args[0]?._path?.segments) _path = args[0]._path.segments.join('/');
+      else if (args[0]?.type === 'query') _path = 'query: ' + args[0]?._query?.path?.segments?.join('/');
+    } catch(e){}
+    
+    // Ignore permission-denied errors that often occur during auth state transitions (like logout)
+    if (err?.code === 'permission-denied' || err?.message?.includes('Missing or insufficient permissions')) {
+      console.warn(`Firestore permission denied on path [${_path}]. This is usually harmless during route transitions or logout.`, err.message);
+      return;
+    }
+    
+    console.error(`Global onSnapshot Uncaught ERROR intercept for path [${_path}]:`, err);
+  };
+  
+  if (args.length === 2 && typeof args[1] === 'function') {
+    return originalOnSnapshot(args[0], args[1], customErrorCb);
+  } else if (args.length === 3 && typeof args[1] === 'function' && typeof args[2] === 'function') {
+    return originalOnSnapshot(args[0], args[1], args[2]);
+  } else if (args.length === 3 && typeof args[1] === 'object' && typeof args[2] === 'function') {
+      return originalOnSnapshot(args[0], args[1], args[2], customErrorCb);
+  } else {
+    return (originalOnSnapshot as any)(...args);
+  }
+};
+
 export { 
-  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment,
+  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment,
   ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString
 };

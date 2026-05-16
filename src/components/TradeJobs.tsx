@@ -91,7 +91,7 @@ export default function TradeJobs() {
               "px-6 py-2.5 rounded-2xl text-sm font-bold transition-all shrink-0 border",
               filter === tab.id 
                 ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200" 
-                : "bg-white text-slate-500 border-slate-100 hover:border-black"
+                : "bg-white text-slate-500 border-black hover:border-black"
             )}
           >
             {tab.label}
@@ -100,7 +100,7 @@ export default function TradeJobs() {
       </div>
 
       {displayJobs.length === 0 ? (
-        <div className="bg-white p-12 rounded-3xl border border-slate-100 text-center space-y-6 shadow-sm">
+        <div className="bg-white p-12 rounded-3xl border border-black text-center space-y-6 shadow-sm">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
             <Briefcase className="w-10 h-10" />
           </div>
@@ -129,7 +129,7 @@ export default function TradeJobs() {
             <Link
               key={job.id}
               to={`/job/${job.id}`}
-              className="block bg-white rounded-[2.5rem] shadow-sm hover:shadow-md transition-all overflow-hidden relative group border border-slate-100"
+              className="block bg-white rounded-[2.5rem] shadow-sm hover:shadow-md transition-all overflow-hidden relative group border border-black"
             >
               {(job.boostTier === 'instant_match' || job.isInstantMatch) ? (
                 <div className="bg-[#E6A020] text-center py-2 text-slate-900 font-black text-3xl tracking-wide uppercase border-b border-[#D4921E]">
@@ -146,22 +146,22 @@ export default function TradeJobs() {
               )}
               <div className={cn(
                 "p-8 space-y-4",
-                job.urgency === 'emergency' ? "bg-red-50/30" : ""
+                job.urgency === "emergency" ? "bg-red-50/30" : ""
               )}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <div className={cn(
                       "w-5 h-5 rounded-lg flex items-center justify-center",
-                      job.urgency === 'emergency' ? "bg-red-100" : "bg-orange-50"
+                      job.urgency === "emergency" ? "bg-red-100" : "bg-orange-50"
                     )}>
                       <Briefcase className={cn(
                         "w-3 h-3",
-                        job.urgency === 'emergency' ? "text-red-500" : "text-orange-500"
+                        job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
                       )} />
                     </div>
                     <p className={cn(
                       "text-[10px] font-black uppercase tracking-widest",
-                      job.urgency === 'emergency' ? "text-red-500" : "text-orange-500"
+                      job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
                     )}>
                       {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
                     </p>

@@ -133,7 +133,7 @@ export function PropertyManager() {
           <div className="pt-2 pb-6">
             <div className="space-y-3">
               {properties.length === 0 ? (
-                 <div className="text-center py-8 text-slate-500 text-sm bg-white rounded-3xl shadow-sm border border-slate-100">
+                 <div className="text-center py-8 text-slate-500 text-sm bg-white rounded-3xl shadow-sm border border-black">
                    No properties added yet. Click + to add your first property.
                  </div>
               ) : properties.slice(0, 3).map(property => (
@@ -170,7 +170,7 @@ export function PropertyManager() {
                   <div className="flex flex-col items-center justify-start gap-1.5 ml-3 shrink-0 pt-0.5">
                     <div className="relative">
                       {deletingId === property.id && (
-                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-black z-10">
+                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-white/20 z-10">
                           <p className="mb-2">Delete property?</p>
                           <div className="flex gap-2">
                             <button 
@@ -186,7 +186,7 @@ export function PropertyManager() {
                               Yes
                             </button>
                           </div>
-                          <div className="absolute -top-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-t border-l border-black"></div>
+                          <div className="absolute -top-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-t border-l border-white/20"></div>
                         </div>
                       )}
                       <button 
@@ -223,7 +223,7 @@ export function PropertyManager() {
           <div className="bg-white flex-1 sm:rounded-3xl sm:max-w-md sm:mx-auto w-full sm:shadow-xl flex flex-col h-full overflow-hidden relative">
             
             {/* Header */}
-            <div className="px-4 py-4 flex items-center justify-between border-b border-slate-100 bg-white z-10 shrink-0">
+            <div className="px-4 py-4 flex items-center justify-between border-b border-black bg-white z-10 shrink-0">
               <button onClick={() => { setIsAdding(false); setEditingPropertyId(null); }} className="p-2 -ml-2 text-slate-900 hover:bg-slate-100 rounded-full transition">
                 <ArrowLeft className="w-6 h-6" />
               </button>
@@ -322,7 +322,7 @@ export function PropertyManager() {
             </div>
 
             {/* Static Footer */}
-            <div className="p-4 bg-white border-t border-slate-100 flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="p-4 bg-white border-t border-black flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               <button 
                 type="button" 
                 onClick={() => setIsAdding(false)} 

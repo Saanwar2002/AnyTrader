@@ -239,7 +239,7 @@ export default function TradesBannerAdStudio() {
               <h3 className="font-bold text-slate-900 line-clamp-1">{ad.title}</h3>
               <p className="text-sm text-slate-500 line-clamp-2 mt-1 min-h-[40px]">{ad.description}</p>
               
-              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2">
+              <div className="mt-4 pt-4 border-t border-black grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Duration</p>
                   <p className="text-lg font-black text-slate-900">{ad.durationDays} Days</p>
@@ -271,7 +271,7 @@ export default function TradesBannerAdStudio() {
       {showModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <div className="p-6 border-b border-black flex justify-between items-center bg-slate-50">
               <h3 className="text-xl font-bold text-slate-900">Boost Profile on Banner Ads</h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-2"><ArrowLeft className="w-5 h-5" /></button>
             </div>
@@ -317,7 +317,7 @@ export default function TradesBannerAdStudio() {
               </div>
             </div>
             
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+            <div className="p-6 border-t border-black bg-slate-50 flex justify-end">
               <button 
                 onClick={handleCreateCampaign}
                 disabled={isSaving}

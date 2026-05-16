@@ -171,7 +171,7 @@ export function HireB2BServiceManager() {
                         </div>
                         <div className={cn(
                           "w-4 h-4 rounded-full border flex flex-shrink-0 items-center justify-center transition-colors shrink-0",
-                          isSelected ? "border-black bg-black" : "border-black"
+                          isSelected ? "border-white/20 bg-black" : "border-black"
                         )}>
                           {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_0_1px_black]" />}
                         </div>
@@ -188,7 +188,7 @@ export function HireB2BServiceManager() {
                    className={cn(
                      "px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition",
                      selectedPropertyIds.length > 0
-                       ? "bg-black text-white hover:bg-slate-800 border border-black shadow-sm" 
+                       ? "bg-black text-white hover:bg-slate-800 border border-white/20 shadow-sm" 
                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
                    )}
                 >
@@ -200,7 +200,7 @@ export function HireB2BServiceManager() {
       ) : (
         <div className="fixed inset-0 z-[120] bg-slate-50 flex flex-col sm:p-4">
           <div className="bg-white flex-1 sm:rounded-3xl sm:max-w-md sm:mx-auto w-full sm:shadow-xl flex flex-col h-full overflow-hidden relative">
-            <div className="px-4 py-4 flex items-center justify-between border-b border-slate-100 bg-white z-10 shrink-0">
+            <div className="px-4 py-4 flex items-center justify-between border-b border-black bg-white z-10 shrink-0">
                <button onClick={() => setIsAdding(false)} className="p-2 -ml-2 text-slate-900 hover:bg-slate-100 rounded-full transition">
                  <ArrowLeft className="w-6 h-6" />
                </button>
@@ -281,7 +281,7 @@ export function HireB2BServiceManager() {
                </form>
             </div>
 
-            <div className="p-4 bg-white border-t border-slate-100 flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="p-4 bg-white border-t border-black flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
                <button 
                  type="button" 
                  onClick={() => setIsAdding(false)} 

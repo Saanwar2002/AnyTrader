@@ -120,9 +120,9 @@ export default function RoleTabBar() {
                   className={cn(
                     "flex-1 py-1 px-1 rounded-md font-medium transition duration-200 whitespace-nowrap text-center",
                     isActive ? (
-                        tab === 'properties' ? "bg-black text-white shadow-sm" :
-                        tab === 'field_services' ? "bg-[#0055DD] text-white shadow-sm" :
-                        tab === 'consultancy' ? "bg-purple-700 text-white shadow-sm" : 
+                        tab === "properties" ? "bg-black text-white shadow-sm" :
+                        tab === "field_services" ? "bg-[#0055DD] text-white shadow-sm" :
+                        tab === "consultancy" ? "bg-purple-700 text-white shadow-sm" : 
                         "bg-[#0055DD] text-white shadow-sm"
                     ) : "text-slate-700 hover:bg-slate-50"
                   )}

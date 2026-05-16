@@ -331,7 +331,7 @@ export default function Dashboard() {
           <div className="space-y-4">
             {activeJobs.length === 0 ? (
               <div className="bg-slate-50 p-12 rounded-3xl border border-dashed border-black text-center space-y-3">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-slate-100">
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-black">
                   <Briefcase className="w-8 h-8 text-slate-300" />
                 </div>
                 <div>
@@ -348,7 +348,7 @@ export default function Dashboard() {
                   key={job.id}
                   className={cn(
                     "bg-white rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all overflow-hidden relative group",
-                    job.urgency === 'emergency' ? "border-red-500 bg-red-50/30" : "border-slate-100"
+                    job.urgency === "emergency" ? "border-red-500 bg-red-50/30" : "border-black"
                   )}
                 >
                   {/* Status Badge */}
@@ -375,7 +375,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2">
                       <div className={cn(
                         "w-4 h-4 rounded-lg flex items-center justify-center",
-                        job.urgency === 'emergency' ? "bg-red-100" : "bg-orange-50"
+                        job.urgency === "emergency" ? "bg-red-100" : "bg-orange-50"
                       )}>
                         {(() => {
                           const category = TRADE_CATEGORIES.find(c => c.name === job.category);
@@ -383,18 +383,18 @@ export default function Dashboard() {
                             const Icon = iconMap[category.icon];
                             return Icon ? <Icon className={cn(
                               "w-2.5 h-2.5",
-                              job.urgency === 'emergency' ? "text-red-500" : "text-orange-500"
+                              job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
                             )} /> : <span className="text-[10px]">{category.icon}</span>;
                           }
                           return <Briefcase className={cn(
                             "w-2.5 h-2.5",
-                            job.urgency === 'emergency' ? "text-red-500" : "text-orange-500"
+                            job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
                           )} />;
                         })()}
                       </div>
                       <p className={cn(
                         "text-[9px] font-black uppercase tracking-widest",
-                        job.urgency === 'emergency' ? "text-red-500" : "text-orange-500"
+                        job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
                       )}>
                         {job.category} • {job.subcategory}
                       </p>
@@ -512,7 +512,7 @@ export default function Dashboard() {
                 <Link
                   key={quote.id}
                   to={`/job/${quote.jobId}`}
-                  className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all flex items-center justify-between group"
+                  className="bg-white p-5 rounded-3xl border border-black shadow-sm hover:shadow-md transition-all flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
@@ -592,7 +592,7 @@ export default function Dashboard() {
             
             <div className="grid grid-cols-1 gap-4">
               {maintenancePredictions.map((prediction, idx) => (
-                <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4 relative overflow-hidden group">
+                <div key={idx} className="bg-white p-6 rounded-[32px] border border-black shadow-sm space-y-4 relative overflow-hidden group">
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">

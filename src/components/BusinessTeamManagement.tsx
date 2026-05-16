@@ -122,7 +122,7 @@ export default function BusinessTeamManagement() {
 
   if (!isEligible) {
     return (
-      <div className="p-12 text-center bg-white rounded-[40px] border-2 border-dashed border-slate-100 flex flex-col items-center gap-6 max-w-2xl mx-auto shadow-2xl shadow-indigo-50 mt-12">
+      <div className="p-12 text-center bg-white rounded-[40px] border-2 border-dashed border-black flex flex-col items-center gap-6 max-w-2xl mx-auto shadow-2xl shadow-indigo-50 mt-12">
         <div className="w-24 h-24 rounded-full bg-indigo-50 flex items-center justify-center">
           <Shield className="w-12 h-12 text-indigo-400" />
         </div>
@@ -166,10 +166,10 @@ export default function BusinessTeamManagement() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Active Members */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
+          <div className="bg-white rounded-[40px] border border-black shadow-xl shadow-slate-200/50 overflow-hidden">
             <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
               <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Active Team Members</h3>
-              <span className="px-3 py-1 bg-white border border-slate-100 rounded-xl font-bold text-xs text-slate-500 shadow-sm">
+              <span className="px-3 py-1 bg-white border border-black rounded-xl font-bold text-xs text-slate-500 shadow-sm">
                 {members.length + 1} / {profile?.subscriptionType === 'Enterprise Powerhouse' ? 'Unlimited' : '5'} Seats
               </span>
             </div>
@@ -188,7 +188,7 @@ export default function BusinessTeamManagement() {
                       <p className="text-sm font-medium text-slate-400">{profile?.email}</p>
                    </div>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 italic">
+                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-2xl border border-black italic">
                   Primary Owner
                 </div>
               </div>
@@ -197,7 +197,7 @@ export default function BusinessTeamManagement() {
               {members.map(member => (
                 <div key={member.uid} className="p-8 flex items-center justify-between hover:bg-indigo-50/30 transition-colors group">
                   <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 rounded-[24px] bg-white border border-slate-100 flex items-center justify-center text-slate-400 shadow-sm shrink-0">
+                    <div className="w-16 h-16 rounded-[24px] bg-white border border-black flex items-center justify-center text-slate-400 shadow-sm shrink-0">
                       {member.avatarUrl ? <img src={member.avatarUrl} className="w-full h-full rounded-[24px] object-cover" /> : <Users className="w-8 h-8" />}
                     </div>
                     <div>
@@ -230,7 +230,7 @@ export default function BusinessTeamManagement() {
 
         {/* Invitations & Resource Usage */}
         <div className="space-y-8">
-          <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl shadow-slate-200/50 p-8 space-y-6">
+          <div className="bg-white rounded-[40px] border border-black shadow-xl shadow-slate-200/50 p-8 space-y-6">
             <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs flex items-center gap-3">
               <Mail className="w-4 h-4 text-amber-500" />
               Pending Invites
@@ -254,7 +254,7 @@ export default function BusinessTeamManagement() {
                 </div>
               ))}
               {invitations.length === 0 && (
-                <div className="p-8 text-center border-2 border-dashed border-slate-100 rounded-[30px]">
+                <div className="p-8 text-center border-2 border-dashed border-black rounded-[30px]">
                    <p className="text-xs font-bold text-slate-400 italic">No pending invites</p>
                 </div>
               )}

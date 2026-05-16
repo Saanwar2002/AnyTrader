@@ -19,7 +19,7 @@ export default function CrossPortalBanner() {
     // Listen for active rides
     const qRides = query(
       collection(db, "ride_requests"),
-      where("passengerId", "==", user.uid)
+      where("riderId", "==", user.uid)
     );
 
     const unsubRidesPassenger = onSnapshot(qRides, (snapshot) => {
@@ -32,7 +32,7 @@ export default function CrossPortalBanner() {
         }
       }
       setActiveRide(foundActive);
-    }, () => {});
+    }, (err) => { console.error("Error cross portal rides:", err); });
 
     return () => {
       unsubRidesPassenger();
@@ -59,7 +59,7 @@ export default function CrossPortalBanner() {
         }
       }
       setActiveJob(prev => foundActive || prev);
-    }, () => {});
+    }, (err) => { console.error("Error cross portal jobs:", err) });
 
     // Listen for active jobs (tradesperson)
     const qJobsTrader = query(
@@ -76,7 +76,7 @@ export default function CrossPortalBanner() {
         }
       }
       setActiveJob(prev => foundActive || prev);
-    }, () => {});
+    }, (err) => { console.error("Error cross portal jobs trader:", err) });
 
     return () => {
       unsubJobs();

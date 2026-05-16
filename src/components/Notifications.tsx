@@ -118,7 +118,7 @@ export default function Notifications() {
                 exit={{ opacity: 0, x: 20 }}
                 className={cn(
                   "bg-white p-4 rounded-2xl border transition-all flex gap-4 items-start group",
-                  notification.read ? "border-slate-100 opacity-75" : "border-blue-100 bg-blue-50/30 shadow-sm"
+                  notification.read ? "border-black opacity-75" : "border-blue-100 bg-blue-50/30 shadow-sm"
                 )}
               >
                 <div className={cn(

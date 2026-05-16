@@ -66,7 +66,7 @@ export const TrustPulse = ({ status, className, traderId }: TrustPulseProps) => 
 
   return (
     <div className={cn("inline-flex flex-col gap-1.5", className)}>
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-2xl shadow-sm relative overflow-hidden group">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-black rounded-2xl shadow-sm relative overflow-hidden group">
         {/* Animated Background Pulse */}
         <motion.div 
           animate={{ 

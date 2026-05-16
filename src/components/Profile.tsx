@@ -1688,7 +1688,7 @@ export default function Profile() {
       <div className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-4 sm:p-6 mb-3 relative">
         <div className="flex flex-col items-center">
           <div className="relative mb-4">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-slate-900 flex items-center justify-center text-white text-2xl md:text-3xl font-bold overflow-hidden border-4 border-black shadow-lg relative">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-slate-900 flex items-center justify-center text-white text-2xl md:text-3xl font-bold overflow-hidden border-4 border-white/20 shadow-lg relative">
               {profile.photoURL ? (
                 <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
@@ -3833,7 +3833,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-slate-100 bg-white">
+              <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-black bg-white">
                 <button 
                   onClick={() => setIsEditingMiniProfile(false)}
                   className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-black hover:bg-slate-100 transition-colors"
@@ -3938,7 +3938,7 @@ export default function Profile() {
                 )}
               </div>
 
-              <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-slate-100 bg-white">
+              <div className="p-5 pt-4 flex gap-3 shrink-0 border-t border border-black bg-white">
                 <button 
                   onClick={() => setIsEditingIM(false)}
                   className="flex-1 p-4 rounded-2xl font-bold text-slate-600 bg-slate-50 border border-black hover:bg-slate-100 transition-colors"

@@ -335,7 +335,7 @@ export default function Availability() {
           onClick={() => setActiveTab('calendar')}
           className={cn(
             "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-            activeTab === 'calendar' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            activeTab === "calendar" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
           Calendar
@@ -344,7 +344,7 @@ export default function Availability() {
           onClick={() => setActiveTab('standard')}
           className={cn(
             "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-            activeTab === 'standard' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            activeTab === "standard" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
           Standard Hours
@@ -353,7 +353,7 @@ export default function Availability() {
           onClick={() => setActiveTab('appointments')}
           className={cn(
             "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-            activeTab === 'appointments' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            activeTab === "appointments" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
           Appointments
@@ -382,7 +382,7 @@ export default function Availability() {
             </div>
 
             {/* Stats Summary */}
-            <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-black">
               <div className="text-center">
                 <div className="w-2 h-2 bg-green-500 rounded-full mx-auto mb-1" />
                 <p className="text-xl font-bold text-slate-900">{availableCount}</p>
@@ -427,18 +427,18 @@ export default function Availability() {
                       isCurrentMonth && !isPast && "text-slate-700 hover:bg-slate-50",
                       isPast && "text-slate-300 cursor-not-allowed",
                       isSelected && "ring-2 ring-blue-600 ring-offset-2",
-                      status === 'available' && "bg-green-50 text-green-700",
-                      status === 'busy' && "bg-orange-50 text-orange-700",
-                      status === 'booked' && "bg-slate-800 text-white hover:bg-slate-700"
+                      status === "available" && "bg-green-50 text-green-700",
+                      status === "busy" && "bg-orange-50 text-orange-700",
+                      status === "booked" && "bg-slate-800 text-white hover:bg-slate-700"
                     )}
                   >
                     {format(day, 'd')}
                     {status && (
                       <div className={cn(
                         "absolute bottom-1.5 w-1 h-1 rounded-full",
-                        status === 'available' && "bg-green-500",
-                        status === 'busy' && "bg-orange-500",
-                        status === 'booked' && "bg-white"
+                        status === "available" && "bg-green-500",
+                        status === "busy" && "bg-orange-500",
+                        status === "booked" && "bg-white"
                       )} />
                     )}
                   </button>
@@ -513,7 +513,7 @@ export default function Availability() {
           )}
 
           <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
+            <div className="p-6 border-b border-black">
               <h2 className="text-lg font-bold text-slate-900">Standard Working Hours</h2>
               <p className="text-sm text-slate-500 mt-1">Set your regular working hours so homeowners know when you're available.</p>
             </div>
@@ -623,16 +623,16 @@ export default function Availability() {
                           <div className="flex items-center gap-2 mb-1">
                              <span className={cn(
                                "text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded",
-                               apt.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                               apt.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                               'bg-slate-100 text-slate-600'
+                               apt.status === "pending" ? "bg-amber-100 text-amber-700" :
+                               apt.status === "confirmed" ? "bg-green-100 text-green-700" :
+                               "bg-slate-100 text-slate-600"
                              )}>{apt.status}</span>
                              <p className="text-xs text-slate-500 font-medium">{format(new Date(apt.date), 'MMM d, yyyy')} at {apt.startTime}</p>
                           </div>
                           <h4 className="font-bold text-slate-900">{apt.serviceName}</h4>
                           <p className="text-sm text-slate-500">{apt.durationMinutes} mins • £{apt.price}</p>
                           {apt.notes && (
-                            <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded mt-2 border border-slate-100 italic">"{apt.notes}"</p>
+                            <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded mt-2 border border-black italic">"{apt.notes}"</p>
                           )}
                        </div>
                        

@@ -2183,7 +2183,7 @@ export default function DriverTerminal() {
             onClickCapture={handleMapInteraction}
             className={cn(
             "absolute right-4 z-[45] transition-all duration-300",
-            (rideState === 'incoming' || rideState === 'review' || rideState === 'completed') ? "opacity-0 pointer-events-none" :
+            (rideState === "incoming" || rideState === "review" || rideState === "completed") ? "opacity-0 pointer-events-none" :
             rideState === 'idle' ? "bottom-[140px]" :
             isCardCollapsed ? "bottom-[280px]" : "bottom-[420px]"
           )}>
@@ -4546,7 +4546,7 @@ export default function DriverTerminal() {
       </AnimatePresence>
 
       {/* 3. Bottom UI: Details and Call to Action */}
-      <div className={cn("relative z-20 w-full px-4 pb-24 flex flex-col gap-3 transition-opacity", rideState !== 'idle' ? "opacity-0 pointer-events-none" : "opacity-100")}>
+      <div className={cn("relative z-20 w-full px-4 pb-24 flex flex-col gap-3 transition-opacity", rideState !== "idle" ? "opacity-0 pointer-events-none" : "opacity-100")}>
         
         {/* Primary Action Button moved to Menu - only map controls or status might remain here if needed */}
       </div>

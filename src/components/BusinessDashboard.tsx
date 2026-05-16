@@ -222,7 +222,7 @@ export default function BusinessDashboard() {
                   </div>
                 </div>
                 
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-auto">
+                <div className="flex items-center justify-between pt-3 border-t border-black mt-auto">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 bg-slate-50 rounded-md flex items-center justify-center">
                       <FileText className="w-3.5 h-3.5 text-slate-400" />
@@ -241,7 +241,7 @@ export default function BusinessDashboard() {
       </div>
 
       {/* Business Support Banner */}
-      <div className="bg-slate-900 rounded-xl p-3 border border-black shadow-sm text-white flex items-center justify-between">
+      <div className="bg-slate-900 rounded-xl p-3 border border-white/20 shadow-sm text-white flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
             <Users2 className="w-4 h-4 text-blue-400" />

@@ -511,7 +511,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                       role === "homeowner" 
                         ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-slate-100 bg-white hover:border-black"
+                        : "border-black bg-white hover:border-black"
                     )}
                   >
                     <div className={cn(
@@ -543,7 +543,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                       role === "business" 
                         ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-slate-100 bg-white hover:border-black"
+                        : "border-black bg-white hover:border-black"
                     )}
                   >
                     <div className={cn(
@@ -575,7 +575,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
                       role === "fleet_driver" 
                         ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-slate-100 bg-white hover:border-black"
+                        : "border-black bg-white hover:border-black"
                     )}
                   >
                     <div className={cn(
@@ -607,7 +607,7 @@ export default function Onboarding() {
                       "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group hover:border-red-500/50",
                       role === "admin" 
                         ? "border-red-500 bg-red-50/30 ring-4 ring-red-500/10" 
-                        : "border-slate-100 bg-white hover:border-black border-dashed"
+                        : "border-black bg-white hover:border-black border-dashed"
                     )}
                   >
                     <div className={cn(
@@ -635,13 +635,13 @@ export default function Onboarding() {
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4 pt-4 border-t border-slate-100"
+                  className="space-y-4 pt-4 border-t border-black"
                 >
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
                     <input 
                       type="text" 
-                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900"
+                      className="w-full p-4 rounded-2xl border border-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. John Smith"
@@ -652,7 +652,7 @@ export default function Onboarding() {
                     <input 
                       type="tel" 
                       placeholder="07123 456789"
-                      className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900"
+                      className="w-full p-4 rounded-2xl border border-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                     />
@@ -663,7 +663,7 @@ export default function Onboarding() {
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                       <input 
                         type="text" 
-                        className="w-full p-4 pl-12 rounded-2xl border border-slate-100 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900 uppercase"
+                        className="w-full p-4 pl-12 rounded-2xl border border-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900 uppercase"
                         placeholder="e.g. SW1A 1AA"
                         value={postcode}
                         onChange={(e) => setPostcode(e.target.value)}
@@ -700,7 +700,7 @@ export default function Onboarding() {
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4 pt-4 border-t border-slate-100"
+                  className="space-y-4 pt-4 border-t border-black"
                 >
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vehicle Setup</p>
                   
@@ -717,7 +717,7 @@ export default function Onboarding() {
                         { id: '8seater', name: '8-Seater Max' },
                         { id: 'wav', name: 'Wheelchair' }
                       ].map(cat => (
-                        <label key={cat.id} className={cn("p-3 rounded-xl border-2 flex items-center gap-3 transition-colors cursor-pointer", vehicleCategories.includes(cat.id) ? "border-primary bg-primary/5 text-primary" : "border-slate-100 hover:border-primary/30 text-slate-600")}>
+                        <label key={cat.id} className={cn("p-3 rounded-xl border-2 flex items-center gap-3 transition-colors cursor-pointer", vehicleCategories.includes(cat.id) ? "border-primary bg-primary/5 text-primary" : "border-black hover:border-primary/30 text-slate-600")}>
                           <input type="checkbox" className="hidden" checked={vehicleCategories.includes(cat.id)} onChange={(e) => {
                             if (e.target.checked) setVehicleCategories(prev => [...prev, cat.id]);
                             else setVehicleCategories(prev => prev.filter(c => c !== cat.id));
@@ -732,7 +732,7 @@ export default function Onboarding() {
                   </div>
 
                   <div className="pt-2">
-                    <label className={cn("p-4 rounded-xl border-2 flex items-center justify-between transition-colors cursor-pointer", isPetFriendly ? "border-primary bg-primary/5" : "border-slate-100 hover:border-black")}>
+                    <label className={cn("p-4 rounded-xl border-2 flex items-center justify-between transition-colors cursor-pointer", isPetFriendly ? "border-primary bg-primary/5" : "border-black hover:border-black")}>
                       <div>
                         <p className="text-sm font-black text-slate-900">Pet Friendly Vehicle</p>
                         <p className="text-xs text-slate-500">Allow passengers to travel with pets (+£3 fare bonus)</p>
@@ -754,7 +754,7 @@ export default function Onboarding() {
                   </div>
                   <span className="text-[10px] font-black text-slate-700 uppercase leading-none">Verified<br/>trades</span>
                 </div>
-                <div className="flex flex-col items-center text-center gap-1 border-x border-slate-100">
+                <div className="flex flex-col items-center text-center gap-1 border-x border-black">
                   <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                     <Shield className="w-4 h-4 text-blue-600" />
                   </div>
@@ -841,14 +841,14 @@ export default function Onboarding() {
                   }}
                   className={cn(
                     "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
-                    businessLayer === 'properties' 
+                    businessLayer === "properties" 
                       ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                      : "border-slate-100 bg-white hover:border-black"
+                      : "border-black bg-white hover:border-black"
                   )}
                 >
                   <div className={cn(
                     "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                    businessLayer === 'properties' ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                    businessLayer === "properties" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
                   )}>
                     <Building2 className="w-7 h-7" />
                   </div>
@@ -858,7 +858,7 @@ export default function Onboarding() {
                   </div>
                   <div className={cn(
                     "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                    businessLayer === 'properties' ? "border-orange-500" : "border-black"
+                    businessLayer === "properties" ? "border-orange-500" : "border-black"
                   )}>
                     {businessLayer === 'properties' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                   </div>
@@ -871,14 +871,14 @@ export default function Onboarding() {
                   }}
                   className={cn(
                     "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
-                    businessLayer === 'field_services' 
+                    businessLayer === "field_services" 
                       ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                      : "border-slate-100 bg-white hover:border-black"
+                      : "border-black bg-white hover:border-black"
                   )}
                 >
                   <div className={cn(
                     "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                    businessLayer === 'field_services' ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                    businessLayer === "field_services" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
                   )}>
                     <Briefcase className="w-7 h-7" />
                   </div>
@@ -888,7 +888,7 @@ export default function Onboarding() {
                   </div>
                   <div className={cn(
                     "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                    businessLayer === 'field_services' ? "border-orange-500" : "border-black"
+                    businessLayer === "field_services" ? "border-orange-500" : "border-black"
                   )}>
                     {businessLayer === 'field_services' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                   </div>
@@ -901,14 +901,14 @@ export default function Onboarding() {
                   }}
                   className={cn(
                     "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
-                    businessLayer === 'consultancy' 
+                    businessLayer === "consultancy" 
                       ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                      : "border-slate-100 bg-white hover:border-black"
+                      : "border-black bg-white hover:border-black"
                   )}
                 >
                   <div className={cn(
                     "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                    businessLayer === 'consultancy' ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                    businessLayer === "consultancy" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
                   )}>
                     <Award className="w-7 h-7" />
                   </div>
@@ -918,7 +918,7 @@ export default function Onboarding() {
                   </div>
                   <div className={cn(
                     "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                    businessLayer === 'consultancy' ? "border-orange-500" : "border-black"
+                    businessLayer === "consultancy" ? "border-orange-500" : "border-black"
                   )}>
                     {businessLayer === 'consultancy' && <div className="w-3 h-3 rounded-full bg-orange-500" />}
                   </div>
@@ -963,7 +963,7 @@ export default function Onboarding() {
                         "w-full p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all duration-300 group",
                         selectedTrades.includes(t.name) 
                           ? "bg-primary/5 border-primary text-primary shadow-lg shadow-primary/5" 
-                          : "bg-white border-slate-100 text-slate-600 hover:border-black"
+                          : "bg-white border-black text-slate-600 hover:border-black"
                       )}
                     >
                       <div className="flex items-center gap-4">
@@ -985,7 +985,7 @@ export default function Onboarding() {
                       <motion.div 
                         initial={{ opacity: 0, height: 0 }} 
                         animate={{ opacity: 1, height: 'auto' }}
-                        className="ml-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3"
+                        className="ml-4 p-4 bg-slate-50 border border-black rounded-2xl space-y-3"
                       >
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Specific Services:</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1015,7 +1015,7 @@ export default function Onboarding() {
               <div className="flex gap-4">
                 <button
                   onClick={() => setStep(1)}
-                  className="flex-1 p-5 rounded-[2rem] border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 p-5 rounded-[2rem] border-2 border-black font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                 >
                   <ChevronLeft className="w-5 h-5" /> Back
                 </button>
@@ -1073,7 +1073,7 @@ export default function Onboarding() {
                             "p-3 rounded-lg border text-left font-bold text-sm transition-all flex items-center gap-3",
                             businessCategory === cat.name 
                               ? "bg-primary/5 border-primary text-primary" 
-                              : "bg-white border-slate-100 text-slate-600 hover:border-black"
+                              : "bg-white border-black text-slate-600 hover:border-black"
                           )}
                         >
                           <span className="text-xl">{cat.icon}</span>
@@ -1118,7 +1118,7 @@ export default function Onboarding() {
                             "p-4 rounded-2xl border-2 text-left transition-all relative",
                             selectedTier === tier.name 
                               ? "bg-primary/5 border-primary shadow-sm" 
-                              : "bg-white border-slate-100 hover:border-black"
+                              : "bg-white border-black hover:border-black"
                           )}
                         >
                           <div className="flex justify-between items-start mb-1">
@@ -1150,7 +1150,7 @@ export default function Onboarding() {
                         setStep(1);
                         setBusinessCategory(null);
                       }}
-                      className="flex-1 p-5 rounded-[2rem] border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                      className="flex-1 p-5 rounded-[2rem] border-2 border-black font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                     >
                       <ChevronLeft className="w-5 h-5" /> Back
                     </button>
@@ -1201,7 +1201,7 @@ export default function Onboarding() {
 
               <div className="space-y-4">
                 {uniqueRequiredCerts.map((cert, idx) => (
-                  <div key={idx} className="p-5 rounded-[2rem] border-2 border-slate-100 bg-slate-50/50 space-y-4">
+                  <div key={idx} className="p-5 rounded-[2rem] border-2 border-black bg-slate-50/50 space-y-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-black text-slate-900 tracking-tight">{cert}</p>
                       {verificationDocs.find(d => d.type === cert) ? (
@@ -1228,7 +1228,7 @@ export default function Onboarding() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={() => setStep(role === "fleet_driver" ? 1 : 2)}
-                  className="w-full sm:w-auto p-5 rounded-[2rem] border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto p-5 rounded-[2rem] border-2 border-black font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                 >
                   <ChevronLeft className="w-5 h-5" /> Back
                 </button>
@@ -1299,7 +1299,7 @@ export default function Onboarding() {
                     setStep(1); // Go back to start
                     setConfirmationResult(null);
                   }}
-                  className="flex-1 p-5 rounded-[2rem] border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 p-5 rounded-[2rem] border-2 border-black font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                 >
                   <ChevronLeft className="w-5 h-5" /> Cancel
                 </button>

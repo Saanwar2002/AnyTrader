@@ -1990,7 +1990,7 @@ const libraries: any[] = ['places'];
                       initial={{ opacity: 0, scale: 0.95, y: -10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                      className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-20 py-2"
+                      className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-black z-20 py-2"
                     >
                       <button
                         onClick={() => navigate(`/post-job`, { state: { editJob: job } })}
@@ -2064,7 +2064,7 @@ const libraries: any[] = ['places'];
         {(!isHomeowner && job.status === "in_progress") ? (
           <div className="space-y-6 pb-[100px] mt-4">
             {/* UK Active Job Tracker Header */}
-            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 flex flex-col items-center">
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-black flex flex-col items-center">
               <div className="w-full flex justify-between items-center mb-8">
                 <h2 className="font-bold text-lg text-slate-900">UK Active Job Tracker</h2>
                 <div className="flex items-center gap-1.5 text-green-600 font-bold text-sm bg-green-50 px-3 py-1 rounded-full border border-green-100">
@@ -2078,9 +2078,9 @@ const libraries: any[] = ['places'];
             </div>
 
             {/* Job Progress */}
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-black">
               <h3 className="font-bold text-2xl text-slate-900 mb-2 tracking-tight">Job Progress</h3>
-              <p className="text-slate-600 font-medium pb-4 border-b border-slate-100 mb-6">{job.category} Repair at {job.fullAddress || job.houseNumber || job.postcode}</p>
+              <p className="text-slate-600 font-medium pb-4 border-b border-black mb-6">{job.category} Repair at {job.fullAddress || job.houseNumber || job.postcode}</p>
               
               <div className="space-y-5">
                 <label className="flex items-start gap-4 cursor-pointer group">
@@ -2109,17 +2109,17 @@ const libraries: any[] = ['places'];
             </div>
 
             {/* Media Gallery */}
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-black">
               <h3 className="font-bold text-2xl text-slate-900 tracking-tight mb-1">Media Gallery</h3>
               <p className="text-slate-600 font-medium mb-5">During Work</p>
               
               <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar">
-                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-black">
+                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-white/20">
                    <img src="https://images.unsplash.com/photo-1581092921461-7031e4bfb83e?auto=format&fit=crop&w=300&q=80" alt="Work 1" className="w-full h-full object-cover opacity-90" />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
                    <span className="absolute bottom-3 left-0 right-0 text-center text-white text-xs font-semibold tracking-wide shadow-black">10:02 AM</span>
                 </div>
-                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-black">
+                <div className="w-32 h-32 bg-slate-900 rounded-[1.5rem] shrink-0 relative overflow-hidden snap-start shadow-sm border border-white/20">
                    <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=300&q=80" alt="Work 2" className="w-full h-full object-cover opacity-90" />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
                    <span className="absolute bottom-3 left-0 right-0 text-center text-white text-xs font-semibold tracking-wide shadow-black">10:10 AM</span>
@@ -2279,7 +2279,7 @@ const libraries: any[] = ['places'];
                     src={`https://maps.google.com/maps?q=${encodeURIComponent((job.fullAddress || job.postcode || job.location) + ", UK")}&t=&z=13&ie=UTF8&iwloc=&output=embed`} 
                   />
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-blue-50/20">
-                    <div className="bg-white/95 px-3 py-1.5 rounded-md text-xs font-bold text-slate-800 shadow-md border border-slate-100/80 backdrop-blur-md mb-2 z-10 relative">
+                    <div className="bg-white/95 px-3 py-1.5 rounded-md text-xs font-bold text-slate-800 shadow-md border border-black/80 backdrop-blur-md mb-2 z-10 relative">
                        <span className="tracking-widest uppercase text-[10px] text-slate-600">APPROX. AREA</span>
                     </div>
                     <MapPin className="w-8 h-8 text-slate-800 drop-shadow-md z-10 relative" />
@@ -2333,7 +2333,7 @@ const libraries: any[] = ['places'];
                   {job.beforePhotos && job.beforePhotos.length > 0 && (
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       {job.beforePhotos.map((url: string, i: number) => (
-                        <div key={i} className="aspect-square rounded-lg overflow-hidden border border-slate-100 bg-slate-50">
+                        <div key={i} className="aspect-square rounded-lg overflow-hidden border border-black bg-slate-50">
                           <img src={url} alt={`Before ${i+1}`} className="w-full h-full object-cover" />
                         </div>
                       ))}
@@ -2854,7 +2854,7 @@ const libraries: any[] = ['places'];
                     <img 
                       key={i} 
                       src={url} 
-                      className="w-16 h-16 rounded-lg object-cover border border-slate-100" 
+                      className="w-16 h-16 rounded-lg object-cover border border-black" 
                       referrerPolicy="no-referrer"
                     />
                   ))}
@@ -2909,9 +2909,9 @@ const libraries: any[] = ['places'];
             )}
             <span className={cn(
               "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-              job.status === 'posted' ? "bg-blue-50 text-blue-600" :
-              job.status === 'accepted' ? "bg-green-50 text-green-600" :
-              job.status === 'in_progress' ? "bg-orange-50 text-orange-600" :
+              job.status === "posted" ? "bg-blue-50 text-blue-600" :
+              job.status === "accepted" ? "bg-green-50 text-green-600" :
+              job.status === "in_progress" ? "bg-orange-50 text-orange-600" :
               "bg-slate-100 text-slate-600"
             )}>
               {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace('_', ' ')}
@@ -3077,7 +3077,7 @@ const libraries: any[] = ['places'];
             </div>
             
             {canSeeFullDetails && (job.fullAddress || job.houseNumber || job.locationInstructions) && (
-              <div className="mt-4 mb-2 bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col gap-3">
+              <div className="mt-4 mb-2 bg-slate-50 p-4 rounded-xl border border-black flex flex-col gap-3">
                 <div className="font-bold flex items-center gap-2 text-slate-900 border-b border-black pb-2 mb-1">
                   <Home className="w-4 h-4 text-blue-500" /> Exact Location Details
                 </div>
@@ -3098,7 +3098,7 @@ const libraries: any[] = ['places'];
                     <span className="text-sm font-bold text-slate-500 flex items-center gap-1">
                       <Info className="w-3.5 h-3.5" /> Instructions:
                     </span>
-                    <span className="text-sm text-slate-700 italic bg-white p-3 rounded-lg border border-slate-100 shadow-sm leading-relaxed whitespace-pre-wrap">{job.locationInstructions}</span>
+                    <span className="text-sm text-slate-700 italic bg-white p-3 rounded-lg border border-black shadow-sm leading-relaxed whitespace-pre-wrap">{job.locationInstructions}</span>
                   </div>
                 )}
               </div>
@@ -3114,7 +3114,7 @@ const libraries: any[] = ['places'];
         </div>
 
         {/* Map Section */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
+        <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
@@ -3179,7 +3179,7 @@ const libraries: any[] = ['places'];
         {/* Description Section */}
         <div className="space-y-3">
           <h3 className="text-xl font-bold text-slate-900">Job Description</h3>
-          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6">
+          <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-6">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0">
                 <FileText className="w-4 h-4 text-purple-600" />
@@ -3195,7 +3195,7 @@ const libraries: any[] = ['places'];
                   </div>
                   <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Quote Scope</h4>
                 </div>
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-black">
                   <p className="text-sm text-slate-700 font-semibold mb-1">
                     {job.quoteScope === 'complete_package' ? 'Complete Package (Materials & Labour)' : 
                      job.quoteScope === 'labour_only' ? 'Labour Only (Homeowner provides materials)' : 
@@ -3255,7 +3255,7 @@ const libraries: any[] = ['places'];
 
             {/* AI Price Estimate Card */}
             {job.estimateMin && job.estimateMax && (
-              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
+              <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
@@ -3309,7 +3309,7 @@ const libraries: any[] = ['places'];
             {(isHomeowner || (quotes.find(q => q.status === "accepted")?.tradespersonId || job.acceptedTradespersonId) === user?.uid) && (
               <button 
                 onClick={() => navigate(`/job/${id}/timeline`)}
-                className="w-full bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all"
+                className="w-full bg-white p-4 rounded-2xl border border-black shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-[#1e3a5f] transition-colors">
@@ -3330,7 +3330,7 @@ const libraries: any[] = ['places'];
         {job.documents && job.documents.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-xl font-bold text-slate-900">Plans & Drawings</h3>
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
+            <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
                   <FileText className="w-5 h-5 text-indigo-600" />
@@ -3347,7 +3347,7 @@ const libraries: any[] = ['places'];
                     href={doc.url} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all group"
+                    className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-black hover:border-indigo-600 hover:bg-indigo-50 transition-all group"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
@@ -3369,7 +3369,7 @@ const libraries: any[] = ['places'];
             <h3 className="text-xl font-bold text-slate-900">Photos & Videos</h3>
             <div className="grid grid-cols-2 gap-3">
               {job.photos?.map((url: string, i: number) => (
-                <div key={`photo-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-slate-100 shadow-sm">
+                <div key={`photo-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-black shadow-sm">
                   <img 
                     src={url} 
                     alt={`Job photo ${i + 1}`} 
@@ -3383,7 +3383,7 @@ const libraries: any[] = ['places'];
                 </div>
               ))}
               {job.videos?.map((url: string, i: number) => (
-                <div key={`video-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-slate-100 bg-slate-900 flex items-center justify-center relative group shadow-sm">
+                <div key={`video-${i}`} className="aspect-square rounded-3xl overflow-hidden border border-white/20 bg-slate-900 flex items-center justify-center relative group shadow-sm">
                   <video 
                     src={url} 
                     className="w-full h-full object-cover opacity-100 md:opacity-50 md:group-hover:opacity-100 transition-opacity cursor-pointer"
@@ -3414,7 +3414,7 @@ const libraries: any[] = ['places'];
         {!isHomeowner && isFinalizingMaterials && finalizingQuoteId && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="p-6 border-b border-slate-100 bg-amber-50">
+              <div className="p-6 border-b border-black bg-amber-50">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
                     <Sparkles className="w-5 h-5 text-amber-600" />
@@ -3481,7 +3481,7 @@ const libraries: any[] = ['places'];
                   </button>
                 </div>
                 
-                <div className="pt-4 border-t border-slate-100">
+                <div className="pt-4 border-t border-black">
                    <button 
                       onClick={handleGenerateMaterialList}
                       disabled={isGeneratingMaterials}
@@ -3494,7 +3494,7 @@ const libraries: any[] = ['places'];
 
               </div>
 
-              <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
+              <div className="p-6 border-t border-black bg-slate-50 flex gap-3">
                 <button
                   onClick={handleFinalizeMaterialList}
                   disabled={isProcessing}
@@ -3580,7 +3580,7 @@ const libraries: any[] = ['places'];
               }
 
               return (
-                <div key={quote.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-start justify-between gap-4">
+                <div key={quote.id} className="bg-white p-6 rounded-3xl border border-black shadow-sm flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-slate-100 rounded-full overflow-hidden border border-black relative">
@@ -3667,7 +3667,7 @@ const libraries: any[] = ['places'];
                     )}
 
                     {reviewSummaries[quote.tradespersonId] && (
-                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex items-start gap-2">
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-black flex items-start gap-2">
                         <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Zap className="w-3 h-3 text-blue-600" />
                         </div>
@@ -3682,12 +3682,12 @@ const libraries: any[] = ['places'];
                     
                     {quote.startDate && (
                       <div className="flex flex-wrap gap-2">
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 self-start px-3 py-1.5 rounded-lg border border-slate-100">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 self-start px-3 py-1.5 rounded-lg border border-black">
                           <Calendar className="w-3.5 h-3.5 text-blue-600" />
                           <span>{quote.isImmediateStart ? "Immediately" : `Starts: ${new Date(quote.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}</span>
                         </div>
                         {quote.estimatedTimeline && (
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 self-start px-3 py-1.5 rounded-lg border border-slate-100">
+                          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 self-start px-3 py-1.5 rounded-lg border border-black">
                             <Clock className="w-3.5 h-3.5 text-indigo-600" />
                             <span>Timeline: {quote.estimatedTimeline}</span>
                           </div>
@@ -3705,7 +3705,7 @@ const libraries: any[] = ['places'];
                     )}
 
                     {quote.materialList && quote.materialList.length > 0 && (
-                       <div className="mt-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                       <div className="mt-3 p-4 bg-slate-50 border border-black rounded-2xl">
                          <div className="flex items-center gap-2 mb-3">
                            <Sparkles className="w-4 h-4 text-blue-600" />
                            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Finalized Material List</h4>
@@ -3857,7 +3857,7 @@ const libraries: any[] = ['places'];
 
                               {quote.paymentTrack === 'quick' ? (
                                 <div className="space-y-4">
-                                  <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                                  <div className="bg-white p-4 rounded-xl border border-black flex items-center justify-between shadow-sm">
                                     <div className="flex items-center gap-3">
                                       <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
                                         <QrCode className="w-6 h-6" />
@@ -3910,12 +3910,12 @@ const libraries: any[] = ['places'];
                               ) : (
                                 <div className="space-y-3">
                                   {(quote.milestones || []).map((milestone: any, idx: number) => (
-                                    <div key={milestone.id} className="bg-white p-3 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                                    <div key={milestone.id} className="bg-white p-3 rounded-xl border border-black flex items-center justify-between shadow-sm">
                                       <div className="flex items-center gap-3">
                                         <div className={cn(
                                           "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                                          milestone.status === 'funded' ? "bg-green-100 text-green-600" :
-                                          milestone.status === 'funds_released' ? "bg-blue-100 text-blue-600" :
+                                          milestone.status === "funded" ? "bg-green-100 text-green-600" :
+                                          milestone.status === "funds_released" ? "bg-blue-100 text-blue-600" :
                                           "bg-slate-100 text-slate-400"
                                         )}>
                                           {idx + 1}
@@ -3984,10 +3984,10 @@ const libraries: any[] = ['places'];
                           exit={{ opacity: 0, height: 0 }}
                           className="overflow-hidden"
                         >
-                          <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                          <div className="mt-4 pt-4 border-t border-black space-y-3">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quote History</p>
                             {quote.history.map((h: any, idx: number) => (
-                              <div key={idx} className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
+                              <div key={idx} className="bg-slate-50 p-3 rounded-2xl border border-black space-y-2">
                                 <div className="flex items-center justify-between">
                                   <span className="text-[10px] font-bold text-slate-500">{new Date(h.timestamp).toLocaleString()}</span>
                                   <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{h.reason}</span>
@@ -4005,7 +4005,7 @@ const libraries: any[] = ['places'];
                     </AnimatePresence>
 
                     {quote.status === "withdrawn" && quote.withdrawReason && (
-                      <div className="mt-4 pt-4 border-t border-slate-100">
+                      <div className="mt-4 pt-4 border-t border-black">
                         <div className="bg-slate-50 p-3 rounded-2xl border border-black space-y-1">
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Withdrawal Reason</p>
                           <p className="text-sm text-slate-700 italic">"{quote.withdrawReason}"</p>
@@ -4202,7 +4202,7 @@ const libraries: any[] = ['places'];
         {/* Sidebar Actions (Tradesperson view) */}
         {!isHomeowner && profile?.role === "tradesperson" && job.status === "posted" && (!hasQuoted || needsRequote) && (
           (job.quoteCount || 0) >= 5 && !hasQuoted ? (
-            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center space-y-4">
+            <div className="bg-white p-8 rounded-3xl border border-black shadow-sm text-center space-y-4">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
                 <AlertCircle className="w-8 h-8 text-red-500" />
               </div>
@@ -4214,9 +4214,9 @@ const libraries: any[] = ['places'];
               </div>
             </div>
           ) : (
-            <div id="quote-form-section" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <div id="quote-form-section" className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4">
               {new URLSearchParams(window.location.search).get('quickQuote') === 'true' && (
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3 mb-2">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-black space-y-3 mb-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Job Summary</span>
                     <button 
@@ -4231,11 +4231,11 @@ const libraries: any[] = ['places'];
                     <p className="text-xs text-slate-500 line-clamp-2">{job.description}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-100 text-[10px] font-bold text-slate-600">
+                    <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-black text-[10px] font-bold text-slate-600">
                       <MapPin className="w-3 h-3" />
                       {job.location}
                     </div>
-                    <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-100 text-[10px] font-bold text-slate-600">
+                    <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-black text-[10px] font-bold text-slate-600">
                       <Sparkles className="w-3 h-3 text-orange-500" />
                       £{job.estimateMin}-£{job.estimateMax}
                     </div>
@@ -4337,7 +4337,7 @@ const libraries: any[] = ['places'];
                   <motion.div 
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-2"
+                    className="p-4 bg-slate-50 rounded-xl border border-black flex flex-col gap-2"
                   >
                     <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
                       <span>Platform Fee ({(profile?.tier === 'pro' ? '10%' : profile?.tier === 'premium' ? '5%' : '15%')})</span>
@@ -4515,7 +4515,7 @@ const libraries: any[] = ['places'];
                 {(myQuote.revisionCount || 0) >= 4 ? "Max Revisions Reached" : "Request Quote/Scope Change"}
               </button>
             ) : (
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+              <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-slate-900">Request Quote Change</h3>
                   <button onClick={() => setIsEditingRevision(false)} className="text-slate-400 hover:text-slate-600">
@@ -4594,7 +4594,7 @@ const libraries: any[] = ['places'];
 
         {isHomeowner && job.status === "completed" && (
           <div className="space-y-4 mb-4">
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-black space-y-4">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-bold text-[#1e3a8a] text-[19px]">Financial Summary</h3>
                 <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
@@ -4977,7 +4977,7 @@ const libraries: any[] = ['places'];
                       <option value="monthly">Monthly</option>
                     </select>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-black">
                     <p className="text-xs text-slate-600">
                       This will send a proposal to the {isHomeowner ? "tradesperson" : "homeowner"}. If they accept, this job will automatically be scheduled {recurringFrequency}.
                     </p>
@@ -5029,7 +5029,7 @@ const libraries: any[] = ['places'];
                     value={rescheduleDate}
                     onChange={(e) => setRescheduleDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-slate-700"
+                    className="w-full p-4 bg-slate-50 border border-black rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-slate-700"
                   />
                 </div>
 
@@ -5040,7 +5040,7 @@ const libraries: any[] = ['places'];
                     onChange={(e) => setRescheduleReason(e.target.value)}
                     placeholder="e.g., Previous job overran, or material delivery delay..."
                     rows={3}
-                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm text-slate-700 resize-none"
+                    className="w-full p-4 bg-slate-50 border border-black rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm text-slate-700 resize-none"
                   />
                 </div>
 
@@ -5089,7 +5089,7 @@ const libraries: any[] = ['places'];
                 <p className="text-xs text-slate-500 px-4">Show this to the homeowner to initiate the secure payout for your session.</p>
               </div>
 
-              <div className="aspect-square bg-slate-50 rounded-3xl border-4 border-slate-100 p-6 flex items-center justify-center relative overflow-hidden group">
+              <div className="aspect-square bg-slate-50 rounded-3xl border-4 border-black p-6 flex items-center justify-center relative overflow-hidden group">
                 {/* Simulated QR Code */}
                 <div className="w-full h-full border-2 border-slate-900 flex flex-wrap p-2 gap-1">
                   {Array.from({ length: 64 }).map((_, i) => (
@@ -5125,7 +5125,7 @@ const libraries: any[] = ['places'];
               </div>
 
               <div className="space-y-4">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-black">
                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Secure Token Reference</p>
                   <p className="text-xs font-mono text-slate-600 truncate">{qrCodeData}</p>
                 </div>
@@ -5150,7 +5150,7 @@ const libraries: any[] = ['places'];
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden border border-slate-100"
+              className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden border border-black"
             >
               <div className="p-6 space-y-6">
                 <div className="flex items-center gap-4">
@@ -5279,7 +5279,7 @@ const libraries: any[] = ['places'];
               className="w-full h-full sm:h-auto max-w-md bg-slate-50 sm:rounded-[2rem] sm:shadow-2xl overflow-y-auto flex flex-col pt-safe-top relative"
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-4 bg-white border-b border-slate-100 shrink-0 sticky top-0 z-10">
+              <div className="flex items-center justify-between p-4 bg-white border-b border-black shrink-0 sticky top-0 z-10">
                 <button
                   onClick={() => setShowJobSummary(false)}
                   className="flex items-center text-blue-600 font-medium text-[17px]"
@@ -5304,7 +5304,7 @@ const libraries: any[] = ['places'];
                   {/* Financial Summary */}
                   <div>
                     <h3 className="font-bold text-[#1e3a8a] text-[19px] mb-3 px-1">Financial Summary</h3>
-                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100 space-y-3">
+                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-black space-y-3">
                       <div className="flex justify-between items-center bg-white">
                          <span className="text-slate-600 font-medium text-[17px]">Labour Cost:</span>
                          <span className="text-slate-900 font-medium text-[17px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.714).toFixed(2)}</span>
@@ -5336,7 +5336,7 @@ const libraries: any[] = ['places'];
                   {/* Media */}
                   <div>
                     <h3 className="font-bold text-[#1e3a8a] text-[19px] mb-3 px-1">Media</h3>
-                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100">
+                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-black">
                       <div className="flex gap-4">
                         <div className="w-[100px] h-[100px] shrink-0 relative rounded-[1rem] overflow-hidden shadow-sm">
                            <img src="https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=200&q=80" alt="Before" className="w-full h-full object-cover" />
@@ -5359,7 +5359,7 @@ const libraries: any[] = ['places'];
                   {/* Share Financial Summary */}
                   <div>
                     <h3 className="font-bold text-[#1e3a8a] text-[19px] mb-3 px-1">Share Financial Summary</h3>
-                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100 flex flex-col gap-3">
+                    <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-black flex flex-col gap-3">
                       <button 
                         onClick={() => {
                           const subject = encodeURIComponent(`Invoice: ${job?.title || 'Job Completed'}`);
@@ -5397,7 +5397,7 @@ const libraries: any[] = ['places'];
               </div>
 
               {/* Bottom Actions Form Menu */}
-              <div className="fixed sm:absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-100 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-20">
+              <div className="fixed sm:absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-black shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-20">
                 <div className="space-y-3">
                   <button 
                     className="w-full bg-[#004bb4] hover:bg-[#003c90] text-white py-4 rounded-[1rem] font-bold text-[17px] transition-colors"
@@ -5429,7 +5429,7 @@ const libraries: any[] = ['places'];
               className="w-[80%] max-w-[280px] max-h-[85vh] bg-white rounded-[1.5rem] shadow-2xl flex flex-col relative overflow-hidden"
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-3 bg-white border-b border-slate-100 shrink-0 relative z-10">
+              <div className="flex items-center justify-between p-3 bg-white border-b border-black shrink-0 relative z-10">
                 <button
                   onClick={() => setShowDigitalId(false)}
                   className="text-blue-600 font-medium text-[13px] px-2 py-1"
@@ -5495,7 +5495,7 @@ const libraries: any[] = ['places'];
 
                   {/* QR Code */}
                   <div className="flex flex-col items-center justify-center pb-4 pt-0 mx-3">
-                     <div className="w-24 h-24 bg-white flex items-center justify-center p-1 border border-slate-100 rounded-lg">
+                     <div className="w-24 h-24 bg-white flex items-center justify-center p-1 border border-black rounded-lg">
                        <QRCodeSVG 
                          value={`${window.location.origin}/profile/${profile?.uid}`} 
                          size={88}

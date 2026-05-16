@@ -241,7 +241,7 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
                           if (doc.status === 'valid' && doc.id !== 'insurance') handleActionClick(doc.id, 'Update');
                        }}
                        className={cn("bg-[#1A1A1E] border rounded-2xl p-4 transition-colors", 
-                          doc.status === 'expiring' ? "border-[#FF9500]/50 shadow-[0_0_15px_rgba(255,149,0,0.05)]" : 
+                          doc.status === "expiring" ? "border-[#FF9500]/50 shadow-[0_0_15px_rgba(255,149,0,0.05)]" : 
                           doc.status === 'missing' ? "border-[#FF3B30]/50" : 
                           doc.status === 'pending' ? "border-[#FF9500]/50" : "border-[#2C2C30]",
                           doc.status === 'valid' && doc.id !== 'insurance' ? "cursor-pointer hover:border-[#333338]" : ""
@@ -255,15 +255,15 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
                                 <h4 className="text-sm font-bold text-white tracking-tight break-words">{doc.name}</h4>
                                 {doc.id === 'insurance' && <span className="text-[9px] font-bold text-[#A1A1AA] uppercase px-1.5 py-0.5 bg-[#252529] rounded break-words">{doc.originalProvider}</span>}
                              </div>
-                             <p className={cn("text-xs font-bold mt-0.5 break-words", doc.status === 'valid' ? "text-[#A1A1AA] font-medium" : doc.color)}>{doc.expiry}</p>
+                             <p className={cn("text-xs font-bold mt-0.5 break-words", doc.status === "valid" ? "text-[#A1A1AA] font-medium" : doc.color)}>{doc.expiry}</p>
                           </div>
                           {doc.action && (
                              <button 
                                disabled={doc.action === 'Pending'}
                                onClick={() => handleActionClick(doc.id, doc.action)}
                                className={cn("px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ml-2 shrink-0 border active:scale-95 transition-transform flex items-center gap-1", 
-                                  doc.status === 'expiring' ? "bg-[#FF9500] text-[#0D0D0F] border-transparent" : 
-                                  doc.status === 'pending' ? "bg-transparent text-[#FF9500] border-[#FF9500] opacity-50 cursor-not-allowed" :
+                                  doc.status === "expiring" ? "bg-[#FF9500] text-[#0D0D0F] border-transparent" : 
+                                  doc.status === "pending" ? "bg-transparent text-[#FF9500] border-[#FF9500] opacity-50 cursor-not-allowed" :
                                   "bg-[#FF3B30] text-white border-transparent")}>
                                 {doc.action === 'Renew/Upload' || doc.action === 'Upload' || doc.action === 'Re-Upload' ? <Upload className="w-3 h-3" /> : null}
                                 {doc.action}

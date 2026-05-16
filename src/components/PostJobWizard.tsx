@@ -99,7 +99,7 @@ export default function PostJobWizard() {
           )}
         </div>
         {formData.postcode && (
-          <div className="text-right border-l border-slate-100 pl-4">
+          <div className="text-right border-l border-black pl-4">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location</p>
             <p className="text-xs font-black text-slate-900 uppercase">
               {getOutwardPostcode(formData.postcode)}
@@ -1353,7 +1353,7 @@ export default function PostJobWizard() {
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-30">
+      <div className="bg-white border-b border-black sticky top-0 z-30">
         <div className="flex items-center justify-between p-3 min-h-[48px]">
           <button 
             onClick={prevStep} 
@@ -1435,7 +1435,7 @@ export default function PostJobWizard() {
               </div>
 
               {/* Post by Voice */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
+              <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
@@ -1540,7 +1540,7 @@ export default function PostJobWizard() {
               </div>
 
               {/* How it works */}
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
                 <button 
                   onClick={() => setIsHowItWorksOpen(!isHowItWorksOpen)}
                   className="w-full p-6 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors"
@@ -1925,7 +1925,7 @@ export default function PostJobWizard() {
                         </div>
                       ))}
                       {formData.videos.map((url, i) => (
-                        <div key={`video-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-black bg-slate-900 flex items-center justify-center shadow-sm">
+                        <div key={`video-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/20 bg-slate-900 flex items-center justify-center shadow-sm">
                           <video src={url} className="w-full h-full object-cover opacity-60" />
                           <Video className="w-6 h-6 text-white absolute" />
                           <button 
@@ -2083,7 +2083,7 @@ export default function PostJobWizard() {
 
               <div className="space-y-6">
                 {isRefiningScope ? (
-                  <div className="bg-white rounded-3xl p-12 py-16 border border-slate-100 shadow-sm flex flex-col items-center justify-center space-y-6 text-center">
+                  <div className="bg-white rounded-3xl p-12 py-16 border border-black shadow-sm flex flex-col items-center justify-center space-y-6 text-center">
                     <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-2">
                       <Sparkles className="w-8 h-8 text-blue-600 animate-pulse" />
                     </div>
@@ -2127,7 +2127,7 @@ export default function PostJobWizard() {
               <JobReminder />
 
               {/* 1. Where is the job? */}
-              <div className="space-y-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden">
+              <div className="space-y-4 bg-white p-5 rounded-3xl border border-black shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500 rounded-l-3xl"></div>
                 
                 <h2 className="text-lg font-black text-slate-800 flex items-center gap-3">
@@ -2181,7 +2181,7 @@ export default function PostJobWizard() {
                     }}
                   />
                   {addressSuggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 max-h-64 overflow-y-auto z-50">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-black max-h-64 overflow-y-auto z-50">
                       {addressSuggestions.map((suggestion, idx) => (
                         <div 
                           key={idx}
@@ -2254,7 +2254,7 @@ export default function PostJobWizard() {
                       }}
                       className={cn(
                         "flex-1 p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all text-sm active:scale-95",
-                        useRegisteredAddress ? "border-blue-200 bg-white text-blue-700 shadow-inner" : "border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        useRegisteredAddress ? "border-blue-200 bg-white text-blue-700 shadow-inner" : "border-black bg-slate-50 text-slate-600 hover:bg-slate-100"
                       )}
                     >
                       Use Profile Address
@@ -2262,7 +2262,7 @@ export default function PostJobWizard() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 mt-2">
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-black mt-2">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">House / Flat *</label>
                     <input 
@@ -2288,7 +2288,7 @@ export default function PostJobWizard() {
               </div>
 
               {/* 2. When do you need it? */}
-              <div className="space-y-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden">
+              <div className="space-y-4 bg-white p-5 rounded-3xl border border-black shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500 rounded-l-3xl"></div>
 
                 <h2 className="text-lg font-black text-slate-800 flex items-center gap-3">
@@ -2319,7 +2319,7 @@ export default function PostJobWizard() {
                         "px-5 py-3 text-sm rounded-2xl border transition-all font-bold",
                         formData.urgency === level.id 
                           ? "border-[#0084a5] bg-[#0084a5] text-white shadow-[0_4px_12px_rgba(0,132,165,0.2)]" 
-                          : "border-slate-100 bg-slate-50 text-slate-600 hover:border-black hover:bg-slate-100"
+                          : "border-black bg-slate-50 text-slate-600 hover:border-black hover:bg-slate-100"
                       )}
                     >
                       {level.name}
@@ -2361,7 +2361,7 @@ export default function PostJobWizard() {
                 <h2 className="text-xl font-bold text-slate-900">AI Price Guide</h2>
                 <p className="text-slate-500 text-sm">A rough estimate to help you set your budget.</p>
               </div>               {isEstimating ? (
-                <div className="bg-white rounded-3xl p-12 border border-slate-100 shadow-sm flex flex-col items-center justify-center space-y-4">
+                <div className="bg-white rounded-3xl p-12 border border-black shadow-sm flex flex-col items-center justify-center space-y-4">
                   <Loader2 className="w-12 h-12 text-[#0084a5] animate-spin" />
                   <p className="text-slate-500 font-bold animate-pulse">Calculating estimate...</p>
                   <button 
@@ -2426,7 +2426,7 @@ export default function PostJobWizard() {
                     </div>
                   )}
 
-                  <div className="space-y-3 pt-6 border-t border-slate-100">
+                  <div className="space-y-3 pt-6 border-t border-black">
                     <h3 className="font-extrabold text-black flex items-center justify-center -mt-2 bg-white px-4 mx-auto w-max text-sm relative -top-6">Custom budget</h3>
                     <div className="relative">
                       <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 text-xl font-bold">£</span>
@@ -2454,7 +2454,7 @@ export default function PostJobWizard() {
                   </div>
 
                   {estimate.isAvailable !== false && (
-                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
                       <button 
                         onClick={() => setShowEstimateDetails(!showEstimateDetails)}
                         className="w-full p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
@@ -2479,14 +2479,14 @@ export default function PostJobWizard() {
                             exit={{ height: 0, opacity: 0 }}
                             className="px-6 pb-6 space-y-4 overflow-hidden"
                           >
-                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-black">
                               <p className="text-sm text-slate-600 leading-relaxed italic">
                                 "{estimate.reasoning}"
                               </p>
                             </div>
 
                             <div className="grid grid-cols-1 gap-3">
-                              <div className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-white">
+                              <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
                                 <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
                                   <Box className="w-4 h-4 text-orange-600" />
                                 </div>
@@ -2495,7 +2495,7 @@ export default function PostJobWizard() {
                                   <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.materials}</p>
                                 </div>
                               </div>
-                              <div className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-white">
+                              <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
                                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                                   <Wrench className="w-4 h-4 text-blue-600" />
                                 </div>
@@ -2504,7 +2504,7 @@ export default function PostJobWizard() {
                                   <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.labour}</p>
                                 </div>
                               </div>
-                              <div className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-white">
+                              <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
                                 <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
                                   <Clock className="w-4 h-4 text-green-600" />
                                 </div>
@@ -2522,7 +2522,7 @@ export default function PostJobWizard() {
 
                   {estimate?.pricingInsights && (
                     <div className="rounded-2xl border border-black bg-white overflow-hidden shadow-sm">
-                      <div className="p-4 bg-slate-50/50 border-b border-slate-100">
+                      <div className="p-4 bg-slate-50/50 border-b border-black">
                         <h3 className="font-extrabold text-slate-900">Dynamic Pricing Insights</h3>
                       </div>
                       <div className="divide-y divide-slate-100">
@@ -2570,7 +2570,7 @@ export default function PostJobWizard() {
                   )}
                 </div>
               ) : (
-                <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-6">
+                <div className="bg-white rounded-3xl p-8 border border-black shadow-sm space-y-6">
                   <div className="flex flex-col items-center text-center space-y-2">
                     <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-2">
                       <AlertTriangle className="w-8 h-8 text-slate-400" />
@@ -2579,7 +2579,7 @@ export default function PostJobWizard() {
                     <p className="text-slate-500 text-sm">We couldn't generate an AI estimate right now. You can still set your budget manually.</p>
                   </div>
                   
-                  <div className="space-y-4 bg-slate-100/50 p-6 rounded-3xl border border-slate-100">
+                  <div className="space-y-4 bg-slate-100/50 p-6 rounded-3xl border border-black">
                     <h3 className="text-xl font-black text-slate-900">Enter custom amount</h3>
                     <div className="relative">
                       <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-900 font-black text-xl">£</span>
@@ -2675,14 +2675,14 @@ export default function PostJobWizard() {
             {step > 0 && (
               <button 
                 onClick={prevStep} 
-                className="flex-[1] p-4 rounded-2xl border-2 border-slate-100 font-black text-slate-600 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center"
+                className="flex-[1] p-4 rounded-2xl border-2 border-black font-black text-slate-600 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center"
               >
                 Back
               </button>
             )}
             
             {step === 1 ? (
-              <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
+              <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-black flex items-center justify-center">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Category Selection</p>
               </div>
             ) : step === 2 ? (
@@ -2703,7 +2703,7 @@ export default function PostJobWizard() {
                   Continue <ChevronRight className="w-5 h-5" />
                 </button>
               ) : (
-                <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
+                <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-black flex items-center justify-center">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Subcategory Selection</p>
                 </div>
               )
@@ -2729,7 +2729,7 @@ export default function PostJobWizard() {
                   setClarifyingAnswers({});
                   setStep(4);
                 }}
-                className="flex-1 p-4 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 p-4 rounded-2xl border-2 border-black font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 Skip 
               </button>
@@ -2977,7 +2977,7 @@ export default function PostJobWizard() {
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#0084a5] via-orange-500 to-[#0084a5]" />
               
               <div className="relative">
-                <div className="w-20 h-20 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-inner">
+                <div className="w-20 h-20 rounded-2xl bg-slate-50 flex items-center justify-center border border-black shadow-inner">
                   <div className="absolute inset-0 border-4 border-[#0084a5]/20 rounded-2xl animate-[spin_3s_linear_infinite]" />
                   <Loader2 className="w-10 h-10 text-[#0084a5] animate-spin" />
                 </div>
@@ -3022,7 +3022,7 @@ export default function PostJobWizard() {
               <div className="flex justify-between items-start mb-6">
                  <div className={cn(
                    "w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner",
-                   showBoostInfo === 'emergency' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                   showBoostInfo === "emergency" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
                  )}>
                    {showBoostInfo === 'emergency' ? <Zap className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
                  </div>
@@ -3042,7 +3042,7 @@ export default function PostJobWizard() {
                   }
                 </p>
                 
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-6 space-y-2">
+                <div className="bg-slate-50 p-4 rounded-xl border border-black mt-6 space-y-2">
                    <h4 className="font-bold text-xs uppercase tracking-widest text-slate-400">Why choose this?</h4>
                    <ul className="space-y-2">
                      {showBoostInfo === 'emergency' ? (
@@ -3068,7 +3068,7 @@ export default function PostJobWizard() {
                 onClick={() => setShowBoostInfo(null)}
                 className={cn(
                   "mt-6 w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 text-white shadow-lg",
-                  showBoostInfo === 'emergency' ? "bg-red-600 shadow-red-600/20 hover:bg-red-700" : "bg-amber-500 shadow-amber-500/20 hover:bg-amber-600"
+                  showBoostInfo === "emergency" ? "bg-red-600 shadow-red-600/20 hover:bg-red-700" : "bg-amber-500 shadow-amber-500/20 hover:bg-amber-600"
                 )}
               >
                 Got it

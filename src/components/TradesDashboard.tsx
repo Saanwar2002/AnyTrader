@@ -752,7 +752,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                   to={`/job/${job.id}`}
                   className={cn(
                     "bg-white p-4 rounded-3xl border shadow-sm transition-all group relative overflow-hidden",
-                    isCurrentlyBoosted ? "border-red-500 hover:shadow-red-500/20" : "border-slate-100 hover:border-orange-200"
+                    isCurrentlyBoosted ? "border-red-500 hover:shadow-red-500/20" : "border-black hover:border-orange-200"
                   )}
                 >
                   {isCurrentlyBoosted && (
@@ -779,7 +779,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                           Premium
                         </span>
                       )}
-                      <div className="px-2 py-0.5 rounded-full bg-slate-50 text-[10px] font-bold text-slate-500 uppercase border border-slate-100">
+                      <div className="px-2 py-0.5 rounded-full bg-slate-50 text-[10px] font-bold text-slate-500 uppercase border border-black">
                         {job.category}
                       </div>
                     </div>
@@ -913,7 +913,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                 <Link
                   key={job.id}
                   to={`/job/${job.id}`}
-                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition-all flex items-center gap-4 group"
+                  className="bg-white p-4 rounded-2xl border border-black shadow-sm hover:border-blue-200 transition-all flex items-center gap-4 group"
                 >
                   <div className={cn(
                     "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
@@ -988,7 +988,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                 <Link
                   key={quote.id}
                   to="/my-quotes"
-                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 hover:border-blue-200 hover:shadow-md transition-all group"
+                  className="bg-white p-4 rounded-2xl border border-black shadow-sm flex items-center gap-4 hover:border-blue-200 hover:shadow-md transition-all group"
                 >
                   <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0 group-hover:bg-blue-100 transition-colors">
                     <Clock className="w-6 h-6" />
@@ -1040,7 +1040,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
               <Link
                 key={job.id}
                 to={`/job/${job.id}`}
-                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 transition-all flex items-center gap-4 group"
+                className="bg-white p-4 rounded-2xl border border-black shadow-sm hover:border-blue-200 transition-all flex items-center gap-4 group"
               >
                 <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
                   <Briefcase className="w-6 h-6" />
@@ -1228,7 +1228,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="p-6 border-b border-black flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-500" />
@@ -1295,7 +1295,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                 </div>
               </div>
 
-              <div className="p-6 border-t border-slate-100">
+              <div className="p-6 border-t border-black">
                 <button
                   disabled={isSavingIM || !imSetupData.callOutFee || !imSetupData.hourlyRate}
                   onClick={async () => {

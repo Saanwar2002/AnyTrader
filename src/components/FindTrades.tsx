@@ -903,7 +903,7 @@ export default function FindTrades() {
 
               <div className="flex-1 overflow-y-auto px-6 pb-24 no-scrollbar">
                 <div className="flex gap-4 mb-6 pt-2">
-                  <div className="w-24 h-24 bg-slate-800 rounded-2xl shrink-0 overflow-hidden shadow-sm border-2 border-black">
+                  <div className="w-24 h-24 bg-slate-800 rounded-2xl shrink-0 overflow-hidden shadow-sm border-2 border-white/20">
                     {selectedTraderPreview.avatarUrl ? (
                       <img src={selectedTraderPreview.avatarUrl} alt={selectedTraderPreview.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (

@@ -555,7 +555,7 @@ export default function JobFeed() {
           animate={{ opacity: 1, y: 0 }}
           className="grid grid-cols-1 md:grid-cols-2 gap-6"
         >
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4">
             <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
               <Search className="w-6 h-6" />
             </div>
@@ -565,7 +565,7 @@ export default function JobFeed() {
             </p>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4">
             <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600">
               <Zap className="w-6 h-6" />
             </div>
@@ -575,7 +575,7 @@ export default function JobFeed() {
             </p>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4">
             <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-600">
               <Save className="w-6 h-6" />
             </div>
@@ -585,7 +585,7 @@ export default function JobFeed() {
             </p>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4">
             <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
               <Filter className="w-6 h-6" />
             </div>
@@ -807,7 +807,7 @@ export default function JobFeed() {
           </div>
 
           {/* Save Current Filter Section */}
-          <div id="save-feed-section" className="pt-6 border-t border-slate-100 space-y-4">
+          <div id="save-feed-section" className="pt-6 border-t border-black space-y-4">
             <h3 className="font-bold text-slate-900 text-sm">Save current search & filters</h3>
             <div className="flex gap-2">
               <input 
@@ -838,7 +838,7 @@ export default function JobFeed() {
       )}
 
       {filteredJobs.length === 0 ? (
-        <div className="bg-white p-12 rounded-3xl border border-slate-100 text-center space-y-6 shadow-sm">
+        <div className="bg-white p-12 rounded-3xl border border-black text-center space-y-6 shadow-sm">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
             <Wrench className="w-10 h-10" />
           </div>
@@ -1034,7 +1034,7 @@ export default function JobFeed() {
                   </div>
 
                   {(job.paymentPreference || job.quoteScope || job.estimatedCompletionTime || job.photos?.length > 0 || job.videos?.length > 0) && (
-                    <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+                    <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-black">
                       {job.paymentPreference && (
                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-200 uppercase tracking-wider">
                           {job.paymentPreference.replace('_', ' ')}
@@ -1094,7 +1094,7 @@ export default function JobFeed() {
                   <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600 transition-colors" />
                 </div>
               </div>
-              <div className="sm:hidden bg-slate-50 p-3 text-center text-xs font-bold text-blue-600 border-t border-slate-100">
+              <div className="sm:hidden bg-slate-50 p-3 text-center text-xs font-bold text-blue-600 border-t border-black">
                 View Details
               </div>
             </Link>

@@ -23,7 +23,7 @@
 
 ## Project Conventions
 - **Styling**: Tailwind CSS with a "Modern Professional" aesthetic.
-- **Card & Box Styling**: Whenever creating placeholders, boxes, or cards (small or big), MUST strictly use a compact square with rounded edges and a thin jet black border (e.g., `rounded-xl border border-black shadow-sm bg-white`). Do not use other border colors or styles unless explicitly requested.
+- **Card & Box Styling**: Whenever creating placeholders, boxes, or cards (small or big), MUST strictly use a compact square with rounded edges. For light backgrounds (e.g. `bg-white`, `bg-slate-50`), use a thin jet black border (`border border-black`). For dark backgrounds (e.g. `bg-slate-900`, `bg-black`), use a thin white border (`border border-white/20` or `border border-white`). Do not use other border colors or styles unless explicitly requested.
 - **Typography**: Always use jet black (`text-black`) for any text which is meant to be readable.
 - **Icons**: Lucide React.
 - **Animations**: Motion (framer-motion).

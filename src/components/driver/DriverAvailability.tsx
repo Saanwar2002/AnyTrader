@@ -114,26 +114,26 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
               <div className="space-y-3">
                  <button 
                     onClick={() => handleSaveSchedule(editingDay, { status: 'anytime' })}
-                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === 'anytime' ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}
+                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === "anytime" ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}
                  >
-                    <span className={cn("font-medium", dayData.status === 'anytime' ? "text-[#007AFF]" : "text-white")}>Anytime</span>
+                    <span className={cn("font-medium", dayData.status === "anytime" ? "text-[#007AFF]" : "text-white")}>Anytime</span>
                     {dayData.status === 'anytime' && <Check className="w-5 h-5 text-[#007AFF]" />}
                  </button>
                  
                  <button 
                     onClick={() => handleSaveSchedule(editingDay, { status: 'unavailable' })}
-                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === 'unavailable' ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}
+                    className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left", dayData.status === "unavailable" ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}
                  >
-                    <span className={cn("font-medium", dayData.status === 'unavailable' ? "text-[#007AFF]" : "text-white")}>Unavailable</span>
+                    <span className={cn("font-medium", dayData.status === "unavailable" ? "text-[#007AFF]" : "text-white")}>Unavailable</span>
                     {dayData.status === 'unavailable' && <Check className="w-5 h-5 text-[#007AFF]" />}
                  </button>
 
-                 <div className={cn("p-4 rounded-xl border transition-all", dayData.status === 'specific' ? "bg-[#007AFF]/5 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}>
+                 <div className={cn("p-4 rounded-xl border transition-all", dayData.status === "specific" ? "bg-[#007AFF]/5 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20")}>
                     <div 
                        className="flex items-center justify-between mb-4 cursor-pointer"
                        onClick={() => handleSaveSchedule(editingDay, { status: 'specific', startTime: dayData.startTime || '09:00', endTime: dayData.endTime || '17:00' })}
                     >
-                       <span className={cn("font-medium", dayData.status === 'specific' ? "text-[#007AFF]" : "text-white")}>Specific Hours</span>
+                       <span className={cn("font-medium", dayData.status === "specific" ? "text-[#007AFF]" : "text-white")}>Specific Hours</span>
                        {dayData.status === 'specific' && <Check className="w-5 h-5 text-[#007AFF]" />}
                     </div>
 
@@ -249,7 +249,7 @@ export default function DriverAvailability({ onClose }: { onClose: () => void })
                    >
                       <span className="text-white font-medium">{day}</span>
                       <div className="flex items-center gap-2">
-                         <span className={cn("text-sm", schedule[day]?.status === 'unavailable' ? "text-slate-500" : "text-[#007AFF]")}>
+                         <span className={cn("text-sm", schedule[day]?.status === "unavailable" ? "text-slate-500" : "text-[#007AFF]")}>
                             {formatScheduleText(schedule[day] || {status: 'anytime'})}
                          </span>
                          <ChevronRight className="w-4 h-4 text-slate-500" />

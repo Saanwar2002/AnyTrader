@@ -264,7 +264,7 @@ export default function Login() {
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-slate-100"></span>
+              <span className="w-full border-t border-black"></span>
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-white px-2 text-slate-400">Or</span>
@@ -342,7 +342,7 @@ export default function Login() {
             )}
           </button>
 
-          <div className="pt-4 border-t border-slate-100">
+          <div className="pt-4 border-t border-black">
             <button
               onClick={handleAdminGuestLogin}
               disabled={loading || guestLoading || adminGuestLoading}

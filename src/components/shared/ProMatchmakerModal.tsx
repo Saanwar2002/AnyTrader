@@ -243,7 +243,7 @@ export function ProMatchmakerModal({ role, projectId, onClose }: { role: any, pr
                   <div className="mt-4 flex gap-2">
                     <button 
                       onClick={() => handleShortlist(m.id)}
-                      className="flex-1 py-2 bg-white text-black font-bold text-sm rounded-xl border border-black hover:bg-black/5 transition"
+                      className="flex-1 py-2 bg-white text-black font-bold text-sm rounded-xl border border-white/20 hover:bg-black/5 transition"
                     >
                       Shortlist
                     </button>

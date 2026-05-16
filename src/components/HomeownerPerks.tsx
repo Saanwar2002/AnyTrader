@@ -135,7 +135,7 @@ export default function HomeownerPerks({ limit }: { limit?: number }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            className="group relative bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all flex flex-col justify-between"
+            className="group relative bg-white p-5 rounded-[2rem] border border-black shadow-sm hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all flex flex-col justify-between"
           >
             {perk.badge && (
               <div className="absolute top-4 right-4 px-2 py-1 rounded-full bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest">

@@ -70,7 +70,7 @@ export function SwipeButton({ onComplete, text, bgClass, sliderClass, icon, disa
         dragMomentum={false}
         animate={dragControls}
         onDragEnd={handleDragEnd}
-        className={`absolute left-0.5 top-0.5 bottom-0.5 w-[60px] rounded-lg flex items-center justify-center cursor-grab active:cursor-grabbing z-10 ${sliderClass || 'bg-black/20 border border-black/20 shadow-sm'}`}
+        className={`absolute left-0.5 top-0.5 bottom-0.5 w-[60px] rounded-lg flex items-center justify-center cursor-grab active:cursor-grabbing z-10 ${sliderClass || 'bg-black/20 border border-white/20/20 shadow-sm'}`}
       >
         <span className="flex text-white font-black text-[12px] tracking-tighter drop-shadow-sm uppercase selection:bg-transparent">
           SLIDE

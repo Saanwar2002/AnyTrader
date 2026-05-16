@@ -120,7 +120,7 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
           </div>
 
           {/* Input */}
-          <div className="p-4 bg-white border-t border-slate-100">
+          <div className="p-4 bg-white border-t border-black">
             <div className="relative">
               <input 
                 type="text"

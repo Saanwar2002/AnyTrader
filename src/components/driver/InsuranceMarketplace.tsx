@@ -166,7 +166,7 @@ export default function InsuranceMarketplace({
                {partners.map(partner => (
                  <div key={partner.id} className={cn(
                     "bg-[#1A1A1E] border rounded-2xl transition-all relative overflow-hidden",
-                    partner.tier === 'featured' ? "border-[#00D26A]/50 shadow-[0_0_20px_rgba(0,210,106,0.05)]" : "border-[#2C2C30]"
+                    partner.tier === "featured" ? "border-[#00D26A]/50 shadow-[0_0_20px_rgba(0,210,106,0.05)]" : "border-[#2C2C30]"
                  )}>
                     {partner.tier === 'featured' && (
                        <div className="absolute top-0 right-0 bg-[#00D26A] text-[#0D0D0F] text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-bl-lg z-10">

@@ -132,7 +132,7 @@ export default function App() {
   if (isMaintenanceMode && !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-md w-full bg-white p-8 rounded-[32px] border border-slate-200 shadow-xl text-center space-y-6">
+        <div className="max-w-md w-full bg-white p-8 rounded-[32px] border border-black shadow-xl text-center space-y-6">
           <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto">
             <Lock className="w-10 h-10 text-red-600" />
           </div>
@@ -143,7 +143,7 @@ export default function App() {
               We'll be back online shortly.
             </p>
           </div>
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="p-4 bg-slate-50 rounded-2xl border border-black">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Status</p>
             <p className="text-sm font-bold text-slate-700">Offline for Improvements</p>
           </div>

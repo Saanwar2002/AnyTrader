@@ -77,7 +77,7 @@ export default function AdReport() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-black flex items-center gap-4">
               <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
                 <MousePointerClick className="w-6 h-6" />
               </div>
@@ -87,7 +87,7 @@ export default function AdReport() {
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-black flex items-center gap-4">
               <div className="w-12 h-12 bg-slate-200 text-slate-600 rounded-xl flex items-center justify-center shrink-0">
                 <Calendar className="w-6 h-6" />
               </div>
@@ -97,7 +97,7 @@ export default function AdReport() {
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-black flex items-center gap-4">
               <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
                 <Zap className="w-6 h-6" />
               </div>

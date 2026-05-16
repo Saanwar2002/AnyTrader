@@ -117,7 +117,7 @@ export default function JobTimeline() {
 
       <div className="p-4 space-y-6">
         {/* Summary Card */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6">
+        <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-6">
           <div className="flex justify-between items-start">
             <div className="space-y-1">
               <h2 className="text-2xl font-bold text-slate-900 capitalize">
@@ -202,17 +202,17 @@ export default function JobTimeline() {
             <div key={step.id} className="flex gap-4 relative">
               <div className={cn(
                 "w-12 h-12 rounded-full flex items-center justify-center z-10 shrink-0 shadow-sm transition-colors duration-500",
-                step.status === 'completed' ? "bg-green-500 text-white" :
-                step.status === 'active' ? "bg-[#1e3a5f] text-white" :
-                "bg-white text-slate-300 border border-slate-100"
+                step.status === "completed" ? "bg-green-500 text-white" :
+                step.status === "active" ? "bg-[#1e3a5f] text-white" :
+                "bg-white text-slate-300 border border-black"
               )}>
                 <step.icon className="w-6 h-6" />
               </div>
               
               <div className={cn(
                 "flex-1 bg-white p-5 rounded-2xl border transition-all duration-500",
-                step.status === 'active' ? "border-[#1e3a5f] shadow-md" : "border-slate-100 shadow-sm",
-                step.status === 'pending' && "opacity-50"
+                step.status === "active" ? "border-[#1e3a5f] shadow-md" : "border-black shadow-sm",
+                step.status === "pending" && "opacity-50"
               )}>
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="font-bold text-slate-900">{step.title}</h3>
@@ -227,7 +227,7 @@ export default function JobTimeline() {
                 </div>
                 <p className={cn(
                   "text-sm leading-relaxed",
-                  step.status === 'pending' ? "text-slate-400" : "text-slate-500"
+                  step.status === "pending" ? "text-slate-400" : "text-slate-500"
                 )}>
                   {step.description}
                 </p>
@@ -239,7 +239,7 @@ export default function JobTimeline() {
         {/* Footer Action */}
         <button 
           onClick={() => navigate(`/job/${id}`)}
-          className="w-full bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all"
+          className="w-full bg-white p-5 rounded-2xl border border-black shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-[#1e3a5f] transition-colors">

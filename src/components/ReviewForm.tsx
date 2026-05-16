@@ -59,7 +59,7 @@ export function ReviewForm({ jobId, reviewerId, revieweeId, type = "tradesperson
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="flex flex-col items-center justify-center space-y-2 pt-4 pb-2 border-b border-slate-100">
+        <div className="flex flex-col items-center justify-center space-y-2 pt-4 pb-2 border-b border-black">
           <div className="flex items-center gap-2">
             {[1, 2, 3, 4, 5].map((star) => (
               <button

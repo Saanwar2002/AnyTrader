@@ -160,7 +160,7 @@ export default function PassengerRideHistory() {
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 pb-24" onScroll={handleScroll}>
       {/* Header */}
-      <div className="bg-white px-4 py-6 border-b border-slate-100 sticky top-0 z-10">
+      <div className="bg-white px-4 py-6 border-b border-black sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -218,7 +218,7 @@ export default function PassengerRideHistory() {
       {/* Content */}
       <div className="max-w-2xl mx-auto p-4 space-y-4">
         {filteredRides.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
+          <div className="text-center py-12 bg-white rounded-3xl border border-black shadow-sm">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <Car className="w-8 h-8 text-slate-300" />
             </div>
@@ -247,7 +247,7 @@ export default function PassengerRideHistory() {
                 transition={{ delay: idx * 0.05 }}
                 key={ride.id}
                 onClick={isCompleted ? toggleExpanded : undefined}
-                className={cn("bg-white rounded-3xl border shadow-sm p-4 transition-colors", isCompleted ? "border-black cursor-pointer hover:bg-slate-50" : "border-slate-100")}
+                className={cn("bg-white rounded-3xl border shadow-sm p-4 transition-colors", isCompleted ? "border-black cursor-pointer hover:bg-slate-50" : "border-black")}
               >
                 {/* Header (Always Visible or Compact Mode for Completed) */}
                 {isCompleted && !isExpanded ? (
@@ -273,7 +273,7 @@ export default function PassengerRideHistory() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-black">
                     <div className="flex items-center gap-2">
                       <span className={cn(
                         "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
@@ -339,7 +339,7 @@ export default function PassengerRideHistory() {
                   >
                   <div className="space-y-4 mb-4 mt-2">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-8 h-8 rounded-full bg-slate-50 border border-black flex items-center justify-center shrink-0 mt-0.5">
                         <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                       </div>
                       <div>
@@ -351,7 +351,7 @@ export default function PassengerRideHistory() {
                     <div className="w-0.5 h-4 bg-slate-200 ml-[15px] -my-2" />
 
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-8 h-8 rounded-full bg-slate-50 border border-black flex items-center justify-center shrink-0 mt-0.5">
                         <MapPin className="w-4 h-4 text-emerald-500" />
                       </div>
                       <div>
@@ -373,7 +373,7 @@ export default function PassengerRideHistory() {
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleSaveJourney(ride); }}
                       disabled={isSaved}
@@ -500,7 +500,7 @@ export default function PassengerRideHistory() {
              <div className="w-full flex justify-center pt-3 pb-1 absolute top-0 left-0 right-0 z-10 bg-slate-50/80 backdrop-blur-sm pointer-events-none">
                <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
              </div>
-             <div className="flex items-center justify-between p-5 pt-8 border-b border-slate-100 bg-slate-50 shrink-0">
+             <div className="flex items-center justify-between p-5 pt-8 border-b border-black bg-slate-50 shrink-0">
                 <div>
                    <h2 className="text-xl font-black text-slate-900">Job Details</h2>
                    <p className="text-xs font-bold text-slate-500 mt-1">{selectedRideDetails.createdAt?.toDate ? new Date(selectedRideDetails.createdAt.toDate()).toLocaleString() : 'N/A'}</p>
@@ -512,7 +512,7 @@ export default function PassengerRideHistory() {
              
              <div className="p-5 overflow-y-auto w-full max-h-[70vh]">
                 {/* Route */}
-                <div className="space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-black">
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-full bg-slate-100 border border-black flex items-center justify-center shrink-0 mt-0.5">
                       <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
@@ -555,7 +555,7 @@ export default function PassengerRideHistory() {
                 {/* Driver & Vehicle */}
                 <div className="mb-6 grid gap-3">
                   <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Driver & Vehicle</h3>
-                  <div className="bg-slate-50 rounded-2xl p-4 flex items-center justify-between border border-slate-100">
+                  <div className="bg-slate-50 rounded-2xl p-4 flex items-center justify-between border border-black">
                      <div className="flex items-center gap-3">
                        <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRideDetails.driverName || 'Driver')}`} alt={selectedRideDetails.driverName} className="w-10 h-10 rounded-full border-2 border-black shadow-sm" />
                        <div>
@@ -572,7 +572,7 @@ export default function PassengerRideHistory() {
                 </div>
                 
                 {/* Trip Stats & Receipt */}
-                <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 flex flex-col items-center mb-6">
+                <div className="bg-slate-50 p-5 rounded-3xl border border-black flex flex-col items-center mb-6">
                   <p className="text-[10px] font-black tracking-widest uppercase text-slate-400 mb-2">Total Paid</p>
                   <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
                     £{(selectedRideDetails.finalFare ? parseFloat(selectedRideDetails.finalFare) : (parseFloat(selectedRideDetails.fareEstimate || selectedRideDetails.price || 0) + (selectedRideDetails.tipAmount || 0) + (selectedRideDetails.cancellationFee || 0))).toFixed(2)}
@@ -602,7 +602,7 @@ export default function PassengerRideHistory() {
                   </div>
                 </div>
 
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 border-b border-slate-100 pb-2">Receipt Breakdown</p>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 border-b border-black pb-2">Receipt Breakdown</p>
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm font-bold text-slate-500">
                     <span>Base Fare & Distance</span>
@@ -642,18 +642,18 @@ export default function PassengerRideHistory() {
 
                 {/* Support Actions */}
                 <div className="grid grid-cols-2 gap-3 mb-2">
-                  <button onClick={() => toast.success("Receipt sent to your email!")} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-50 border border-slate-100 text-slate-600 hover:bg-slate-100 transition-colors">
+                  <button onClick={() => toast.success("Receipt sent to your email!")} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-50 border border-black text-slate-600 hover:bg-slate-100 transition-colors">
                     <ArrowDownToLine className="w-5 h-5 mb-1.5 text-slate-400" />
                     <span className="text-xs font-bold">Get Receipt</span>
                   </button>
-                  <button onClick={() => toast.info("Opening support chat...")} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-50 border border-slate-100 text-slate-600 hover:bg-slate-100 transition-colors">
+                  <button onClick={() => toast.info("Opening support chat...")} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-50 border border-black text-slate-600 hover:bg-slate-100 transition-colors">
                     <HelpCircle className="w-5 h-5 mb-1.5 text-blue-400" />
                     <span className="text-xs font-bold">Report Issue</span>
                   </button>
                 </div>
              </div>
              
-             <div className="p-4 border-t border-slate-100 bg-white shrink-0">
+             <div className="p-4 border-t border-black bg-white shrink-0">
                 <button onClick={() => setSelectedRideDetails(null)} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-transform">Close</button>
              </div>
           </motion.div>

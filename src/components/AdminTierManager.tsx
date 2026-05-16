@@ -290,23 +290,23 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                   </div>
 
                   <div className="space-y-1 mb-6 flex-1">
-                    <div className="flex justify-between items-center py-2.5 border-b border-slate-100/50">
+                    <div className="flex justify-between items-center py-2.5 border-b border-black/50">
                       <span className="text-sm font-medium text-slate-500">Commission</span>
                       <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.commission * 100}%</span>
                     </div>
-                    <div className="flex justify-between items-center py-2.5 border-b border-slate-100/50">
+                    <div className="flex justify-between items-center py-2.5 border-b border-black/50">
                       <span className="text-sm font-medium text-slate-500">Job Quotes</span>
                       <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.maxQuotes >= 9999 ? 'Unlimited' : tier.maxQuotes}</span>
                     </div>
                     {tier.leadFee !== undefined && tier.leadFee > 0 && (
-                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100/50">
+                      <div className="flex justify-between items-center py-2.5 border-b border-black/50">
                         <span className="text-sm font-medium text-slate-500">Lead Fee</span>
                         <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">£{tier.leadFee}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="mt-auto bg-slate-50/80 p-4 rounded-xl border border-slate-100/50">
+                  <div className="mt-auto bg-slate-50/80 p-4 rounded-xl border border-black/50">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Included Features</p>
                     <ul className="space-y-2.5">
                       {tier.features?.map((f: string) => (
@@ -326,7 +326,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
               onClick={() => handleAddTier(model)}
               className="flex flex-col items-center justify-center border-2 border-dashed border-black bg-slate-50/50 rounded-[24px] hover:bg-slate-50 hover:border-black hover:shadow-inner text-slate-400 hover:text-slate-600 p-6 min-h-[420px] transition-all group"
             >
-              <div className="w-12 h-12 bg-white rounded-full shadow-sm border border-slate-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 bg-white rounded-full shadow-sm border border-black flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Plus className="w-5 h-5" />
               </div>
               <span className="font-bold uppercase tracking-widest text-xs">Add Tier</span>

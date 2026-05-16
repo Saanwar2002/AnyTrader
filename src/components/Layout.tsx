@@ -403,7 +403,7 @@ export default function Layout() {
   const isFullScreenPage = location.pathname.includes('/post-job') || location.pathname.includes('/post-emergency-job');
 
   return (
-    <div className={cn("min-h-screen flex flex-col", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
+    <div className={cn("min-h-screen flex flex-col w-full overflow-x-hidden relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
       {/* Scheduled Maintenance Banner */}
       {showMaintenanceBanner && platformConfig?.scheduledMaintenance && (
         <div className="bg-primary text-white px-4 py-3 flex items-center justify-between gap-4 shadow-lg z-[60]">
@@ -577,9 +577,9 @@ export default function Layout() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: "-100%" }}
                         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                        className="fixed top-0 left-0 right-0 max-h-[75vh] bg-white z-[70] shadow-2xl rounded-b-[32px] flex flex-col overflow-hidden sm:max-w-2xl sm:mx-auto sm:top-2 sm:rounded-[32px] border border-slate-100"
+                        className="fixed top-0 left-0 right-0 max-h-[75vh] bg-white z-[70] shadow-2xl rounded-b-[32px] flex flex-col overflow-hidden sm:max-w-2xl sm:mx-auto sm:top-2 sm:rounded-[32px] border border-black"
                       >
-                        <div className="p-4 sm:p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between sticky top-0 z-10 shrink-0">
+                        <div className="p-4 sm:p-6 bg-slate-50 border-b border-black flex items-center justify-between sticky top-0 z-10 shrink-0">
                           <div>
                             <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-3">
                               <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
@@ -612,7 +612,7 @@ export default function Layout() {
                                       setShowShopPopover(false);
                                       enterShop(rec.name);
                                     }}
-                                    className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl hover:bg-blue-50 transition-colors group cursor-pointer w-full text-left border border-slate-100 shadow-sm"
+                                    className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl hover:bg-blue-50 transition-colors group cursor-pointer w-full text-left border border-black shadow-sm"
                                   >
                                     <div className="w-12 h-12 rounded-xl bg-white border border-black shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform group-hover:border-blue-300 group-hover:shadow-blue-200">
                                       <RecommendationIcon className="w-6 h-6 text-slate-600 group-hover:text-blue-600" />
@@ -628,8 +628,8 @@ export default function Layout() {
                           )}
                         </div>
 
-                        <div className="p-4 bg-white border-t border-slate-100 shrink-0 relative">
-                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors z-20"
+                        <div className="p-4 bg-white border-t border-black shrink-0 relative">
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-black cursor-pointer hover:bg-slate-50 transition-colors z-20"
                                onClick={(e) => {
                                  const scroller = e.currentTarget.parentElement?.previousElementSibling;
                                  if (scroller) {
@@ -792,7 +792,7 @@ export default function Layout() {
       {/* Main Content */}
       <main className={cn(
         "flex-1 w-full relative min-h-0",
-        isDriverTerminal || activePortal === 'anyroller' 
+        isDriverTerminal || activePortal === "anyroller" 
           ? "p-0 flex flex-col overflow-hidden" 
           : (isFullScreenPage ? "p-0 flex flex-col" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
       )}>
@@ -874,7 +874,7 @@ export default function Layout() {
                             <button 
                               key={`fav-${idx}`}
                               onClick={() => { navigate(`/book-ride?pickup=${encodeURIComponent(fav.address)}`); setIsMenuOpen(false); }}
-                              className="w-full p-2.5 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3 hover:bg-slate-100 transition-all group"
+                              className="w-full p-2.5 bg-slate-50 border border-black rounded-2xl flex items-center gap-3 hover:bg-slate-100 transition-all group"
                             >
                               <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
                                 <MapPin className="w-4 h-4 text-indigo-500" />
@@ -934,7 +934,7 @@ export default function Layout() {
                                 <button 
                                   key={`driver-${idx}`}
                                   onClick={() => navigate(`/profile/${driver.uid}`)}
-                                  className="shrink-0 flex flex-col items-center gap-1.5 p-2 bg-slate-50 border border-slate-100 rounded-2xl min-w-[70px] hover:bg-slate-100 transition-colors"
+                                  className="shrink-0 flex flex-col items-center gap-1.5 p-2 bg-slate-50 border border-black rounded-2xl min-w-[70px] hover:bg-slate-100 transition-colors"
                                 >
                                   <img src={driver.avatarUrl || `https://ui-avatars.com/api/?name=${driver.name}`} className="w-10 h-10 rounded-full border-2 border-black shadow-sm" alt={driver.name} referrerPolicy="no-referrer" />
                                   <span className="text-[10px] font-bold text-slate-700 truncate w-full text-center">{driver.name.split(' ')[0]}</span>
@@ -970,7 +970,7 @@ export default function Layout() {
                            className="overflow-hidden space-y-2 px-1"
                         >
                        {recentRides.map((ride, idx) => (
-                         <div key={`ride-${idx}`} className="p-3 bg-white border border-slate-100 rounded-2xl space-y-2 group relative">
+                         <div key={`ride-${idx}`} className="p-3 bg-white border border-black rounded-2xl space-y-2 group relative">
                             <div className="flex items-center justify-between">
                                <span className={cn(
                                  "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
@@ -1076,7 +1076,7 @@ export default function Layout() {
                     ) : (
                       <div className="space-y-2">
                         {emergencyContacts.map((contact, i) => (
-                           <div key={`contact-${i}`} className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                           <div key={`contact-${i}`} className="p-3 bg-slate-50 border border-black rounded-2xl flex items-center justify-between">
                               <p className="font-bold text-slate-900 text-xs">{contact.name}</p>
                               <a href={`tel:${contact.phone}`} className="p-2 bg-white rounded-xl shadow-sm text-blue-600">
                                  <Phone className="w-3 h-3" />
@@ -1090,7 +1090,7 @@ export default function Layout() {
                     </AnimatePresence>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100">
+                  <div className="pt-2 border-t border-black">
                      <button 
                        onClick={() => toast.info("Lost & Found report service coming soon. Please contact live support for immediate assistance.")}
                        className="w-full p-3 flex items-center gap-3 text-slate-500 hover:text-slate-900 transition-colors"
@@ -1101,7 +1101,7 @@ export default function Layout() {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-slate-100">
+                <div className="pt-6 border-t border-black">
                   <button
                     onClick={() => {
                       setIsMenuOpen(false);
@@ -1172,10 +1172,10 @@ export default function Layout() {
                      className={cn("absolute inset-0 rounded-[16px] -z-10 shadow-sm", 
                         isDriverTerminal ? "bg-white/10" : 
                         activePortal === "anyroller" ? "bg-[#0055DD]" :
-                        activeRole === 'business' ? (
-                          activeTab === 'properties' ? "bg-black" :
-                          activeTab === 'field_services' ? "bg-[#0055DD]" :
-                          activeTab === 'consultancy' ? "bg-purple-700" :
+                        activeRole === "business" ? (
+                          activeTab === "properties" ? "bg-black" :
+                          activeTab === "field_services" ? "bg-[#0055DD]" :
+                          activeTab === "consultancy" ? "bg-purple-700" :
                           "bg-[#0055DD]"
                         ) : "bg-[#0055DD]"
                      )}

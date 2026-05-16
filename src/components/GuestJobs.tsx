@@ -33,7 +33,7 @@ export default function GuestJobs({ jobs, users, showToast }: { jobs: any[], use
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="p-4 md:p-6 bg-white border-b border-slate-100 sticky top-0 z-10">
+      <div className="p-4 md:p-6 bg-white border-b border-black sticky top-0 z-10">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">GUEST POSTS</h2>

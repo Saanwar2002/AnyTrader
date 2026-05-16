@@ -421,7 +421,7 @@ export default function PublicProfile() {
               console.error('Error sharing:', err);
             }
           }}
-          className="px-4 py-2 bg-white rounded-xl shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-2 text-slate-600 border border-slate-100"
+          className="px-4 py-2 bg-white rounded-xl shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-2 text-slate-600 border border-black"
         >
           <Share2 className="w-4 h-4 text-blue-600" />
           <span className="text-sm font-bold">Share Profile</span>
@@ -442,7 +442,7 @@ export default function PublicProfile() {
       {/* Profile Card */}
       <div className="bg-white rounded-3xl border border-black shadow-sm p-8 mb-8 relative">
         <div className="flex flex-col items-center">
-          <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-4xl font-bold overflow-hidden border-4 border-black shadow-lg mb-4">
+          <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-4xl font-bold overflow-hidden border-4 border-white/20 shadow-lg mb-4">
             {profile.photoURL || profile.avatarUrl ? (
               <img src={profile.photoURL || profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
@@ -493,7 +493,7 @@ export default function PublicProfile() {
               )}
             </div>
             <div className="flex flex-col items-center gap-3 mb-8">
-              <div className="flex items-stretch gap-3 bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 w-full max-w-sm">
+              <div className="flex items-stretch gap-3 bg-white p-2 rounded-[1.5rem] border border-black shadow-xl shadow-slate-200/50 w-full max-w-sm">
                 <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-slate-900 rounded-2xl shadow-lg">
                   <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
                   <div className="flex flex-col items-start">
@@ -579,7 +579,7 @@ export default function PublicProfile() {
         </div>
 
         {/* Performance Stats */}
-        <div className="grid grid-cols-3 gap-4 mt-4 border-t border-slate-100 pt-8">
+        <div className="grid grid-cols-3 gap-4 mt-4 border-t border-black pt-8">
           <div className="text-center">
             <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
               <Briefcase className="w-5 h-5 text-slate-600" />
@@ -675,7 +675,7 @@ export default function PublicProfile() {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {(isServicesExpanded ? profile.services : profile.services.slice(0, 4)).map((service: string, index: number) => (
-              <div key={index} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all">
+              <div key={index} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-black hover:border-blue-200 hover:bg-blue-50/50 transition-all">
                 <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
                 <span className="text-sm font-bold text-slate-700 leading-relaxed">{service}</span>
               </div>
@@ -714,7 +714,7 @@ export default function PublicProfile() {
         </div>
 
         {profile.postcode && (
-          <div className="mt-8 pt-8 border-t border-slate-100">
+          <div className="mt-8 pt-8 border-t border-black">
             <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-slate-400" />
               Trader Location
@@ -879,7 +879,7 @@ export default function PublicProfile() {
               <button 
                 onClick={() => setIsBookingModalOpen(true)}
                 disabled={isProcessing}
-                className="w-full bg-slate-900 border-2 border-black text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full bg-slate-900 border-2 border-white/20 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <CalendarClock className="w-5 h-5" />
                 Book an Appointment
@@ -906,7 +906,7 @@ export default function PublicProfile() {
               exit={{ y: "100%" }}
               className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="p-6 border-b border-black flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
                     <CalendarClock className="w-5 h-5" />
@@ -988,7 +988,7 @@ export default function PublicProfile() {
                 </div>
               </div>
 
-              <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
+              <div className="p-6 border-t border-black bg-slate-50 shrink-0">
                 <button
                   onClick={handleSubmitBooking}
                   disabled={isProcessing || !bookingDate || !bookingTime}
@@ -1049,7 +1049,7 @@ export default function PublicProfile() {
                       <button
                         key={job.id}
                         onClick={() => handleInviteToJob(job)}
-                        className="w-full p-5 rounded-2xl border-2 border-slate-100 hover:border-blue-600 hover:bg-blue-50 transition-all text-left flex items-center justify-between group"
+                        className="w-full p-5 rounded-2xl border-2 border-black hover:border-blue-600 hover:bg-blue-50 transition-all text-left flex items-center justify-between group"
                       >
                         <div>
                           <h4 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{job.title}</h4>
@@ -1074,7 +1074,7 @@ export default function PublicProfile() {
                 </div>
 
                 {userJobs.length > 0 && (
-                  <div className="pt-4 border-t border-slate-100">
+                  <div className="pt-4 border-t border-black">
                     <p className="text-center text-xs text-slate-400 mb-4">Need to post a new job?</p>
                     <Link 
                       to="/post-job"

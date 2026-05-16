@@ -511,7 +511,7 @@ export function ConsultancyManager() {
                         </p>
                       </div>
                     </div>
-                    <div className="space-y-1.5 pt-3 border-t border-slate-100">
+                    <div className="space-y-1.5 pt-3 border-t border-black">
                       {client.email && (
                         <div className="flex items-center gap-2 text-[11px] text-black font-medium">
                           <Mail className="w-3.5 h-3.5 text-slate-400" />{" "}

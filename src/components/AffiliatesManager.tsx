@@ -246,7 +246,7 @@ export default function AffiliatesManager() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 uppercase text-[10px] tracking-wider text-slate-500 font-bold">
+              <tr className="bg-slate-50 border-b border-black uppercase text-[10px] tracking-wider text-slate-500 font-bold">
                 <th className="p-4 rounded-tl-2xl">Partner</th>
                 <th className="p-4">Tracking Link / Code</th>
                 <th className="p-4">Terms</th>

@@ -2427,7 +2427,7 @@ export default function PassengerBooking() {
                 className="bg-card rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] pointer-events-auto flex flex-col h-full w-full border-t border-border-main overflow-hidden"
               >
                 {detailsView === "address" && (
-                    <button onClick={toggleListening} disabled={isAiProcessing} className="w-full bg-slate-900 border-b border-black/10 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-1 px-4 flex items-center justify-center gap-1.5 font-bold shadow-sm active:scale-95 transition-all text-[11px] uppercase tracking-wider shrink-0 z-10 relative rounded-none h-8">
+                    <button onClick={toggleListening} disabled={isAiProcessing} className="w-full bg-slate-900 border-b border-white/20/10 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 py-1 px-4 flex items-center justify-center gap-1.5 font-bold shadow-sm active:scale-95 transition-all text-[11px] uppercase tracking-wider shrink-0 z-10 relative rounded-none h-8">
                       {isListening ? (
                         <>
                           <div className="relative flex items-center justify-center">
@@ -2510,7 +2510,7 @@ export default function PassengerBooking() {
                                 </div>
                               )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                     {s.isHistory ? 
                                       <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
@@ -2567,7 +2567,7 @@ export default function PassengerBooking() {
                                   </div>
                                 )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                     {s.isHistory ? 
                                       <History className="w-4 h-4 text-amber-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
@@ -2626,7 +2626,7 @@ export default function PassengerBooking() {
                                   </div>
                                 )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                     {s.isHistory ? 
                                       <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                       <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
@@ -2761,7 +2761,7 @@ export default function PassengerBooking() {
                                       selectSuggestion({ label: fav.address, lat: fav.lat, lon: fav.lng, placeId: fav.placeId });
                                       setShowFavorites(false);
                                     }}
-                                    className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:border-amber-300 transition-colors flex items-center gap-3"
+                                    className="w-full text-left bg-white border border-black rounded-xl p-3 shadow-sm hover:border-amber-300 transition-colors flex items-center gap-3"
                                   >
                                     <div className="w-8 h-8 rounded-full bg-amber-50 flex flex-shrink-0 items-center justify-center">
                                       <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
@@ -2797,8 +2797,8 @@ export default function PassengerBooking() {
                               <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowRegularJourneys(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                               {profile?.regularJourneys && profile.regularJourneys.length > 0 ? (
                                 profile.regularJourneys.map((j: any, idx: number) => (
-                                  <div key={idx} className="flex flex-col gap-2 p-2 bg-white rounded-xl border border-slate-100 shadow-sm relative pr-2">
-                                    <div className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1 mb-1 pr-4">{j.name || "Saved Route"}</div>
+                                  <div key={idx} className="flex flex-col gap-2 p-2 bg-white rounded-xl border border-black shadow-sm relative pr-2">
+                                    <div className="text-xs font-bold text-slate-800 border-b border-black pb-1 mb-1 pr-4">{j.name || "Saved Route"}</div>
                                     <div className="flex items-center gap-2 text-xs">
                                       <MapPin className="w-3 h-3 text-emerald-500 flex-shrink-0" />
                                       <span className="font-semibold text-slate-600 truncate">{j.from}</span>
@@ -3158,7 +3158,7 @@ export default function PassengerBooking() {
                         <h4 className="text-amber-950 font-black text-[13px] leading-[1.1]">Boost Priority (+£3)</h4>
                         <p className="text-amber-800/80 text-[11px] font-bold tracking-tight mt-0.5 leading-[1.1]">Jump to the top of the queue.</p>
                       </div>
-                      <div className={cn("w-[42px] h-[26px] rounded-full p-1 transition-colors relative flex items-center shrink-0 border", isPriority ? "bg-amber-900 border-amber-950/20" : "bg-black/10 border-black/5")}>
+                      <div className={cn("w-[42px] h-[26px] rounded-full p-1 transition-colors relative flex items-center shrink-0 border", isPriority ? "bg-amber-900 border-amber-950/20" : "bg-black/10 border-white/20/5")}>
                         <div className={cn("w-[18px] h-[18px] bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
                       </div>
                     </div>
@@ -3245,7 +3245,7 @@ export default function PassengerBooking() {
                         key={i} 
                         onClick={() => handleSendQuickMessage(msg)}
                         disabled={isOnCooldown}
-                        className={`whitespace-nowrap px-4 py-2 ${isOnCooldown ? 'bg-slate-300 border-black text-slate-500 cursor-not-allowed opacity-60' : 'bg-slate-800 border-slate-700 text-white shadow-sm active:scale-95 transition-transform'} font-bold text-[13px] rounded-[12px]`}
+                        className={`whitespace-nowrap px-4 py-2 ${isOnCooldown ? 'bg-slate-300 border-white/20 text-slate-500 cursor-not-allowed opacity-60' : 'bg-slate-800 border-slate-700 text-white shadow-sm active:scale-95 transition-transform'} font-bold text-[13px] rounded-[12px]`}
                       >
                         {msg} {isOnCooldown && "⏳"}
                       </button>
@@ -3423,7 +3423,7 @@ export default function PassengerBooking() {
                 )}
                 
                 <div className="flex gap-3 mt-4">
-                  <button onClick={() => setIsChatOpen(true)} className="relative flex-1 py-3 bg-[#0a1930] border border-black rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+                  <button onClick={() => setIsChatOpen(true)} className="relative flex-1 py-3 bg-[#0a1930] border border-white/20 rounded-[16px] flex items-center justify-center shadow-lg active:scale-95 transition-transform">
                     <MessageSquare className="w-[22px] h-[22px] text-white" />
                     {unreadChatCount > 0 && (
                       <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -3435,7 +3435,7 @@ export default function PassengerBooking() {
                     )}
                   </button>
                   <a href={`tel:${assignedDriverInfo?.phone || ""}`} className="flex-1 py-3 bg-white border border-black rounded-[16px] flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"><Phone className="w-[22px] h-[22px] text-[#0a1930]" /></a>
-                  <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] border border-black text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Driver</button>
+                  <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] border border-white/20 text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Driver</button>
                 </div>
                 
                 {assignedDriverInfo?.status !== "in_progress" && assignedDriverInfo?.status !== "awaiting_payment" && (
@@ -3895,8 +3895,8 @@ export default function PassengerBooking() {
                         const finalFare = getComputedFare(selectedCategory);
                         const surgeExtra = finalFare - vehicleSubtotal;
                         return (
-                           <div className="rounded-[16px] p-5 flex flex-col bg-white shadow-sm border border-slate-100">
-                              <p className="font-extrabold text-[#0a1930] text-[11px] uppercase tracking-wider border-b border-slate-100 pb-3 mb-3">Fare Breakdown</p>
+                           <div className="rounded-[16px] p-5 flex flex-col bg-white shadow-sm border border-black">
+                              <p className="font-extrabold text-[#0a1930] text-[11px] uppercase tracking-wider border-b border-black pb-3 mb-3">Fare Breakdown</p>
                               <div className="flex justify-between items-center text-[15px] mb-2">
                                  <span className="text-[#0a1930]">Journey Fare</span>
                                  <span className="text-[#0a1930]">£{base.toFixed(2)}</span>
@@ -3937,7 +3937,7 @@ export default function PassengerBooking() {
                                    <span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span>
                                 </div>
                               )}
-                              <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+                              <div className="flex justify-between items-center pt-3 border-t border-black mt-2">
                                  <span className="font-extrabold text-[#0a1930] text-[18px]">Total Estimate</span>
                                  <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                               </div>
@@ -4058,7 +4058,7 @@ export default function PassengerBooking() {
                                <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                  {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                  {[...suggestions].map((s, idx) => (
-                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                       {s.isHistory ? 
                                        <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                        <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
@@ -4104,7 +4104,7 @@ export default function PassengerBooking() {
                                  <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                    {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                    {[...suggestions].map((s, idx) => (
-                                     <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                     <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                         {s.isHistory ? 
                                          <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                          <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
@@ -4145,7 +4145,7 @@ export default function PassengerBooking() {
                                <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                  {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                  {[...suggestions].map((s, idx) => (
-                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
                                       {s.isHistory ? 
                                        <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                        <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />

@@ -335,7 +335,7 @@ export default function AdminAdvertsTab() {
       {showModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+            <div className="p-6 border-b border-black flex justify-between items-center sticky top-0 bg-white z-10">
               <h3 className="text-xl font-bold">{editingAd ? "Edit Advertisement" : "New Advertisement"}</h3>
               <button onClick={() => setShowModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">X</button>
             </div>
@@ -429,7 +429,7 @@ export default function AdminAdvertsTab() {
                 </div>
               )}
               
-              <div className="pt-4 border-t border-slate-100">
+              <div className="pt-4 border-t border-black">
                 <h4 className="text-sm font-bold text-slate-900 mb-4">CRM & Billing Details</h4>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
@@ -458,7 +458,7 @@ export default function AdminAdvertsTab() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100">
+              <div className="pt-4 border-t border-black">
                 <h4 className="text-sm font-bold text-slate-900 mb-4">Budget & Delivery Settings</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
@@ -477,7 +477,7 @@ export default function AdminAdvertsTab() {
               </div>
             </div>
             
-            <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+            <div className="p-6 border-t border-black flex justify-end gap-3">
               <button disabled={isSaving} onClick={() => setShowModal(false)} className="px-6 h-12 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Cancel</button>
               <button disabled={isSaving || !title || !url} onClick={handleSave} className="px-6 h-12 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Save Advert

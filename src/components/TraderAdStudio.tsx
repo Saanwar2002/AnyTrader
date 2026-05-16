@@ -138,15 +138,15 @@ export default function TraderAdStudio() {
                   </div>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div className="bg-slate-50 rounded-xl p-3 border border-black">
                       <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none mb-1">Clicks</p>
                       <p className="text-lg font-black text-slate-900">{ad.clicks || 0}</p>
                     </div>
-                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div className="bg-slate-50 rounded-xl p-3 border border-black">
                       <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none mb-1">Cost / Click</p>
                       <p className="text-lg font-black text-slate-900">£{(ad.costPerDisplay || tierCost).toFixed(2)}</p>
                     </div>
-                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 md:col-span-2">
+                    <div className="bg-slate-50 rounded-xl p-3 border border-black md:col-span-2">
                       <div className="flex justify-between items-end mb-1">
                         <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none">Wallet Balance</p>
                         <p className="text-lg font-black text-blue-600 leading-none">£{(ad.prepaidBalance || 0).toFixed(2)}</p>
@@ -162,7 +162,7 @@ export default function TraderAdStudio() {
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center pt-4 border-t border-slate-100 gap-2">
+                  <div className="flex justify-between items-center pt-4 border-t border-black gap-2">
                     <div className="flex gap-2 w-full md:w-auto">
                         <button onClick={() => handleTopup(ad.id, ad.prepaidBalance, 50)} className="flex-1 md:flex-none border border-black bg-white text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition">
                         <CreditCard className="w-4 h-4" /> Top up £50
@@ -239,7 +239,7 @@ export default function TraderAdStudio() {
       {showRequestModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
           <form onSubmit={handleRequestAd} className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <div className="p-6 border-b border-black flex justify-between items-center bg-slate-50">
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Request Campaign</h3>
                 <p className="text-sm text-slate-500">Your ad will go live after admin approval.</p>
@@ -284,7 +284,7 @@ export default function TraderAdStudio() {
               </div>
             </div>
             
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+            <div className="p-6 bg-slate-50 border-t border-black flex justify-end gap-3">
               <button type="button" onClick={() => setShowRequestModal(false)} className="px-6 py-3 font-bold text-slate-600 hover:text-slate-900">Cancel</button>
               <button type="submit" className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-colors">Submit Request</button>
             </div>

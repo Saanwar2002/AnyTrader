@@ -82,21 +82,26 @@
   html, body {
     margin: 0;
     padding: 0;
-    width: 100%;
+    width: 100vw;
     min-height: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
     cursor: default;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-surface text-text-main font-sans antialiased;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
     overflow-x: hidden;
+  }
+
+  /* Hide scrollbar globally */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  * {
+    scrollbar-width: none;
   }
 
   input, textarea, select {

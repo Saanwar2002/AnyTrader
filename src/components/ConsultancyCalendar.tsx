@@ -131,7 +131,7 @@ export function ConsultancyCalendar() {
       {syncModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col border border-black">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-6 border-b border-black flex items-center justify-between">
               <h2 className="text-xl font-bold">Sync Calendars</h2>
               <button onClick={() => setSyncModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500" />
