@@ -3,7 +3,7 @@ import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, serv
 import { useAuth } from "./AuthProvider";
 import { usePortal } from "@/src/lib/PortalContext";
 import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, AlertTriangle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap } from "lucide-react";
+import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, AlertTriangle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap, Building2 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { EmergencyTimer } from "./EmergencyTimer";
@@ -343,6 +343,12 @@ export default function MyJobs() {
 
                   {/* Title & Description */}
                   <div className="space-y-2 cursor-pointer" onClick={() => navigate(`/job/${job.id}`)}>
+                    {job.assetName && (
+                      <div className="flex items-center gap-2 mb-1">
+                        <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">{job.assetName}</span>
+                      </div>
+                    )}
                     <h3 className="text-2xl font-black text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
                       {job.title}
                     </h3>

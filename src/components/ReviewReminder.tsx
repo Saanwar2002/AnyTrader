@@ -38,8 +38,8 @@ export function ReviewReminder() {
             triggerReminder(jobDoc.id, jobData.title, "homeowner");
           }
         });
-      } else if (profile.role === "tradesperson") {
-        // Check jobs where tradesperson hasn't reviewed homeowner
+      } else if (profile.role === "tradesperson" || profile.role === "business") {
+        // Check jobs where tradesperson/business hasn't reviewed homeowner
         const quotesQ = query(
           collectionGroup(db, "quotes"),
           where("tradespersonId", "==", user.uid),

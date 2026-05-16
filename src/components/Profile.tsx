@@ -218,6 +218,7 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 
 export default function Profile() {
   const { user, profile, setProfile } = useAuth();
+  const isBusinessProfile = profile?.role === 'business' || profile?.role === 'tradesperson';
   const { activePortal, switchPortal } = usePortal();
   const navigate = useNavigate();
   const location = useLocation();
@@ -1082,7 +1083,7 @@ export default function Profile() {
 
   const menuGroups = activePortal === "anyroller" 
     ? passengerMenuGroups 
-    : (profile.role === "tradesperson" ? tradespersonMenuGroups : homeownerMenuGroups);
+    : (isBusinessProfile ? tradespersonMenuGroups : homeownerMenuGroups);
 
   const handleSubscribe = async () => {
     if (!user || !showCheckoutForTier) return;
@@ -1519,7 +1520,7 @@ export default function Profile() {
         </div>
       )}
 
-      {(profile.role === "tradesperson" || (profile.role === "homeowner" && profile.subscriptionType === "business")) && platformConfig && (
+      {(isBusinessProfile || (profile.role === "homeowner" && profile.subscriptionType === "business")) && platformConfig && (
         <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8">
           {platformConfig.paywallEnabled === false && (
             <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center gap-4">
@@ -1607,7 +1608,7 @@ export default function Profile() {
                 <p className="text-[10px] text-slate-500 mb-2">{tier.description}</p>
                 
                 <div className="flex items-center gap-2 flex-wrap mb-4">
-                  {profile.role === "tradesperson" ? (
+                  {isBusinessProfile ? (
                     <>
                       <div className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-600">
                         {tier.maxQuotes} Quotes / {tier.limitPeriod === "lifetime" ? "Lifetime" : "Month"}
@@ -1639,7 +1640,7 @@ export default function Profile() {
                   )}
                 </div>
                 
-                {profile.role === "tradesperson" && currentRoleTierId === tier.name && (
+                {isBusinessProfile && currentRoleTierId === tier.name && (
                   <div className="space-y-3 pt-4 border-t border border-black">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-bold">
@@ -1714,7 +1715,7 @@ export default function Profile() {
                 </div>
               )}
             </h2>
-            {profile.role === "tradesperson" && (
+            {isBusinessProfile && (
               <div className="flex flex-col items-center gap-3 mb-8 mt-2">
                 <div className="flex items-stretch gap-3 bg-white p-2 rounded-[1.5rem] border border-black shadow-xl shadow-slate-200/50 w-full max-w-sm">
                   <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-slate-900 rounded-2xl shadow-lg">
@@ -1748,7 +1749,7 @@ export default function Profile() {
               </div>
             )}
             <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-              {profile.role === "tradesperson" ? (
+              {isBusinessProfile ? (
                 <>
                   <p className="text-slate-500 text-sm font-medium">Professional Tradesperson</p>
                   <span className="text-slate-300">•</span>
@@ -1786,7 +1787,7 @@ export default function Profile() {
         </div>
 
         {/* Phase 1: Performance Stats */}
-        {profile.role === "tradesperson" && (
+        {isBusinessProfile && (
           <div className="grid grid-cols-3 gap-4 mt-6">
             <div className="text-center">
               <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
@@ -1813,7 +1814,7 @@ export default function Profile() {
         )}
 
         {/* Badges & Achievements Section */}
-        {profile.role === "tradesperson" && (
+        {isBusinessProfile && (
           <div className="mt-8">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Award className="w-4 h-4" />
@@ -1848,7 +1849,7 @@ export default function Profile() {
           </div>
         )}
 
-        {profile.role === "tradesperson" && isBannerAdsEnabled && (
+        {isBusinessProfile && isBannerAdsEnabled && (
           <div className="mt-8 mb-2">
             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <Zap className="w-4 h-4" />
@@ -1873,7 +1874,7 @@ export default function Profile() {
       </div>
 
       {/* Phase 1: Certifications/Achievements */}
-      {profile.role === "tradesperson" && (
+      {isBusinessProfile && (
         <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-4 mb-8">
           <div 
             className="flex items-center justify-between cursor-pointer px-2"
@@ -1940,7 +1941,7 @@ export default function Profile() {
       )}
 
       {/* Products and Services Section */}
-      {profile.role === "tradesperson" && (
+      {isBusinessProfile && (
         <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8 relative">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-4">
             <div className="flex items-center gap-3">
@@ -2088,7 +2089,7 @@ export default function Profile() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h3 className="text-xl font-bold text-slate-900">About</h3>
-            {profile.role === "tradesperson" && (
+            {isBusinessProfile && (
               <button 
                 onClick={() => setShowBioInfo(true)}
                 className="p-1 rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
@@ -2107,7 +2108,7 @@ export default function Profile() {
         </div>
         <p className="text-slate-600 text-sm leading-relaxed mb-6">{profile.bio || "No bio provided."}</p>
         
-        {profile.role === "tradesperson" && (
+        {isBusinessProfile && (
           <>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-slate-900">Skills/Services</h4>
@@ -2270,7 +2271,7 @@ export default function Profile() {
       </div>
 
       {/* Portfolio Section (Tradespeople only) */}
-      {profile.role === "tradesperson" && (
+      {isBusinessProfile && (
         <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
@@ -2501,7 +2502,7 @@ export default function Profile() {
                                   className="border-t border border-black"
                                 >
                                   {item.path === "#payments" ? (
-                                    profile.role === "tradesperson" || profile.role === "business" ? (
+                                    isBusinessProfile || profile.role === "business" ? (
                                       <div className="p-6 md:p-5 bg-slate-50/50 space-y-8">
                                         {/* Receiving Section */}
                                         <div>
@@ -2880,7 +2881,7 @@ export default function Profile() {
       </>
 
         {/* Notification Settings Section */}
-        {profile.role === "tradesperson" && (
+        {isBusinessProfile && (
           <div id="notifications" className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-3 break-inside-avoid">
             <button 
               onClick={() => setIsNotificationsExpanded(!isNotificationsExpanded)}
@@ -3063,7 +3064,7 @@ export default function Profile() {
         {/* Payment Methods (AnyRoller Rider Only) */}
 
       {/* Verification Center (Tradespeople only) */}
-      {profile.role === "tradesperson" && (
+      {isBusinessProfile && (
         <div id="verification" className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-3 break-inside-avoid">
           <button 
             onClick={() => setIsVerificationExpanded(!isVerificationExpanded)}
@@ -3469,7 +3470,7 @@ export default function Profile() {
       <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
 
       {/* Tradesperson specific sections - Reviews */}
-      {profile.role === "tradesperson" && (
+      {isBusinessProfile && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-slate-900">Client Reviews</h3>
@@ -3587,7 +3588,7 @@ export default function Profile() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Bio</label>
-                    {profile.role === "tradesperson" && (
+                    {isBusinessProfile && (
                       <button
                         type="button"
                         onClick={handleAIPolish}
@@ -3610,7 +3611,7 @@ export default function Profile() {
                     <span className="text-[10px] font-bold text-slate-400">{(editData.bio || '').length}/300</span>
                   </div>
                 </div>
-                {profile.role === "tradesperson" && (
+                {isBusinessProfile && (
                   <>
                     <div>
                       <div className="flex items-center justify-between mb-1">

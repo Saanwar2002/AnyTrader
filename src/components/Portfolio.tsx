@@ -19,6 +19,31 @@ export default function Portfolio() {
   
   const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
   const [propertyJobs, setPropertyJobs] = useState<any[]>([]);
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleNext = () => {
+    if (selectedPropertyIds.length === 0) return;
+    const selectedPropertiesObjects = properties.filter(p => selectedPropertyIds.includes(p.id))
+      .map(p => ({
+        id: p.id,
+        name: p.name || p.address?.line1 || 'Property / Site'
+      }));
+    navigate("/post-job", { 
+      state: { 
+        linkedProperties: selectedPropertiesObjects,
+        isB2B: true
+      } 
+    });
+  };
+
+  const toggleProperty = (propertyId: string) => {
+    setSelectedPropertyIds(prev => 
+      prev.includes(propertyId) 
+        ? prev.filter(id => id !== propertyId)
+        : [...prev, propertyId]
+    );
+  };
 
   // Form state
   const [propertyName, setPropertyName] = useState("");
@@ -244,6 +269,8 @@ export default function Portfolio() {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input 
                 type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, address or postcode" 
                 className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
               />
@@ -259,11 +286,13 @@ export default function Portfolio() {
           <div className="pt-2 pb-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {properties.length === 0 ? (
-                 <div className="col-span-full text-center py-8 text-slate-500 text-sm bg-white rounded-xl shadow-sm border border-black">
-                   No properties added yet. Click + to add your first property.
-                 </div>
-              ) : properties.map(property => (
-                <div key={property.id} className="flex relative flex-col justify-start p-3 rounded-xl border border-black hover:bg-slate-50 transition cursor-pointer group shadow-sm bg-white" onClick={() => setSelectedProperty(property)}>
+                  <div className="col-span-full text-center py-8 text-slate-500 text-sm bg-white rounded-xl shadow-sm border border-black">
+                    No properties / sites added yet. Click + to add your first property / site.
+                  </div>
+              ) : properties.map(property => {
+                const isSelected = selectedPropertyIds.includes(property.id);
+                return (
+                <div key={property.id} className={cn("flex relative flex-col justify-start p-3 rounded-xl border transition cursor-pointer group shadow-sm bg-white", isSelected ? "border-black ring-1 ring-black bg-white" : "border-black hover:bg-slate-50")} onClick={() => toggleProperty(property.id)}>
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
                       {property.propertyType === "commercial" ? (
@@ -278,19 +307,24 @@ export default function Portfolio() {
                     </div>
                     <div className="flex flex-col flex-1 min-w-0 pt-0.5">
                       <div className="flex items-center flex-wrap gap-2 mb-1 pr-6">
-                        <h3 className="font-bold text-slate-900 text-base leading-tight truncate">{property.name || "Unnamed Property"}</h3>
-                        <span className={cn("text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border shrink-0", property.occupancy === "vacant" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200")}>
+                        <h3 onClick={(e) => { e.stopPropagation(); setSelectedProperty(property); }} className="font-bold hover:underline text-slate-900 text-base leading-tight truncate">{property.name || "Unnamed Property"}</h3>
+                        <span onClick={(e) => { e.stopPropagation(); setSelectedProperty(property); }} className={cn("text-[9px] hover:underline font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border shrink-0", property.occupancy === "vacant" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200")}>
                           {property.occupancy === 'vacant' ? 'Vacant' : 'Occupied'}
                         </span>
                       </div>
                       {property.address?.line1 && (
-                        <div className="text-[12px] text-black font-medium break-words whitespace-normal leading-snug line-clamp-2 pr-6">
+                        <div onClick={(e) => { e.stopPropagation(); setSelectedProperty(property); }} className="text-[12px] hover:underline text-black font-medium break-words whitespace-normal leading-snug line-clamp-2 pr-6">
                           {property.address.line1}
                         </div>
                       )}
                     </div>
                   </div>
                   <div className="absolute top-2 right-2 flex flex-col items-center justify-start gap-1">
+                    <div className={cn("w-5 h-5 rounded-full border flex items-center justify-center transition-colors shrink-0 mx-auto mt-0.5", isSelected ? "border-white/20 bg-black shadow-sm" : "border-black/30 bg-white")}>
+                      {isSelected && <div className="w-2 h-2 rounded-full bg-white shadow-[0_0_0_1px_black]" />}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end mt-2 pt-2 border-t border-black/10 gap-2">
                     <div className="relative">
                       {deletingId === property.id && (
                         <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-white/20 z-10" onClick={e => e.stopPropagation()}>
@@ -314,20 +348,36 @@ export default function Portfolio() {
                       )}
                       <button 
                         onClick={(e) => { e.stopPropagation(); setDeletingId(property.id); }}
-                        className="text-red-500 hover:bg-red-50 rounded p-1.5 transition"
+                        className="text-red-500 hover:bg-red-50 rounded p-1.5 transition flex items-center gap-1 text-[11px] font-bold uppercase"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
                       </button>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleEditClick(property); }}
-                      className="text-slate-400 hover:bg-slate-50 hover:text-blue-600 rounded p-1.5 transition"
+                      className="text-slate-500 hover:bg-slate-50 hover:text-blue-600 rounded p-1.5 transition flex items-center gap-1 text-[11px] font-bold uppercase"
                     >
-                      <Edit className="w-4 h-4" />
+                      <Edit className="w-3.5 h-3.5" /> Edit
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
+            </div>
+
+            <div className="mt-8 flex justify-end sticky bottom-6 z-20">
+              <button
+                 onClick={handleNext}
+                 disabled={selectedPropertyIds.length === 0}
+                 className={cn(
+                   "px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition shadow-xl",
+                   selectedPropertyIds.length > 0
+                     ? "bg-black text-white hover:bg-slate-800 border border-white/20" 
+                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                 )}
+              >
+                 Post Job Request <Briefcase className="w-4 h-4 ml-1" />
+              </button>
             </div>
           </div>
         </>
@@ -350,7 +400,7 @@ export default function Portfolio() {
               >
                 <ArrowLeft className="w-6 h-6" />
               </button>
-              <h2 className="text-lg font-semibold text-slate-900">{editingPropertyId ? 'Edit Property' : 'Add New Property'}</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{editingPropertyId ? 'Edit Property / Site' : 'Add Property / Site'}</h2>
               <div className="w-10" /> {/* Spacer for centering */}
             </div>
 
@@ -373,13 +423,13 @@ export default function Portfolio() {
                 {step === 1 && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="block text-[15px] font-medium text-slate-900">Property Name</label>
+                      <label className="block text-[15px] font-medium text-slate-900">Property / Site Name</label>
                       <input 
                         type="text" 
                         value={propertyName}
                         onChange={e => setPropertyName(e.target.value)}
                         required
-                        placeholder="e.g., Sunrise Apartments"
+                        placeholder="e.g., Sunrise Apartments or Acme Corp Site"
                         className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
                       />
                     </div>
@@ -402,9 +452,9 @@ export default function Portfolio() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-[15px] font-medium text-slate-900">Property Type</label>
+                      <label className="block text-[15px] font-medium text-slate-900">Property / Site Type</label>
                       <div className="flex p-1 bg-white border border-black rounded-xl text-[14px]">
-                        {["Commercial", "Residential", "Industrial", "Retail"].map(type => {
+                        {["Commercial", "Residential", "Industrial", "Retail", "Other"].map(type => {
                           const value = type.toLowerCase();
                           const isActive = propertyType === value;
                           return (
@@ -425,7 +475,7 @@ export default function Portfolio() {
                     </div>
 
                     <div className="space-y-3 pt-2">
-                       <h3 className="text-[16px] font-bold text-slate-900">Property Details</h3>
+                       <h3 className="text-[16px] font-bold text-slate-900">Details</h3>
                        <input 
                          type="text" 
                          placeholder="Total Area (sq ft)" 
@@ -512,7 +562,7 @@ export default function Portfolio() {
                 form="add-property-form"
                 className="flex-1 py-3.5 font-semibold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-full shadow-sm transition flex justify-center items-center gap-2"
               >
-                {step < 3 ? "Next Step" : "Add Property"}
+                {step < 3 ? "Next Step" : "Add Property / Site"}
               </button>
             </div>
 

@@ -14,10 +14,10 @@ export default function RoleTabBar() {
   const hasInitialized = useRef(false);
 
   useEffect(() => {
-    if (!hasInitialized.current && profile?.businessCategory) {
-      if (profile.businessCategory.toLowerCase().includes("consult")) {
+    if (!hasInitialized.current && profile?.businessLayer) {
+      if (profile.businessLayer === "consultancy") {
         setActiveTab("consultancy");
-      } else if (profile.businessCategory.toLowerCase().includes("field")) {
+      } else if (profile.businessLayer === "field_services") {
         setActiveTab("field_services");
       } else {
         setActiveTab("properties");
@@ -63,7 +63,7 @@ export default function RoleTabBar() {
 
   const getLabel = (role: string) => {
     switch(role) {
-      case "customer": return activePortal === "anyroller" ? "As Rider" : "As Homeowner / Hire Trades";
+      case "customer": return activePortal === "anyroller" ? "As Rider" : "As Homeowner";
       case "trader": return "As Tradesperson";
       case "business": return "As Business";
       case "driver": return "As Driver";

@@ -171,9 +171,8 @@ export default function BusinessDashboard() {
             </button>
           </div>
 
-          {/* Active Portfolio Section */}
-          <PropertyManager />
-      <div className="space-y-4">
+          {/* Active Portfolio Section (Removed) */}
+          <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             Active Projects

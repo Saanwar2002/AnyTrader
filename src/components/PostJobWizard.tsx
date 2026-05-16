@@ -1335,16 +1335,21 @@ export default function PostJobWizard() {
       )}
 
       {/* Linked Project/Properties Indicator */}
-      {linkedProperties && linkedProperties.length > 0 && (
+      {(linkedProperties?.length > 0 || formData.selectedAssets.length > 0) && step >= 0 && (
         <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between text-xs font-bold">
           <div className="flex items-center gap-2 overflow-hidden mr-4">
             <Building2 className="w-4 h-4 shrink-0" />
             <span className="truncate">
-              Posting for: {linkedProperties.map((p: any) => p.name).join(", ")}
+              Posting for: {(linkedProperties?.length > 0 ? linkedProperties : formData.selectedAssets).map((p: any) => p.name || p.propertyName || p.address?.line1).join(", ")}
             </span>
           </div>
           <button 
-            onClick={() => navigate(location.pathname, { state: { ...location.state, linkedProperties: null, linkedPropertyId: null, linkedPropertyName: null, isB2B: null } })}
+            onClick={() => {
+              if (linkedProperties?.length > 0) {
+                navigate(location.pathname, { state: { ...location.state, linkedProperties: null, linkedPropertyId: null, linkedPropertyName: null, isB2B: null } });
+              }
+              setFormData({ ...formData, selectedAssets: [] });
+            }}
             className="hover:bg-white/10 p-1 rounded transition-colors shrink-0"
           >
             <X className="w-3 h-3" />
@@ -1616,14 +1621,7 @@ export default function PostJobWizard() {
                   {userAssets.map((asset) => (
                     <button
                       key={asset.id}
-                      onClick={() => {
-                        const isSelected = formData.selectedAssets.some(a => a.id === asset.id);
-                        if (isSelected) {
-                          setFormData({ ...formData, selectedAssets: formData.selectedAssets.filter(a => a.id !== asset.id) });
-                        } else {
-                          setFormData({ ...formData, selectedAssets: [...formData.selectedAssets, asset] });
-                        }
-                      }}
+                      onClick={() => setFormData({ ...formData, selectedAssets: [asset] })}
                       className={cn(
                         "flex items-center justify-between p-3 rounded-xl border border-black bg-white hover:bg-slate-50 transition-all text-left text-slate-900",
                         formData.selectedAssets.some(a => a.id === asset.id)
@@ -1647,39 +1645,38 @@ export default function PostJobWizard() {
                         </div>
                       </div>
                       <div className={cn(
-                        "w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0",
+                        "w-4 h-4 rounded-full flex items-center justify-center transition-colors shrink-0",
                         formData.selectedAssets.some(a => a.id === asset.id)
-                          ? "border-black bg-black"
-                          : "border-black"
-                      )}>
-                        {formData.selectedAssets.some(a => a.id === asset.id) && <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />}
-                      </div>
+                          ? "border-[4px] border-[#0084a5] bg-white ring-1 ring-black"
+                          : "border border-black"
+                      )} />
                     </button>
                   ))}
                 </div>
-
-                {formData.selectedAssets.length > 1 && (
-                  <div className="p-4 bg-[#0084a5]/10 rounded-xl border border-[#0084a5]/20 flex gap-3 items-start">
-                    <Info className="w-5 h-5 text-[#0084a5] shrink-0 mt-0.5" />
-                    <p className="text-sm text-[#0084a5]/80">
-                      Posting to <strong>{formData.selectedAssets.length}</strong> {isB2B || activeTab === 'field_services' ? 'projects' : 'properties'} will count as <strong>{formData.selectedAssets.length}</strong> posts towards your allowance. You can manage the posts individually after they are created.
-                    </p>
-                  </div>
-                )}
               </div>
 
               <div className="pt-4 flex flex-col gap-3">
                 <button
                   onClick={() => setStep(0)}
+                  disabled={formData.selectedAssets.length === 0}
                   className={cn(
                     "w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all",
                     formData.selectedAssets.length > 0
                       ? "bg-[#0084a5] text-white hover:bg-[#006e8a] shadow-lg shadow-[#0084a5]/20"
-                      : "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                      : "bg-slate-200 text-slate-500 cursor-not-allowed opacity-50"
                   )}
                 >
-                  {formData.selectedAssets.length > 0 ? "Continue" : `Skip (Post without ${isB2B || activeTab === 'field_services' ? 'project' : 'property'})`}
+                  Continue with Selected
                   <ChevronRight className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    setFormData({ ...formData, selectedAssets: [] });
+                    setStep(0);
+                  }}
+                  className="w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 transition-all"
+                >
+                  Continue without
                 </button>
               </div>
             </motion.div>

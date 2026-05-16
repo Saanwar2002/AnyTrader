@@ -29,7 +29,7 @@ export function TraderUpcomingAppointments() {
       
       // Filter out non-confirmed and past
       const today = startOfDay(new Date());
-      const confirmedFuture = data.filter(apt => {
+      const confirmedFuture = data.filter((apt: any) => {
         if (apt.status !== 'confirmed') return false;
         
         // Check if date is in future or today
@@ -44,7 +44,7 @@ export function TraderUpcomingAppointments() {
       });
 
       // Sort by date, then by time
-      confirmedFuture.sort((a, b) => {
+      confirmedFuture.sort((a: any, b: any) => {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
         if (dateA === dateB) {

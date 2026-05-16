@@ -47,7 +47,7 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Deduplicate by ID to prevent React key errors if stale data exists in Firestore
       const uniqueData = Array.from(new Map(data.map(item => [item.id, item])).values());
       
-      setCategories(uniqueData.sort((a, b) => a.name.localeCompare(b.name)));
+      setCategories(uniqueData.sort((a: any, b: any) => a.name.localeCompare(b.name)));
       setLoading(false);
     });
     return () => unsub();
