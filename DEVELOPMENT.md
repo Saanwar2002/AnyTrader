@@ -432,3 +432,8 @@ The prefix is determined by the user's primary registration role:
 - Phase C8 Complete: Introduced Professional & Consultancy path during Onboarding (`role=business`, `businessLayer=consultancy`). Isolated `CONSULTANCY_CATEGORIES` within `constants.ts` to present a non-trade focused category list during signup. Ensured `requiredCerts` handles dynamic consultancy fields, and patched `<BusinessDashboard />` to automatically load `<ConsultancyManager />` based on `profile.businessLayer`. Added missing `/consultancy/portfolio` route in `App.tsx` that routes back to `BusinessDashboard` ensuring nested views load properly. Ready for Phase C9 (Dashboard & Navigation).
 
 - Phase C9 Complete: Successfully mapped dynamic navigation routes (`consultancyNav` arrays in `Layout.tsx`) and the `<ConsultancyManager />` dashboard to dynamically respond based on the `depth` classification (SIMPLE, MEDIUM, COMPLEX) of the user's category (from `CONSULTANCY_CATEGORIES`). This completes all 30 tasks spanning 9 phases for effectively implementing the LAYOUT C (Consultancy & Professional Services) ecosystem layer. All systems operational.
+
+---
+
+## 🚨 Developer Reminders / To-Do
+- [ ] **External Calendar Sync (Phase 12.5)**: The Google/Apple calendar sync in `TraderCalendar.tsx` is currently a simulated placeholder. We need to implement proper OAuth flows and obtain/configure the necessary API keys (Google Calendar API, Apple Calendar equivalent) to make this functional in a real-life scenario.

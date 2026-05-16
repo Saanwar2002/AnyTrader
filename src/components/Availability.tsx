@@ -26,6 +26,7 @@ export default function Availability() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'calendar' | 'standard' | 'appointments'>('calendar');
+  const [jobs, setJobs] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [isAcceptingRequests, setIsAcceptingRequests] = useState(true);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
@@ -92,12 +93,26 @@ export default function Availability() {
         where("traderId", "==", user.uid),
         orderBy("date", "desc")
       );
-      const unsub = onSnapshot(q, (snapshot) => {
+      const unsubApt = onSnapshot(q, (snapshot) => {
         setAppointments(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
       }, err => {
         console.error("Error fetching appointments:", err);
       });
-      return () => unsub();
+
+      const qJobs = query(
+        collection(db, "bidding_jobs"),
+        where("assignedTo", "==", user.uid)
+      );
+      const unsubJobs = onSnapshot(qJobs, (snapshot) => {
+        setJobs(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
+      }, err => {
+        console.error("Error fetching jobs:", err);
+      });
+
+      return () => {
+        unsubApt();
+        unsubJobs();
+      };
     }
   }, [user]);
 
@@ -228,11 +243,28 @@ export default function Availability() {
   let busyCount = 0;
   let bookedCount = 0;
 
-  Object.entries(dateOverrides).forEach(([dateStr, status]) => {
-    if (dateStr.startsWith(currentMonthStr)) {
-      if (status === 'busy') busyCount++;
-      if (status === 'booked') bookedCount++;
+  const getDayStatus = (day: Date) => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    let status = dateOverrides[dateStr]; // base status from overrides
+
+    // If an override explicitly says "available", it wins
+    if (status === 'available') return 'available';
+
+    // Auto-sync Booked status based on jobs and appointments
+    const hasJob = jobs.some(j => j.status === 'accepted' && j.date && isSameDay(new Date(j.date), day));
+    const hasApt = appointments.some(a => a.status === 'confirmed' && a.date && isSameDay(new Date(a.date), day));
+    
+    if (hasJob || hasApt) {
+      return 'booked';
     }
+
+    return status; // could be 'busy' or 'booked' from overrides
+  };
+
+  eachDayOfInterval({ start: monthStart, end: monthEnd }).forEach(day => {
+    const status = getDayStatus(day);
+    if (status === 'busy') busyCount++;
+    if (status === 'booked') bookedCount++;
   });
 
   const daysInMonth = monthEnd.getDate();
@@ -411,7 +443,8 @@ export default function Availability() {
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, i) => {
                 const dateStr = format(day, 'yyyy-MM-dd');
-                const status = dateOverrides[dateStr];
+                const status = getDayStatus(day);
+                const explicitOverride = dateOverrides[dateStr];
                 const isSelected = selectedDates.some(d => isSameDay(d, day));
                 const isPast = isBefore(day, startOfDay(new Date()));
                 const isCurrentMonth = isSameMonth(day, currentMonth);
@@ -429,7 +462,7 @@ export default function Availability() {
                       isSelected && "ring-2 ring-blue-600 ring-offset-2",
                       status === "available" && "bg-green-50 text-green-700",
                       status === "busy" && "bg-orange-50 text-orange-700",
-                      status === "booked" && "bg-slate-800 text-white hover:bg-slate-700"
+                      status === "booked" && "bg-slate-800 text-white hover:bg-slate-700 hover:text-white"
                     )}
                   >
                     {format(day, 'd')}
