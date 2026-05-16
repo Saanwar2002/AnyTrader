@@ -151,7 +151,7 @@ export default function PartnerPerks({ limit }: { limit?: number }) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            className="group block bg-slate-50/50 hover:bg-slate-100 border border-slate-200/50 p-3 rounded-xl transition-all relative overflow-hidden"
+            className="group block bg-white hover:bg-slate-50 border border-black p-3 rounded-2xl transition-all relative overflow-hidden"
           >
              <div className="flex items-center justify-between gap-3">
                <div className="flex-1 min-w-0">
