@@ -127,19 +127,19 @@ export default function PartnerPerks({ limit }: { limit?: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Award className="w-5 h-5 text-primary" />
-          <h2 className="text-xl font-bold text-slate-900">Partner Perks & Offers</h2>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 opacity-60 mix-blend-multiply">
+          <Award className="w-4 h-4 text-slate-500" />
+          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Partner Perks & Offers</h2>
         </div>
         {!limit && (
-          <p className="text-xs text-slate-500 font-medium">Exclusive deals for AnyTrader Pros</p>
+          <p className="text-xs text-slate-400 font-medium">Exclusive deals for AnyTrader Pros</p>
         )}
       </div>
 
       <div className={cn(
-        "grid gap-4",
-        limit ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+        "grid gap-3",
+        limit ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
       )}>
         {displayPerks.map((perk, idx) => (
           <motion.a
@@ -148,41 +148,40 @@ export default function PartnerPerks({ limit }: { limit?: number }) {
             target={perk.link === "#" ? undefined : "_blank"}
             rel="noopener noreferrer"
             onClick={() => handlePerkClick(perk)}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            className="group relative bg-white p-5 rounded-[2rem] border border-black shadow-sm hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all flex flex-col justify-between"
+            className="group block bg-slate-50/80 border border-dashed border-slate-300 p-3 rounded-2xl hover:bg-slate-100 hover:border-slate-400 transition-all relative overflow-hidden"
           >
-            {perk.badge && (
-              <div className="absolute top-4 right-4 px-2 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest">
-                {perk.badge}
-              </div>
-            )}
-            
-            <div>
-              <div className={cn(
-                "w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110",
-                perk.color === "blue" ? "bg-blue-50 text-blue-600" :
-                perk.color === "orange" ? "bg-orange-50 text-orange-600" :
-                perk.color === "red" ? "bg-red-50 text-red-600" :
-                perk.color === "green" ? "bg-green-50 text-green-600" :
-                "bg-rose-50 text-rose-600"
-              )}>
-                <perk.icon className="w-6 h-6" />
-              </div>
-              
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{perk.category}</p>
-              <h3 className="text-lg font-black text-slate-900 mb-2 group-hover:text-primary transition-colors">{perk.title}</h3>
-              <p className="text-sm text-slate-500 leading-relaxed mb-6">{perk.description}</p>
-            </div>
-
-            <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50">
-              <span className="text-xs font-black text-primary uppercase tracking-tight flex items-center gap-1">
-                {perk.cta}
-                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </span>
-              <ExternalLink className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
-            </div>
+             <div className="flex items-start gap-3">
+               <div className={cn(
+                 "w-10 h-10 rounded-xl shrink-0 flex items-center justify-center transition-transform group-hover:scale-105",
+                 perk.color === "blue" ? "bg-blue-100 text-blue-600" :
+                 perk.color === "orange" ? "bg-orange-100 text-orange-600" :
+                 perk.color === "red" ? "bg-red-100 text-red-600" :
+                 perk.color === "green" ? "bg-green-100 text-green-600" :
+                 "bg-rose-100 text-rose-600"
+               )}>
+                 <perk.icon className="w-5 h-5" />
+               </div>
+               <div className="flex-1 min-w-0 pt-0.5">
+                 <div className="flex items-center gap-2 mb-1">
+                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-white px-1.5 py-0.5 rounded-md border border-slate-200 shadow-sm leading-none flex items-center">
+                     Sponsored
+                   </span>
+                   {perk.badge && (
+                     <span className="text-[9px] font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded-full truncate leading-none">
+                       {perk.badge}
+                     </span>
+                   )}
+                 </div>
+                 <h3 className="text-sm font-bold text-slate-700 group-hover:text-slate-900 truncate">{perk.title}</h3>
+                 <p className="text-xs text-slate-500 line-clamp-1 mt-0.5 pr-2">{perk.description}</p>
+               </div>
+               <div className="shrink-0 flex flex-col items-center justify-center h-10">
+                 <ExternalLink className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
+               </div>
+             </div>
           </motion.a>
         ))}
       </div>

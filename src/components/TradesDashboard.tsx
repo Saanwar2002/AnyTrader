@@ -5,6 +5,7 @@ import {
 } from "@/src/firebase";
 import { getRecommendedJobs } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
+import { TraderUpcomingAppointments } from './shared/TraderUpcomingAppointments';
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Briefcase, Clock, MessageSquare, CheckCircle2, 
@@ -1018,6 +1019,8 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
           </div>
         </div>
       </div>
+
+      <TraderUpcomingAppointments />
 
       {/* Partner Perks Section */}
       <div className="mt-12">
