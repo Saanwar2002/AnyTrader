@@ -22,6 +22,23 @@ export default function TraderCalendar() {
   const [timeOffset, setTimeOffset] = useState(0);
   const [showViewMenu, setShowViewMenu] = useState(false);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      const saved = localStorage.getItem(`calendar_viewFilter_${user.uid}`);
+      if (saved === 'today' || saved === 'week' || saved === 'month') {
+        setViewFilter(saved as 'today' | 'week' | 'month');
+      }
+      setIsInitialized(true);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user && isInitialized) {
+      localStorage.setItem(`calendar_viewFilter_${user.uid}`, viewFilter);
+    }
+  }, [viewFilter, user, isInitialized]);
 
   useEffect(() => {
     if (scrollContainerRef.current) {

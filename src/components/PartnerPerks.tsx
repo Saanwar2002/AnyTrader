@@ -151,35 +151,25 @@ export default function PartnerPerks({ limit }: { limit?: number }) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            className="group block bg-slate-50/80 border border-dashed border-slate-300 p-3 rounded-2xl hover:bg-slate-100 hover:border-slate-400 transition-all relative overflow-hidden"
+            className="group block bg-slate-50/50 hover:bg-slate-100 border border-slate-200/50 p-3 rounded-xl transition-all relative overflow-hidden"
           >
-             <div className="flex items-start gap-3">
-               <div className={cn(
-                 "w-10 h-10 rounded-xl shrink-0 flex items-center justify-center transition-transform group-hover:scale-105",
-                 perk.color === "blue" ? "bg-blue-100 text-blue-600" :
-                 perk.color === "orange" ? "bg-orange-100 text-orange-600" :
-                 perk.color === "red" ? "bg-red-100 text-red-600" :
-                 perk.color === "green" ? "bg-green-100 text-green-600" :
-                 "bg-rose-100 text-rose-600"
-               )}>
-                 <perk.icon className="w-5 h-5" />
-               </div>
-               <div className="flex-1 min-w-0 pt-0.5">
-                 <div className="flex items-center gap-2 mb-1">
-                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-white px-1.5 py-0.5 rounded-md border border-slate-200 shadow-sm leading-none flex items-center">
-                     Sponsored
+             <div className="flex items-center justify-between gap-3">
+               <div className="flex-1 min-w-0">
+                 <div className="flex items-center gap-1.5 mb-1">
+                   <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400 bg-slate-200/50 px-1.5 py-0.5 rounded flex items-center leading-none">
+                     Add
                    </span>
                    {perk.badge && (
-                     <span className="text-[9px] font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded-full truncate leading-none">
-                       {perk.badge}
+                     <span className="text-[9px] font-semibold text-slate-500 truncate leading-none">
+                       • {perk.badge}
                      </span>
                    )}
                  </div>
-                 <h3 className="text-sm font-bold text-slate-700 group-hover:text-slate-900 truncate">{perk.title}</h3>
-                 <p className="text-xs text-slate-500 line-clamp-1 mt-0.5 pr-2">{perk.description}</p>
+                 <h3 className="text-sm font-semibold text-slate-600 truncate">{perk.category}: {perk.title}</h3>
+                 <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{perk.description}</p>
                </div>
-               <div className="shrink-0 flex flex-col items-center justify-center h-10">
-                 <ExternalLink className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
+               <div className="shrink-0 flex items-center">
+                 <ExternalLink className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
                </div>
              </div>
           </motion.a>
