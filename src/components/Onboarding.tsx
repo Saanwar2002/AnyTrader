@@ -248,7 +248,7 @@ export default function Onboarding() {
     }
 
     try {
-      const finalRole = isTestAdmin ? "admin" : (role === "business" && businessLayer === "field_services" ? "tradesperson" : role);
+      const finalRole = isTestAdmin ? "admin" : role;
       const finalName = finalRole === "admin" && !name ? "System Admin" : name;
       const finalPhone = finalRole === "admin" && !phone ? "N/A" : cleanPhone;
       
@@ -314,7 +314,7 @@ export default function Onboarding() {
       const deviceId = btoa(navigator.userAgent + navigator.language + screen.width + screen.height);
       
       // Generate Member ID
-      const { memberId, memberSequence } = await generateMemberId(isBusiness ? (role === "business" && businessLayer === "field_services" ? "tradesperson" : "business") : "homeowner");
+      const { memberId, memberSequence } = await generateMemberId(isBusiness ? "business" : "homeowner");
 
       // Fraud Detection: Check for existing accounts with same Device ID or IP
       let accountFlags: string[] = [];
@@ -351,7 +351,7 @@ export default function Onboarding() {
             ? (homeownerType === "business" ? "Business Professional" : "Standard Homeowner")
             : (platformConfig?.feeTiers?.[0]?.name || "Free Explorer")
         ),
-        subscriptionType: role === "business" && (businessLayer === "properties" || businessLayer === "consultancy") ? "business" : null,
+        subscriptionType: role === "business" ? "business" : null,
         businessCategory: role === "business" ? businessCategory : null,
         permissions: finalPermissions,
         deviceId,
