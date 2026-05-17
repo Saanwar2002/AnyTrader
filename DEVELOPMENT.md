@@ -439,5 +439,5 @@ The prefix is determined by the user's primary registration role:
 
 ## 🚨 Developer Reminders / To-Do
 - [ ] **External Calendar Sync (Phase 12.5)**: The Google/Apple calendar sync in `TraderCalendar.tsx` is currently a simulated placeholder. We need to implement proper OAuth flows and obtain/configure the necessary API keys (Google Calendar API, Apple Calendar equivalent) to make this functional in a real-life scenario.
-- [ ] **Hire B2B Services Synchronization**: Ensure that the "MHQ" (My Hiring Quotes) tab perfectly synchronizes its data and status updates with the "Projects" (My Jobs) tab for Business users. Any state changes occurring on received quotes must seamlessly reflect over the project workflow so traders don't experience blind spots.
-- [ ] **Ecosystem Handoff**: Thoroughly test the linkage between posting a "Hire B2B Service" job, receiving a quote (under MHQ), converting that quote, and it moving gracefully into the active calendar/project timeline.
+- [x] **Hire B2B Services Synchronization**: Ensure that the "MHQ" (My Hiring Quotes) tab perfectly synchronizes its data and status updates with the "Projects" (My Jobs) tab for Business users. Any state changes occurring on received quotes must seamlessly reflect over the project workflow so traders don't experience blind spots.
+- [x] **Ecosystem Handoff**: Thoroughly test the linkage between posting a "Hire B2B Service" job, receiving a quote (under MHQ), converting that quote, and it moving gracefully into the active calendar/project timeline.

@@ -960,13 +960,22 @@ const libraries: any[] = ['places'];
     if (!id) return;
     setLoading(true);
     try {
+      const newPaymentStatus = job.paymentStatus === "handshake_complete" || job.isPaid ? job.paymentStatus : "pending";
       await updateDoc(doc(db, "jobs", id), {
         status: "completed",
         completedAt: serverTimestamp(),
         hasReview: false,
-        hasTradespersonReview: false
+        hasTradespersonReview: false,
+        paymentStatus: newPaymentStatus
       });
-      setJob((prev: any) => ({ ...prev, status: "completed", completedAt: new Date(), hasReview: false, hasTradespersonReview: false }));
+      setJob((prev: any) => ({ 
+        ...prev, 
+        status: "completed", 
+        completedAt: new Date(), 
+        hasReview: false, 
+        hasTradespersonReview: false,
+        paymentStatus: newPaymentStatus
+      }));
       
       // Notify tradesperson and update their stats
       const acceptedQuote = quotes.find(q => q.status === "accepted");
@@ -1170,6 +1179,13 @@ const libraries: any[] = ['places'];
   const [rescheduleReason, setRescheduleReason] = useState("");
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [isUploadingBeforePhoto, setIsUploadingBeforePhoto] = useState(false);
+  const [showPaymentReminder, setShowPaymentReminder] = useState(false);
+  const [reminderChannels, setReminderChannels] = useState({
+    app: true,
+    whatsapp: false,
+    email: false,
+    sms: false
+  });
   const [payoutSummary, setPayoutSummary] = useState<PayoutBreakdown | null>(null);
   
   useEffect(() => {
@@ -1784,6 +1800,52 @@ const libraries: any[] = ['places'];
       setQuoteScope(myQuote.quoteScope || "complete_package");
     }
   }, [needsRequote, myQuote]);
+
+  const handleSendPaymentReminder = async () => {
+    if (!job || !id) return;
+    
+    // In job details, sometimes isHomeowner might be true, but since this is for the tradesperson, it should be called by the tradesperson
+    const acceptedQuote = quotes.find(q => q.status === "accepted");
+    const amount = ((acceptedQuote?.amount || 0) * 1.20).toFixed(2);
+    
+    const invoiceSubject = encodeURIComponent(`Payment Reminder: Invoice for ${job.title}`);
+    const messageBody = `Hi ${job?.homeownerName || 'Customer'},\n\nThis is a gentle reminder that the payment for "${job.title}" is still pending.\n\nThe total amount due is £${amount}.\n\nPlease settle the payment at your earliest convenience.\n\nThank you!`;
+    const encodedBodyText = encodeURIComponent(messageBody);
+
+    try {
+      if (reminderChannels.app) {
+        await sendNotification(
+          job.homeownerId,
+          "Payment Reminder",
+          `Friendly reminder: Payment of £${amount} for "${job.title}" is pending.`,
+          `/job/${id}`
+        );
+        toast.success("App notification sent.");
+      }
+
+      if (reminderChannels.email) {
+        window.location.href = `mailto:?subject=${invoiceSubject}&body=${encodedBodyText}`;
+      }
+
+      if (reminderChannels.whatsapp) {
+        window.open(`https://wa.me/?text=${encodedBodyText}`, '_blank');
+      }
+
+      if (reminderChannels.sms) {
+        window.open(`sms:?body=${encodedBodyText}`, '_blank');
+      }
+      
+      if (!reminderChannels.app && !reminderChannels.email && !reminderChannels.whatsapp && !reminderChannels.sms) {
+        toast.error("Please select at least one channel to send the reminder.");
+        return;
+      }
+
+      setShowPaymentReminder(false);
+    } catch (e) {
+      console.error("Error sending payment reminder:", e);
+      toast.error("Failed to send some reminders. Please try again.");
+    }
+  };
 
   const handleDownloadInvoice = () => {
     if (!job || !myQuote || !profile) return;
@@ -4597,9 +4659,15 @@ const libraries: any[] = ['places'];
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-black space-y-4">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-bold text-[#1e3a8a] text-[19px]">Financial Summary</h3>
-                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Fully Paid
-                </div>
+                {(job.paymentStatus === "pending" || job.paymentStatus === "unpaid") ? (
+                  <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" /> Payment Pending
+                  </div>
+                ) : (
+                  <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {(job.paymentStatus === "handshake_complete" || job.isPaid) ? "Fully Paid" : "Paid"}
+                  </div>
+                )}
               </div>
               <div className="space-y-3">
                 <div className="flex justify-between items-center bg-white">
@@ -4612,7 +4680,7 @@ const libraries: any[] = ['places'];
                 </div>
                 <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-black"></div>
                 <div className="flex justify-between items-center pt-1">
-                   <span className="text-black font-black text-[18px]">Total Paid:</span>
+                   <span className="text-black font-black text-[18px]">Total {job.paymentStatus === "pending" ? "Due" : "Paid"}:</span>
                    <span className="text-black font-black text-[18px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 1.20).toFixed(2)}</span>
                 </div>
               </div>
@@ -4654,6 +4722,90 @@ const libraries: any[] = ['places'];
 
         {!isHomeowner && job.status === "completed" && (myQuote?.status === "accepted" || job.acceptedTradespersonId === user?.uid) && (
           <div className="space-y-4">
+            {job.paymentStatus === "pending" && (
+              <div className="bg-amber-50 rounded-3xl p-6 border border-amber-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <PoundSterling className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-amber-900">Payment Pending</h3>
+                    <p className="text-amber-700 text-xs text-balance mt-0.5">Wait for the homeowner to pay, or mark as paid if you received the funds via cash/transfer.</p>
+                  </div>
+                </div>
+                
+                {showPaymentReminder ? (
+                  <div className="bg-white border text-sm border-amber-200 rounded-2xl p-4 mb-4 space-y-4">
+                    <h4 className="font-bold text-amber-900 mb-2">Send Payment Reminder</h4>
+                    <p className="text-xs text-amber-700 mb-3 block">Choose how you want to remind the customer:</p>
+                    
+                    <div className="space-y-2">
+                       <label className="flex items-center gap-2 cursor-pointer text-amber-900 font-medium">
+                         <input type="checkbox" checked={reminderChannels.app} onChange={(e) => setReminderChannels({...reminderChannels, app: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500 bg-amber-50 border-amber-300 w-4 h-4" />
+                         <span>In-App Notification</span>
+                       </label>
+                       <label className="flex items-center gap-2 cursor-pointer text-amber-900 font-medium">
+                         <input type="checkbox" checked={reminderChannels.whatsapp} onChange={(e) => setReminderChannels({...reminderChannels, whatsapp: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500 bg-amber-50 border-amber-300 w-4 h-4" />
+                         <span>WhatsApp Message</span>
+                       </label>
+                       <label className="flex items-center gap-2 cursor-pointer text-amber-900 font-medium">
+                         <input type="checkbox" checked={reminderChannels.email} onChange={(e) => setReminderChannels({...reminderChannels, email: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500 bg-amber-50 border-amber-300 w-4 h-4" />
+                         <span>Email</span>
+                       </label>
+                       <label className="flex items-center gap-2 cursor-pointer text-amber-900 font-medium">
+                         <input type="checkbox" checked={reminderChannels.sms} onChange={(e) => setReminderChannels({...reminderChannels, sms: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500 bg-amber-50 border-amber-300 w-4 h-4" />
+                         <span>SMS</span>
+                       </label>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                      <button 
+                        onClick={() => setShowPaymentReminder(false)}
+                        className="flex-1 bg-amber-100 text-amber-800 p-3 rounded-xl font-bold hover:bg-amber-200 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleSendPaymentReminder}
+                        className="flex-1 bg-amber-600 text-white p-3 rounded-xl font-bold hover:bg-amber-700 transition-colors"
+                      >
+                        Send Now
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => setShowPaymentReminder(true)}
+                    className="w-full bg-white text-amber-700 border-2 border-amber-200 p-4 rounded-2xl font-bold hover:bg-amber-100 transition-all flex items-center justify-center gap-2 mb-3"
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                    Send Payment Reminder
+                  </button>
+                )}
+
+                <button 
+                  onClick={async () => {
+                    if (!id) return;
+                    try {
+                      await updateDoc(doc(db, "jobs", id), {
+                        paymentStatus: "handshake_complete",
+                        isPaid: true
+                      });
+                      setJob((prev: any) => ({ ...prev, paymentStatus: "handshake_complete", isPaid: true }));
+                      toast.success("Job marked as Paid!");
+                    } catch (e) {
+                      console.error("Error marking as paid", e);
+                      toast.error("Failed to update payment status");
+                    }
+                  }}
+                  className="w-full bg-amber-600 text-white p-4 rounded-2xl font-bold hover:bg-amber-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  Mark as Paid Manually
+                </button>
+              </div>
+            )}
+
             {myQuote?.status === "accepted" && (
               <button 
                 onClick={handleDownloadInvoice}

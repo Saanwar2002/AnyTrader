@@ -37,6 +37,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
   const [postedJobs, setPostedJobs] = useState<any[]>([]);
   const [recommendedJobs, setRecommendedJobs] = useState<any[]>([]);
+  const [pendingPaymentJobs, setPendingPaymentJobs] = useState<any[]>([]);
   const [isRecommending, setIsRecommending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedJobMedia, setSelectedJobMedia] = useState<any | null>(null);
@@ -290,6 +291,22 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       setLoading(false);
     });
 
+    // Fetch pending payment jobs
+    const pendingPaymentJobsQuery = query(
+      collection(db, "jobs"),
+      where("acceptedTradespersonId", "==", user.uid),
+      where("status", "==", "completed")
+    );
+
+    const unsubscribePendingPaymentJobs = onSnapshot(pendingPaymentJobsQuery, (snapshot) => {
+      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      // Filter those that are not explicitly paid
+      const unpaid = jobsData.filter(j => j.paymentStatus === "pending" || j.paymentStatus === "unpaid" || (!j.paymentStatus && !j.isPaid));
+      setPendingPaymentJobs(unpaid);
+    }, (error) => {
+      console.error("Error fetching pending payment jobs:", error);
+    });
+
     // Fetch jobs posted by this tradesperson (acting as homeowner)
     const postedJobsQuery = query(
       collection(db, "jobs"),
@@ -309,6 +326,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
     return () => {
       unsubscribeQuotes();
       unsubscribeJobs();
+      unsubscribePendingPaymentJobs();
       unsubscribePostedJobs();
     };
   }, [user, profile]);
@@ -1021,6 +1039,43 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       </div>
 
       <TraderUpcomingAppointments />
+
+      {/* Payment Pending Section */}
+      {pendingPaymentJobs.length > 0 && (
+        <div className="mt-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-slate-900 border-l-4 border-amber-500 pl-3">Payment Pending</h3>
+          </div>
+          <div className="space-y-3">
+            {pendingPaymentJobs.map((job) => (
+              <Link
+                key={job.id}
+                to={`/job/${job.id}`}
+                className="bg-white p-4 rounded-2xl border border-black shadow-sm flex items-center gap-4 hover:border-amber-200 hover:shadow-md transition-all group relative overflow-hidden"
+              >
+                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500 rounded-l-2xl"></div>
+                <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 shrink-0 group-hover:bg-amber-100 transition-colors">
+                  <PoundSterling className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-slate-900 truncate group-hover:text-amber-600 transition-colors">
+                    {job.title || "Untitled Job"}
+                  </h4>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-xs text-slate-500">{new Date(job.completedAt?.toDate?.() || job.completedAt).toLocaleDateString()}</p>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      Awaiting Payment
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right flex items-center gap-2">
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-600 transition-colors" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Partner Perks Section */}
       <div className="mt-12">
