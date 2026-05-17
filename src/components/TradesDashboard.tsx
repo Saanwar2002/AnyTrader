@@ -693,44 +693,44 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
-        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-center min-w-0">
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 sm:gap-2.5">
+        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-between min-w-0 h-20">
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-5 h-5 bg-blue-50 rounded-md flex items-center justify-center text-blue-600 shrink-0">
               <PoundSterling className="w-3 h-3" />
             </div>
             <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight truncate">Quotes</p>
           </div>
-          <p className="text-lg sm:text-xl font-bold text-slate-900 truncate">{stats.activeQuotes}</p>
+          <p className="text-lg sm:text-lg font-black text-slate-900 truncate leading-none">{stats.activeQuotes}</p>
         </div>
-        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-center min-w-0">
+        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-between min-w-0 h-20">
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-5 h-5 bg-green-50 rounded-md flex items-center justify-center text-green-600 shrink-0">
               <Briefcase className="w-3 h-3" />
             </div>
             <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight truncate">Active Jobs</p>
           </div>
-          <p className="text-lg sm:text-xl font-bold text-slate-900 truncate">{stats.activeJobs}</p>
+          <p className="text-lg sm:text-lg font-black text-slate-900 truncate leading-none">{stats.activeJobs}</p>
         </div>
-        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-center min-w-0">
+        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-between min-w-0 h-20">
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-5 h-5 bg-indigo-50 rounded-md flex items-center justify-center text-indigo-600 shrink-0">
               <Calendar className="w-3 h-3" />
             </div>
             <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight truncate">Upcoming</p>
           </div>
-          <p className="text-lg sm:text-xl font-bold text-slate-900 truncate">{stats.upcomingJobs}</p>
+          <p className="text-lg sm:text-lg font-black text-slate-900 truncate leading-none">{stats.upcomingJobs}</p>
         </div>
-        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-center min-w-0">
+        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-between min-w-0 h-20">
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-5 h-5 bg-amber-50 rounded-md flex items-center justify-center text-amber-600 shrink-0">
               <Star className="w-3 h-3 fill-current" />
             </div>
             <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight truncate">Rating</p>
           </div>
-          <p className="text-lg sm:text-xl font-bold text-slate-900 truncate">{profile?.rating ? profile.rating.toFixed(1) : "N/A"}</p>
+          <p className="text-lg sm:text-lg font-black text-slate-900 truncate leading-none">{profile?.rating ? profile.rating.toFixed(1) : "N/A"}</p>
         </div>
-        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-center min-w-0">
+        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-between min-w-0 h-20">
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-5 h-5 bg-purple-50 rounded-md flex items-center justify-center text-purple-600 shrink-0">
               <ShieldCheck className="w-3 h-3" />
@@ -738,11 +738,20 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
             <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight truncate">Status</p>
           </div>
           <p className={cn(
-            "text-[11px] sm:text-xs font-bold truncate",
+            "text-xs sm:text-xs font-black truncate leading-none",
             profile?.verificationStatus === "verified" ? "text-green-600" : "text-amber-600"
           )}>
             {profile?.verificationStatus === "verified" ? "Verified" : "Unverified"}
           </p>
+        </div>
+        <div className="bg-white p-2.5 rounded-xl border border-black shadow-sm flex flex-col justify-between min-w-0 h-20">
+          <div className="flex items-center gap-1.5 mb-1">
+            <div className="w-5 h-5 bg-red-50 rounded-md flex items-center justify-center text-red-600 shrink-0">
+              <AlertCircle className="w-3 h-3" />
+            </div>
+            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight truncate">Unpaid Invcs</p>
+          </div>
+          <p className="text-lg sm:text-lg font-black text-slate-900 truncate leading-none">{pendingPaymentJobs.length}</p>
         </div>
       </div>
       

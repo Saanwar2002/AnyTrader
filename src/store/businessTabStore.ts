@@ -27,10 +27,17 @@ export const useBusinessTab = () => {
   useEffect(() => {
     const handleStateChange = (tab: BusinessTab, subTab: BusinessSubTab) => setState({ tab, subTab });
     listeners.add(handleStateChange);
+    
+    // Synchronize state in case it was updated by a child component's useEffect
+    // before this component's useEffect had a chance to run.
+    if (state.tab !== currentTab || state.subTab !== currentSubTab) {
+      setState({ tab: currentTab, subTab: currentSubTab });
+    }
+
     return () => {
       listeners.delete(handleStateChange);
     };
-  }, []);
+  }, [state.tab, state.subTab]);
 
   return { 
     activeTab: state.tab, 
