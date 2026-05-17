@@ -188,9 +188,9 @@ function SearchingTimer() {
   const secs = (elapsed % 60).toString().padStart(2, '0');
   
   return (
-    <div className="flex flex-col items-center justify-center bg-[#f8fafc] border border-black px-6 py-3.5 rounded-[20px] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] mb-4 min-w-[140px]">
-      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.1em] mb-1.5">Time Elapsed</p>
-      <p className="text-[28px] leading-none font-black text-slate-900 tracking-tight">{mins.toString().padStart(2, '0')}:{secs}</p>
+    <div className="flex items-center justify-between bg-[#f8fafc] border border-black px-6 py-2 rounded-[16px] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] mb-3 w-full max-w-[320px]">
+      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.1em]">Time Elapsed</p>
+      <p className="text-[24px] leading-none font-black text-slate-900 tracking-tight">{mins.toString().padStart(2, '0')}:{secs}</p>
     </div>
   );
 }
@@ -3186,11 +3186,10 @@ export default function PassengerBooking() {
             )}
 
             {step === "searching" && (
-              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[32px] p-6 flex flex-col items-center border-t border-black pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)] relative z-20">
-                <div className="w-10 h-[5px] bg-slate-200 rounded-full mb-5"/>
-                <p className="text-slate-800 text-sm font-semibold mb-1">Searching for drivers...</p>
-                <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Requesting...</h2>
-                <p className="text-slate-600 font-medium text-[15px] text-center mb-6 max-w-[280px]">Pinging the fleet to find your professional driver.</p>
+              <motion.div key="searching" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[24px] px-6 pt-3 pb-6 flex flex-col items-center border-t border-black pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.12)] relative z-20">
+                <div className="w-10 h-[5px] bg-slate-200 rounded-full mb-3 shrink-0"/>
+                <p className="text-slate-800 text-xs font-semibold mb-1">Searching for drivers...</p>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-3">Requesting...</h2>
                 
                 <SearchingTimer />
 
