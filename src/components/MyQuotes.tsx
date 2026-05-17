@@ -185,7 +185,7 @@ export default function MyQuotes() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold text-slate-900">
-          My Quotes
+          My Trade Quotes
         </h1>
         
         <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar mt-2">

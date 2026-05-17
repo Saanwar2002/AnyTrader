@@ -24,7 +24,7 @@ export function HireB2BServiceManager() {
     );
 
     const unsub = onSnapshot(q, async (snapshot) => {
-      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       setQuotes(quotesData);
 
       // Fetch corresponding job info to show property/venue at top
