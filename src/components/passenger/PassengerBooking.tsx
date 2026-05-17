@@ -3469,42 +3469,48 @@ export default function PassengerBooking() {
                 )}
                 
                 {(assignedDriverInfo?.status === "in_progress" || assignedDriverInfo?.status === "awaiting_payment") && (
-                    <div className="flex items-center gap-2 mt-3 overflow-x-auto no-scrollbar pb-1">
-                      <button 
-                         onClick={submitTipInline}
-                         disabled={(!selectedTip && (!customTip || parseFloat(customTip) <= 0)) || isAddingTip || assignedDriverInfo?.status === "awaiting_payment"}
-                         className={cn("px-3 py-1.5 rounded-[10px] font-bold text-[14px] transition-all shrink-0 border-2", isAddingTip ? "bg-[#0a1930] text-white border-[#0a1930]" : ((selectedTip || parseFloat(customTip)) ? "border-[#0a1930] bg-white text-[#0a1930]" : "border-transparent text-slate-900 bg-transparent px-1 mr-1"), assignedDriverInfo?.status === "awaiting_payment" && "opacity-50")}
-                      >
-                         {(!selectedTip && (!customTip || parseFloat(customTip) <= 0)) ? "Select Tip" : "Add Tip"}
-                      </button>
-                      {[2, 3, 5].map((amount) => (
-                        <button key={amount} onClick={() => { 
+                    <div className="relative mt-4 mb-2">
+                      {selectedTip !== null && (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="absolute bottom-[calc(100%+12px)] left-0 bg-emerald-50 border border-emerald-500 rounded-[12px] p-3 shadow-lg z-10 w-[240px]">
+                           <p className="text-emerald-900 text-[13px] font-bold mb-2.5">Are you confirming you want to add a tip?</p>
+                           <div className="flex gap-2">
+                             <button onClick={() => { handleAddTip(selectedTip); setSelectedTip(null); }} className="flex-1 bg-emerald-600 border border-emerald-700 text-white text-[13px] font-bold py-1.5 rounded-[8px] active:scale-95 transition-transform">Yes</button>
+                             <button onClick={() => setSelectedTip(null)} className="flex-1 bg-white border border-emerald-300 text-emerald-800 text-[13px] font-bold py-1.5 rounded-[8px] active:scale-95 transition-transform">No</button>
+                           </div>
+                        </motion.div>
+                      )}
+                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                        {[2, 3, 5].map((amount) => {
+                          const isApplied = (assignedDriverInfo?.tipAmount || 0) === amount;
+                          const isPending = selectedTip === amount;
+                          const isHighlighted = isApplied || isPending;
+                          
+                          return (
+                            <button key={amount} onClick={() => { 
+                                if (assignedDriverInfo?.status === "awaiting_payment" || isApplied) return;
+                                if (selectedTip === amount) {
+                                  setSelectedTip(null);
+                                } else {
+                                  setSelectedTip(amount); 
+                                  setCustomTip(""); 
+                                }
+                              }}
+                              className={cn("px-5 py-2.5 rounded-[12px] font-bold text-[15px] transition-all shrink-0", isHighlighted ? "bg-emerald-600 text-white shadow-[0_2px_10px_rgba(5,150,105,0.3)] border border-emerald-700" : "bg-[#e2e8f0] text-[#0a1930] border border-transparent", assignedDriverInfo?.status === "awaiting_payment" || isApplied ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-300")}
+                            >
+                              £{amount}
+                            </button>
+                          );
+                        })}
+                        <button onClick={() => {
                             if (assignedDriverInfo?.status === "awaiting_payment") return;
-                            if (selectedTip === amount) {
-                              setSelectedTip(null);
-                            } else {
-                              setSelectedTip(amount); 
-                              setCustomTip(""); 
-                            }
-                          }}
-                          className={cn("px-4 py-1.5 rounded-[10px] font-bold text-[14px] transition-all shrink-0", selectedTip === amount ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930]", assignedDriverInfo?.status === "awaiting_payment" ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-300")}
-                        >
-                          £{amount}
-                        </button>
-                      ))}
-                      <button onClick={() => {
-                          if (assignedDriverInfo?.status === "awaiting_payment") return;
-                          if (!selectedTip && parseFloat(customTip) > 0) {
-                            setCustomTip("");
-                            setSelectedTip(null);
-                          } else {
                             setShowCustomTipKeypad(true);
-                          }
-                        }}
-                        className={cn("px-4 py-1.5 rounded-[10px] font-bold text-[14px] transition-all shrink-0", (!selectedTip && parseFloat(customTip) > 0) ? "bg-[#0a1930] text-white" : "bg-[#e2e8f0] text-[#0a1930]", assignedDriverInfo?.status === "awaiting_payment" ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-300")}
-                      >
-                        {(!selectedTip && parseFloat(customTip) > 0) ? `£${parseFloat(customTip)}` : "Custom"}
-                      </button>
+                          }}
+                          className={cn("px-5 py-2.5 rounded-[12px] font-bold text-[15px] transition-all shrink-0", 
+                            ((assignedDriverInfo?.tipAmount || 0) > 0 && ![2, 3, 5].includes(assignedDriverInfo?.tipAmount || 0)) ? "bg-emerald-600 text-white shadow-[0_2px_10px_rgba(5,150,105,0.3)] border border-emerald-700" : "bg-[#e2e8f0] text-[#0a1930] border border-transparent", assignedDriverInfo?.status === "awaiting_payment" ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-300")}
+                        >
+                          {((assignedDriverInfo?.tipAmount || 0) > 0 && ![2, 3, 5].includes(assignedDriverInfo?.tipAmount || 0)) ? `£${assignedDriverInfo!.tipAmount.toFixed(2)}` : "Custom"}
+                        </button>
+                     </div>
                    </div>
                 )}
                 
@@ -3612,6 +3618,7 @@ export default function PassengerBooking() {
                            <button onClick={() => {
                               const amount = parseFloat(customTip);
                               if (amount > 0) {
+                                handleAddTip(amount);
                                 setSelectedTip(null);
                                 setShowCustomTipKeypad(false);
                               }
