@@ -151,7 +151,7 @@ export default function RoleTabBar() {
                onClick={() => setActiveSubTab("hire_b2b")}
                className={cn(
                  "py-1 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-bold transition-all flex-1 text-center whitespace-nowrap",
-                 activeSubTab === "hire_b2b" ? "bg-[#0055DD] shadow-sm text-white" : "text-slate-700 hover:bg-blue-100"
+                 activeSubTab === "hire_b2b" ? "bg-sky-600 shadow-sm text-white" : "text-slate-700 hover:bg-blue-100"
                )}
             >
                Hire B2B Service
