@@ -2910,19 +2910,26 @@ export default function PassengerBooking() {
                         {/* Driver Availability */}
                         <div className={cn(
                           "flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] font-bold text-sm transition-colors duration-300 shadow-sm",
-                          (nearbyDriversCount > 0 || driversAvailableSoonCount > 0)
-                            ? "bg-emerald-600 text-[#F8F9FA]" 
-                            : "bg-red-100 text-red-800"
+                          (nearbyDriversCount === 0 && driversAvailableSoonCount === 0)
+                            ? "bg-red-100 text-red-800" 
+                            : waitWarning 
+                              ? "bg-amber-100 text-amber-900" 
+                              : "bg-emerald-600 text-[#F8F9FA]"
                         )}>
                           <Car className="w-[18px] h-[18px] shrink-0" />
                           <span>
-                            {nearbyDriversCount === 0 && driversAvailableSoonCount === 0 && "No drivers available nearby"}
-                            {(nearbyDriversCount > 0 || driversAvailableSoonCount > 0) && (
-                              estimatedWaitEta !== null ? (
-                                estimatedWaitEta > 20 ? "Driver available in 20+ mins" :
-                                `Driver available within ${Math.max(5, Math.ceil(estimatedWaitEta / 5) * 5)} mins`
-                              ) : "Driver available soon"
-                            )}
+                            {(() => {
+                               if (nearbyDriversCount === 0 && driversAvailableSoonCount === 0) return "No drivers available nearby (Approx)";
+                               if (waitWarning) {
+                                   const wt = maxWaitTimeMins > 30 ? 30 : (maxWaitTimeMins || 20);
+                                   return `High Demand - Wait ${wt}+ mins (Approx)`;
+                               }
+                               if (estimatedWaitEta !== null) {
+                                  return estimatedWaitEta >= 20 ? "Driver available in 20+ mins (Approx)" :
+                                    `Driver available within ${Math.max(5, Math.ceil(estimatedWaitEta / 5) * 5)} mins (Approx)`;
+                               }
+                               return "Driver available soon (Approx)";
+                            })()}
                           </span>
                         </div>
                         
@@ -3079,22 +3086,63 @@ export default function PassengerBooking() {
                            </div>
                         </div>
                         
+                        {(() => {
+                           const noDriversAtAll = nearbyDriversCount === 0 && driversAvailableSoonCount === 0;
+                           const isHighDemandOrSlow = waitWarning || 
+                              (estimatedWaitEta !== null && estimatedWaitEta >= 20) || 
+                              (pickupCoords && noDriversAtAll);
+
+                           return (
                         <div>
-                           {waitWarning && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status)) && (
+                           {isHighDemandOrSlow && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status)) && (
                              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                                <div className="flex items-start gap-2">
                                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                                  <div>
-                                   <h4 className="text-sm font-bold text-red-900">High Demand Area</h4>
-                                   <p className="text-xs text-red-700 mt-1">Drivers are very busy in this area. You might have to wait {maxWaitTimeMins > 30 ? 30 : (maxWaitTimeMins || 20)}+ minutes.</p>
+                                   <h4 className="text-sm font-bold text-red-900">
+                                     {isPriority ? "Priority Active - High Demand" : (noDriversAtAll ? "No Drivers Available" : (waitWarning ? "High Demand Area" : "Limited Availability"))}
+                                   </h4>
+                                   <p className="text-[13px] text-red-700 mt-1 leading-tight font-medium">
+                                     {isPriority 
+                                       ? "With Priority activated, your request is at the top of the queue and will be matched as soon as a driver is available."
+                                       : (noDriversAtAll 
+                                         ? "There is no driver available right now. You might have to wait 20+ minutes for a match."
+                                         : (waitWarning 
+                                           ? `Drivers are very busy in this area. You might have to wait ${maxWaitTimeMins > 30 ? 30 : (maxWaitTimeMins || 20)}+ minutes.` 
+                                           : `Drivers are busy in your area. You might have to wait ${estimatedWaitEta ? Math.max(20, Math.ceil(estimatedWaitEta/5)*5) : 20}+ minutes.`))}
+                                   </p>
+                                   
+                                   {!isPriority && (
+                                     <button 
+                                       onClick={(e) => {
+                                         e.preventDefault();
+                                         if (currentRideId) {
+                                             confirmTogglePriority(true);
+                                         } else {
+                                             setIsPriority(true);
+                                             toast.success("Priority Boost Added! You will jump to the top of the queue.");
+                                         }
+                                       }}
+                                       className="mt-2 text-left flex items-center justify-between bg-white text-indigo-700 border border-indigo-200 px-2 py-1.5 rounded-[6px] hover:bg-indigo-50 active:scale-[0.98] transition-all shadow-sm group cursor-pointer w-full"
+                                     >
+                                       <div className="flex items-center gap-1.5 font-bold text-[12px] truncate pr-2">
+                                         <Zap className="w-3.5 h-3.5 fill-current shrink-0 group-hover:scale-110 transition-transform"/>
+                                         <span className="truncate">Add Priority (+£3)</span>
+                                       </div>
+                                       <span className="text-[10px] uppercase font-black opacity-80 shrink-0 tracking-wider">Top of Queue</span>
+                                     </button>
+                                   )}
+                                   
                                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
                                      <input 
                                        type="checkbox" 
                                        checked={waitWarningAcknowledged}
                                        onChange={(e) => setWaitWarningAcknowledged(e.target.checked)}
-                                       className="rounded text-red-600 focus:ring-red-500"
+                                       className="rounded text-red-600 focus:ring-red-500 w-4 h-4"
                                      />
-                                     <span className="text-xs font-bold text-red-900">I understand, book anyway</span>
+                                     <span className="text-[13px] font-bold text-red-900">
+                                       {isPriority ? "I understand and am ready to wait" : "I understand, find me a driver when available"}
+                                     </span>
                                    </label>
                                  </div>
                                </div>
@@ -3102,7 +3150,7 @@ export default function PassengerBooking() {
                            )}
                            <button 
                              onClick={handleConfirmBooking} 
-                             disabled={!pickup || !dropoff || (waitWarning && !waitWarningAcknowledged && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status)))} 
+                             disabled={!pickup || !dropoff || (isHighDemandOrSlow && !waitWarningAcknowledged && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status)))} 
                              className="w-full py-3 bg-[#0F172A] text-white rounded-[12px] font-bold text-[15px] hover:bg-black active:scale-95 disabled:opacity-50 transition-all focus:outline-none"
                            >
                              {assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status) ? "Confirm Update" : `Confirm ${CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}`}
@@ -3144,6 +3192,8 @@ export default function PassengerBooking() {
                              </button>
                            )}
                         </div>
+                           );
+                        })()}
                       </div>
                     )}
                   </AnimatePresence>

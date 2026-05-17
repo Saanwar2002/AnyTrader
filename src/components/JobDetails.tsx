@@ -1818,6 +1818,7 @@ const libraries: any[] = ['places'];
           job.homeownerId,
           "Payment Reminder",
           `Friendly reminder: Payment of £${amount} for "${job.title}" is pending.`,
+          "status",
           `/job/${id}`
         );
         toast.success("App notification sent.");
