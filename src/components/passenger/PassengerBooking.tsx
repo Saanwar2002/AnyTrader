@@ -32,6 +32,20 @@ const defaultCenter = {
   lng: -0.1554
 };
 
+const createPinIcon = (color: string) => {
+  if (typeof window === 'undefined' || !window.google) return undefined;
+  return {
+    path: "M12,0 C5.373,0 0,5.373 0,12 C0,17.472 3.65,22.08 8.65,23.51 L11.5,46 L12.5,46 L15.35,23.51 C20.35,22.08 24,17.472 24,12 C24,5.373 18.627,0 12,0 Z",
+    fillColor: color,
+    fillOpacity: 1,
+    strokeColor: "#ffffff",
+    strokeWeight: 1.5,
+    scale: 1.4,
+    anchor: new window.google.maps.Point(12, 46),
+    labelOrigin: new window.google.maps.Point(12, 12)
+  };
+};
+
 const formatAddressLines = (address: string) => {
   if (!address) return <span className="block truncate">{address}</span>;
   
@@ -478,6 +492,26 @@ export default function PassengerBooking() {
   const [dropoffCoords, setDropoffCoords] = useState<{lat: number, lng: number} | null>(null);
   const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
   const [routeLine, setRouteLine] = useState<{lat: number, lng: number}[]>([]);
+
+  // Long press to drag markers
+  const [draggablePin, setDraggablePin] = useState<string | null>(null);
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handlePinMouseDown = (id: string) => {
+    if (draggablePin === id) return;
+    pressTimerRef.current = setTimeout(() => {
+      setDraggablePin(id);
+      toast.success("Pin unlocked! You can now drag it.", { duration: 2500, icon: '📍' });
+      triggerHaptic(ImpactStyle.Heavy);
+    }, 1000);
+  };
+
+  const handlePinMouseUpOrLeave = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
 
   // Resolve URL parameters
   useEffect(() => {
@@ -2336,32 +2370,87 @@ export default function PassengerBooking() {
             zoom={15}
             onLoad={setMap}
             options={premiumMapOptions}
-            onClick={(e) => {
-               if (e.latLng && step === "details") {
+            onClick={async (e) => {
+               if (e.latLng && step === "details" && (detailsView === "address" || isEditingJourney)) {
+                  if (!activeField && pickupCoords && dropoffCoords) return;
+                  
                   const lat = e.latLng.lat();
                   const lng = e.latLng.lng();
                   const coords = { lat, lng };
                   setMapCenter(coords);
-                  if (activeField === "pickup") setPickupCoords(coords);
-                  else if (activeField === "dropoff") setDropoffCoords(coords);
-                  else if (!pickupCoords) setPickupCoords(coords);
-                  else setDropoffCoords(coords);
+                  setHasModifiedRouteByUser(true);
+                  
+                  let typeToUpdate = "";
+                  let stopIdx = -1;
+                  
+                  if (activeField === "pickup" || (!activeField && !pickupCoords)) {
+                    setPickupCoords(coords);
+                    typeToUpdate = "pickup";
+                  } else if (activeField === "dropoff" || (!activeField && pickupCoords && !dropoffCoords)) {
+                    setDropoffCoords(coords);
+                    typeToUpdate = "dropoff";
+                  } else if (activeField?.startsWith("stop-")) {
+                    stopIdx = parseInt(activeField.split("-")[1], 10);
+                    const newStops = [...stops];
+                    if (newStops[stopIdx]) {
+                      newStops[stopIdx].coords = coords;
+                      setStops(newStops);
+                      typeToUpdate = "stop";
+                    }
+                  } else {
+                    return;
+                  }
+                  
+                  if (!window.google || !window.google.maps) return;
+                  try {
+                    const geocoder = new window.google.maps.Geocoder();
+                    const response = await geocoder.geocode({ location: coords });
+                    if (response.results[0]) {
+                      let foundAddr = response.results[0].formatted_address;
+                      if (typeToUpdate === "pickup") setPickup(foundAddr);
+                      else if (typeToUpdate === "dropoff") setDropoff(foundAddr);
+                      else if (typeToUpdate === "stop" && stopIdx >= 0) {
+                        setStops(prevStops => {
+                          const ns = [...prevStops];
+                          ns[stopIdx].address = foundAddr;
+                          return ns;
+                        });
+                      }
+                    }
+                  } catch (err) {
+                    console.error("Reverse geocoding failed", err);
+                  }
                }
             }}
           >
             {pickupCoords && (
               <>
-                <MarkerF position={pickupCoords} label="P" draggable={step === "details"} onDragEnd={(e) => handleMarkerDragEnd(e, "pickup")} />
+                <MarkerF 
+                  position={pickupCoords} 
+                  label={{ text: "P", color: "white", fontSize: "13px", fontWeight: "bold" }} 
+                  draggable={step === "details" && draggablePin === "pickup"} 
+                  onDragEnd={(e) => { setDraggablePin(null); handleMarkerDragEnd(e, "pickup"); }} 
+                  onMouseDown={() => handlePinMouseDown("pickup")}
+                  onMouseUp={handlePinMouseUpOrLeave}
+                  onDragStart={handlePinMouseUpOrLeave}
+                  icon={createPinIcon("#10b981")} 
+                />
                 <OverlayViewF
                   position={pickupCoords}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
+                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 68 })}
                 >
-                  <div className="bg-emerald-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-emerald-200 min-w-[120px] max-w-[200px] pointer-events-auto">
+                  <div className="bg-emerald-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-emerald-200 min-w-[120px] max-w-[200px] pointer-events-auto flex flex-col">
                     <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.1em] mb-1">Pickup</p>
                     <div className="text-[10px] font-bold text-emerald-950 leading-tight space-y-0.5">
                       {formatAddressLines(pickup)}
                     </div>
+                    {draggablePin !== "pickup" && (
+                      <div className="mt-1.5 pt-1 border-t border-emerald-200/50 flex items-center justify-center gap-1 opacity-70">
+                        <MapPin className="w-2.5 h-2.5 text-emerald-700" />
+                        <span className="text-[8px] font-bold text-emerald-800 tracking-tight">Hold pin to move</span>
+                      </div>
+                    )}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-50 border-r border-b border-emerald-200 rotate-45 -mt-1" />
                   </div>
                 </OverlayViewF>
@@ -2369,17 +2458,32 @@ export default function PassengerBooking() {
             )}
             {dropoffCoords && (
               <>
-                <MarkerF position={dropoffCoords} label="D" draggable={step === "details"} onDragEnd={(e) => handleMarkerDragEnd(e, "dropoff")} />
+                <MarkerF 
+                  position={dropoffCoords} 
+                  label={{ text: "D", color: "white", fontSize: "13px", fontWeight: "bold" }} 
+                  draggable={step === "details" && draggablePin === "dropoff"} 
+                  onDragEnd={(e) => { setDraggablePin(null); handleMarkerDragEnd(e, "dropoff"); }} 
+                  onMouseDown={() => handlePinMouseDown("dropoff")}
+                  onMouseUp={handlePinMouseUpOrLeave}
+                  onDragStart={handlePinMouseUpOrLeave}
+                  icon={createPinIcon("#f43f5e")} 
+                />
                 <OverlayViewF
                   position={dropoffCoords}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
+                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 68 })}
                 >
-                  <div className="bg-rose-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-rose-200 min-w-[120px] max-w-[200px] pointer-events-auto">
+                  <div className="bg-rose-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-rose-200 min-w-[120px] max-w-[200px] pointer-events-auto flex flex-col">
                     <p className="text-[8px] font-black text-rose-600 uppercase tracking-[0.1em] mb-1">Dropoff</p>
                     <div className="text-[10px] font-bold text-rose-950 leading-tight space-y-0.5">
                       {formatAddressLines(dropoff)}
                     </div>
+                    {draggablePin !== "dropoff" && (
+                      <div className="mt-1.5 pt-1 border-t border-rose-200/50 flex items-center justify-center gap-1 opacity-70">
+                        <MapPin className="w-2.5 h-2.5 text-rose-700" />
+                        <span className="text-[8px] font-bold text-rose-800 tracking-tight">Hold pin to move</span>
+                      </div>
+                    )}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-rose-50 border-r border-b border-rose-200 rotate-45 -mt-1" />
                   </div>
                 </OverlayViewF>
@@ -2387,17 +2491,32 @@ export default function PassengerBooking() {
             )}
             {stops.map((s, i) => s.coords && (
               <React.Fragment key={i}>
-                <MarkerF position={s.coords} label={`${i+1}`} draggable={step === "details"} onDragEnd={(e) => handleMarkerDragEnd(e, "stop", i)} />
+                <MarkerF 
+                  position={s.coords} 
+                  label={{ text: `${i+1}`, color: "white", fontSize: "13px", fontWeight: "bold" }} 
+                  draggable={step === "details" && draggablePin === `stop-${i}`} 
+                  onDragEnd={(e) => { setDraggablePin(null); handleMarkerDragEnd(e, "stop", i); }} 
+                  onMouseDown={() => handlePinMouseDown(`stop-${i}`)}
+                  onMouseUp={handlePinMouseUpOrLeave}
+                  onDragStart={handlePinMouseUpOrLeave}
+                  icon={createPinIcon("#f59e0b")} 
+                />
                 <OverlayViewF
                   position={s.coords}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 45 })}
+                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 68 })}
                 >
-                  <div className="bg-amber-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-amber-200 min-w-[120px] max-w-[200px] pointer-events-auto">
+                  <div className="bg-amber-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-amber-200 min-w-[120px] max-w-[200px] pointer-events-auto flex flex-col">
                     <p className="text-[8px] font-black text-amber-600 uppercase tracking-[0.1em] mb-1">Stop {i+1}</p>
                     <div className="text-[10px] font-bold text-amber-950 leading-tight space-y-0.5">
                       {formatAddressLines(s.address)}
                     </div>
+                    {draggablePin !== `stop-${i}` && (
+                      <div className="mt-1.5 pt-1 border-t border-amber-200/50 flex items-center justify-center gap-1 opacity-70">
+                        <MapPin className="w-2.5 h-2.5 text-amber-700" />
+                        <span className="text-[8px] font-bold text-amber-800 tracking-tight">Hold pin to move</span>
+                      </div>
+                    )}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-amber-50 border-r border-b border-amber-200 rotate-45 -mt-1" />
                   </div>
                 </OverlayViewF>
