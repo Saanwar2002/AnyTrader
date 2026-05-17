@@ -295,6 +295,13 @@ export default function PassengerBooking() {
             const extras = (data.isPriority ? 3 : 0) + (data.isPetFriendly ? 3 : 0);
             setFareEstimate(Math.max(data.fareEstimate - extras, 5.0));
           }
+          if (data.surgeModel !== undefined) {
+             setActiveSurge({
+               multiplier: data.surgeMultiplier || 1.0,
+               fee: data.surgeFixedAmount || 0,
+               isFixed: data.surgeModel === 'fixed'
+             });
+          }
 
           if (data.status === "pending" || data.status === "offered") {
             setStep("searching");
@@ -335,6 +342,15 @@ export default function PassengerBooking() {
             setSelectedCategory(data.carCategory || "standard");
             setIsPetFriendly(data.isPetFriendly || false);
             if (data.waitTolerance) setWaitTolerance(data.waitTolerance as any);
+            if (data.baseCalc) setFareEstimate(data.baseCalc);
+            
+            if (data.surgeModel !== undefined) {
+               setActiveSurge({
+                 multiplier: data.surgeMultiplier || 1.0,
+                 fee: data.surgeFixedAmount || 0,
+                 isFixed: data.surgeModel === 'fixed'
+               });
+            }
           }
         }
       }, (err) => console.error("onSnapshot ERROR ride_requests:", err));
@@ -351,6 +367,7 @@ export default function PassengerBooking() {
   const [waitWarning, setWaitWarning] = useState(false);
   const [maxWaitTimeMins, setMaxWaitTimeMins] = useState<number>(0);
   const [waitWarningAcknowledged, setWaitWarningAcknowledged] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [distanceMiles, setDistanceMiles] = useState<number>(0);
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
   const [activeSurge, setActiveSurge] = useState<{multiplier: number, fee: number, isFixed: boolean}>({multiplier: 1.0, fee: 0, isFixed: true});
@@ -613,6 +630,7 @@ export default function PassengerBooking() {
     
     // Check if pickup is in a busy/surge zone
     const checkZone = async () => {
+      if (currentRideId && !isEditingJourney) return;
       const zones = await fetchLiveDemandZones();
       let isBusy = false;
       let maxWait = 0;
@@ -3089,6 +3107,42 @@ export default function PassengerBooking() {
                            >
                              {assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status) ? "Confirm Update" : `Confirm ${CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}`}
                            </button>
+                           
+                           {showCancelConfirm ? (
+                             <div className="w-full mt-1.5 p-2 bg-red-50 border border-red-200 rounded-[12px] flex flex-col gap-1.5">
+                               <p className="text-[13px] font-bold text-red-900 text-center">Cancel this ride?</p>
+                               <div className="flex gap-2">
+                                 <button 
+                                   onClick={() => {
+                                     setPickup("");
+                                     setPickupCoords(null);
+                                     setDropoff("");
+                                     setDropoffCoords(null);
+                                     setComments("");
+                                     setWaitWarningAcknowledged(false);
+                                     setShowCancelConfirm(false);
+                                     navigate("/");
+                                   }}
+                                   className="flex-1 py-1.5 bg-red-600 text-white rounded-[8px] font-bold text-[12px] hover:bg-red-700 transition-all"
+                                 >
+                                   Yes, Cancel
+                                 </button>
+                                 <button 
+                                   onClick={() => setShowCancelConfirm(false)}
+                                   className="flex-1 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-[8px] font-bold text-[12px] hover:bg-slate-50 transition-all"
+                                 >
+                                   No, Keep
+                                 </button>
+                               </div>
+                             </div>
+                           ) : (
+                             <button 
+                               onClick={() => setShowCancelConfirm(true)}
+                               className="w-full mt-2 py-2 bg-white border border-red-200 text-red-600 rounded-[12px] font-bold text-[13px] shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] hover:bg-red-50 hover:border-red-300 active:scale-95 transition-all focus:outline-none flex justify-center items-center gap-2"
+                             >
+                               Cancel Booking
+                             </button>
+                           )}
                         </div>
                       </div>
                     )}
