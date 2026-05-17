@@ -428,6 +428,14 @@ export default function PassengerBooking() {
   useEffect(() => {
     let timeout: NodeJS.Timeout;
     if (showRegularJourneys || showFavorites || showHomeBlank || showWorkBlank) {
+      if (bottomSheetRef.current) {
+        setTimeout(() => {
+          bottomSheetRef.current?.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' });
+        }, 350);
+        setTimeout(() => {
+          bottomSheetRef.current?.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' });
+        }, 500);
+      }
       timeout = setTimeout(() => {
         setShowRegularJourneys(false);
         setShowFavorites(false);
@@ -956,6 +964,14 @@ export default function PassengerBooking() {
   const [pastAddresses, setPastAddresses] = useState<{label: string, lat?: number, lon?: number}[]>([]);
 
   useEffect(() => {
+    if (activeField && bottomSheetRef.current && detailsView === "address") {
+      setTimeout(() => {
+        bottomSheetRef.current?.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' });
+      }, 300); // Wait for suggestions to render/expand
+    }
+  }, [activeField, suggestions.length, detailsView]);
+
+  useEffect(() => {
     if (!user) return;
     const fetchHistory = async () => {
       try {
@@ -1195,14 +1211,9 @@ export default function PassengerBooking() {
           setPickup(addr);
           setSuggestions([]);
           
-          if (!dropoff) {
-            dropoffInputRef.current?.focus();
-            setActiveField("dropoff");
-          } else {
-            setActiveField(null);
-            if (addr && dropoff) {
-              setDetailsView("vehicle");
-            }
+          setActiveField(null);
+          if (addr && dropoff) {
+            setDetailsView("vehicle");
           }
         }
       });
@@ -2003,17 +2014,9 @@ export default function PassengerBooking() {
       }
       setSuggestions([]); 
       
-      if (activeField === "pickup" && !currentDropoff) {
-        dropoffInputRef.current?.focus();
-        setActiveField("dropoff");
-      } else if (activeField === "dropoff" && !currentPickup) {
-        pickupInputRef.current?.focus();
-        setActiveField("pickup");
-      } else {
-        setActiveField(null);
-        if (currentPickup && currentDropoff) {
-          setDetailsView("vehicle");
-        }
+      setActiveField(null);
+      if (currentPickup && currentDropoff) {
+        setDetailsView("vehicle");
       }
     };
 
@@ -2497,7 +2500,7 @@ export default function PassengerBooking() {
 
                         <AnimatePresence>
                           {activeField === "pickup" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
                               <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
@@ -2613,7 +2616,7 @@ export default function PassengerBooking() {
 
                         <AnimatePresence>
                           {activeField === "dropoff" && (suggestions.length > 0 || isLoadingAddress) && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })} className="z-[60] ml-6 mr-0 mt-1 overflow-hidden rounded-2xl shadow-sm border border-black bg-white origin-top flex flex-col">
                               <div className="flex justify-between items-center bg-slate-50 border-b border-black px-3 py-2 shrink-0">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Suggestions</span>
                                 <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setActiveField(null); setSuggestions([]); }} className="p-1 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors shadow-sm active:scale-95"><X className="w-4 h-4" /></button>
@@ -2710,6 +2713,7 @@ export default function PassengerBooking() {
                             initial={{ opacity: 0, height: 0 }} 
                             animate={{ opacity: 1, height: "auto" }} 
                             exit={{ opacity: 0, height: 0 }} 
+                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
                             className="ml-6 overflow-hidden pr-1"
                           >
                             <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm relative">
@@ -2729,6 +2733,7 @@ export default function PassengerBooking() {
                             initial={{ opacity: 0, height: 0 }} 
                             animate={{ opacity: 1, height: "auto" }} 
                             exit={{ opacity: 0, height: 0 }} 
+                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
                             className="ml-6 overflow-hidden pr-1"
                           >
                             <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm relative">
@@ -2748,6 +2753,7 @@ export default function PassengerBooking() {
                             initial={{ opacity: 0, height: 0 }} 
                             animate={{ opacity: 1, height: "auto" }} 
                             exit={{ opacity: 0, height: 0 }} 
+                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
                             className="ml-6 overflow-hidden pr-1"
                           >
                             <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
@@ -2790,6 +2796,7 @@ export default function PassengerBooking() {
                             initial={{ opacity: 0, height: 0 }} 
                             animate={{ opacity: 1, height: "auto" }} 
                             exit={{ opacity: 0, height: 0 }} 
+                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
                             className="ml-6 overflow-hidden pr-1"
                           >
                             <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
@@ -2812,6 +2819,7 @@ export default function PassengerBooking() {
                                         onClick={() => {
                                           geocodeLocation(j.from, setPickup, setPickupCoords);
                                           geocodeLocation(j.to, setDropoff, setDropoffCoords);
+                                          setShowRegularJourneys(false);
                                           setDetailsView("vehicle");
                                         }}
                                         className="flex-1 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
@@ -2822,6 +2830,7 @@ export default function PassengerBooking() {
                                         onClick={() => {
                                           geocodeLocation(j.to, setPickup, setPickupCoords);
                                           geocodeLocation(j.from, setDropoff, setDropoffCoords);
+                                          setShowRegularJourneys(false);
                                           setDetailsView("vehicle");
                                         }}
                                         className="flex-1 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"
@@ -3180,7 +3189,7 @@ export default function PassengerBooking() {
                   </AnimatePresence>
                   </>
                   )}
-                  <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full" />
+                  <div className="shrink-0 w-full h-[calc(6rem+env(safe-area-inset-bottom))] transition-all duration-300" />
                 </div>
               </motion.div>
             )}
