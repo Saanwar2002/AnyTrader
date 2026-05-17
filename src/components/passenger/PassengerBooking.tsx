@@ -922,6 +922,42 @@ export default function PassengerBooking() {
     });
   };
 
+  const handleMarkerDragEnd = async (e: google.maps.MapMouseEvent, type: "pickup" | "dropoff" | "stop", stopIndex?: number) => {
+    if (!e.latLng) return;
+    const newCoords = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+    
+    setHasModifiedRouteByUser(true);
+
+    if (type === "pickup") {
+      setPickupCoords(newCoords);
+    } else if (type === "dropoff") {
+      setDropoffCoords(newCoords);
+    } else if (type === "stop" && typeof stopIndex === "number") {
+      const newStops = [...stops];
+      newStops[stopIndex].coords = newCoords;
+      setStops(newStops);
+    }
+    
+    if (!window.google || !window.google.maps) return;
+    
+    try {
+      const geocoder = new window.google.maps.Geocoder();
+      const response = await geocoder.geocode({ location: newCoords });
+      if (response.results[0]) {
+        let foundAddr = response.results[0].formatted_address;
+        if (type === "pickup") setPickup(foundAddr);
+        if (type === "dropoff") setDropoff(foundAddr);
+        if (type === "stop" && typeof stopIndex === "number") {
+          const newStops = [...stops];
+          newStops[stopIndex].address = foundAddr;
+          setStops(newStops);
+        }
+      }
+    } catch (err) {
+      console.error("Reverse geocoding failed:", err);
+    }
+  };
+
   const processVoiceCommand = async (text: string) => {
     setIsAiProcessing(true);
     toast.info("AI extracting details...");
@@ -1182,11 +1218,15 @@ export default function PassengerBooking() {
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       
-      if (accuracy > 20) {
+      if (accuracy > 100) {
         toast.warning(`GPS accuracy too low (${Math.round(accuracy)}m). Please enter manually for better precision.`);
         setIsDetecting(false);
         setActiveField("pickup");
         return;
+      }
+      
+      if (accuracy > 30) {
+        toast.info(`Adjust location slightly on map if needed (Accuracy: ${Math.round(accuracy)}m)`);
       }
       
       const c = { lat: latitude, lng: longitude };
@@ -2311,7 +2351,7 @@ export default function PassengerBooking() {
           >
             {pickupCoords && (
               <>
-                <MarkerF position={pickupCoords} label="P" />
+                <MarkerF position={pickupCoords} label="P" draggable={step === "details"} onDragEnd={(e) => handleMarkerDragEnd(e, "pickup")} />
                 <OverlayViewF
                   position={pickupCoords}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
@@ -2329,7 +2369,7 @@ export default function PassengerBooking() {
             )}
             {dropoffCoords && (
               <>
-                <MarkerF position={dropoffCoords} label="D" />
+                <MarkerF position={dropoffCoords} label="D" draggable={step === "details"} onDragEnd={(e) => handleMarkerDragEnd(e, "dropoff")} />
                 <OverlayViewF
                   position={dropoffCoords}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
@@ -2347,7 +2387,7 @@ export default function PassengerBooking() {
             )}
             {stops.map((s, i) => s.coords && (
               <React.Fragment key={i}>
-                <MarkerF position={s.coords} label={`${i+1}`} />
+                <MarkerF position={s.coords} label={`${i+1}`} draggable={step === "details"} onDragEnd={(e) => handleMarkerDragEnd(e, "stop", i)} />
                 <OverlayViewF
                   position={s.coords}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
