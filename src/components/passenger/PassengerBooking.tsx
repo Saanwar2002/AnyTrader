@@ -527,7 +527,7 @@ export default function PassengerBooking() {
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     if (pickupCoords && dropoffCoords && isLoaded) {
-      const getRoute = () => {
+      const getRoute = async () => {
         try {
           const directionsService = new window.google.maps.DirectionsService();
           const validStops = stops.filter(s => s.coords !== null).map(s => ({
@@ -544,62 +544,52 @@ export default function PassengerBooking() {
             routeReq.waypoints = validStops;
           }
 
-          const routeResult: any = directionsService.route(routeReq, (result, status) => {
-            if (status === window.google.maps.DirectionsStatus.OK && result) {
-              // Draw the line
-              const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-              setRouteLine(path);
+          const result = await directionsService.route(routeReq);
+          
+          // Draw the line
+          const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+          setRouteLine(path);
 
-              // Fit bounds
-              if (map) {
-                const bounds = new window.google.maps.LatLngBounds();
-                path.forEach((p: any) => bounds.extend(p));
-                map.fitBounds(bounds, { 
-                  padding: { top: 60, right: 50, bottom: 60, left: 50 } 
-                });
-                
-                // Zoom out 1-2 ticks after bounds are set to give more breathing room
-                setTimeout(() => {
-                  const currentZoom = map.getZoom();
-                  if (currentZoom) {
-                     map.setZoom(currentZoom - 1);
-                  }
-                }, 150);
-              }
-
-              // Calculate distance/fare
-              let totalDistanceMeters = 0;
-              let totalDurationSeconds = 0;
-              result.routes[0].legs.forEach((leg: any) => {
-                if (leg.distance) totalDistanceMeters += leg.distance.value;
-                if (leg.duration) totalDurationSeconds += leg.duration.value;
-              });
-              const dMiles = totalDistanceMeters / 1609.34;
-              const dMins = totalDurationSeconds / 60;
-              
-              setDistanceMiles(dMiles);
-              setDurationMinutes(dMins);
-
-              if (!currentRideId && !editId || hasModifiedRouteByUser) {
-                // Base Fare + Distance + Time
-                const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
-                setFareEstimate(Math.max(calcFare, fareConfig.minFare));
-              }
-            } else {
-              console.warn("Directions failed:", status);
-            }
-          });
-          if (routeResult && routeResult.catch) {
-            routeResult.catch((e: any) => {
-              if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR')) {
-                 console.warn("Caught Directions request Promise rejection", e);
-              }
+          // Fit bounds
+          if (map) {
+            const bounds = new window.google.maps.LatLngBounds();
+            path.forEach((p: any) => bounds.extend(p));
+            map.fitBounds(bounds, { 
+              padding: { top: 60, right: 50, bottom: 60, left: 50 } 
             });
+            
+            // Zoom out 1-2 ticks after bounds are set to give more breathing room
+            setTimeout(() => {
+              const currentZoom = map.getZoom();
+              if (currentZoom) {
+                 map.setZoom(currentZoom - 1);
+              }
+            }, 150);
+          }
+
+          // Calculate distance/fare
+          let totalDistanceMeters = 0;
+          let totalDurationSeconds = 0;
+          result.routes[0].legs.forEach((leg: any) => {
+            if (leg.distance) totalDistanceMeters += leg.distance.value;
+            if (leg.duration) totalDurationSeconds += leg.duration.value;
+          });
+          const dMiles = totalDistanceMeters / 1609.34;
+          const dMins = totalDurationSeconds / 60;
+          
+          setDistanceMiles(dMiles);
+          setDurationMinutes(dMins);
+
+          if (!currentRideId && !editId || hasModifiedRouteByUser) {
+            // Base Fare + Distance + Time
+            const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
+            setFareEstimate(Math.max(calcFare, fareConfig.minFare));
           }
         } catch (e: any) {
+          // Silently catch directions API errors without triggering unhandled rejections
           const errStr = String(e);
           if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR') && !errStr.includes('UNKNOWN_ERROR')) {
-            console.error("DIRECTIONS_ROUTE error:", e);
+            console.warn("DIRECTIONS_ROUTE error:", e);
           }
         }
       };
@@ -2125,47 +2115,38 @@ export default function PassengerBooking() {
                               assignedDriverInfo?.status === "in_progress" ? dropoffCoords : null;
 
     if ((assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "in_progress") && destinationCoords && isLoaded) {
-      const getLiveRoute = () => {
+      const getLiveRoute = async () => {
         const currentDriverPos = driverPosRef.current;
         if (!currentDriverPos) return;
 
         try {
           const directionsService = new window.google.maps.DirectionsService();
-          const routeResult: any = directionsService.route({
+          const result = await directionsService.route({
             origin: new window.google.maps.LatLng(currentDriverPos.lat, currentDriverPos.lng),
             destination: new window.google.maps.LatLng(destinationCoords.lat, destinationCoords.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
-          }, (result, status) => {
-            if (status === window.google.maps.DirectionsStatus.OK && result && result.routes[0]) {
-              const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-              setLiveRouteLine(path);
-              
-              let totalSecs = 0;
-              result.routes[0].legs.forEach((leg: any) => {
-                if (leg.duration?.value) totalSecs += leg.duration.value;
-              });
-              
-              if (assignedDriverInfo?.status === "accepted" && assignedDriverInfo?.stackedDriverDelay) {
-                 totalSecs += assignedDriverInfo.stackedDriverDelay * 60;
-              }
-
-              setLiveEtaMins(Math.ceil(totalSecs / 60));
-              setLiveEtaSeconds(totalSecs);
-            } else {
-              console.warn("Live route directions failed with status:", status);
-            }
           });
-          if (routeResult && routeResult.catch) {
-            routeResult.catch((e: any) => {
-              if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR')) {
-                 console.warn("Caught Live Directions request Promise rejection", e);
-              }
+          
+          if (result && result.routes[0]) {
+            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+            setLiveRouteLine(path);
+            
+            let totalSecs = 0;
+            result.routes[0].legs.forEach((leg: any) => {
+              if (leg.duration?.value) totalSecs += leg.duration.value;
             });
+            
+            if (assignedDriverInfo?.status === "accepted" && assignedDriverInfo?.stackedDriverDelay) {
+               totalSecs += assignedDriverInfo.stackedDriverDelay * 60;
+            }
+
+            setLiveEtaMins(Math.ceil(totalSecs / 60));
+            setLiveEtaSeconds(totalSecs);
           }
         } catch (e: any) {
           const errStr = String(e);
           if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR') && !errStr.includes('UNKNOWN_ERROR')) {
-            console.error("LIVE DIRECTIONS_ROUTE error:", e);
+            console.warn("LIVE DIRECTIONS_ROUTE error:", e);
           }
         }
       };
@@ -3129,7 +3110,7 @@ export default function PassengerBooking() {
                                          <Zap className="w-3.5 h-3.5 fill-current shrink-0 group-hover:scale-110 transition-transform"/>
                                          <span className="truncate">Add Priority (+£3)</span>
                                        </div>
-                                       <span className="text-[10px] uppercase font-black opacity-80 shrink-0 tracking-wider">Top of Queue</span>
+                                       <span className="text-[10px] uppercase font-black opacity-80 shrink-0 tracking-wider">Go Top of Queue</span>
                                      </button>
                                    )}
                                    
@@ -3289,27 +3270,29 @@ export default function PassengerBooking() {
 
             {step === "confirmed" && (
               <>
+                <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[24px] px-4 pt-2 pb-5 border-t border-black/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
+                <div className="w-10 h-1.5 bg-slate-200 rounded-full mx-auto mb-2.5 shrink-0"/>
+                
                 {assignedDriverInfo?.status === "accepted" && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0a1930] rounded-[16px] px-5 py-3 border border-[#1e293b] shadow-[0_8px_20px_rgba(0,0,0,0.15)] flex flex-col items-center justify-center gap-1.5 mb-3 pointer-events-auto w-fit mx-auto z-20 mt-auto">
-                     <div className="flex items-center gap-2.5">
-                       <Car className="w-[20px] h-[20px] text-white" />
-                       <span className="font-black text-white text-[17px] tracking-wide">
+                  <div className="bg-[#0a1930] rounded-[12px] px-4 py-2 border border-[#1e293b] shadow-sm flex flex-col items-center justify-center w-full mb-3 shrink-0">
+                     <div className="flex items-center gap-2">
+                       <Car className="w-[16px] h-[16px] text-white" />
+                       <span className="font-black text-white text-[15px] tracking-wide">
                          {(liveEtaSeconds !== null && liveEtaSeconds > 0) ? `Arriving in ${Math.floor(liveEtaSeconds / 60) > 0 ? Math.floor(liveEtaSeconds / 60) + 'm ' : ''}${liveEtaSeconds % 60}s` : 
                           "Driver arriving soon..."}
                        </span>
                      </div>
                      {(assignedDriverInfo.isFinishingTrip || assignedDriverInfo.stackedDriverDelay) && (
-                       <div className="bg-amber-400/20 px-3 py-1 rounded-full mt-0.5">
-                         <span className="text-[11px] font-bold text-amber-300 uppercase tracking-widest flex items-center gap-1">
+                       <div className="bg-amber-400/20 px-2 py-0.5 rounded-full mt-1.5">
+                         <span className="text-[10px] font-bold text-amber-300 uppercase tracking-widest flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                             Dropping off another passenger
                          </span>
                        </div>
                      )}
-                  </motion.div>
+                  </div>
                 )}
-                <motion.div key="confirmed" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-white rounded-t-[28px] p-5 border-t border-black/50 pointer-events-auto h-full w-full overflow-y-auto no-scrollbar shadow-[0_-8px_30px_rgba(0,0,0,0.08)] relative z-20 flex flex-col">
-                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-3"/>
+                
                 <div className="flex justify-center mb-4">
                    <button onClick={() => setShowRideInfo(true)} className="bg-blue-600 rounded-xl px-4 py-1 flex items-center justify-center font-bold text-[13px] text-white tracking-wider border border-blue-500 shadow-sm shadow-blue-500/20 active:scale-95 transition-transform uppercase">
                       Ride Info
