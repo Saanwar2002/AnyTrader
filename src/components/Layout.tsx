@@ -308,6 +308,15 @@ export default function Layout() {
     { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
   ];
 
+  const hireB2bNav = [
+    { name: "HQ", path: "/", icon: Home, isCta: false },
+    { name: "Portfolio", path: "/portfolio", icon: LayoutGrid, isCta: false },
+    { name: "Projects", path: "/my-jobs", icon: Briefcase, isCta: false },
+    { name: "Hire Trades", path: "/find-trades", icon: Search, isCta: true, state: { isB2B: true } },
+    { name: "Analytics", path: "/analytics", icon: BarChart3, isCta: false },
+    { name: "Messages", path: "/messages", icon: MessageSquare, isCta: false },
+  ];
+
   const driverNav = [
     { name: "Terminal", path: "/driver-terminal", icon: Zap, isCta: false },
     { name: "Earnings", path: "/driver-terminal?tab=earnings", icon: PoundSterling, isCta: false },
@@ -382,8 +391,12 @@ export default function Layout() {
     navItems = activeRole === "driver" ? driverNav : passengerNav;
   } else {
     if (activeRole === "business") {
-      if (activeTab === "field_services" && activeSubTab === "work_hub") {
-        navItems = businessWorkHubNav;
+      if (activeTab === "field_services") {
+        if (activeSubTab === "work_hub") {
+          navItems = businessWorkHubNav;
+        } else {
+          navItems = hireB2bNav;
+        }
       } else if (activeTab === "consultancy") {
         navItems = consultancyNav;
       } else {
@@ -1148,6 +1161,7 @@ export default function Layout() {
               <Link
                 key={`nav-${idx}-${item.path}`}
                 to={item.path}
+                state={(item as any).state}
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 transition-colors relative flex-1 min-w-0 mx-1 h-[60px] rounded-[16px] z-10",
                   isActive 

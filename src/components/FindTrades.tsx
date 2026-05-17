@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building } from "lucide-react";
 import { db, collection, query, where, onSnapshot, setDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { cn } from "@/src/lib/utils";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import { useCategories } from "../lib/CategoryProvider";
 import { motion, AnimatePresence } from "motion/react";
@@ -53,10 +53,17 @@ interface Tradesperson {
 
 export default function FindTrades() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { categories } = useCategories();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [tradespeople, setTradespeople] = useState<Tradesperson[]>([]);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
+  
+  const isB2B = location.state?.isB2B;
+  const [showSplash, setShowSplash] = useState(isB2B === true);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [userAssets, setUserAssets] = useState<any[]>([]);
+  const [selectedAsset, setSelectedAsset] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -217,9 +224,22 @@ export default function FindTrades() {
       handleFirestoreError(error, OperationType.LIST, "users");
       setLoading(false);
     });
+    
+    // Fetch assets if B2B
+    let unsubAssets = () => {};
+    if (user && profile?.subscriptionType === 'business') {
+      import("firebase/firestore").then(({ getDocs }) => {
+        getDocs(query(collection(db, "properties"), where("ownerId", "==", user.uid)))
+          .then(snapshot => {
+            setUserAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          }).catch(console.error);
+      });
+    }
+
     return () => {
       unsubscribe();
       unsubConfig();
+      unsubAssets();
     };
   }, []);
 
@@ -333,6 +353,118 @@ export default function FindTrades() {
     { label: "Rewiring", query: "Rewiring" },
     { label: "Leak Repair", query: "Leak" }
   ];
+
+  if (showSplash) {
+    return (
+      <div className="max-w-md mx-auto p-4 space-y-6 pt-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        
+        {/* Double Confirmation Modal */}
+        <AnimatePresence>
+          {showSkipConfirm && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm"
+            >
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-3xl overflow-hidden p-6 max-w-sm w-full shadow-2xl border border-black text-center"
+              >
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-200">
+                  <AlertTriangle className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Skip Linking?</h3>
+                <p className="text-slate-600 text-sm mb-6 font-medium leading-relaxed">
+                  Are you sure you want to proceed without linking a project? Any jobs requested will still appear under your Hiring Jobs.
+                </p>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShowSkipConfirm(false)}
+                    className="flex-1 py-3 px-4 rounded-xl border-2 border-black font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => { setShowSkipConfirm(false); setShowSplash(false); }}
+                    className="flex-1 py-3 px-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors border border-blue-600"
+                  >
+                    Yes, Skip
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <button
+          onClick={() => setShowSkipConfirm(true)}
+          className="w-full py-2.5 px-4 mb-3 rounded-xl bg-yellow-100 border border-black shadow-sm flex flex-col items-center justify-center text-center hover:bg-yellow-200 active:scale-95 transition-all"
+        >
+          <span className="text-black font-extrabold text-[13px] uppercase tracking-wider">SKIP WITHOUT LINKING</span>
+          <span className="text-slate-600 font-bold text-[9px] uppercase tracking-widest mt-0.5">/ OR SELECT A PROJECT BELOW</span>
+        </button>
+
+        <div className="space-y-1">
+          <p className="text-slate-800 text-lg font-medium leading-snug">
+            Select an active project or property to link with this service request.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search by name, address or postcode" 
+              className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
+            />
+          </div>
+          <button 
+            onClick={() => navigate('/portfolio')}
+            className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shrink-0 shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="border border-black rounded-3xl p-6 border-dashed bg-white shadow-sm flex flex-col items-center justify-center text-center min-h-[250px]">
+          {userAssets.length > 0 ? (
+            <div className="w-full space-y-3">
+              {userAssets.map(asset => (
+                <button
+                  key={asset.id}
+                  onClick={() => { setSelectedAsset(asset); setShowSplash(false); }}
+                  className="w-full p-4 rounded-xl border border-slate-200 hover:border-blue-600 hover:bg-blue-50 transition-all text-left flex items-center justify-between group bg-white shadow-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center group-hover:border-blue-600 shrink-0">
+                       <div className="w-2.5 h-2.5 rounded-full bg-transparent group-hover:bg-blue-600 transition-colors" />
+                    </div>
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center border border-blue-200 shrink-0">
+                      <Briefcase className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-base">{asset.name || asset.propertyName || "Unnamed Project"}</h4>
+                      {asset.address?.line1 && <p className="text-xs text-slate-500 mt-0.5">{asset.address.line1}</p>}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+             <div className="flex flex-col items-center justify-center py-8">
+              <Building className="w-12 h-12 text-slate-300 mb-4" />
+              <h3 className="text-xl font-bold text-slate-900 mb-2">No projects found</h3>
+              <p className="text-slate-700 text-base max-w-[250px] leading-snug font-medium">Add a project or property first to hire B2B services.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -524,6 +656,7 @@ export default function FindTrades() {
                   <Link 
                     key={tp.uid} 
                     to={`/profile/${tp.uid}`}
+                    state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
                     className="flex-shrink-0 w-24 bg-white p-2 rounded-2xl border-2 border-black shadow-sm hover:shadow-md transition-shadow text-center"
                   >
                     <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center text-white font-bold text-lg mx-auto mb-2">
@@ -577,6 +710,7 @@ export default function FindTrades() {
                 <Link 
                   key={tp.uid} 
                   to={`/profile/${tp.uid}`}
+                  state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
                   className="flex-shrink-0 w-28 bg-white p-3 rounded-2xl border-2 border-black shadow-sm hover:shadow-md transition-shadow text-center"
                 >
                   <div className="relative mb-2 mx-auto">
@@ -1007,6 +1141,7 @@ export default function FindTrades() {
                 <div className="flex justify-center mt-8 pb-4">
                    <Link 
                      to={`/profile/${selectedTraderPreview.uid}`}
+                     state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
                      className="bg-slate-100 text-slate-700 px-6 py-3 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2 border-2 border-black"
                    >
                      View Full Profile <ChevronRight className="w-3 h-3" />
@@ -1021,7 +1156,7 @@ export default function FindTrades() {
                   <p className="text-lg font-black text-slate-900">£150 - £250</p>
                 </div>
                 <button 
-                  onClick={() => navigate(`/profile/${selectedTraderPreview.uid}`, { state: { openQuote: true } })}
+                  onClick={() => navigate(`/profile/${selectedTraderPreview.uid}`, { state: { openQuote: true, isB2B, linkedPropertyId: isB2B && selectedAsset ? selectedAsset.id : undefined, linkedPropertyName: isB2B && selectedAsset ? (selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1) : undefined } })}
                   className="flex-1 bg-slate-900 text-white rounded-2xl py-4 px-6 text-sm font-black text-center shadow-lg shadow-slate-900/10 hover:-translate-y-0.5 transition-all w-full flex justify-center uppercase tracking-widest"
                 >
                   Request Quote
