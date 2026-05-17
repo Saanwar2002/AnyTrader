@@ -441,7 +441,7 @@ export default function PassengerBooking() {
         setShowFavorites(false);
         setShowHomeBlank(false);
         setShowWorkBlank(false);
-      }, 5000);
+      }, 10000);
     }
     return () => clearTimeout(timeout);
   }, [showRegularJourneys, showFavorites, showHomeBlank, showWorkBlank]);
@@ -1988,6 +1988,10 @@ export default function PassengerBooking() {
   }, [currentRideId, user, step]);
 
   const selectSuggestion = async (s: {label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any}) => {
+    setShowRegularJourneys(false);
+    setShowFavorites(false);
+    setShowHomeBlank(false);
+    setShowWorkBlank(false);
     triggerHaptic(ImpactStyle.Light);
     setHasModifiedRouteByUser(true);
     
@@ -2706,58 +2710,62 @@ export default function PassengerBooking() {
                           <Star className="w-3 h-3 text-amber-500 fill-amber-500" /> Favorite
                         </button>
                       </div>
+                    </div>
+                  </div>
 
-                      <AnimatePresence>
-                        {showHomeBlank && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: "auto" }} 
-                            exit={{ opacity: 0, height: 0 }} 
-                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
-                            className="ml-6 overflow-hidden pr-1"
-                          >
-                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm relative">
-                                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowHomeBlank(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
-                                <div className="text-center py-4">
-                                  <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No home address saved.</p>
-                                  <p className="text-[10px] text-slate-400">Save an address as 'Home' in My Rides.</p>
-                                </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                  <AnimatePresence>
+                    {distanceMiles > 0 && pickup && dropoff && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                        <button onClick={() => setDetailsView("vehicle")} className="w-full py-4 bg-primary text-white rounded-[20px] font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all mb-4">
+                          Continue to Vehicles
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-                      <AnimatePresence>
-                        {showWorkBlank && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: "auto" }} 
-                            exit={{ opacity: 0, height: 0 }} 
-                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
-                            className="ml-6 overflow-hidden pr-1"
+                  <AnimatePresence>
+                    {(showRegularJourneys || showFavorites || showHomeBlank || showWorkBlank) && (
+                      <motion.div 
+                        initial={{ y: "100%", opacity: 0 }} 
+                        animate={{ y: 0, opacity: 1 }} 
+                        exit={{ y: "100%", opacity: 0 }}
+                        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-0 left-0 right-0 z-[250] bg-white rounded-t-[32px] border-t-2 border-black shadow-[0_-10px_40px_rgba(0,0,0,0.15)] flex flex-col max-h-[70vh] w-full"
+                      >
+                        <div className="flex justify-between items-center p-4 border-b border-black bg-slate-50 rounded-t-[32px] shrink-0">
+                          <span className="font-black text-sm tracking-widest uppercase text-slate-700">
+                             {showRegularJourneys && "Regular Journeys"}
+                             {showFavorites && "Favorite Addresses"}
+                             {showHomeBlank && "Home Address"}
+                             {showWorkBlank && "Work Address"}
+                          </span>
+                          <button 
+                            onPointerDown={(e) => { 
+                              e.preventDefault(); e.stopPropagation(); 
+                              setShowRegularJourneys(false); setShowFavorites(false); setShowHomeBlank(false); setShowWorkBlank(false); 
+                            }} 
+                            className="p-1.5 rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors shadow-sm"
                           >
-                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm relative">
-                                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowWorkBlank(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
-                                <div className="text-center py-4">
-                                  <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No work address saved.</p>
-                                  <p className="text-[10px] text-slate-400">Save an address as 'Work' in My Rides.</p>
-                                </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
 
-                      <AnimatePresence>
-                        {showFavorites && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: "auto" }} 
-                            exit={{ opacity: 0, height: 0 }} 
-                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
-                            className="ml-6 overflow-hidden pr-1"
-                          >
-                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
-                              <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowFavorites(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                        <div className="p-4 overflow-y-auto w-full max-w-[500px] mx-auto space-y-3 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+                          {showHomeBlank && (
+                             <div className="text-center py-6 text-slate-500">
+                               <p className="font-bold text-[15px] mb-2 text-slate-800">No home address saved.</p>
+                               <p className="text-sm">Save an address as 'Home' in My Rides.</p>
+                             </div>
+                          )}
+
+                          {showWorkBlank && (
+                             <div className="text-center py-6 text-slate-500">
+                               <p className="font-bold text-[15px] mb-2 text-slate-800">No work address saved.</p>
+                               <p className="text-sm">Save an address as 'Work' in My Rides.</p>
+                             </div>
+                          )}
+
+                          {showFavorites && (
+                            <>
                               {favoriteAddresses && favoriteAddresses.length > 0 ? (
                                 favoriteAddresses.map((fav: any, idx: number) => (
                                   <button
@@ -2766,55 +2774,44 @@ export default function PassengerBooking() {
                                       selectSuggestion({ label: fav.address, lat: fav.lat, lon: fav.lng, placeId: fav.placeId });
                                       setShowFavorites(false);
                                     }}
-                                    className="w-full text-left bg-white border border-black rounded-xl p-3 shadow-sm hover:border-amber-300 transition-colors flex items-center gap-3"
+                                    className="w-full text-left bg-white border border-black rounded-xl p-4 shadow-sm hover:border-amber-400 hover:bg-amber-50 transition-colors flex items-center gap-4"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-amber-50 flex flex-shrink-0 items-center justify-center">
-                                      <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                                    <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex flex-shrink-0 items-center justify-center">
+                                      <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
                                     </div>
-                                    <div className="flex-1 min-w-0 pr-4">
-                                      <div className="flex items-center justify-between mb-0.5">
-                                        <span className="font-bold text-xs text-black uppercase tracking-wider">{fav.name}</span>
+                                    <div className="flex-1 min-w-0 pr-2">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="font-black text-[13px] text-slate-800 uppercase tracking-widest">{fav.name}</span>
                                       </div>
-                                      <span className="font-bold text-sm text-black truncate block">{fav.address}</span>
+                                      <span className="font-semibold text-[15px] text-slate-600 truncate block">{fav.address}</span>
                                     </div>
                                   </button>
                                 ))
                               ) : (
-                                <div className="text-center py-4">
-                                  <p className="text-xs text-slate-500 font-medium mb-1 pt-1">No favorite addresses saved.</p>
-                                  <p className="text-[10px] text-slate-400">Add them in the Saved tab.</p>
+                                <div className="text-center py-6 text-slate-500">
+                                  <p className="font-bold text-[15px] mb-2 text-slate-800">No favorite addresses saved.</p>
+                                  <p className="text-sm">Add them in the Favorite tab.</p>
                                 </div>
                               )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                            </>
+                          )}
 
-                      <AnimatePresence>
-                        {showRegularJourneys && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: "auto" }} 
-                            exit={{ opacity: 0, height: 0 }} 
-                            onAnimationComplete={() => bottomSheetRef.current && bottomSheetRef.current.scrollTo({ top: bottomSheetRef.current.scrollHeight, behavior: 'smooth' })}
-                            className="ml-6 overflow-hidden pr-1"
-                          >
-                            <div className="bg-slate-50 border border-black rounded-2xl p-3 mb-2 shadow-sm space-y-2 relative">
-                              <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowRegularJourneys(false); }} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                          {showRegularJourneys && (
+                            <>
                               {profile?.regularJourneys && profile.regularJourneys.length > 0 ? (
                                 profile.regularJourneys.map((j: any, idx: number) => (
-                                  <div key={idx} className="flex flex-col gap-2 p-2 bg-white rounded-xl border border-black shadow-sm relative pr-2">
-                                    <div className="text-xs font-bold text-slate-800 border-b border-black pb-1 mb-1 pr-4">{j.name || "Saved Route"}</div>
-                                    <div className="flex items-center gap-2 text-xs">
+                                  <div key={idx} className="flex flex-col gap-2 p-2 bg-white rounded-2xl border-2 border-black shadow-[3px_3px_0_rgba(0,0,0,1)] relative">
+                                    <div className="text-xs font-black text-slate-800 bg-slate-100 rounded-lg px-2 py-1 inline-block self-start border border-black">{j.name || "Saved Route"}</div>
+                                    <div className="flex items-center gap-2">
                                       <MapPin className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                                      <span className="font-semibold text-slate-600 truncate">{j.from}</span>
+                                      <span className="font-bold text-slate-700 text-xs truncate">{j.from}</span>
                                     </div>
-                                    <div className="w-0.5 h-2 bg-slate-200 ml-1.5" />
-                                    <div className="flex items-center gap-2 text-xs">
+                                    <div className="w-0.5 h-2 bg-slate-200 ml-[5px] my-0" />
+                                    <div className="flex items-center gap-2">
                                       <MapPin className="w-3 h-3 text-red-500 flex-shrink-0" />
-                                      <span className="font-semibold text-slate-600 truncate">{j.to}</span>
+                                      <span className="font-bold text-slate-700 text-xs truncate">{j.to}</span>
                                     </div>
-                                    <div className="flex gap-2 mt-2">
+                                    <div className="flex gap-2 mt-1.5 pt-1.5 border-t border-slate-200">
                                       <button 
                                         onClick={() => {
                                           geocodeLocation(j.from, setPickup, setPickupCoords);
@@ -2822,7 +2819,7 @@ export default function PassengerBooking() {
                                           setShowRegularJourneys(false);
                                           setDetailsView("vehicle");
                                         }}
-                                        className="flex-1 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
+                                        className="flex-1 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 active:scale-95 transition-all border border-emerald-200"
                                       >
                                         Book Outward
                                       </button>
@@ -2833,7 +2830,7 @@ export default function PassengerBooking() {
                                           setShowRegularJourneys(false);
                                           setDetailsView("vehicle");
                                         }}
-                                        className="flex-1 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"
+                                        className="flex-1 py-1.5 bg-orange-50 text-orange-700 rounded-xl text-xs font-black hover:bg-orange-100 active:scale-95 transition-all border border-orange-200"
                                       >
                                         Book Return
                                       </button>
@@ -2841,24 +2838,14 @@ export default function PassengerBooking() {
                                   </div>
                                 ))
                               ) : (
-                                <div className="text-center py-4">
-                                  <p className="text-xs text-slate-500 font-medium mb-3 pt-1">No regular journeys saved yet.</p>
-                                  <p className="text-[10px] text-slate-400">Save routes in My Rides as regular journeys.</p>
+                                <div className="text-center py-6 text-slate-500">
+                                  <p className="font-bold text-[15px] mb-2 text-slate-800">No regular journeys saved yet.</p>
+                                  <p className="text-sm">Save routes in My Rides as regular journeys.</p>
                                 </div>
                               )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-
-                  <AnimatePresence>
-                    {distanceMiles > 0 && pickup && dropoff && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                        <button onClick={() => setDetailsView("vehicle")} className="w-full py-4 bg-primary text-white rounded-[20px] font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all mb-4">
-                          Continue to Vehicles
-                        </button>
+                            </>
+                          )}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -3933,7 +3920,7 @@ export default function PassengerBooking() {
                  onDragEnd={(e, info) => {
                    if (info.offset.y > 50) setShowRideInfo(false);
                  }}
-                 className="absolute inset-x-0 bottom-0 max-h-[85vh] bg-[#f4f7fa] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.25)] flex flex-col pointer-events-auto overflow-hidden"
+                 className="absolute inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-0 max-h-[85vh] bg-[#f4f7fa] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.25)] flex flex-col pointer-events-auto overflow-hidden"
               >
                   {/* Handle */}
                   <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 shrink-0"/>
@@ -4119,7 +4106,7 @@ export default function PassengerBooking() {
 
         <AnimatePresence>
           {isEditingJourney && (
-            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col max-h-[85vh]">
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col max-h-[85vh]">
                 <div className="p-4 border-b border-black flex items-center justify-between shrink-0">
                     <h2 className="text-2xl font-black text-[#0a1930] tracking-tight">Edit Journey</h2>
                     <button onClick={() => setIsEditingJourney(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
