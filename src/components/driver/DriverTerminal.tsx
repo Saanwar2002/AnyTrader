@@ -793,8 +793,8 @@ export default function DriverTerminal() {
     } else {
       if (driverHeading !== null && driverHeading !== undefined) {
         setMapHeading(driverHeading);
-        setMapTilt(60);
-        mapInstance.setZoom(17.2);
+        setMapTilt(0);
+        mapInstance.setZoom(15);
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
       } else {
         setMapHeading(0);
@@ -2662,7 +2662,7 @@ export default function DriverTerminal() {
                       : rideState === "en_route_pickup" ||
                           rideState === "in_progress"
                         ? 13
-                        : 13 // Default driver location zoom level when idle
+                        : 11 // Default driver location zoom level when idle
                 }
                 onLoad={(map) => setMapInstance(map)}
                 options={{
@@ -2682,7 +2682,13 @@ export default function DriverTerminal() {
                     position={{ lat: mapCenter[0], lng: mapCenter[1] }}
                     mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                   >
-                    <div className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
+                    <div 
+                      ref={(el) => {
+                        if (el && el.parentElement) {
+                          el.parentElement.style.transition = 'left 1s linear, top 1s linear';
+                        }
+                      }}
+                      className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
                       <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                       {(!activeRide || rideState === "en_route_pickup" || rideState === "waiting") && (
                         <div className="absolute top-0 left-0 w-[36px] h-[36px] bg-[#FACC15] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
@@ -2965,7 +2971,13 @@ export default function DriverTerminal() {
                       }}
                       mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                     >
-                      <div className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50">
+                      <div 
+                        ref={(el) => {
+                          if (el && el.parentElement) {
+                            el.parentElement.style.transition = 'left 1s linear, top 1s linear';
+                          }
+                        }}
+                        className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50">
                         <div className="absolute top-[50px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
 
                         {/* Pulsing ring */}

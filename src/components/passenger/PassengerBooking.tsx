@@ -2567,7 +2567,13 @@ export default function PassengerBooking() {
             ))}
              {passengerPos && (
               <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50">
+                <div 
+                  ref={(el) => {
+                    if (el && el.parentElement) {
+                      el.parentElement.style.transition = 'left 1s linear, top 1s linear';
+                    }
+                  }}
+                  className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50">
                   <div className="absolute top-[50px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                   
                   {/* Pulsing ring */}
@@ -2604,7 +2610,13 @@ export default function PassengerBooking() {
 
             {driverPos && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
+                <div 
+                  ref={(el) => {
+                    if (el && el.parentElement) {
+                      el.parentElement.style.transition = 'left 1s linear, top 1s linear';
+                    }
+                  }}
+                  className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
                   <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                   {currentRideId && (assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "arrived") && (
                     <div className="absolute top-0 left-0 w-[36px] h-[36px] bg-[#FACC15] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
