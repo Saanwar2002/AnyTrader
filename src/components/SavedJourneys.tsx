@@ -200,7 +200,7 @@ export default function SavedJourneys() {
             onClick={() => setActiveTab("regular")}
             className={cn(
               "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-              activeTab === "regular" ? "bg-card text-text-main shadow-sm" : "text-text-muted hover:text-text-main hover:bg-card/50"
+              activeTab === "regular" ? "bg-sky-100 text-sky-900 shadow-sm border border-sky-200" : "text-text-muted hover:text-text-main hover:bg-card/50"
             )}
           >
             Regular Journeys
@@ -209,7 +209,7 @@ export default function SavedJourneys() {
             onClick={() => setActiveTab("favorites")}
             className={cn(
               "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-              activeTab === "favorites" ? "bg-card text-text-main shadow-sm" : "text-text-muted hover:text-text-main hover:bg-card/50"
+              activeTab === "favorites" ? "bg-sky-100 text-sky-900 shadow-sm border border-sky-200" : "text-text-muted hover:text-text-main hover:bg-card/50"
             )}
           >
             Favorite Addresses

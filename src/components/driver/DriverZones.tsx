@@ -102,7 +102,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
         <div className="w-10" />
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-32">
+      <div className="flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom)+8rem)] sm:pb-32">
         <div className="p-5 space-y-8">
 
           {/* Description */}
@@ -235,7 +235,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <button
-                   onClick={() => setSelectedDistance(0)}
+                   onClick={() => setSelectedDistance(selectedDistance === 0 ? 10 : 0)}
                    className={cn(
                       "w-full flex items-center justify-between p-4 rounded-xl border transition-all text-left mt-2",
                       selectedDistance === 0 ? "bg-[#007AFF]/10 border-[#007AFF]" : "bg-[#1A1A1E] border-white/20"
@@ -253,7 +253,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Floating Save Button */}
-      <div className="absolute bottom-6 left-5 right-5 pointer-events-auto">
+      <div className="absolute bottom-[calc(4.5rem+env(safe-area-inset-bottom)+1.5rem)] sm:bottom-6 left-5 right-5 pointer-events-auto">
         <button 
           onClick={handleSave}
           className="w-full bg-[#007AFF] text-white font-bold py-4 rounded-2xl shadow-[0_8px_30px_rgba(0,122,255,0.3)] active:scale-[0.98] transition-transform"

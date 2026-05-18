@@ -3105,7 +3105,7 @@ export default function DriverTerminal() {
             rideState === "waiting" ||
             rideState === "in_progress") &&
             activeRide?.id && (
-              <div className="absolute top-[100px] left-4 z-50 pointer-events-auto flex flex-col gap-3">
+              <div className="absolute top-[100px] left-4 z-50 pointer-events-auto flex flex-col gap-6">
                 <button
                   onClick={handleStartExternalNavigation}
                   className="w-10 h-10 rounded-full flex items-center justify-center bg-[#007AFF] shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform"
