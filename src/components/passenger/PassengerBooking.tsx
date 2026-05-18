@@ -103,6 +103,7 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
+  mapTypeId: "roadmap",
   styles: [
     { "elementType": "geometry", "stylers": [{ "color": "#ebe3cd" }] },
     { "elementType": "labels.text.fill", "stylers": [{ "color": "#523735" }] },
@@ -338,7 +339,7 @@ export default function PassengerBooking() {
     id: 'google-map-script',
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
-    version: "weekly"
+    version: "quarterly"
   });
 
   const [map, setMap] = useState<google.maps.Map | null>(null);

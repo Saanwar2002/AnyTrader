@@ -43,6 +43,9 @@ import {
   Camera,
   MapPinOff,
   PhoneCall,
+  Volume2,
+  Volume1,
+  VolumeX,
 } from "lucide-react";
 import {
   GoogleMap,
@@ -120,6 +123,7 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
+  mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
   keyboardShortcuts: false,
@@ -270,8 +274,15 @@ export default function DriverTerminal() {
   const [showPredictiveSurge, setShowPredictiveSurge] = useState(false);
 
   // Storage for directions
-  const [directions, setDirections] =
+  const [directions, setDirectionsState] =
     useState<google.maps.DirectionsResult | null>(null);
+  const currentDirectionsRef = useRef<google.maps.DirectionsResult | null>(
+    null,
+  );
+  const setDirections = (val: google.maps.DirectionsResult | null) => {
+    currentDirectionsRef.current = val;
+    setDirectionsState(val);
+  };
 
   const [currentLegIndex, setCurrentLegIndex] = useState(0);
   const [showLeaveStopReminder, setShowLeaveStopReminder] = useState(false);
@@ -413,7 +424,7 @@ export default function DriverTerminal() {
     id: "google-map-script",
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
-    version: "weekly",
+    version: "quarterly",
   });
 
   // Dynamic Fare & Live Ride Tracking
@@ -478,7 +489,18 @@ export default function DriverTerminal() {
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
   const [isAutoNavPaused, setIsAutoNavPaused] = useState(false);
+  const [navVoiceVolume, setNavVoiceVolume] = useState<number>(1.0);
   const autoNavPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastDirectionsFetchRef = useRef<{
+    originLat: number;
+    originLng: number;
+    destLat: number;
+    destLng: number;
+    time: number;
+  } | null>(null);
+  const [lastSpokenInstruction, setLastSpokenInstruction] =
+    useState<string>("");
+  const [hasAnnouncedArrival, setHasAnnouncedArrival] = useState(false);
 
   const handleMapInteraction = () => {
     if (!isAutoNavHeadUp) return;
@@ -550,6 +572,92 @@ export default function DriverTerminal() {
     }
   }, [isAutoNavHeadUp]);
 
+  useEffect(() => {
+    if (
+      isAutoNavHeadUp &&
+      directions?.routes?.[0]?.legs?.[0]?.steps?.[0]?.instructions
+    ) {
+      const htmlInstruction =
+        directions.routes[0].legs[0].steps[0].instructions;
+      // Strip HTML tags to get readable text
+      const plainText = htmlInstruction.replace(/<[^>]*>?/gm, "");
+
+      if (plainText && plainText !== lastSpokenInstruction) {
+        setLastSpokenInstruction(plainText);
+
+        if ("speechSynthesis" in window && navVoiceVolume > 0) {
+          // Cancel any ongoing speech to prioritize the latest instruction
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(plainText);
+          utterance.lang = "en-GB";
+          utterance.rate = 1.0;
+          utterance.volume = navVoiceVolume;
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+    }
+  }, [
+    directions,
+    currentLegIndex,
+    isAutoNavHeadUp,
+    lastSpokenInstruction,
+    navVoiceVolume,
+  ]);
+
+  // Reset hasAnnouncedArrival on new ride or leg
+  useEffect(() => {
+    setHasAnnouncedArrival(false);
+  }, [rideState, currentLegIndex, activeRide?.id]);
+
+  useEffect(() => {
+    if (
+      directions?.routes?.[0]?.legs?.[0] &&
+      isAutoNavHeadUp &&
+      (rideState === "en_route_pickup" || rideState === "in_progress")
+    ) {
+      const leg = directions.routes[0].legs[0];
+      const remainingDistance = leg.distance?.value || 0;
+
+      if (
+        remainingDistance > 0 &&
+        remainingDistance <= 100 &&
+        !hasAnnouncedArrival
+      ) {
+        setHasAnnouncedArrival(true);
+        if ("speechSynthesis" in window && navVoiceVolume > 0) {
+          window.speechSynthesis.cancel();
+          const text =
+            rideState === "en_route_pickup"
+              ? "You have arrived at the pickup location."
+              : "You have arrived at your destination.";
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = 1.0;
+          utterance.volume = navVoiceVolume;
+          window.speechSynthesis.speak(utterance);
+        }
+        if (mapInstance && (mapInstance.getZoom() || 0) < 17) {
+          mapInstance.setZoom(17);
+        }
+      }
+    }
+  }, [
+    directions,
+    rideState,
+    hasAnnouncedArrival,
+    navVoiceVolume,
+    mapInstance,
+    isAutoNavHeadUp,
+  ]);
+
+  const handleToggleVoiceVolume = () => {
+    setNavVoiceVolume((prev) => {
+      if (prev === 1.0) return 0.5;
+      if (prev === 0.5) return 0.0;
+      return 1.0;
+    });
+    triggerHaptic(ImpactStyle.Light);
+  };
+
   const handleStartExternalNavigation = () => {
     if (!activeRide) return;
 
@@ -615,21 +723,96 @@ export default function DriverTerminal() {
     // Fetch route directions using Google Maps API
     const fetchDirections = async (destLat: number, destLng: number) => {
       if (!window.google || !window.google.maps) return;
-      
+
       const originLat = mapCenterRef.current[0];
       const originLng = mapCenterRef.current[1];
 
       if (
-        typeof originLat !== 'number' || isNaN(originLat) ||
-        typeof originLng !== 'number' || isNaN(originLng) ||
-        typeof destLat !== 'number' || isNaN(destLat) ||
-        typeof destLng !== 'number' || isNaN(destLng)
+        typeof originLat !== "number" ||
+        isNaN(originLat) ||
+        typeof originLng !== "number" ||
+        isNaN(originLng) ||
+        typeof destLat !== "number" ||
+        isNaN(destLat) ||
+        typeof destLng !== "number" ||
+        isNaN(destLng)
       ) {
-        console.warn('Invalid coordinates for directions:', { originLat, originLng, destLat, destLng });
+        console.warn("Invalid coordinates for directions:", {
+          originLat,
+          originLng,
+          destLat,
+          destLng,
+        });
         return;
       }
 
-      if (Math.abs(originLat - destLat) < 0.0001 && Math.abs(originLng - destLng) < 0.0001) return;
+      if (
+        Math.abs(originLat - destLat) < 0.0001 &&
+        Math.abs(originLng - destLng) < 0.0001
+      )
+        return;
+
+      // Smart API call reduction logic
+      const now = Date.now();
+      if (lastDirectionsFetchRef.current) {
+        const last = lastDirectionsFetchRef.current;
+        const originMoved = getDistanceInMeters(
+          last.originLat,
+          last.originLng,
+          originLat,
+          originLng,
+        );
+        const destMoved = getDistanceInMeters(
+          last.destLat,
+          last.destLng,
+          destLat,
+          destLng,
+        );
+        const timeSinceLastFetch = now - last.time;
+
+        let isOffRoute = false;
+
+        // Calculate distance from current driver location to the defined route polyline
+        if (currentDirectionsRef.current?.routes?.[0]?.overview_path) {
+          let minDistanceToRoute = Infinity;
+          const path = currentDirectionsRef.current.routes[0].overview_path;
+          for (let i = 0; i < path.length; i++) {
+            const p = path[i];
+            const plat =
+              typeof p.lat === "function"
+                ? p.lat()
+                : (p.lat as unknown as number);
+            const plng =
+              typeof p.lng === "function"
+                ? p.lng()
+                : (p.lng as unknown as number);
+            const dist = getDistanceInMeters(plat, plng, originLat, originLng);
+            if (dist < minDistanceToRoute) {
+              minDistanceToRoute = dist;
+            }
+          }
+          // If the minimum distance to the polyline is > 50 meters, they are "off route"
+          if (minDistanceToRoute > 50) {
+            isOffRoute = true;
+          }
+        } else {
+          isOffRoute = true;
+        }
+
+        // Smart API call reduction logic to save $$$
+        // We SKIP fetching new directions IF:
+        // 1. Destination hasn't changed (destMoved < 50m)
+        // AND 2. Less than 60 seconds have passed since last fetch (prevents spamming API for traffic/ETA updates)
+        // AND 3. The driver is ON ROUTE (not off route)
+        if (destMoved < 50) {
+          if (!isOffRoute && timeSinceLastFetch < 60000) {
+            return; // Skip fetch, they are on route and data is fresh enough (saves MASSIVE costs)
+          }
+          if (isOffRoute && timeSinceLastFetch < 5000) {
+            return; // Throttle off-route recalculations to max once every 5 seconds to prevent spam
+          }
+        }
+      }
 
       const directionsService = new window.google.maps.DirectionsService();
 
@@ -644,6 +827,14 @@ export default function DriverTerminal() {
           mapInstance.fitBounds(result.routes[0].bounds);
           isInitialFitBounds = false;
         }
+
+        lastDirectionsFetchRef.current = {
+          originLat,
+          originLng,
+          destLat,
+          destLng,
+          time: now,
+        };
       } catch (e) {
         // Silently catch directions API errors (e.g. UNKNOWN_ERROR, MAX_WAYPOINTS_EXCEEDED, ZERO_RESULTS)
       }
@@ -684,7 +875,7 @@ export default function DriverTerminal() {
     };
 
     updateDynamicDirections();
-    intervalId = setInterval(updateDynamicDirections, 15000);
+    intervalId = setInterval(updateDynamicDirections, 5000);
 
     return () => clearInterval(intervalId);
   }, [
@@ -745,8 +936,15 @@ export default function DriverTerminal() {
       setMapHeading(targetBearing);
       setMapTilt(60); // 3D perspective
       if (directions) {
+        let desiredZoom = 16;
+        if (
+          directions.routes?.[0]?.legs?.[0]?.distance?.value &&
+          directions.routes[0].legs[0].distance.value <= 100
+        ) {
+          desiredZoom = 17;
+        }
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(14);
+        mapInstance.setZoom(desiredZoom);
       }
     } else if (
       rideState === "in_progress" &&
@@ -772,9 +970,7 @@ export default function DriverTerminal() {
       if (targetBearing === null) {
         // Try getting path bearing from directions
         if (directions && directions.routes && directions.routes[0]) {
-          const leg =
-            directions.routes[0].legs[currentLegIndex] ||
-            directions.routes[0].legs[0];
+          const leg = directions.routes[0].legs[0];
           if (leg && leg.steps.length > 0) {
             const p1 = leg.steps[0].start_location;
             const p2 = leg.steps[0].end_location;
@@ -800,8 +996,15 @@ export default function DriverTerminal() {
       setMapHeading(targetBearing);
       setMapTilt(60);
       if (directions) {
+        let desiredZoom = 16;
+        if (
+          directions.routes?.[0]?.legs?.[0]?.distance?.value &&
+          directions.routes[0].legs[0].distance.value <= 100
+        ) {
+          desiredZoom = 17;
+        }
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(14);
+        mapInstance.setZoom(desiredZoom);
       }
     } else {
       if (driverHeading !== null && driverHeading !== undefined) {
@@ -1344,15 +1547,18 @@ export default function DriverTerminal() {
         // Sync to Firestore for dispatcher / passenger (hybrid throttled: 10s + distance, or 60s max)
         const now = Date.now();
         const timeSinceLastSync = now - lastLocationSyncRef.current;
-        const distToLastSync = lastSyncCoordsRef.current 
-            ? Math.sqrt(Math.pow(latitude - lastSyncCoordsRef.current.lat, 2) + Math.pow(longitude - lastSyncCoordsRef.current.lng, 2))
-            : 999;
-            
+        const distToLastSync = lastSyncCoordsRef.current
+          ? Math.sqrt(
+              Math.pow(latitude - lastSyncCoordsRef.current.lat, 2) +
+                Math.pow(longitude - lastSyncCoordsRef.current.lng, 2),
+            )
+          : 999;
+
         // Sync if: 1) Never synced, 2) Moved ~15m (0.00015 deg) AND 10s passed, 3) Or 60s passed
-        const shouldSync = 
-            timeSinceLastSync >= 60000 || 
-            (timeSinceLastSync >= 10000 && distToLastSync > 0.00015) ||
-            !lastSyncCoordsRef.current;
+        const shouldSync =
+          timeSinceLastSync >= 60000 ||
+          (timeSinceLastSync >= 10000 && distToLastSync > 0.00015) ||
+          !lastSyncCoordsRef.current;
 
         if (shouldSync) {
           lastLocationSyncRef.current = now;
@@ -1797,10 +2003,13 @@ export default function DriverTerminal() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const lastSeenChatCountRef = useRef(0);
-  const [incomingPopupMessage, setIncomingPopupMessage] = useState<{ id: string, text: string } | null>(null);
+  const [incomingPopupMessage, setIncomingPopupMessage] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
   const lastPopupMessageIdRef = useRef<string | null>(null);
   const lastLocationSyncRef = useRef(0);
-  const lastSyncCoordsRef = useRef<{lat: number, lng: number} | null>(null);
+  const lastSyncCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const [showJobDetails, setShowJobDetails] = useState(false);
   const [quickMessageCooldown, setQuickMessageCooldown] = useState(0);
   const [isCardCollapsed, setIsCardCollapsed] = useState(true);
@@ -1821,7 +2030,7 @@ export default function DriverTerminal() {
       await addDoc(collection(db, "ride_requests", activeRide.id, "chat"), {
         text: replyText,
         senderId: user.uid,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       });
       setIncomingPopupMessage(null);
     } catch (err) {
@@ -1897,7 +2106,10 @@ export default function DriverTerminal() {
     );
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() as any }));
+      const messages = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as any),
+      }));
       const remoteMessages = messages.filter((m) => m.senderId !== user.uid);
 
       if (isChatOpen) {
@@ -1908,12 +2120,12 @@ export default function DriverTerminal() {
         const unread = remoteMessages.length - lastSeenChatCountRef.current;
         if (unread > 0) {
           setUnreadChatCount(unread);
-          
+
           const latestMsg = remoteMessages[remoteMessages.length - 1];
           if (latestMsg && latestMsg.id !== lastPopupMessageIdRef.current) {
-             lastPopupMessageIdRef.current = latestMsg.id;
-             setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
-             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            lastPopupMessageIdRef.current = latestMsg.id;
+            setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
           }
         }
       }
@@ -2672,6 +2884,34 @@ export default function DriverTerminal() {
             onWheelCapture={handleMapInteraction}
             onMouseDownCapture={handleMapInteraction}
           >
+            <AnimatePresence>
+              {isAutoNavHeadUp &&
+                directions?.routes?.[0]?.legs?.[currentLegIndex]
+                  ?.steps?.[0] && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="absolute bottom-[180px] left-0 right-0 z-30 flex flex-col items-center justify-center pointer-events-none text-center px-4"
+                  >
+                    <div className="flex-1 w-full max-w-sm flex flex-col items-center">
+                      <p
+                        className="text-[26px] text-[#007AFF] font-normal leading-tight drop-shadow-[0_2px_10px_rgba(255,255,255,1)] [text-shadow:_0_2px_8px_rgb(255_255_255_/_80%),_0_1px_2px_rgb(255_255_255_/_100%)] line-clamp-2"
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            directions.routes[0].legs[0].steps[0].instructions,
+                        }}
+                      />
+                      <div className="mt-2 inline-flex bg-[#1A1A1E] px-4 py-1.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#333338]">
+                        <p className="text-[16px] text-[#00D26A] font-bold tracking-wider uppercase">
+                          {directions.routes[0].legs[0].steps[0].distance?.text}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+            </AnimatePresence>
+
             {isLoaded && (
               <GoogleMap
                 mapContainerStyle={{ width: "100%", height: "100%" }}
@@ -2687,7 +2927,7 @@ export default function DriverTerminal() {
                       ? 17
                       : rideState === "en_route_pickup" ||
                           rideState === "in_progress"
-                        ? 14
+                        ? 16
                         : 11 // Default driver location zoom level when idle
                 }
                 onLoad={(map) => setMapInstance(map)}
@@ -2708,19 +2948,26 @@ export default function DriverTerminal() {
                     position={{ lat: mapCenter[0], lng: mapCenter[1] }}
                     mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                   >
-                    <div 
+                    <div
                       ref={(el) => {
                         if (el && el.parentElement) {
-                          el.parentElement.style.transition = 'left 1s linear, top 1s linear';
+                          el.parentElement.style.transition =
+                            "left 1s linear, top 1s linear";
                         }
                       }}
-                      className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
+                      className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50"
+                    >
                       <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
-                      {(!activeRide || rideState === "en_route_pickup" || rideState === "waiting") && (
+                      {(!activeRide ||
+                        rideState === "en_route_pickup" ||
+                        rideState === "waiting") && (
                         <div className="absolute top-0 left-0 w-[36px] h-[36px] bg-[#FACC15] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
                       )}
                       <div className="bg-[#FACC15] w-[36px] h-[36px] rounded-full border-2 border-black flex items-center justify-center relative shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20">
-                        <Car className="w-[20px] h-[20px] text-black" fill="currentColor" />
+                        <Car
+                          className="w-[20px] h-[20px] text-black"
+                          fill="currentColor"
+                        />
                         {/* The leg */}
                         <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[3px] h-[16px] bg-black flex justify-center">
                           <div className="w-[1px] h-full bg-[#FACC15]"></div>
@@ -2997,13 +3244,15 @@ export default function DriverTerminal() {
                       }}
                       mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                     >
-                      <div 
+                      <div
                         ref={(el) => {
                           if (el && el.parentElement) {
-                            el.parentElement.style.transition = 'left 1s linear, top 1s linear';
+                            el.parentElement.style.transition =
+                              "left 1s linear, top 1s linear";
                           }
                         }}
-                        className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50">
+                        className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50"
+                      >
                         <div className="absolute top-[50px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
 
                         {/* Pulsing ring */}
@@ -3048,29 +3297,45 @@ export default function DriverTerminal() {
                         : "bottom-[420px]",
                 )}
               >
-                <div className="flex flex-col gap-5 items-center">
+                <div className="flex flex-col items-center">
                   <MapZoomControls mapInstance={mapInstance} />
-                  
+
                   {(rideState === "en_route_pickup" ||
                     rideState === "waiting" ||
                     rideState === "in_progress") &&
                     activeRide?.id && (
-                      <button
-                        onClick={handleToggleAutoNav}
-                        className={cn(
-                          "w-[34px] h-[34px] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(0,210,106,0.4)] active:scale-95 transition-transform shrink-0",
-                          isAutoNavHeadUp
-                            ? "bg-[#00D26A]"
-                            : "bg-[#1A1A1E] border border-[#00D26A]",
-                        )}
-                      >
-                        <Compass
+                      <>
+                        <button
+                          onClick={handleToggleAutoNav}
                           className={cn(
-                            "w-[18px] h-[18px]",
-                            isAutoNavHeadUp ? "text-[#1A1A1E]" : "text-[#00D26A]",
+                            "w-[34px] h-[34px] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(0,210,106,0.4)] active:scale-95 transition-transform shrink-0 mt-8",
+                            isAutoNavHeadUp
+                              ? "bg-[#00D26A]"
+                              : "bg-[#1A1A1E] border border-[#00D26A]",
                           )}
-                        />
-                      </button>
+                        >
+                          <Compass
+                            className={cn(
+                              "w-[18px] h-[18px]",
+                              isAutoNavHeadUp
+                                ? "text-[#1A1A1E]"
+                                : "text-[#00D26A]",
+                            )}
+                          />
+                        </button>
+                        <button
+                          onClick={handleToggleVoiceVolume}
+                          className="w-[34px] h-[34px] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(0,0,0,0.4)] active:scale-95 transition-transform shrink-0 mt-3 bg-[#1A1A1E] border border-[#333338]"
+                        >
+                          {navVoiceVolume === 1.0 ? (
+                            <Volume2 className="w-[16px] h-[16px] text-white" />
+                          ) : navVoiceVolume === 0.5 ? (
+                            <Volume1 className="w-[16px] h-[16px] text-white" />
+                          ) : (
+                            <VolumeX className="w-[16px] h-[16px] text-[#A0A0A5]" />
+                          )}
+                        </button>
+                      </>
                     )}
                 </div>
               </div>
@@ -3090,7 +3355,14 @@ export default function DriverTerminal() {
                 exit={{ opacity: 0, y: 50, scale: 0.95 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
                 className="absolute left-4 right-4 z-[60] bg-[#1A1A1E]/95 backdrop-blur-md rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-[#333338]"
-                style={{ bottom: rideState === "idle" ? "140px" : isCardCollapsed ? "280px" : "420px" }}
+                style={{
+                  bottom:
+                    rideState === "idle"
+                      ? "140px"
+                      : isCardCollapsed
+                        ? "280px"
+                        : "420px",
+                }}
               >
                 <div className="flex items-start gap-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-[#00D26A]/20 flex items-center justify-center shrink-0">
@@ -3098,26 +3370,28 @@ export default function DriverTerminal() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-white font-bold text-[14px] truncate mb-1">
-                      {activeRide?.passengerName || activeRide?.name || "Passenger"}
+                      {activeRide?.passengerName ||
+                        activeRide?.name ||
+                        "Passenger"}
                     </h3>
                     <p className="text-[#E4E4E7] text-[13px] leading-snug line-clamp-2 break-words">
                       "{incomingPopupMessage.text}"
                     </p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setIncomingPopupMessage(null)}
                     className="w-8 h-8 rounded-full bg-[#252529] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
                   >
                     <X className="w-4 h-4 text-[#8E8E93]" />
                   </button>
                 </div>
-                
+
                 <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 w-full">
                   {[
                     "OK, got it!",
                     "I'll be right there",
                     "Traffic is heavy",
-                    "I'll be outside shortly"
+                    "I'll be outside shortly",
                   ].map((msg, i) => (
                     <button
                       key={i}
@@ -3167,7 +3441,7 @@ export default function DriverTerminal() {
             </button>
           </div>
 
-            {/* Floating Map Navigation (Left Side) */}
+          {/* Floating Map Navigation (Left Side) */}
           {(rideState === "en_route_pickup" ||
             rideState === "waiting" ||
             rideState === "in_progress") &&
@@ -5927,7 +6201,7 @@ export default function DriverTerminal() {
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
                 className={cn(
                   "absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-2 sm:px-4 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pt-0 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col",
-                  isCardCollapsed ? "pb-3" : "pb-[68px]"
+                  isCardCollapsed ? "pb-3" : "pb-[68px]",
                 )}
                 onTouchStartCapture={() => {
                   if (
@@ -6011,7 +6285,11 @@ export default function DriverTerminal() {
                       {!isCardCollapsed && (
                         <motion.div
                           initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                          animate={{ height: "auto", opacity: 1, marginTop: 12 }}
+                          animate={{
+                            height: "auto",
+                            opacity: 1,
+                            marginTop: 12,
+                          }}
                           exit={{ height: 0, opacity: 0, marginTop: 0 }}
                           className="overflow-hidden flex flex-col gap-3"
                         >
@@ -6214,7 +6492,9 @@ export default function DriverTerminal() {
                               <SwipeButton
                                 onComplete={handleStartRide}
                                 text={
-                                  <span className="text-[#0D0D0F]">START TRIP</span>
+                                  <span className="text-[#0D0D0F]">
+                                    START TRIP
+                                  </span>
                                 }
                                 bgClass="bg-[#00D26A]"
                                 icon={
@@ -6346,7 +6626,11 @@ export default function DriverTerminal() {
                       {!isCardCollapsed && (
                         <motion.div
                           initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                          animate={{ height: "auto", opacity: 1, marginTop: 12 }}
+                          animate={{
+                            height: "auto",
+                            opacity: 1,
+                            marginTop: 12,
+                          }}
                           exit={{ height: 0, opacity: 0, marginTop: 0 }}
                           className="overflow-hidden flex flex-col gap-3"
                         >
@@ -6356,7 +6640,9 @@ export default function DriverTerminal() {
                                 onClick={handleToggleWaitAtStop}
                                 className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? "bg-[#FF9500] text-white border-[#FF9500]/50" : "bg-transparent text-[#FF9500] border-[#FF9500]/30"}`}
                               >
-                                {isWaitingAtStop ? "Resume Trip" : "Wait at Stop"}
+                                {isWaitingAtStop
+                                  ? "Resume Trip"
+                                  : "Wait at Stop"}
                               </button>
 
                               <AnimatePresence>
@@ -6414,7 +6700,8 @@ export default function DriverTerminal() {
                                 </span>
                               )}
                             </button>
-                            {currentLegIndex < (activeRide?.stops?.length || 0) ? (
+                            {currentLegIndex <
+                            (activeRide?.stops?.length || 0) ? (
                               <div className="flex-1 min-w-0">
                                 <SwipeButton
                                   onComplete={handleGoToNextLeg}
