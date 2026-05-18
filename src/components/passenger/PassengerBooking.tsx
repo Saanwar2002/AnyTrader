@@ -2567,20 +2567,20 @@ export default function PassengerBooking() {
             ))}
              {passengerPos && (
               <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex flex-col items-center justify-start -ml-[14px] -mt-[46px] z-50">
-                  <div className="absolute top-[44px] w-5 h-2 bg-black/30 rounded-full blur-[1px]"></div>
+                <div className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50">
+                  <div className="absolute top-[50px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                   
                   {/* Pulsing ring */}
-                  <div className="absolute top-0 left-0 w-[28px] h-[28px] bg-black rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-60"></div>
+                  <div className="absolute top-0 left-0 w-[32px] h-[32px] bg-[#9333ea] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-60"></div>
                   
-                  <div className="bg-[#FF9500] w-[28px] h-[28px] rounded-full border-[1.5px] border-black flex items-center justify-center relative shadow-sm z-20">
-                    <User className="w-[14px] h-[14px] text-white" fill="currentColor" strokeWidth={2} />
+                  <div className="bg-[#9333ea] w-[32px] h-[32px] rounded-full border-2 border-white flex items-center justify-center relative shadow-[0_0_15px_rgba(147,51,234,0.5)] z-20">
+                    <User className="w-[16px] h-[16px] text-white" fill="currentColor" strokeWidth={2} />
                     {/* The leg */}
-                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[2.5px] h-[16px] bg-black">
-                      <div className="absolute inset-0 bg-[#FF9500] w-[0.5px] mx-auto opacity-50"></div>
+                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[4px] h-[20px] bg-white flex justify-center">
+                      <div className="w-[1.5px] h-full bg-[#9333ea]"></div>
                     </div>
                     {/* The base dot */}
-                    <div className="absolute top-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-2 h-2 bg-white border border-black rounded-full shadow-[0_0_8px_rgba(255,149,0,0.8)]"></div>
+                    <div className="absolute top-[calc(100%+17px)] left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-[#9333ea] border-2 border-white rounded-full shadow-[0_0_10px_rgba(147,51,234,0.8)]"></div>
                   </div>
                 </div>
               </OverlayViewF>
