@@ -517,7 +517,7 @@ export default function DriverTerminal() {
         lat: mapCenterRef.current[0],
         lng: mapCenterRef.current[1],
       });
-      mapInstance.setZoom(15);
+      mapInstance.setZoom(17);
     } else {
       setMapCenter([mapCenterRef.current[0], mapCenterRef.current[1]]);
     }
@@ -615,10 +615,23 @@ export default function DriverTerminal() {
     // Fetch route directions using Google Maps API
     const fetchDirections = async (destLat: number, destLng: number) => {
       if (!window.google || !window.google.maps) return;
-      const directionsService = new window.google.maps.DirectionsService();
-
+      
       const originLat = mapCenterRef.current[0];
       const originLng = mapCenterRef.current[1];
+
+      if (
+        typeof originLat !== 'number' || isNaN(originLat) ||
+        typeof originLng !== 'number' || isNaN(originLng) ||
+        typeof destLat !== 'number' || isNaN(destLat) ||
+        typeof destLng !== 'number' || isNaN(destLng)
+      ) {
+        console.warn('Invalid coordinates for directions:', { originLat, originLng, destLat, destLng });
+        return;
+      }
+
+      if (Math.abs(originLat - destLat) < 0.0001 && Math.abs(originLng - destLng) < 0.0001) return;
+
+      const directionsService = new window.google.maps.DirectionsService();
 
       try {
         const result = await directionsService.route({
@@ -733,7 +746,7 @@ export default function DriverTerminal() {
       setMapTilt(60); // 3D perspective
       if (directions) {
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(17.2);
+        mapInstance.setZoom(14);
       }
     } else if (
       rideState === "in_progress" &&
@@ -788,13 +801,13 @@ export default function DriverTerminal() {
       setMapTilt(60);
       if (directions) {
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(17.2);
+        mapInstance.setZoom(14);
       }
     } else {
       if (driverHeading !== null && driverHeading !== undefined) {
         setMapHeading(driverHeading);
         setMapTilt(0);
-        mapInstance.setZoom(15);
+        mapInstance.setZoom(rideState === "waiting" ? 17 : 17); // Set to 17 for waiting and idle to match previous behavior
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
       } else {
         setMapHeading(0);
@@ -1835,17 +1848,13 @@ export default function DriverTerminal() {
       clearTimeout(cardCollapseTimeoutRef.current);
     cardCollapseTimeoutRef.current = setTimeout(() => {
       setIsCardCollapsed(true);
-    }, 8000);
+    }, 10000);
   }, []);
 
   useEffect(() => {
-    if (["en_route_pickup", "waiting"].includes(rideState)) {
+    if (["en_route_pickup", "waiting", "in_progress"].includes(rideState)) {
       setIsCardCollapsed(false);
       resetCardCollapseTimer();
-    } else if (rideState === "in_progress") {
-      setIsCardCollapsed(true);
-      if (cardCollapseTimeoutRef.current)
-        clearTimeout(cardCollapseTimeoutRef.current);
     } else {
       setIsCardCollapsed(true);
       if (cardCollapseTimeoutRef.current)
@@ -1855,7 +1864,24 @@ export default function DriverTerminal() {
       if (cardCollapseTimeoutRef.current)
         clearTimeout(cardCollapseTimeoutRef.current);
     };
-  }, [rideState, resetCardCollapseTimer]);
+  }, [rideState, currentLegIndex, resetCardCollapseTimer]);
+
+  useEffect(() => {
+    // Hide Layout's bottom nav when card is collapsed and we have an active job
+    if (["en_route_pickup", "waiting", "in_progress"].includes(rideState)) {
+      if (isCardCollapsed) {
+        document.body.classList.add("hide-driver-bottom-nav");
+      } else {
+        document.body.classList.remove("hide-driver-bottom-nav");
+      }
+    } else {
+      document.body.classList.remove("hide-driver-bottom-nav");
+    }
+
+    return () => {
+      document.body.classList.remove("hide-driver-bottom-nav");
+    };
+  }, [rideState, isCardCollapsed]);
 
   useEffect(() => {
     if (
@@ -2658,10 +2684,10 @@ export default function DriverTerminal() {
                   directions
                     ? undefined
                     : rideState === "waiting"
-                      ? 13
+                      ? 17
                       : rideState === "en_route_pickup" ||
                           rideState === "in_progress"
-                        ? 13
+                        ? 14
                         : 11 // Default driver location zoom level when idle
                 }
                 onLoad={(map) => setMapInstance(map)}
@@ -3005,12 +3031,12 @@ export default function DriverTerminal() {
               </GoogleMap>
             )}
 
-            {/* Main Map Zoom Controls */}
+            {/* Main Map Zoom Controls & Overview Nav */}
             {mapInstance && (
               <div
                 onClickCapture={handleMapInteraction}
                 className={cn(
-                  "absolute right-4 z-[45] transition-all duration-300",
+                  "absolute right-4 z-[45] transition-all duration-300 flex flex-col gap-3 items-end",
                   rideState === "incoming" ||
                     rideState === "review" ||
                     rideState === "completed"
@@ -3022,7 +3048,31 @@ export default function DriverTerminal() {
                         : "bottom-[420px]",
                 )}
               >
-                <MapZoomControls mapInstance={mapInstance} />
+                <div className="flex flex-col gap-5 items-center">
+                  <MapZoomControls mapInstance={mapInstance} />
+                  
+                  {(rideState === "en_route_pickup" ||
+                    rideState === "waiting" ||
+                    rideState === "in_progress") &&
+                    activeRide?.id && (
+                      <button
+                        onClick={handleToggleAutoNav}
+                        className={cn(
+                          "w-[34px] h-[34px] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(0,210,106,0.4)] active:scale-95 transition-transform shrink-0",
+                          isAutoNavHeadUp
+                            ? "bg-[#00D26A]"
+                            : "bg-[#1A1A1E] border border-[#00D26A]",
+                        )}
+                      >
+                        <Compass
+                          className={cn(
+                            "w-[18px] h-[18px]",
+                            isAutoNavHeadUp ? "text-[#1A1A1E]" : "text-[#00D26A]",
+                          )}
+                        />
+                      </button>
+                    )}
+                </div>
               </div>
             )}
 
@@ -3117,7 +3167,7 @@ export default function DriverTerminal() {
             </button>
           </div>
 
-          {/* Floating Map Navigation (Left Side) */}
+            {/* Floating Map Navigation (Left Side) */}
           {(rideState === "en_route_pickup" ||
             rideState === "waiting" ||
             rideState === "in_progress") &&
@@ -3128,23 +3178,6 @@ export default function DriverTerminal() {
                   className="w-10 h-10 rounded-full flex items-center justify-center bg-[#007AFF] shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform"
                 >
                   <Navigation className="w-5 h-5 text-white fill-white" />
-                </button>
-
-                <button
-                  onClick={handleToggleAutoNav}
-                  className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(0,210,106,0.4)] active:scale-95 transition-transform",
-                    isAutoNavHeadUp
-                      ? "bg-[#00D26A]"
-                      : "bg-[#1A1A1E] border-2 border-[#00D26A]",
-                  )}
-                >
-                  <Compass
-                    className={cn(
-                      "w-5 h-5",
-                      isAutoNavHeadUp ? "text-[#1A1A1E]" : "text-[#00D26A]",
-                    )}
-                  />
                 </button>
               </div>
             )}
@@ -3368,8 +3401,8 @@ export default function DriverTerminal() {
                                   map,
                                   "idle",
                                   () => {
-                                    if ((map.getZoom() || 0) > 13)
-                                      map.setZoom(13); // Restrict to 13 as user mentioned
+                                    if ((map.getZoom() || 0) > 17)
+                                      map.setZoom(17); // Restrict to 17 as user mentioned
                                     window.google.maps.event.removeListener(
                                       listener,
                                     );
@@ -3990,8 +4023,8 @@ export default function DriverTerminal() {
                                   map,
                                   "idle",
                                   () => {
-                                    if ((map.getZoom() || 0) > 13)
-                                      map.setZoom(13); // Restrict to 13 as user mentioned
+                                    if ((map.getZoom() || 0) > 17)
+                                      map.setZoom(17); // Restrict to 17 as user mentioned
                                     window.google.maps.event.removeListener(
                                       listener,
                                     );
@@ -4620,8 +4653,8 @@ export default function DriverTerminal() {
                                   map,
                                   "idle",
                                   () => {
-                                    if ((map.getZoom() || 0) > 13)
-                                      map.setZoom(13); // Restrict to 13 as user mentioned
+                                    if ((map.getZoom() || 0) > 17)
+                                      map.setZoom(17); // Restrict to 17 as user mentioned
                                     window.google.maps.event.removeListener(
                                       listener,
                                     );
@@ -5250,8 +5283,8 @@ export default function DriverTerminal() {
                                   map,
                                   "idle",
                                   () => {
-                                    if ((map.getZoom() || 0) > 13)
-                                      map.setZoom(13); // Restrict to 13 as user mentioned
+                                    if ((map.getZoom() || 0) > 17)
+                                      map.setZoom(17); // Restrict to 17 as user mentioned
                                     window.google.maps.event.removeListener(
                                       listener,
                                     );
@@ -5892,7 +5925,10 @@ export default function DriverTerminal() {
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-2 sm:px-4 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pt-0 pb-[68px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col"
+                className={cn(
+                  "absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-2 sm:px-4 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pt-0 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col",
+                  isCardCollapsed ? "pb-3" : "pb-[68px]"
+                )}
                 onTouchStartCapture={() => {
                   if (
                     ["en_route_pickup", "waiting", "in_progress"].includes(
@@ -5915,7 +5951,7 @@ export default function DriverTerminal() {
                 }}
               >
                 <div
-                  className="w-full h-8 flex items-center justify-center mb-0 cursor-pointer touch-none opacity-90 hover:opacity-100 transition-opacity drop-shadow-sm"
+                  className="w-auto h-[36px] -mx-2 sm:-mx-4 flex items-center justify-center mb-1 cursor-pointer touch-none transition-colors border-b border-black/20 drop-shadow-sm bg-[#2C2C30] rounded-t-[23px] hover:bg-[#34343A]"
                   onClick={() => {
                     const nextState = !isCardCollapsed;
                     setIsCardCollapsed(nextState);
@@ -5972,72 +6008,59 @@ export default function DriverTerminal() {
                     </div>
 
                     <AnimatePresence initial={false}>
-                      {!isCardCollapsed && activeRide?.comments && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-                          animate={{
-                            height: "auto",
-                            opacity: 1,
-                            marginBottom: 12,
-                          }}
-                          exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
-                            <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
-                            <div>
-                              <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">
-                                Passenger Note
-                              </span>
-                              <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                                {activeRide.comments}
-                              </p>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <div className="flex justify-center gap-2 mt-1">
-                      <button
-                        onClick={() => setShowJobDetails(true)}
-                        className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
-                      >
-                        <Info className="w-5 h-5 text-white" />
-                      </button>
-                      <button
-                        onClick={() => setIsChatOpen(true)}
-                        className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]"
-                      >
-                        <MessageCircle className="w-5 h-5 text-[#00D26A]" />
-                        {unreadChatCount > 0 && (
-                          <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
-                              {unreadChatCount}
-                            </span>
-                          </span>
-                        )}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <SwipeButton
-                          onComplete={onArrivedClick}
-                          text="MARK AS ARRIVED"
-                          bgClass="bg-[#FF9500]"
-                          icon={<MapPin className="w-5 h-5 text-white" />}
-                          resetToken={showEarlyArrivalConfirm}
-                        />
-                      </div>
-                    </div>
-
-                    <AnimatePresence initial={false}>
                       {!isCardCollapsed && (
                         <motion.div
                           initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                          animate={{ height: "auto", opacity: 1, marginTop: 8 }}
+                          animate={{ height: "auto", opacity: 1, marginTop: 12 }}
                           exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                          className="overflow-hidden"
+                          className="overflow-hidden flex flex-col gap-3"
                         >
+                          {activeRide?.comments && (
+                            <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
+                              <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
+                              <div>
+                                <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">
+                                  Passenger Note
+                                </span>
+                                <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                                  {activeRide.comments}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex justify-center gap-2">
+                            <button
+                              onClick={() => setShowJobDetails(true)}
+                              className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                            >
+                              <Info className="w-5 h-5 text-white" />
+                            </button>
+                            <button
+                              onClick={() => setIsChatOpen(true)}
+                              className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]"
+                            >
+                              <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                              {unreadChatCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
+                                    {unreadChatCount}
+                                  </span>
+                                </span>
+                              )}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <SwipeButton
+                                onComplete={onArrivedClick}
+                                text="MARK AS ARRIVED"
+                                bgClass="bg-[#FF9500]"
+                                icon={<MapPin className="w-5 h-5 text-white" />}
+                                resetToken={showEarlyArrivalConfirm}
+                              />
+                            </div>
+                          </div>
+
                           <div className="flex overflow-x-auto no-scrollbar gap-2 mb-1 w-full pb-1">
                             {[
                               "I'll be right there",
@@ -6165,53 +6188,42 @@ export default function DriverTerminal() {
                                 </div>
                               </div>
                             )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
 
-                    <div className="flex justify-center gap-2 mt-1">
-                      <button
-                        onClick={() => setShowJobDetails(true)}
-                        className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
-                      >
-                        <Info className="w-5 h-5 text-white" />
-                      </button>
-                      <button
-                        onClick={() => setIsChatOpen(true)}
-                        className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]"
-                      >
-                        <MessageCircle className="w-5 h-5 text-[#00D26A]" />
-                        {unreadChatCount > 0 && (
-                          <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
-                              {unreadChatCount}
-                            </span>
-                          </span>
-                        )}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <SwipeButton
-                          onComplete={handleStartRide}
-                          text={
-                            <span className="text-[#0D0D0F]">START TRIP</span>
-                          }
-                          bgClass="bg-[#00D26A]"
-                          icon={
-                            <Zap className="w-5 h-5 fill-[#0D0D0F] text-[#0D0D0F]" />
-                          }
-                        />
-                      </div>
-                    </div>
+                          <div className="flex justify-center gap-2 mt-1">
+                            <button
+                              onClick={() => setShowJobDetails(true)}
+                              className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                            >
+                              <Info className="w-5 h-5 text-white" />
+                            </button>
+                            <button
+                              onClick={() => setIsChatOpen(true)}
+                              className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]"
+                            >
+                              <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                              {unreadChatCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
+                                    {unreadChatCount}
+                                  </span>
+                                </span>
+                              )}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <SwipeButton
+                                onComplete={handleStartRide}
+                                text={
+                                  <span className="text-[#0D0D0F]">START TRIP</span>
+                                }
+                                bgClass="bg-[#00D26A]"
+                                icon={
+                                  <Zap className="w-5 h-5 fill-[#0D0D0F] text-[#0D0D0F]" />
+                                }
+                              />
+                            </div>
+                          </div>
 
-                    <AnimatePresence initial={false}>
-                      {!isCardCollapsed && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                          animate={{ height: "auto", opacity: 1, marginTop: 8 }}
-                          exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                          className="overflow-hidden"
-                        >
                           <div className="flex overflow-x-auto no-scrollbar gap-2 mt-auto mb-1 w-full pb-1">
                             {[
                               "I'm waiting outside",
@@ -6331,102 +6343,102 @@ export default function DriverTerminal() {
                     </div>
 
                     <AnimatePresence initial={false}>
-                      {!isCardCollapsed && activeRide?.stops?.length > 0 && (
+                      {!isCardCollapsed && (
                         <motion.div
-                          initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-                          animate={{
-                            height: "auto",
-                            opacity: 1,
-                            marginBottom: 12,
-                          }}
-                          exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-                          className="overflow-hidden flex flex-col gap-2 mt-3"
+                          initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                          animate={{ height: "auto", opacity: 1, marginTop: 12 }}
+                          exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                          className="overflow-hidden flex flex-col gap-3"
                         >
-                          <button
-                            onClick={handleToggleWaitAtStop}
-                            className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? "bg-[#FF9500] text-white border-[#FF9500]/50" : "bg-transparent text-[#FF9500] border-[#FF9500]/30"}`}
-                          >
-                            {isWaitingAtStop ? "Resume Trip" : "Wait at Stop"}
-                          </button>
+                          {activeRide?.stops?.length > 0 && (
+                            <div className="flex flex-col gap-2">
+                              <button
+                                onClick={handleToggleWaitAtStop}
+                                className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-colors border ${isWaitingAtStop ? "bg-[#FF9500] text-white border-[#FF9500]/50" : "bg-transparent text-[#FF9500] border-[#FF9500]/30"}`}
+                              >
+                                {isWaitingAtStop ? "Resume Trip" : "Wait at Stop"}
+                              </button>
 
-                          <AnimatePresence>
-                            {fareConfig.allowRiderAbandonment &&
-                              isWaitingAtStop &&
-                              currentStopWaitSeconds >= 300 &&
-                              !abandonmentWarningSent && (
-                                <motion.button
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: "auto", opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  onClick={handleSendAbandonmentWarning}
-                                  className="w-full py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/50 text-[#FF3B30] rounded-xl font-black text-xs uppercase tracking-wider hover:bg-[#FF3B30]/20 transition-colors"
-                                >
-                                  Rider not responding?
-                                </motion.button>
-                              )}
+                              <AnimatePresence>
+                                {fareConfig.allowRiderAbandonment &&
+                                  isWaitingAtStop &&
+                                  currentStopWaitSeconds >= 300 &&
+                                  !abandonmentWarningSent && (
+                                    <motion.button
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      onClick={handleSendAbandonmentWarning}
+                                      className="w-full py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/50 text-[#FF3B30] rounded-xl font-black text-xs uppercase tracking-wider hover:bg-[#FF3B30]/20 transition-colors"
+                                    >
+                                      Rider not responding?
+                                    </motion.button>
+                                  )}
 
-                            {fareConfig.allowRiderAbandonment &&
-                              isWaitingAtStop &&
-                              currentStopWaitSeconds >= 420 &&
-                              abandonmentWarningSent && (
-                                <motion.button
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: "auto", opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  onClick={handleRiderAbandonment}
-                                  className="w-full py-3 bg-[#FF3B30] text-white rounded-xl font-black text-sm uppercase tracking-wider hover:bg-[#FF3B30]/90 transition-colors shadow-lg"
-                                >
-                                  End Trip Here (Rider Abandoned)
-                                </motion.button>
+                                {fareConfig.allowRiderAbandonment &&
+                                  isWaitingAtStop &&
+                                  currentStopWaitSeconds >= 420 &&
+                                  abandonmentWarningSent && (
+                                    <motion.button
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      onClick={handleRiderAbandonment}
+                                      className="w-full py-3 bg-[#FF3B30] text-white rounded-xl font-black text-sm uppercase tracking-wider hover:bg-[#FF3B30]/90 transition-colors shadow-lg"
+                                    >
+                                      End Trip Here (Rider Abandoned)
+                                    </motion.button>
+                                  )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+
+                          <div className="flex justify-center gap-2">
+                            <button
+                              onClick={() => setShowJobDetails(true)}
+                              className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                            >
+                              <Info className="w-5 h-5 text-white" />
+                            </button>
+                            <button
+                              onClick={() => setIsChatOpen(true)}
+                              className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]"
+                            >
+                              <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                              {unreadChatCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
+                                    {unreadChatCount}
+                                  </span>
+                                </span>
                               )}
-                          </AnimatePresence>
+                            </button>
+                            {currentLegIndex < (activeRide?.stops?.length || 0) ? (
+                              <div className="flex-1 min-w-0">
+                                <SwipeButton
+                                  onComplete={handleGoToNextLeg}
+                                  text="GO NEXT"
+                                  bgClass="bg-[#FF9500]"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex-1 min-w-0">
+                                <SwipeButton
+                                  onComplete={handleCompleteRideBtnClick}
+                                  text="COMPLETE"
+                                  bgClass="bg-[#FF3B30]"
+                                  icon={
+                                    <Check className="w-5 h-5 stroke-[3] text-white" />
+                                  }
+                                  resetToken={showCompleteConfirm}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
-
-                    <div className="flex justify-center gap-2 mt-1">
-                      <button
-                        onClick={() => setShowJobDetails(true)}
-                        className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
-                      >
-                        <Info className="w-5 h-5 text-white" />
-                      </button>
-                      <button
-                        onClick={() => setIsChatOpen(true)}
-                        className="relative w-[15%] h-10 bg-[#252529] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform border border-[#333338] shadow-[0_0_10px_rgba(0,210,106,0.1)]"
-                      >
-                        <MessageCircle className="w-5 h-5 text-[#00D26A]" />
-                        {unreadChatCount > 0 && (
-                          <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-[#1A1A1E] items-center justify-center text-[7px] font-bold text-white shadow-sm">
-                              {unreadChatCount}
-                            </span>
-                          </span>
-                        )}
-                      </button>
-                      {currentLegIndex < (activeRide?.stops?.length || 0) ? (
-                        <div className="flex-1 min-w-0">
-                          <SwipeButton
-                            onComplete={handleGoToNextLeg}
-                            text="GO NEXT"
-                            bgClass="bg-[#FF9500]"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex-1 min-w-0">
-                          <SwipeButton
-                            onComplete={handleCompleteRideBtnClick}
-                            text="COMPLETE"
-                            bgClass="bg-[#FF3B30]"
-                            icon={
-                              <Check className="w-5 h-5 stroke-[3] text-white" />
-                            }
-                            resetToken={showCompleteConfirm}
-                          />
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
 
@@ -6434,16 +6446,27 @@ export default function DriverTerminal() {
                 {(rideState === "en_route_pickup" ||
                   rideState === "waiting") && (
                   <>
-                    <button
-                      onClick={() => setShowCancelConfirm(true)}
-                      className="w-full py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wide hover:text-[#FF3B30] transition-colors mt-0"
-                    >
-                      {rideState === "waiting"
-                        ? 300 - elapsedWaitSeconds > 0
-                          ? `Cancel (No Fee in ${Math.floor((300 - elapsedWaitSeconds) / 60)}:${((300 - elapsedWaitSeconds) % 60).toString().padStart(2, "0")})`
-                          : "Cancel (Charge Fee)"
-                        : "Cancel Ride"}
-                    </button>
+                    <AnimatePresence initial={false}>
+                      {!isCardCollapsed && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <button
+                            onClick={() => setShowCancelConfirm(true)}
+                            className="w-full mt-2 py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wide hover:text-[#FF3B30] transition-colors"
+                          >
+                            {rideState === "waiting"
+                              ? 300 - elapsedWaitSeconds > 0
+                                ? `Cancel (No Fee in ${Math.floor((300 - elapsedWaitSeconds) / 60)}:${((300 - elapsedWaitSeconds) % 60).toString().padStart(2, "0")})`
+                                : "Cancel (Charge Fee)"
+                              : "Cancel Ride"}
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     <AnimatePresence>
                       {showCancelConfirm && (

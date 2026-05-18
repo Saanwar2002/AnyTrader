@@ -112,3 +112,9 @@
     @apply font-display tracking-tight;
   }
 }
+
+body.hide-driver-bottom-nav #mobile-bottom-nav {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}

@@ -573,6 +573,8 @@ export default function PassengerBooking() {
     let timeoutId: NodeJS.Timeout;
     if (pickupCoords && dropoffCoords && isLoaded) {
       const getRoute = async () => {
+        if (Math.abs(pickupCoords.lat - dropoffCoords.lat) < 0.0001 && Math.abs(pickupCoords.lng - dropoffCoords.lng) < 0.0001) return;
+
         try {
           const directionsService = new window.google.maps.DirectionsService();
           const validStops = stops.filter(s => s.coords !== null).map(s => ({
@@ -631,11 +633,7 @@ export default function PassengerBooking() {
             setFareEstimate(Math.max(calcFare, fareConfig.minFare));
           }
         } catch (e: any) {
-          // Silently catch directions API errors without triggering unhandled rejections
-          const errStr = String(e);
-          if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR') && !errStr.includes('UNKNOWN_ERROR')) {
-            console.warn("DIRECTIONS_ROUTE error:", e);
-          }
+          // completely silence routing errors to avoid unhandled rejection/console noise
         }
       };
       timeoutId = setTimeout(getRoute, 800);
@@ -2243,6 +2241,8 @@ export default function PassengerBooking() {
         const currentDriverPos = driverPosRef.current;
         if (!currentDriverPos) return;
 
+        if (Math.abs(currentDriverPos.lat - destinationCoords.lat) < 0.0001 && Math.abs(currentDriverPos.lng - destinationCoords.lng) < 0.0001) return;
+
         try {
           const directionsService = new window.google.maps.DirectionsService();
           const result = await directionsService.route({
@@ -2268,10 +2268,7 @@ export default function PassengerBooking() {
             setLiveEtaSeconds(totalSecs);
           }
         } catch (e: any) {
-          const errStr = String(e);
-          if (e?.code !== 'UNKNOWN_ERROR' && !e?.message?.includes('UNKNOWN_ERROR') && !errStr.includes('UNKNOWN_ERROR')) {
-            console.warn("LIVE DIRECTIONS_ROUTE error:", e);
-          }
+          // completely silence routing errors to avoid unhandled rejection/console noise
         }
       };
       
@@ -2410,7 +2407,11 @@ export default function PassengerBooking() {
           <GoogleMap
             mapContainerStyle={containerStyle}
             center={mapCenter}
-            zoom={15}
+            zoom={
+              assignedDriverInfo?.status === "arrived"
+                ? 17 
+                : 14
+            }
             onLoad={setMap}
             options={premiumMapOptions}
             onClick={async (e) => {
