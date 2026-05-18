@@ -727,7 +727,6 @@ export default function PassengerBooking() {
             if (distToPickup <= 3) {
                countSoon++;
                driverCategories.forEach((cat: string) => cats.add(cat));
-               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
                const driverEta = (distFromCurrentToDropoff * 4) + 3 + (distToPickup * 4);
                if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
             }
@@ -738,7 +737,7 @@ export default function PassengerBooking() {
             if (distToPickup <= 3) {
                countNow++;
                driverCategories.forEach((cat: string) => cats.add(cat));
-               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id });
+               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id, dist: distToPickup });
                const driverEta = distToPickup * 4;
                if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
             }
@@ -748,7 +747,15 @@ export default function PassengerBooking() {
       setNearbyDriversCount(countNow);
       setDriversAvailableSoonCount(countSoon);
       setEstimatedWaitEta(minEtaMins);
-      setNearbyDriversLocations(locations);
+      
+      // Take max 5 closest drivers (prioritize within 1 mile, fallback to within 3 miles)
+      locations.sort((a, b) => (a as any).dist - (b as any).dist);
+      const within1Mile = locations.filter((l: any) => l.dist <= 1);
+      if (within1Mile.length > 0) {
+        setNearbyDriversLocations(within1Mile.slice(0, 5));
+      } else {
+        setNearbyDriversLocations(locations.slice(0, 5));
+      }
       setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
     }, (err) => console.error("onSnapshot ERROR live_tracking:", err));
     return () => unsub();
@@ -2549,21 +2556,26 @@ export default function PassengerBooking() {
 
             {!currentRideId && step === "details" && nearbyDriversLocations.map(driver => (
               <OverlayViewF key={driver.id} position={{ lat: driver.lat, lng: driver.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex items-center justify-center w-6 h-6 -ml-3 -mt-3">
-                  <div className="absolute inset-0 bg-primary/40 rounded-full animate-pulse blur-[2px]"></div>
-                  <div className="bg-primary border-2 border-card w-3.5 h-3.5 rounded-sm shadow-md z-10 flex items-center justify-center transform rotate-45"></div>
+                <div className="relative flex items-center justify-center -ml-3.5 -mt-8">
+                  <div className="bg-slate-500/90 w-[26px] h-[26px] rounded-t-full rounded-bl-full shadow-sm z-10 flex items-center justify-center rotate-45">
+                    <div className="-rotate-45 bg-white w-[22px] h-[22px] rounded-full flex items-center justify-center shadow-sm">
+                      <Car className="w-3 h-3 text-slate-700" fill="currentColor" />
+                    </div>
+                  </div>
                 </div>
               </OverlayViewF>
             ))}
 
             {driverPos && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex items-center justify-center w-10 h-10 -ml-5 -mt-5">
-                  <div className="absolute inset-0 bg-zinc-900 rounded-full opacity-20 animate-pulse blur-[2px]"></div>
-                  <div className="bg-white border-2 border-black w-8 h-8 rounded-full shadow-xl z-10 flex items-center justify-center">
-                     <Car className="w-4 h-4 text-slate-800" />
+                <div className="relative flex items-center justify-center -ml-3.5 -mt-8">
+                  <div className="absolute inset-0 bg-zinc-900 rounded-full opacity-10 animate-pulse blur-[1px]"></div>
+                  <div className="bg-slate-500/90 w-[30px] h-[30px] rounded-t-full rounded-bl-full shadow-sm z-10 flex items-center justify-center rotate-45">
+                    <div className="-rotate-45 bg-white w-[26px] h-[26px] rounded-full flex items-center justify-center shadow-sm">
+                      <Car className="w-3.5 h-3.5 text-slate-700" fill="currentColor" />
+                    </div>
                   </div>
-                  <div className="absolute -top-6 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5">
+                  <div className="absolute -top-6 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5 z-20">
                     <span>{assignedDriverInfo?.status === "accepted" ? "Heading to you" : assignedDriverInfo?.status === "arrived" ? "Arrived" : "In Progress"}</span>
                     {(liveEtaSeconds !== null && liveEtaSeconds > 0) && (
                       <span className="bg-white/20 px-1.5 py-0.5 rounded tracking-wider">
