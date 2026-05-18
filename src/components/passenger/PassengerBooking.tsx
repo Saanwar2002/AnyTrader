@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Zap, History, Loader2, 
-  Mic, MicOff, Star, Users, Repeat, Shield, Plus, Heart,
+  Mic, MicOff, Star, Users, User, Repeat, Shield, Plus, Heart,
   Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete, Dumbbell
 } from "lucide-react";
 import RideChat from "../driver/RideChat";
@@ -2053,23 +2053,25 @@ export default function PassengerBooking() {
 
   // Passenger Live GPS tracking for driver to see
   useEffect(() => {
-    if (!currentRideId || !user) return;
-    if (step === "details" || step === "review" || step === "payment") return;
+    if (!user) return;
 
     const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         setPassengerPos({ lat: latitude, lng: longitude });
-        try {
-          await setDoc(doc(db, "live_tracking", user.uid), {
-            passengerId: user.uid,
-            lat: latitude,
-            lng: longitude,
-            updatedAt: serverTimestamp(),
-            isPassenger: true
-          }, { merge: true });
-        } catch (err) {
-          console.error("Failed to sync passenger location:", err);
+        
+        if (currentRideId && step !== "details" && step !== "review" && step !== "payment" && step !== "receipt") {
+          try {
+            await setDoc(doc(db, "live_tracking", user.uid), {
+              passengerId: user.uid,
+              lat: latitude,
+              lng: longitude,
+              updatedAt: serverTimestamp(),
+              isPassenger: true
+            }, { merge: true });
+          } catch (err) {
+            console.error("Failed to sync passenger location:", err);
+          }
         }
       },
       (err) => console.warn("Passenger GPS error:", err),
@@ -2545,11 +2547,19 @@ export default function PassengerBooking() {
                 </OverlayViewF>
               </React.Fragment>
             ))}
-            {passengerPos && (
+             {passengerPos && (
               <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
-                  <div className="absolute inset-0 bg-[#007AFF] rounded-full opacity-30 animate-ping"></div>
-                  <div className="bg-[#007AFF] border-2 border-black w-4 h-4 rounded-full shadow-lg z-10"></div>
+                <div className="relative flex flex-col items-center justify-start -ml-[14px] -mt-[46px] z-50">
+                  <div className="absolute top-[44px] w-5 h-2 bg-black/30 rounded-full blur-[1px]"></div>
+                  <div className="bg-[#FF9500] w-[28px] h-[28px] rounded-full border-[1.5px] border-black flex items-center justify-center relative shadow-sm z-20">
+                    <User className="w-[14px] h-[14px] text-white" fill="currentColor" strokeWidth={2} />
+                    {/* The leg */}
+                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[2.5px] h-[16px] bg-black">
+                      <div className="absolute inset-0 bg-[#FF9500] w-[0.5px] mx-auto opacity-50"></div>
+                    </div>
+                    {/* The base dot */}
+                    <div className="absolute top-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-2 h-2 bg-white border border-black rounded-full"></div>
+                  </div>
                 </div>
               </OverlayViewF>
             )}

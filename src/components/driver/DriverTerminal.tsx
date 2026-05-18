@@ -2161,14 +2161,20 @@ export default function DriverTerminal() {
             ))}
 
             {/* Passenger Live Location */}
-            {passengerPos && (rideState === 'en_route_pickup' || rideState === 'waiting') && (
+            {passengerPos && (rideState === 'en_route_pickup' || rideState === 'waiting' || rideState === 'in_progress' || rideState === 'en_route_dropoff') && (
               <OverlayViewF position={{ lat: passengerPos.lat, lng: passengerPos.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex items-center justify-center w-8 h-8 -ml-4 -mt-4">
-                  <div className="absolute inset-0 bg-[#FF3B30] rounded-full opacity-30 animate-pulse"></div>
-                  <div className="bg-[#FF3B30] border border-white w-3 h-3 rounded-full shadow-lg z-10 flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+                <div className="relative flex flex-col items-center justify-start -ml-[14px] -mt-[46px] z-50">
+                  <div className="absolute top-[44px] w-5 h-2 bg-black/30 rounded-full blur-[1px]"></div>
+                  <div className="bg-[#FF9500] w-[28px] h-[28px] rounded-full border-[1.5px] border-black flex items-center justify-center relative shadow-sm z-20">
+                    <User className="w-[14px] h-[14px] text-white" fill="currentColor" strokeWidth={2} />
+                    {/* The leg */}
+                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[2.5px] h-[16px] bg-black">
+                      <div className="absolute inset-0 bg-[#FF9500] w-[0.5px] mx-auto opacity-50"></div>
+                    </div>
+                    {/* The base dot */}
+                    <div className="absolute top-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-2 h-2 bg-white border border-black rounded-full"></div>
                   </div>
-                  <div className="absolute -top-6 bg-black/80 px-2 py-0.5 rounded text-[9px] font-bold text-white whitespace-nowrap shadow border border-[#FF3B30]/30">
+                  <div className="absolute -top-[28px] bg-black/80 px-2 py-0.5 rounded text-[9px] font-bold text-[#FF9500] whitespace-nowrap shadow border border-[#FF9500]/50 z-30">
                     PASSENGER
                   </div>
                 </div>
