@@ -431,6 +431,8 @@ export default function PassengerBooking() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const lastSeenChatCountRef = useRef(0);
+  const lastLocationSyncRef = useRef(0);
+  const lastSyncCoordsRef = useRef<{lat: number, lng: number} | null>(null);
 
   const [hasModifiedRouteByUser, setHasModifiedRouteByUser] = useState(false);
   const [showRegularJourneys, setShowRegularJourneys] = useState(false);
@@ -499,6 +501,7 @@ export default function PassengerBooking() {
 
   const handlePinMouseDown = (id: string) => {
     if (draggablePin === id) return;
+    if (step !== "details" || detailsView !== "address") return;
     pressTimerRef.current = setTimeout(() => {
       setDraggablePin(id);
       toast.success("Pin unlocked! You can now drag it.", { duration: 2500, icon: '📍' });
@@ -696,7 +699,7 @@ export default function PassengerBooking() {
       let countSoon = 0;
       let minEtaMins: number | null = null;
       const cats = new Set<string>();
-      const locations: {lat: number, lng: number, id: string}[] = [];
+      const locations: {lat: number, lng: number, id: string, dist?: number}[] = [];
 
       snapshot.docs.forEach(docSnap => {
         const data = docSnap.data();
@@ -2061,21 +2064,36 @@ export default function PassengerBooking() {
         setPassengerPos({ lat: latitude, lng: longitude });
         
         if (currentRideId && step !== "details" && step !== "review" && step !== "payment" && step !== "receipt") {
-          try {
-            await setDoc(doc(db, "live_tracking", user.uid), {
-              passengerId: user.uid,
-              lat: latitude,
-              lng: longitude,
-              updatedAt: serverTimestamp(),
-              isPassenger: true
-            }, { merge: true });
-          } catch (err) {
-            console.error("Failed to sync passenger location:", err);
+          const now = Date.now();
+          const timeSinceLastSync = now - lastLocationSyncRef.current;
+          const distToLastSync = lastSyncCoordsRef.current 
+              ? Math.sqrt(Math.pow(latitude - lastSyncCoordsRef.current.lat, 2) + Math.pow(longitude - lastSyncCoordsRef.current.lng, 2))
+              : 999;
+              
+          const shouldSync = 
+              timeSinceLastSync >= 60000 || 
+              (timeSinceLastSync >= 10000 && distToLastSync > 0.00015) ||
+              !lastSyncCoordsRef.current;
+
+          if (shouldSync) {
+            lastLocationSyncRef.current = now;
+            lastSyncCoordsRef.current = { lat: latitude, lng: longitude };
+            try {
+              await setDoc(doc(db, "live_tracking", user.uid), {
+                passengerId: user.uid,
+                lat: latitude,
+                lng: longitude,
+                updatedAt: serverTimestamp(),
+                isPassenger: true
+              }, { merge: true });
+            } catch (err) {
+              console.error("Failed to sync passenger location:", err);
+            }
           }
         }
       },
       (err) => console.warn("Passenger GPS error:", err),
-      { enableHighAccuracy: true, maximumAge: 5000 }
+      { enableHighAccuracy: true, maximumAge: 10000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
@@ -2453,7 +2471,7 @@ export default function PassengerBooking() {
                 <MarkerF 
                   position={pickupCoords} 
                   label={{ text: "P", color: "white", fontSize: "13px", fontWeight: "bold" }} 
-                  draggable={step === "details" && draggablePin === "pickup"} 
+                  draggable={step === "details" && detailsView === "address" && draggablePin === "pickup"} 
                   onDragEnd={(e) => { setDraggablePin(null); handleMarkerDragEnd(e, "pickup"); }} 
                   onMouseDown={() => handlePinMouseDown("pickup")}
                   onMouseUp={handlePinMouseUpOrLeave}
@@ -2470,7 +2488,7 @@ export default function PassengerBooking() {
                     <div className="text-[10px] font-bold text-emerald-950 leading-tight space-y-0.5">
                       {formatAddressLines(pickup)}
                     </div>
-                    {draggablePin !== "pickup" && (
+                    {draggablePin !== "pickup" && step === "details" && detailsView === "address" && (
                       <div className="mt-1.5 pt-1 border-t border-emerald-200/50 flex items-center justify-center gap-1 opacity-70">
                         <MapPin className="w-2.5 h-2.5 text-emerald-700" />
                         <span className="text-[8px] font-bold text-emerald-800 tracking-tight">Hold pin to move</span>
@@ -2486,7 +2504,7 @@ export default function PassengerBooking() {
                 <MarkerF 
                   position={dropoffCoords} 
                   label={{ text: "D", color: "white", fontSize: "13px", fontWeight: "bold" }} 
-                  draggable={step === "details" && draggablePin === "dropoff"} 
+                  draggable={step === "details" && detailsView === "address" && draggablePin === "dropoff"} 
                   onDragEnd={(e) => { setDraggablePin(null); handleMarkerDragEnd(e, "dropoff"); }} 
                   onMouseDown={() => handlePinMouseDown("dropoff")}
                   onMouseUp={handlePinMouseUpOrLeave}
@@ -2503,7 +2521,7 @@ export default function PassengerBooking() {
                     <div className="text-[10px] font-bold text-rose-950 leading-tight space-y-0.5">
                       {formatAddressLines(dropoff)}
                     </div>
-                    {draggablePin !== "dropoff" && (
+                    {draggablePin !== "dropoff" && step === "details" && detailsView === "address" && (
                       <div className="mt-1.5 pt-1 border-t border-rose-200/50 flex items-center justify-center gap-1 opacity-70">
                         <MapPin className="w-2.5 h-2.5 text-rose-700" />
                         <span className="text-[8px] font-bold text-rose-800 tracking-tight">Hold pin to move</span>
@@ -2519,7 +2537,7 @@ export default function PassengerBooking() {
                 <MarkerF 
                   position={s.coords} 
                   label={{ text: `${i+1}`, color: "white", fontSize: "13px", fontWeight: "bold" }} 
-                  draggable={step === "details" && draggablePin === `stop-${i}`} 
+                  draggable={step === "details" && detailsView === "address" && draggablePin === `stop-${i}`} 
                   onDragEnd={(e) => { setDraggablePin(null); handleMarkerDragEnd(e, "stop", i); }} 
                   onMouseDown={() => handlePinMouseDown(`stop-${i}`)}
                   onMouseUp={handlePinMouseUpOrLeave}
@@ -2536,7 +2554,7 @@ export default function PassengerBooking() {
                     <div className="text-[10px] font-bold text-amber-950 leading-tight space-y-0.5">
                       {formatAddressLines(s.address)}
                     </div>
-                    {draggablePin !== `stop-${i}` && (
+                    {draggablePin !== `stop-${i}` && step === "details" && detailsView === "address" && (
                       <div className="mt-1.5 pt-1 border-t border-amber-200/50 flex items-center justify-center gap-1 opacity-70">
                         <MapPin className="w-2.5 h-2.5 text-amber-700" />
                         <span className="text-[8px] font-bold text-amber-800 tracking-tight">Hold pin to move</span>
@@ -2551,6 +2569,10 @@ export default function PassengerBooking() {
               <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                 <div className="relative flex flex-col items-center justify-start -ml-[14px] -mt-[46px] z-50">
                   <div className="absolute top-[44px] w-5 h-2 bg-black/30 rounded-full blur-[1px]"></div>
+                  
+                  {/* Pulsing ring */}
+                  <div className="absolute top-0 left-0 w-[28px] h-[28px] bg-black rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-60"></div>
+                  
                   <div className="bg-[#FF9500] w-[28px] h-[28px] rounded-full border-[1.5px] border-black flex items-center justify-center relative shadow-sm z-20">
                     <User className="w-[14px] h-[14px] text-white" fill="currentColor" strokeWidth={2} />
                     {/* The leg */}
@@ -2558,7 +2580,7 @@ export default function PassengerBooking() {
                       <div className="absolute inset-0 bg-[#FF9500] w-[0.5px] mx-auto opacity-50"></div>
                     </div>
                     {/* The base dot */}
-                    <div className="absolute top-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-2 h-2 bg-white border border-black rounded-full"></div>
+                    <div className="absolute top-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-2 h-2 bg-white border border-black rounded-full shadow-[0_0_8px_rgba(255,149,0,0.8)]"></div>
                   </div>
                 </div>
               </OverlayViewF>
@@ -2579,7 +2601,9 @@ export default function PassengerBooking() {
             {driverPos && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                 <div className="relative flex items-center justify-center -ml-3.5 -mt-8">
-                  <div className="absolute inset-0 bg-zinc-900 rounded-full opacity-10 animate-pulse blur-[1px]"></div>
+                  {currentRideId && (assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "arrived") && (
+                    <div className="absolute inset-0 bg-black rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
+                  )}
                   <div className="bg-slate-500/90 w-[30px] h-[30px] rounded-t-full rounded-bl-full shadow-sm z-10 flex items-center justify-center rotate-45">
                     <div className="-rotate-45 bg-white w-[26px] h-[26px] rounded-full flex items-center justify-center shadow-sm">
                       <Car className="w-3.5 h-3.5 text-slate-700" fill="currentColor" />
