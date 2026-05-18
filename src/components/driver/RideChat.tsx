@@ -64,6 +64,19 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
     }
   };
 
+  const sendQuickReply = async (text: string) => {
+    if (!user || !rideId) return;
+    try {
+      await addDoc(collection(db, "ride_requests", rideId, "chat"), {
+        text,
+        senderId: user.uid,
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Error sending quick reply:", error);
+    }
+  };
+
   const handleSendSMSNudge = async () => {
     if (!passengerId) {
        toast.error("Passenger ID not found");
@@ -170,8 +183,27 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Quick Replies */}
+          <div className="px-3 pb-2 pt-2 border-t border-[#333338] bg-[#1A1A1E] flex overflow-x-auto no-scrollbar gap-2 w-full">
+            {[
+              "OK, got it!",
+              "I'll be right there",
+              "Traffic is heavy",
+              "I'll be outside shortly"
+            ].map((msg, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => sendQuickReply(msg)}
+                className="whitespace-nowrap px-4 py-1.5 bg-[#252529] border border-[#333338] text-[#E4E4E7] hover:text-white text-[12px] font-bold rounded-lg active:scale-95 transition-transform shrink-0 shadow-sm"
+              >
+                {msg}
+              </button>
+            ))}
+          </div>
+
           {/* Input */}
-          <form onSubmit={handleSendMessage} className="p-3 border-t border-[#333338] bg-[#1A1A1E] rounded-b-3xl shrink-0 flex gap-2 items-end shrink-0">
+          <form onSubmit={handleSendMessage} className="p-3 bg-[#1A1A1E] rounded-b-3xl shrink-0 flex gap-2 items-end">
             <div className="bg-[#0D0D0F] border border-[#333338] rounded-2xl flex-1 flex items-center px-3 min-h-[44px]">
               <input 
                 type="text"

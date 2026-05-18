@@ -1616,6 +1616,14 @@ export default function DriverTerminal() {
           });
         });
 
+        // Instant availability switch so other passengers don't receive confusing ETAs
+        await updateDoc(doc(db, "live_tracking", user.uid), {
+          status: "on_ride",
+          dropoffLat: activeRide?.dropoffLat || null,
+          dropoffLng: activeRide?.dropoffLng || null,
+          updatedAt: serverTimestamp(),
+        }).catch(console.error);
+
         await updateDoc(doc(db, "driver_status", user.uid), {
           isBusy: true,
           pendingRideId: deleteField(),
@@ -1702,6 +1710,14 @@ export default function DriverTerminal() {
           });
         });
 
+        // Instant availability switch for the stacked ride (forces them invisible until current is done)
+        await updateDoc(doc(db, "live_tracking", user.uid), {
+          dropoffLat: stackedRideOffer?.dropoffLat || null,
+          dropoffLng: stackedRideOffer?.dropoffLng || null,
+          isStackingEnabled: false, // temporarily disable stacking until this ride is active
+          updatedAt: serverTimestamp(),
+        }).catch(console.error);
+
         await updateDoc(doc(db, "driver_status", user.uid), {
           isBusy: true,
           pendingRideId: deleteField(),
@@ -1768,12 +1784,37 @@ export default function DriverTerminal() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const lastSeenChatCountRef = useRef(0);
+  const [incomingPopupMessage, setIncomingPopupMessage] = useState<{ id: string, text: string } | null>(null);
+  const lastPopupMessageIdRef = useRef<string | null>(null);
   const lastLocationSyncRef = useRef(0);
   const lastSyncCoordsRef = useRef<{lat: number, lng: number} | null>(null);
   const [showJobDetails, setShowJobDetails] = useState(false);
   const [quickMessageCooldown, setQuickMessageCooldown] = useState(0);
   const [isCardCollapsed, setIsCardCollapsed] = useState(true);
   const cardCollapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (incomingPopupMessage) {
+      const timer = setTimeout(() => {
+        setIncomingPopupMessage(null);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [incomingPopupMessage]);
+
+  const handleQuickReply = async (replyText: string) => {
+    if (!activeRide?.id || !user) return;
+    try {
+      await addDoc(collection(db, "ride_requests", activeRide.id, "chat"), {
+        text: replyText,
+        senderId: user.uid,
+        createdAt: serverTimestamp()
+      });
+      setIncomingPopupMessage(null);
+    } catch (err) {
+      console.error("Failed to send quick reply", err);
+    }
+  };
 
   useEffect(() => {
     if (quickMessageCooldown > 0) {
@@ -1830,16 +1871,24 @@ export default function DriverTerminal() {
     );
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map((doc) => doc.data());
+      const messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() as any }));
       const remoteMessages = messages.filter((m) => m.senderId !== user.uid);
 
       if (isChatOpen) {
         lastSeenChatCountRef.current = remoteMessages.length;
         setUnreadChatCount(0);
+        setIncomingPopupMessage(null);
       } else {
         const unread = remoteMessages.length - lastSeenChatCountRef.current;
         if (unread > 0) {
           setUnreadChatCount(unread);
+          
+          const latestMsg = remoteMessages[remoteMessages.length - 1];
+          if (latestMsg && latestMsg.id !== lastPopupMessageIdRef.current) {
+             lastPopupMessageIdRef.current = latestMsg.id;
+             setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
+             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          }
         }
       }
     });
@@ -2964,6 +3013,57 @@ export default function DriverTerminal() {
             <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
             <div className="absolute bottom-0 left-0 right-0 h-56 bg-gradient-to-t from-[#0D0D0F]/40 to-transparent pointer-events-none z-[5]"></div>
           </div>
+
+          {/* Incoming Message Quick Reply Popup */}
+          <AnimatePresence>
+            {incomingPopupMessage && !isChatOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                className="absolute left-4 right-4 z-[60] bg-[#1A1A1E]/95 backdrop-blur-md rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-[#333338]"
+                style={{ bottom: rideState === "idle" ? "140px" : isCardCollapsed ? "280px" : "420px" }}
+              >
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-[#00D26A]/20 flex items-center justify-center shrink-0">
+                    <MessageCircle className="w-5 h-5 text-[#00D26A]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-white font-bold text-[14px] truncate mb-1">
+                      {activeRide?.passengerName || activeRide?.name || "Passenger"}
+                    </h3>
+                    <p className="text-[#E4E4E7] text-[13px] leading-snug line-clamp-2 break-words">
+                      "{incomingPopupMessage.text}"
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setIncomingPopupMessage(null)}
+                    className="w-8 h-8 rounded-full bg-[#252529] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                  >
+                    <X className="w-4 h-4 text-[#8E8E93]" />
+                  </button>
+                </div>
+                
+                <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 w-full">
+                  {[
+                    "OK, got it!",
+                    "I'll be right there",
+                    "Traffic is heavy",
+                    "I'll be outside shortly"
+                  ].map((msg, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleQuickReply(msg)}
+                      className="whitespace-nowrap px-4 py-2 bg-[#252529] border border-[#333338] text-white text-[13px] font-bold rounded-[10px] active:scale-95 transition-transform shrink-0 shadow-sm"
+                    >
+                      {msg}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Chat Component */}
           {(rideState === "en_route_pickup" ||
