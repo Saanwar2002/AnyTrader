@@ -1027,7 +1027,7 @@ export default function PassengerBooking() {
     }
   };
 
-  const [suggestions, setSuggestions] = useState<{label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any, isHistory?: boolean}[]>([]);
+  const [suggestions, setSuggestions] = useState<{label: string, lat?: number, lon?: number, placeId?: string, placePrediction?: any, isHistory?: boolean, distance?: string}[]>([]);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [pastRides, setPastRides] = useState<any[]>([]);
@@ -1205,11 +1205,17 @@ export default function PassengerBooking() {
             return distA - distB;
           });
           
-          const cleaned = sortedPredictions.map((p: any) => ({
-            label: p.placePrediction.text.text,
-            placeId: p.placePrediction.placeId,
-            placePrediction: p.placePrediction // Save the raw prediction object to use toPlace() later
-          }));
+          const cleaned = sortedPredictions.map((p: any) => {
+            const text = p.placePrediction.text.text;
+            const dist = p.placePrediction.distanceMeters;
+            const distStr = dist ? `${(dist / 1609.34).toFixed(1)} mi` : "";
+            return {
+              label: text,
+              distance: distStr,
+              placeId: p.placePrediction.placeId,
+              placePrediction: p.placePrediction // Save the raw prediction object to use toPlace() later
+            };
+          });
           
           // Deduplicate based on label
           const uniqueCleaned = cleaned.filter((c: any) => !historyMatches.some(h => h.label.toLowerCase() === c.label.toLowerCase()));
@@ -1288,6 +1294,11 @@ export default function PassengerBooking() {
           setActiveField(null);
           if (addr && dropoff) {
             setDetailsView("vehicle");
+          } else if (addr && !dropoff) {
+            setTimeout(() => {
+              setActiveField("dropoff");
+              dropoffInputRef.current?.focus();
+            }, 100);
           }
         }
       });
@@ -2095,6 +2106,11 @@ export default function PassengerBooking() {
       setActiveField(null);
       if (currentPickup && currentDropoff) {
         setDetailsView("vehicle");
+      } else if (activeField === "pickup" && !currentDropoff) {
+        setTimeout(() => {
+          setActiveField("dropoff");
+          dropoffInputRef.current?.focus();
+        }, 100);
       }
     };
 
@@ -2548,7 +2564,7 @@ export default function PassengerBooking() {
                      <Car className="w-4 h-4 text-slate-800" />
                   </div>
                   <div className="absolute -top-6 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5">
-                    <span>{assignedDriverInfo?.status === "accepted" ? "Heading to you" : "In Progress"}</span>
+                    <span>{assignedDriverInfo?.status === "accepted" ? "Heading to you" : assignedDriverInfo?.status === "arrived" ? "Arrived" : "In Progress"}</span>
                     {(liveEtaSeconds !== null && liveEtaSeconds > 0) && (
                       <span className="bg-white/20 px-1.5 py-0.5 rounded tracking-wider">
                         {Math.floor(liveEtaSeconds / 60) > 0 ? Math.floor(liveEtaSeconds / 60) + 'm ' : ''}{(liveEtaSeconds % 60).toString().padStart(2, '0')}s
@@ -2680,12 +2696,15 @@ export default function PassengerBooking() {
                                 </div>
                               )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
-                                    {s.isHistory ? 
-                                      <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
-                                      <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
-                                    }
-                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center justify-between gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      {s.isHistory ? 
+                                        <History className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" /> :
+                                        <MapPin className="w-4 h-4 text-emerald-500 shrink-0 opacity-70" />
+                                      }
+                                      <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                    </div>
+                                    {s.distance && <span className="text-xs whitespace-nowrap text-slate-500 font-bold tracking-tight bg-slate-100 px-2 py-0.5 rounded-md">{s.distance}</span>}
                                   </button>
                                 ))}
                               </div>
@@ -2737,12 +2756,15 @@ export default function PassengerBooking() {
                                   </div>
                                 )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
-                                    {s.isHistory ? 
-                                      <History className="w-4 h-4 text-amber-500 shrink-0 opacity-70" /> :
-                                      <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
-                                    }
-                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center justify-between gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      {s.isHistory ? 
+                                        <History className="w-4 h-4 text-amber-500 shrink-0 opacity-70" /> :
+                                        <MapPin className="w-4 h-4 text-amber-500 shrink-0 opacity-70" />
+                                      }
+                                      <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                    </div>
+                                    {s.distance && <span className="text-xs whitespace-nowrap text-slate-500 font-bold tracking-tight bg-slate-100 px-2 py-0.5 rounded-md">{s.distance}</span>}
                                   </button>
                                 ))}
                               </div>
@@ -2796,12 +2818,15 @@ export default function PassengerBooking() {
                                   </div>
                                 )}
                                 {[...suggestions].map((s, idx) => (
-                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
-                                    {s.isHistory ? 
-                                      <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
-                                      <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
-                                    }
-                                    <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                  <button key={idx} onClick={() => selectSuggestion(s)} className="w-full py-3 px-3 text-left hover:bg-slate-50 border-b border-black flex items-center justify-between gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      {s.isHistory ? 
+                                        <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
+                                        <MapPin className="w-4 h-4 text-red-500 shrink-0 opacity-70" />
+                                      }
+                                      <span className="font-semibold text-text-main text-sm truncate">{s.label}</span>
+                                    </div>
+                                    {s.distance && <span className="text-xs whitespace-nowrap text-slate-500 font-bold tracking-tight bg-slate-100 px-2 py-0.5 rounded-md">{s.distance}</span>}
                                   </button>
                                 ))}
                               </div>
@@ -4311,12 +4336,15 @@ export default function PassengerBooking() {
                                <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                  {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                  {[...suggestions].map((s, idx) => (
-                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center justify-between gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                     <div className="flex items-center gap-3 min-w-0 flex-1">
                                       {s.isHistory ? 
                                        <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                        <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
                                       }
                                       <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
+                                     </div>
+                                     {s.distance && <span className="text-xs whitespace-nowrap text-slate-500 font-bold tracking-tight bg-slate-100 px-2 py-0.5 rounded-md">{s.distance}</span>}
                                    </button>
                                  ))}
                                </div>
@@ -4357,12 +4385,15 @@ export default function PassengerBooking() {
                                  <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                    {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                    {[...suggestions].map((s, idx) => (
-                                     <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                     <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center justify-between gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                       <div className="flex items-center gap-3 min-w-0 flex-1">
                                         {s.isHistory ? 
                                          <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                          <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
                                         }
                                         <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
+                                       </div>
+                                       {s.distance && <span className="text-xs whitespace-nowrap text-slate-500 font-bold tracking-tight bg-slate-100 px-2 py-0.5 rounded-md">{s.distance}</span>}
                                      </button>
                                    ))}
                                  </div>
@@ -4398,12 +4429,15 @@ export default function PassengerBooking() {
                                <div className="text-sm max-h-56 overflow-y-auto flex flex-col no-scrollbar">
                                  {suggestions.length === 0 && isLoadingAddress && <div className="py-4 flex items-center justify-center gap-2 text-sm font-medium text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Searching...</div>}
                                  {[...suggestions].map((s, idx) => (
-                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                   <button key={idx} onClick={(e) => { e.preventDefault(); selectSuggestion(s); }} className="w-full py-3.5 px-4 text-left hover:bg-slate-50 border-b border-black flex items-center justify-between gap-3 transition-colors bg-white mt-0 first:border-b-0 shrink-0">
+                                     <div className="flex items-center gap-3 min-w-0 flex-1">
                                       {s.isHistory ? 
                                        <History className="w-4 h-4 text-blue-500 shrink-0 opacity-70" /> :
                                        <MapPin className="w-4 h-4 text-slate-500 shrink-0 opacity-70" />
                                       }
                                       <span className="font-semibold text-slate-800 text-[15px] truncate">{s.label}</span>
+                                     </div>
+                                     {s.distance && <span className="text-xs whitespace-nowrap text-slate-500 font-bold tracking-tight bg-slate-100 px-2 py-0.5 rounded-md">{s.distance}</span>}
                                    </button>
                                  ))}
                                </div>
