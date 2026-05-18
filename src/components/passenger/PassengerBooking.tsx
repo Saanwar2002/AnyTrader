@@ -2548,7 +2548,12 @@ export default function PassengerBooking() {
                      <Car className="w-4 h-4 text-slate-800" />
                   </div>
                   <div className="absolute -top-6 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5">
-                    {assignedDriverInfo?.status === "accepted" ? "Heading to you" : "In Progress"}
+                    <span>{assignedDriverInfo?.status === "accepted" ? "Heading to you" : "In Progress"}</span>
+                    {(liveEtaSeconds !== null && liveEtaSeconds > 0) && (
+                      <span className="bg-white/20 px-1.5 py-0.5 rounded tracking-wider">
+                        {Math.floor(liveEtaSeconds / 60) > 0 ? Math.floor(liveEtaSeconds / 60) + 'm ' : ''}{(liveEtaSeconds % 60).toString().padStart(2, '0')}s
+                      </span>
+                    )}
                   </div>
                 </div>
               </OverlayViewF>
