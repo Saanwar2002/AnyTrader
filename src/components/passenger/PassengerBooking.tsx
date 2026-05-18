@@ -2588,11 +2588,15 @@ export default function PassengerBooking() {
 
             {!currentRideId && step === "details" && nearbyDriversLocations.map(driver => (
               <OverlayViewF key={driver.id} position={{ lat: driver.lat, lng: driver.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex items-center justify-center -ml-3.5 -mt-8">
-                  <div className="bg-slate-500/90 w-[26px] h-[26px] rounded-t-full rounded-bl-full shadow-sm z-10 flex items-center justify-center rotate-45">
-                    <div className="-rotate-45 bg-white w-[22px] h-[22px] rounded-full flex items-center justify-center shadow-sm">
-                      <Car className="w-3 h-3 text-slate-700" fill="currentColor" />
+                <div className="relative flex flex-col items-center justify-start -ml-[13px] -mt-[38px] z-50">
+                  <div className="bg-[#FACC15] w-[26px] h-[26px] rounded-full border-[1.5px] border-black flex items-center justify-center relative shadow-sm z-20">
+                    <Car className="w-3.5 h-3.5 text-black" fill="currentColor" />
+                    {/* The leg */}
+                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[2px] h-[10px] bg-black flex justify-center">
+                      <div className="w-[0.5px] h-full bg-[#FACC15]"></div>
                     </div>
+                    {/* The base dot */}
+                    <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-2 h-2 bg-[#FACC15] border-[1.5px] border-black rounded-full shadow-sm"></div>
                   </div>
                 </div>
               </OverlayViewF>
@@ -2600,16 +2604,21 @@ export default function PassengerBooking() {
 
             {driverPos && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex items-center justify-center -ml-3.5 -mt-8">
+                <div className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
+                  <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                   {currentRideId && (assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "arrived") && (
-                    <div className="absolute inset-0 bg-black rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
+                    <div className="absolute top-0 left-0 w-[36px] h-[36px] bg-[#FACC15] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
                   )}
-                  <div className="bg-slate-500/90 w-[30px] h-[30px] rounded-t-full rounded-bl-full shadow-sm z-10 flex items-center justify-center rotate-45">
-                    <div className="-rotate-45 bg-white w-[26px] h-[26px] rounded-full flex items-center justify-center shadow-sm">
-                      <Car className="w-3.5 h-3.5 text-slate-700" fill="currentColor" />
+                  <div className="bg-[#FACC15] w-[36px] h-[36px] rounded-full border-2 border-black flex items-center justify-center relative shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20">
+                    <Car className="w-[20px] h-[20px] text-black" fill="currentColor" />
+                    {/* The leg */}
+                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[3px] h-[16px] bg-black flex justify-center">
+                      <div className="w-[1px] h-full bg-[#FACC15]"></div>
                     </div>
+                    {/* The base dot */}
+                    <div className="absolute top-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-[#FACC15] border-2 border-black rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]"></div>
                   </div>
-                  <div className="absolute -top-6 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5 z-20">
+                  <div className="absolute -top-7 bg-[#0a1930] px-2.5 py-1 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5 z-30">
                     <span>{assignedDriverInfo?.status === "accepted" ? "Heading to you" : assignedDriverInfo?.status === "arrived" ? "Arrived" : "In Progress"}</span>
                     {(liveEtaSeconds !== null && liveEtaSeconds > 0) && (
                       <span className="bg-white/20 px-1.5 py-0.5 rounded tracking-wider">
