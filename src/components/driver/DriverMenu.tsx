@@ -4,7 +4,7 @@ import { usePortal } from "@/src/lib/PortalContext";
 import { useNavigate } from "react-router-dom";
 import { logout, db, doc, updateDoc } from "@/src/firebase";
 import { deleteField } from "firebase/firestore";
-import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2, VolumeX } from "lucide-react";
+import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2, VolumeX, Navigation } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 
@@ -24,7 +24,9 @@ export default function DriverMenu({
   const { profile, user } = useAuth();
   const { switchPortal } = usePortal();
   const navigate = useNavigate();
+  const [showMorePrefs, setShowMorePrefs] = useState(false);
   const [showHomeModal, setShowHomeModal] = useState(false);
+  const [showNavAppModal, setShowNavAppModal] = useState(false);
   const [homeInput, setHomeInput] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -132,6 +134,7 @@ export default function DriverMenu({
         { icon: VolumeX, label: "Mute Offer Alerts", desc: "Disable 3-sec sound ping", color: "text-[#FF9500]", bg: "bg-white/5", type: 'toggle', action: 'toggle-mute-alerts', active: profile?.muteRideOfferAlerts === true },
         { icon: ShieldCheck, label: "Passcode Verification", desc: profile?.requirePasscode === true ? "Passenger must provide PIN (Last 4 of phone)" : "Off", color: "text-[#00D26A]", bg: "bg-white/5", type: 'toggle', action: 'toggle-passcode', active: profile?.requirePasscode === true },
         { icon: VolumeX, label: "Mute Heads Up Volume", desc: profile?.muteHeadsUpVolume === true ? "Navigation voice disabled" : "Navigation voice enabled", color: "text-[#FF453A]", bg: "bg-white/5", type: 'toggle', action: 'toggle-mute-heads-up', active: profile?.muteHeadsUpVolume === true },
+        { icon: Navigation, label: "Navigation App", desc: profile?.defaultNavApp || "Google Maps", color: "text-[#007AFF]", bg: "bg-white/5", type: 'action', action: 'choose-nav-app' },
       ]
     },
     {
@@ -143,6 +146,18 @@ export default function DriverMenu({
       ]
     }
   ];
+
+  const handleSelectNavApp = async (app: string) => {
+    if (!user?.uid) return;
+    try {
+      await updateDoc(doc(db, "users", user.uid), { defaultNavApp: app });
+      toast.success(`${app} set as default navigation app`);
+      setShowNavAppModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update navigation app");
+    }
+  };
 
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-y-auto px-4 py-8 font-sans pb-24 min-h-0">
@@ -272,10 +287,32 @@ export default function DriverMenu({
       <div className="space-y-6">
         {sections.map((section, idx) => (
           <div key={idx}>
-            <p className="text-[10px] font-black uppercase text-[#A1A1AA] tracking-widest px-2 mb-2">{section.title}</p>
+            <div className="flex items-center justify-between px-2 mb-2">
+              <p className={cn(
+                "font-black uppercase tracking-widest",
+                section.title === "Ride Preferences (Active Ride)" ? "text-sm text-[#E4E4E7]" : "text-[10px] text-[#A1A1AA]"
+              )}>
+                {section.title}
+              </p>
+              {section.title === "Ride Preferences (Active Ride)" && (
+                <button
+                  onClick={() => setShowMorePrefs(!showMorePrefs)}
+                  className="text-[10px] font-black uppercase tracking-widest bg-white text-black px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+                >
+                  {showMorePrefs ? "See Less" : "See More"}
+                </button>
+              )}
+            </div>
             <div className="bg-[#1A1A1E] border border-white/20 rounded-2xl overflow-hidden shadow-sm">
               {section.items.map((item: any, idxi) => {
+                if (section.title === "Ride Preferences (Active Ride)" && idxi > 0 && !showMorePrefs) return null;
                 const Icon = item.icon;
+                
+                // Hide border if it's the last visible item
+                const isLastVisible = section.title === "Ride Preferences (Active Ride)" 
+                  ? (!showMorePrefs && idxi === 0) || (showMorePrefs && idxi === section.items.length - 1)
+                  : idxi === section.items.length - 1;
+
                 return (
                   <button 
                     key={idxi}
@@ -304,6 +341,10 @@ export default function DriverMenu({
                         if (item.action === 'toggle-last-job') {
                           updateDoc(doc(db, "users", user.uid), { isLastJob: !item.active });
                         }
+                      } else if (item.type === 'action') {
+                        if (item.action === 'choose-nav-app') {
+                          setShowNavAppModal(true);
+                        }
                       } else if (item.action === 'switch-to-anytrader') {
                         switchPortal("anytrader");
                         setTimeout(() => navigate("/", { replace: true }), 50);
@@ -313,7 +354,7 @@ export default function DriverMenu({
                     }}
                     className={cn(
                       "w-full flex items-center justify-between p-4 bg-transparent outline-none active:bg-[#252529] transition-colors text-left disabled:opacity-50",
-                      idxi !== section.items.length - 1 ? "border-b border-white/20" : ""
+                      !isLastVisible ? "border-b border-white/20" : ""
                     )}
                     disabled={item.type === 'text'}
                   >
@@ -425,6 +466,39 @@ export default function DriverMenu({
               </div>
             )}
             {isGeocoding && <p className="text-xs text-center text-emerald-400 font-bold mb-4 flex justify-center items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Setting home...</p>}
+          </div>
+        </div>
+      )}
+
+      {showNavAppModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1A1A1E] w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-white/20">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-white">Navigation App</h3>
+              <button onClick={() => setShowNavAppModal(false)} className="p-2 w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white border border-white/20"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm font-medium text-[#A1A1AA] mb-4">
+              Choose your preferred navigation app.
+            </p>
+            <div className="space-y-3">
+              {['Google Maps', 'Waze', 'Apple Maps'].map((app) => (
+                <button
+                  key={app}
+                  onClick={() => handleSelectNavApp(app)}
+                  className={cn(
+                    "w-full text-left px-5 py-4 rounded-2xl border transition-colors flex items-center justify-between",
+                    profile?.defaultNavApp === app || (!profile?.defaultNavApp && app === 'Google Maps')
+                      ? "bg-[#007AFF]/20 border-[#007AFF] text-white"
+                      : "bg-[#252529] border-white/10 text-white hover:border-white/30"
+                  )}
+                >
+                  <span className="font-bold text-sm">{app}</span>
+                  {(profile?.defaultNavApp === app || (!profile?.defaultNavApp && app === 'Google Maps')) && (
+                    <div className="w-2 h-2 rounded-full bg-[#007AFF]"></div>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

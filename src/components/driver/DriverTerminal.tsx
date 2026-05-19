@@ -706,37 +706,49 @@ export default function DriverTerminal() {
   const handleStartExternalNavigation = () => {
     if (!activeRide) return;
 
-    let url = "https://www.google.com/maps/dir/?api=1";
+    const navApp = profile?.defaultNavApp || "Google Maps";
+    let url = "";
 
-    if (rideState === "en_route_pickup") {
-      url += `&destination=${activeRide.pickupLat},${activeRide.pickupLng}`;
-    } else if (rideState === "in_progress") {
-      url += `&destination=${activeRide.dropoffLat},${activeRide.dropoffLng}`;
-      // Add waypoints if there are stops and we haven't passed them
-      if (
-        activeRide.stops &&
-        activeRide.stops.length > 0 &&
-        currentLegIndex < activeRide.stops.length
-      ) {
-        const remainingStops = activeRide.stops.slice(currentLegIndex);
-        const waypoints = remainingStops
-          .map((stop: any) =>
-            stop.coords ? `${stop.coords.lat},${stop.coords.lng}` : "",
-          )
-          .filter(Boolean)
-          .join("|");
-        if (waypoints) {
-          url += `&waypoints=${waypoints}`;
-        }
-      }
+    const destLat = rideState === "en_route_pickup" ? activeRide.pickupLat : activeRide.dropoffLat;
+    const destLng = rideState === "en_route_pickup" ? activeRide.pickupLng : activeRide.dropoffLng;
+    
+    if (!destLat || !destLng) return;
+
+    if (navApp === "Waze") {
+      url = `https://waze.com/ul?ll=${destLat},${destLng}&navigate=yes`;
+    } else if (navApp === "Apple Maps") {
+      url = `http://maps.apple.com/?daddr=${destLat},${destLng}&dirflg=d`;
     } else {
-      return;
+      url = "https://www.google.com/maps/dir/?api=1";
+      if (rideState === "en_route_pickup") {
+        url += `&destination=${activeRide.pickupLat},${activeRide.pickupLng}`;
+      } else if (rideState === "in_progress") {
+        url += `&destination=${activeRide.dropoffLat},${activeRide.dropoffLng}`;
+        // Add waypoints if there are stops and we haven't passed them
+        if (
+          activeRide.stops &&
+          activeRide.stops.length > 0 &&
+          currentLegIndex < activeRide.stops.length
+        ) {
+          const remainingStops = activeRide.stops.slice(currentLegIndex);
+          const waypoints = remainingStops
+            .map((stop: any) =>
+              stop.coords ? `${stop.coords.lat},${stop.coords.lng}` : "",
+            )
+            .filter(Boolean)
+            .join("|");
+          if (waypoints) {
+            url += `&waypoints=${waypoints}`;
+          }
+        }
+      } else {
+        return;
+      }
+      url += "&travelmode=driving";
     }
 
-    url += "&travelmode=driving";
-
     externalNavWindowRef.current = window.open(url, "_blank");
-    toast.success("Starting navigation...");
+    toast.success(`Starting ${navApp}...`);
   };
 
   // Handle center for 'waiting' state to account for drawer height
