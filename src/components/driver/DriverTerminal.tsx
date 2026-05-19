@@ -260,6 +260,48 @@ const getDistanceInMeters = (
   return R * c;
 };
 
+const getRemainingStepDistance = (
+  mapCenter: [number, number],
+  step: google.maps.DirectionsStep,
+) => {
+  if (!step?.path || step.path.length === 0) return step?.distance?.value || 0;
+
+  let minDistance = Infinity;
+  let closestIdx = 0;
+  for (let i = 0; i < step.path.length; i++) {
+    const p = step.path[i];
+    const plat = typeof p.lat === "function" ? p.lat() : (p.lat as number);
+    const plng = typeof p.lng === "function" ? p.lng() : (p.lng as number);
+    const d = getDistanceInMeters(mapCenter[0], mapCenter[1], plat, plng);
+    if (d < minDistance) {
+      minDistance = d;
+      closestIdx = i;
+    }
+  }
+
+  let remainingDist = 0;
+  for (let i = closestIdx; i < step.path.length - 1; i++) {
+    const p1 = step.path[i];
+    const p2 = step.path[i + 1];
+    const p1lat = typeof p1.lat === "function" ? p1.lat() : (p1.lat as number);
+    const p1lng = typeof p1.lng === "function" ? p1.lng() : (p1.lng as number);
+    const p2lat = typeof p2.lat === "function" ? p2.lat() : (p2.lat as number);
+    const p2lng = typeof p2.lng === "function" ? p2.lng() : (p2.lng as number);
+    remainingDist += getDistanceInMeters(p1lat, p1lng, p2lat, p2lng);
+  }
+  
+  return remainingDist;
+};
+
+const formatNavigateDistance = (meters: number | undefined): string => {
+  if (meters === undefined) return "";
+  if (meters < 482.8) { // less than 0.3 miles -> show meters
+    return `${Math.round(meters)} METERS`;
+  }
+  const miles = meters * 0.000621371;
+  return `${miles.toFixed(1)} MILES`;
+};
+
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
   const { switchPortal, setPreventPortalSwitch } = usePortal();
@@ -493,6 +535,7 @@ export default function DriverTerminal() {
   const isMuted = profile?.muteHeadsUpVolume === true;
   const navVoiceVolume = isMuted ? 0.0 : 1.0;
   const autoNavPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const spokenDistancesRef = useRef(new Set<number>());
   const lastDirectionsFetchRef = useRef<{
     originLat: number;
     originLng: number;
@@ -576,38 +619,145 @@ export default function DriverTerminal() {
     }
   }, [isAutoNavHeadUp]);
 
+  const formatInstructionForDisplay = (htmlInstruction: string) => {
+    let formatted = htmlInstruction;
+
+    const isGoingStraight = /^\s*(?:<[^>]*>)?\s*(?:Head|Proceed)\b/i.test(formatted);
+
+    // Terminology adjustments with HTML tags supported
+    // Matches "Head <b>east</b>" or "Head east" or "Proceed <b>north</b>"
+    formatted = formatted.replace(
+      /(?:Head|Proceed)\s*(?:<[^>]*>)?\s*(?:north|south|east|west)(?:[\s-]*(?:east|west))?(?:ward)?\s*(?:<[^>]*>)?/ig,
+      'Go straight ahead'
+    );
+    
+    if (isGoingStraight) {
+       // Remove "toward" and everything after it for straight instructions
+       // Covers " <b>toward</b> Destination"
+       formatted = formatted.replace(/\s*(?:<[^>]*>)?\s*\b(?:toward|towards)\b.*$/ig, "");
+    }
+
+    formatted = formatted.replace(/\bMerge onto\b/ig, 'Join');
+    formatted = formatted.replace(/\bTraffic circle\b/ig, 'Roundabout');
+    
+    // Change exit numbers to text
+    formatted = formatted.replace(/1st exit/ig, 'first exit');
+    formatted = formatted.replace(/2nd exit/ig, 'second exit');
+    formatted = formatted.replace(/3rd exit/ig, 'third exit');
+    formatted = formatted.replace(/4th exit/ig, 'fourth exit');
+    formatted = formatted.replace(/5th exit/ig, 'fifth exit');
+
+    return formatted;
+  };
+
+  const formatInstructionForTTS = (htmlInstruction: string) => {
+    let plainText = htmlInstruction.replace(/<[^>]*>?/gm, "");
+
+    const isGoingStraight = /^\s*(?:Head|Proceed)\b/i.test(plainText);
+
+    // Common UK abbreviations
+    const abbreviations: Record<string, string> = {
+      'St': 'Street',
+      'Rd': 'Road',
+      'Dr': 'Drive',
+      'Ave': 'Avenue',
+      'Ln': 'Lane',
+      'Blvd': 'Boulevard',
+      'Ct': 'Court',
+      'Pl': 'Place',
+      'Sq': 'Square',
+      'Terr': 'Terrace',
+      'Wy': 'Way',
+      'Apts': 'Apartments',
+      'Bldg': 'Building',
+      'Hwy': 'Highway',
+      'N': 'North',
+      'S': 'South',
+      'E': 'East',
+      'W': 'West',
+      'NE': 'Northeast',
+      'NW': 'Northwest',
+      'SE': 'Southeast',
+      'SW': 'Southwest'
+    };
+
+    // Replace abbreviations with full words, ensuring word boundaries and ignoring casing where appropriate
+    Object.entries(abbreviations).forEach(([abbr, full]) => {
+      const regex = new RegExp(`\\b${abbr}\\b`, 'gi');
+      plainText = plainText.replace(regex, full);
+    });
+
+    // Terminology adjustments
+    plainText = plainText.replace(/(?:Head|Proceed)\s+(?:north|south|east|west)(?:[\s-]*(?:east|west))?(?:ward)?/gi, 'Go straight ahead');
+    
+    if (isGoingStraight) {
+      plainText = plainText.replace(/\b(?:toward|towards)\b.*/i, "");
+    }
+
+    plainText = plainText.replace(/Merge onto/gi, 'Join');
+    plainText = plainText.replace(/Traffic circle/gi, 'Roundabout');
+    
+    // Change exit numbers to spoken text for better TTS
+    plainText = plainText.replace(/1st exit/gi, 'first exit');
+    plainText = plainText.replace(/2nd exit/gi, 'second exit');
+    plainText = plainText.replace(/3rd exit/gi, 'third exit');
+    plainText = plainText.replace(/4th exit/gi, 'fourth exit');
+    plainText = plainText.replace(/5th exit/gi, 'fifth exit');
+
+    return plainText;
+  };
+
+  // TTS Interruption Recovery (Resume if interrupted by OS/Phone call)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && window.speechSynthesis && window.speechSynthesis.paused) {
+         window.speechSynthesis.resume();
+      }
+    };
+    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    
+    const resumeInterval = setInterval(() => {
+      if (window.speechSynthesis && window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+    }, 5000);
+    
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(resumeInterval);
+    };
+  }, []);
+
   useEffect(() => {
     if (
       isAutoNavHeadUp &&
       directions?.routes?.[0]?.legs?.[0]?.steps?.[0]?.instructions
     ) {
-      const htmlInstruction =
-        directions.routes[0].legs[0].steps[0].instructions;
-      // Strip HTML tags to get readable text
-      let plainText = htmlInstruction.replace(/<[^>]*>?/gm, "");
+      const step0 = directions.routes[0].legs[0].steps[0];
+      const htmlInstruction = step0.instructions;
+      const plainText = formatInstructionForTTS(htmlInstruction);
 
-      // UK navigation terminology adjustments
-      // Remove compass directions which drivers find confusing
-      plainText = plainText.replace(/Head (north|south|east|west|northeast|northwest|southeast|southwest)(?:ward)?/i, 'Proceed');
-      plainText = plainText.replace(/head (north|south|east|west|northeast|northwest|southeast|southwest)/i, 'proceed');
-      plainText = plainText.replace(/Merge onto/i, 'Join');
-      plainText = plainText.replace(/merge onto/i, 'join');
-      plainText = plainText.replace(/Traffic circle/i, 'Roundabout');
-      plainText = plainText.replace(/traffic circle/i, 'roundabout');
-      // Change exit numbers to spoken text for better TTS
-      plainText = plainText.replace(/1st exit/i, 'first exit');
-      plainText = plainText.replace(/2nd exit/i, 'second exit');
-      plainText = plainText.replace(/3rd exit/i, 'third exit');
-      plainText = plainText.replace(/4th exit/i, 'fourth exit');
-      plainText = plainText.replace(/5th exit/i, 'fifth exit');
+      // Lookahead logic using live distance mapped to polyline
+      let liveDistanceToTurn = step0.distance?.value || 0;
+      if (mapCenter) {
+        liveDistanceToTurn = getRemainingStepDistance(mapCenter, step0);
+      }
 
-      if (plainText && plainText !== lastSpokenInstruction) {
-        setLastSpokenInstruction(plainText);
+      let initialSpokenText = plainText;
+      if (liveDistanceToTurn <= 50 && directions.routes[0].legs[0].steps.length > 1) {
+        const nextPlain = formatInstructionForTTS(directions.routes[0].legs[0].steps[1].instructions);
+        initialSpokenText = `${plainText} then ${nextPlain}`;
+      }
+
+      if (initialSpokenText && initialSpokenText !== lastSpokenInstruction) {
+        setLastSpokenInstruction(initialSpokenText);
+        spokenDistancesRef.current.clear();
 
         if ("speechSynthesis" in window && navVoiceVolume > 0) {
-          // Cancel any ongoing speech to prioritize the latest instruction
+          // Speak the initial step instruction
           window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(plainText);
+          const utterance = new SpeechSynthesisUtterance(initialSpokenText);
           utterance.lang = "en-GB";
           utterance.rate = 1.0;
           utterance.volume = navVoiceVolume;
@@ -615,46 +765,52 @@ export default function DriverTerminal() {
         }
       }
 
-      // Lookahead logic for upcoming turn (when <= 150 meters away)
-      const currentDistance = directions.routes[0].legs[0].steps[0].distance;
-      if (
-        currentDistance?.value &&
-        currentDistance.value <= 150 &&
-        directions.routes[0].legs[0].steps.length > 1
-      ) {
-        let nextPlain = directions.routes[0].legs[0].steps[1].instructions.replace(/<[^>]*>?/gm, "");
-        nextPlain = nextPlain.replace(/Head (north|south|east|west|northeast|northwest|southeast|southwest)(?:ward)?/i, 'Proceed');
-        nextPlain = nextPlain.replace(/head (north|south|east|west|northeast|northwest|southeast|southwest)/i, 'proceed');
-        nextPlain = nextPlain.replace(/Merge onto/i, 'Join');
-        nextPlain = nextPlain.replace(/merge onto/i, 'join');
-        nextPlain = nextPlain.replace(/Traffic circle/i, 'Roundabout');
-        nextPlain = nextPlain.replace(/traffic circle/i, 'roundabout');
-        nextPlain = nextPlain.replace(/1st exit/i, 'first exit');
-        nextPlain = nextPlain.replace(/2nd exit/i, 'second exit');
-        nextPlain = nextPlain.replace(/3rd exit/i, 'third exit');
-        nextPlain = nextPlain.replace(/4th exit/i, 'fourth exit');
-        nextPlain = nextPlain.replace(/5th exit/i, 'fifth exit');
+      // Mark thresholds as passed if user starts closer than them
+      if (liveDistanceToTurn < 1550) spokenDistancesRef.current.add(1609);
+      if (liveDistanceToTurn < 350) spokenDistancesRef.current.add(400);
 
-        if (nextPlain && nextPlain !== lastSpokenUpcomingStep) {
-          setLastSpokenUpcomingStep(nextPlain);
-          if ("speechSynthesis" in window && navVoiceVolume > 0) {
-            window.speechSynthesis.cancel();
-            const prepPhrase = `In ${currentDistance.text}`;
-            const utterance = new SpeechSynthesisUtterance(`${prepPhrase}, ${nextPlain}`);
-            utterance.lang = "en-GB";
-            utterance.rate = 1.0;
-            utterance.volume = navVoiceVolume;
-            window.speechSynthesis.speak(utterance);
+      const checkAndSpeak = (threshold: number, distString: string, distanceMargin: number) => {
+        if (!spokenDistancesRef.current.has(threshold) && liveDistanceToTurn <= threshold) {
+          spokenDistancesRef.current.add(threshold); // mark as passed
+          
+          if (liveDistanceToTurn > (threshold - distanceMargin)) {
+            let nextPlain = "arriving at destination";
+            let doubleTurnPlain = "";
+            
+            if (directions.routes[0].legs[0].steps.length > 1) {
+              const nextHtmlInstruction = directions.routes[0].legs[0].steps[1].instructions;
+              nextPlain = formatInstructionForTTS(nextHtmlInstruction);
+              
+              if (directions.routes[0].legs[0].steps.length > 2) {
+                const step2Dist = directions.routes[0].legs[0].steps[1].distance?.value || 0;
+                if (step2Dist <= 50) {
+                  doubleTurnPlain = " then " + formatInstructionForTTS(directions.routes[0].legs[0].steps[2].instructions);
+                }
+              }
+            }
+
+            if ("speechSynthesis" in window && navVoiceVolume > 0) {
+              window.speechSynthesis.cancel();
+              const prepPhrase = `In ${distString}`;
+              const utterance = new SpeechSynthesisUtterance(`${prepPhrase}, ${nextPlain}${doubleTurnPlain}`);
+              utterance.lang = "en-GB";
+              utterance.rate = 1.0;
+              utterance.volume = navVoiceVolume;
+              window.speechSynthesis.speak(utterance);
+            }
           }
         }
-      }
+      };
+
+      checkAndSpeak(1609, "1 mile", 150);
+      checkAndSpeak(400, "400 meters", 100);
     }
   }, [
     directions,
+    mapCenter,
     currentLegIndex,
     isAutoNavHeadUp,
     lastSpokenInstruction,
-    lastSpokenUpcomingStep,
     navVoiceVolume,
   ]);
 
@@ -792,7 +948,9 @@ export default function DriverTerminal() {
         typeof destLat !== "number" ||
         isNaN(destLat) ||
         typeof destLng !== "number" ||
-        isNaN(destLng)
+        isNaN(destLng) ||
+        (Math.abs(originLat) < 0.1 && Math.abs(originLng) < 0.1) ||
+        (Math.abs(destLat) < 0.1 && Math.abs(destLng) < 0.1)
       ) {
         console.warn("Invalid coordinates for directions:", {
           originLat,
@@ -873,30 +1031,34 @@ export default function DriverTerminal() {
 
       const directionsService = new window.google.maps.DirectionsService();
 
-      try {
-        const result = await directionsService.route({
+      directionsService.route(
+        {
           origin: new window.google.maps.LatLng(originLat, originLng),
           destination: new window.google.maps.LatLng(destLat, destLng),
           travelMode: window.google.maps.TravelMode.DRIVING,
           region: "GB",
           language: "en-GB",
-        });
-        setDirections(result);
-        if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
-          mapInstance.fitBounds(result.routes[0].bounds);
-          isInitialFitBounds = false;
-        }
+        },
+        (result, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK && result) {
+            setDirections(result);
+            if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
+              mapInstance.fitBounds(result.routes[0].bounds);
+              isInitialFitBounds = false;
+            }
 
-        lastDirectionsFetchRef.current = {
-          originLat,
-          originLng,
-          destLat,
-          destLng,
-          time: now,
-        };
-      } catch (e) {
-        // Silently catch directions API errors (e.g. UNKNOWN_ERROR, MAX_WAYPOINTS_EXCEEDED, ZERO_RESULTS)
-      }
+            lastDirectionsFetchRef.current = {
+              originLat,
+              originLng,
+              destLat,
+              destLng,
+              time: now,
+            };
+          } else {
+            // Silently handle non-OK statuses (ZERO_RESULTS, UNKNOWN_ERROR, etc.)
+          }
+        }
+      );
     };
 
     const updateDynamicDirections = () => {
@@ -2952,21 +3114,29 @@ export default function DriverTerminal() {
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="absolute bottom-[180px] left-0 right-0 z-30 flex flex-col items-center justify-center pointer-events-none text-center px-4"
+                    className="absolute bottom-[160px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4"
                   >
                     <div className="flex-1 w-full max-w-sm flex flex-col items-center">
                       <p
-                        className="text-[26px] text-[#007AFF] font-normal leading-tight drop-shadow-[0_2px_10px_rgba(255,255,255,1)] [text-shadow:_0_2px_8px_rgb(255_255_255_/_80%),_0_1px_2px_rgb(255_255_255_/_100%)] line-clamp-2"
+                        className="text-[20px] text-[#007AFF] font-normal leading-tight drop-shadow-[0_2px_10px_rgba(255,255,255,1)] [text-shadow:_0_2px_8px_rgb(255_255_255_/_80%),_0_1px_2px_rgb(255_255_255_/_100%)] px-2"
                         dangerouslySetInnerHTML={{
-                          __html: directions.routes[0].legs[0].steps[0].instructions
-                            .replace(/\bHead\b\s*(?:<[^>]*>)?\s*(?:north|south|east|west|northeast|northwest|southeast|southwest)(?:ward)?\s*(?:<[^>]*>)?/ig, 'Proceed')
-                            .replace(/\bMerge onto\b/ig, 'Join')
-                            .replace(/\bTraffic circle\b/ig, 'Roundabout')
+                          __html: (() => {
+                            const step0 = directions.routes[0].legs[0].steps[0];
+                            const remainingDist = mapCenter ? getRemainingStepDistance(mapCenter, step0) : step0.distance?.value || 0;
+                            let html = formatInstructionForDisplay(step0.instructions);
+                            if (remainingDist <= 50 && directions.routes[0].legs[0].steps.length > 1) {
+                              const step1 = directions.routes[0].legs[0].steps[1];
+                              html += ' <span style="opacity: 0.8; font-size: 0.85em;">then</span> <br/> ' + formatInstructionForDisplay(step1.instructions);
+                            }
+                            return html;
+                          })()
                         }}
                       />
                       <div className="mt-2 inline-flex bg-[#1A1A1E] px-4 py-1.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#333338]">
                         <p className="text-[16px] text-[#00D26A] font-bold tracking-wider uppercase">
-                          {directions.routes[0].legs[0].steps[0].distance?.text}
+                          {formatNavigateDistance(
+                            mapCenter ? getRemainingStepDistance(mapCenter, directions.routes[0].legs[0].steps[0]) : directions.routes[0].legs[0].steps[0].distance?.value
+                          )}
                         </p>
                       </div>
                     </div>
