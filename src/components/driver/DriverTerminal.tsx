@@ -270,8 +270,8 @@ const getRemainingStepDistance = (
   let closestIdx = 0;
   for (let i = 0; i < step.path.length; i++) {
     const p = step.path[i];
-    const plat = typeof p.lat === "function" ? p.lat() : (p.lat as number);
-    const plng = typeof p.lng === "function" ? p.lng() : (p.lng as number);
+    const plat = typeof p.lat === "function" ? p.lat() : (p.lat as unknown as number);
+    const plng = typeof p.lng === "function" ? p.lng() : (p.lng as unknown as number);
     const d = getDistanceInMeters(mapCenter[0], mapCenter[1], plat, plng);
     if (d < minDistance) {
       minDistance = d;
@@ -283,10 +283,10 @@ const getRemainingStepDistance = (
   for (let i = closestIdx; i < step.path.length - 1; i++) {
     const p1 = step.path[i];
     const p2 = step.path[i + 1];
-    const p1lat = typeof p1.lat === "function" ? p1.lat() : (p1.lat as number);
-    const p1lng = typeof p1.lng === "function" ? p1.lng() : (p1.lng as number);
-    const p2lat = typeof p2.lat === "function" ? p2.lat() : (p2.lat as number);
-    const p2lng = typeof p2.lng === "function" ? p2.lng() : (p2.lng as number);
+    const p1lat = typeof p1.lat === "function" ? p1.lat() : (p1.lat as unknown as number);
+    const p1lng = typeof p1.lng === "function" ? p1.lng() : (p1.lng as unknown as number);
+    const p2lat = typeof p2.lat === "function" ? p2.lat() : (p2.lat as unknown as number);
+    const p2lng = typeof p2.lng === "function" ? p2.lng() : (p2.lng as unknown as number);
     remainingDist += getDistanceInMeters(p1lat, p1lng, p2lat, p2lng);
   }
   

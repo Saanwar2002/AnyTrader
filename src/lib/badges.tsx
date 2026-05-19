@@ -11,6 +11,8 @@ export interface Badge {
 }
 
 export const getTraderBadges = (profile: any): Badge[] => {
+  if (!profile) return [];
+
   const badges: Badge[] = [];
 
   // 0. Founding Member (Highest Priority)

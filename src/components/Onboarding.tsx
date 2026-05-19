@@ -758,7 +758,7 @@ export default function Onboarding() {
                   <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                     <Shield className="w-4 h-4 text-blue-600" />
                   </div>
-                  <span className="text-[10px] font-black text-slate-700 uppercase leading-none">Escrow<br/>payments</span>
+                  <span className="text-[10px] font-black text-slate-700 uppercase leading-none">Secure<br/>payments</span>
                 </div>
                 <div className="flex flex-col items-center text-center gap-1">
                   <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">

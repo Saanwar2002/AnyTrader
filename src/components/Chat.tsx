@@ -283,9 +283,9 @@ export default function Chat() {
   if (loading) return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] bg-white rounded-2xl border border-black shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-12rem)] sm:h-[calc(100dvh-13rem)] bg-white rounded-2xl border border-black shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="p-3 sm:p-4 border-b border-black flex items-center justify-between bg-slate-50/50 gap-2">
+      <div className="p-3 sm:p-4 border-b border-black flex items-center justify-between bg-slate-50/50 gap-2 shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button onClick={() => navigate(-1)} className="p-2 sm:p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0">
             <ChevronLeft className="w-5 h-5 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
@@ -407,7 +407,7 @@ export default function Chat() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSendMessage} className="p-4 border-t border-black flex gap-2 items-center">
+      <form onSubmit={handleSendMessage} className="p-2 sm:p-4 border-t border-black flex gap-1 sm:gap-2 items-center bg-white shrink-0">
         <input
           type="file"
           accept="image/*"
@@ -417,14 +417,14 @@ export default function Chat() {
         />
         
         {isRecording ? (
-          <div className="flex-1 flex items-center gap-3 bg-red-50 p-2 rounded-xl border border-red-100">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-xs font-bold text-red-600 tabular-nums">{formatDuration(recordingDuration)}</span>
+          <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3 bg-red-50 p-2 rounded-xl border border-red-100">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
+            <span className="text-xs font-bold text-red-600 tabular-nums flex-shrink-0">{formatDuration(recordingDuration)}</span>
             <div className="flex-1" />
             <button
               type="button"
               onClick={stopRecording}
-              className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex-shrink-0"
             >
               <Square className="w-4 h-4" />
             </button>
@@ -435,7 +435,7 @@ export default function Chat() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all disabled:opacity-50"
+              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
               title="Share photo"
             >
               {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
@@ -444,7 +444,7 @@ export default function Chat() {
               type="button"
               onClick={startRecording}
               disabled={isUploading}
-              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
               title="Record voice message"
             >
               <Mic className="w-5 h-5" />
@@ -454,12 +454,12 @@ export default function Chat() {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type a message..."
-              className="flex-1 p-2 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
+              className="flex-1 min-w-0 p-2 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
             />
             <button
               type="submit"
               disabled={!newMessage.trim() || isUploading}
-              className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0"
             >
               <Send className="w-5 h-5" />
             </button>

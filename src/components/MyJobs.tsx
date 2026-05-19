@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, handleFirestoreError, OperationType, deleteDoc } from "@/src/firebase";
+import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, handleFirestoreError, OperationType, deleteDoc, addDoc } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { usePortal } from "@/src/lib/PortalContext";
 import { motion, AnimatePresence } from "motion/react";
@@ -85,6 +85,72 @@ export default function MyJobs() {
     if (filter === "completed") return job.status === "completed";
     return true;
   });
+
+  const handleSimulateJob = async () => {
+    setIsProcessing("simulating");
+    try {
+      if (!user) return;
+      
+      let tempJobId = "";
+      try {
+        const jobRef = await addDoc(collection(db, "jobs"), {
+          homeownerId: user.uid,
+          title: "Fix leaking washing machine",
+          description: "My Bosch washing machine is leaking from the bottom front door when running a hot wash. Need someone to fix it ASAP.",
+          category: "Appliance Repair",
+          subcategory: "Washing Machine Repair",
+          urgency: "specific_date",
+          status: "posted",
+          postcode: "HD5 9BW",
+          city: "Huddersfield",
+          createdAt: serverTimestamp(),
+        });
+        tempJobId = jobRef.id;
+      } catch (e: any) {
+        throw new Error(`Job creation failed: ${e.message}`);
+      }
+      
+      const quotesRef = collection(db, "jobs", tempJobId, "quotes");
+      
+      const mockPros = [
+        { id: "pro1", name: "Bob's Repairs", price: 65, rating: 4.8, reviews: 142, message: "Can do this tomorrow morning. Includes standard replacement seal." },
+        { id: "pro2", name: "QuickFix Appliances", price: 85, rating: 4.9, reviews: 310, message: "We can come today. fully insured and guaranteed." },
+        { id: "pro3", name: "Huddersfield Handyman", price: 45, rating: 4.5, reviews: 89, message: "I've fixed many of these. Labour only, parts extra if needed." },
+        { id: "pro4", name: "Elite Appliance Care", price: 110, rating: 5.0, reviews: 45, message: "Premium service with official Bosch parts. 1 year warranty." },
+        { id: "pro5", name: "Dave The Plumber", price: 70, rating: 4.7, reviews: 215, message: "Available next week. Sounds like a simple door seal issue." }
+      ];
+      
+      for (const pro of mockPros) {
+        try {
+          await addDoc(quotesRef, {
+            tradespersonId: pro.id,
+            homeownerId: user.uid,
+            proId: pro.id,
+            jobId: tempJobId,
+            businessName: pro.name,
+            price: pro.price,
+            projectTotal: pro.price,
+            estimatedHours: 1,
+            message: pro.message,
+            status: "pending",
+            createdAt: serverTimestamp(),
+            materialsFinalized: true,
+            averageRating: pro.rating,
+            totalReviews: pro.reviews,
+          });
+        } catch (e: any) {
+           throw new Error(`Quote creation failed for ${pro.id}: ${e.message}`);
+        }
+      }
+      
+      navigate(`/job/${tempJobId}`);
+    } catch (e: any) {
+      console.error("Simulation error", e);
+      alert(`Simulation error: ${e.message}`);
+    } finally {
+      setIsProcessing(null);
+    }
+  };
 
   const handleCancel = async (jobId: string) => {
     setIsProcessing(jobId);
@@ -191,13 +257,23 @@ export default function MyJobs() {
               (isBusiness ? "My Hiring Projects" : "My Hiring Jobs")}
           </h1>
           {!isHistoryView && filter !== "completed" && filter !== "cancelled" && (
-            <Link 
-              to="/post-job"
-              className="text-orange-500 font-bold hover:underline flex items-center gap-1"
-            >
-              <Plus className="w-5 h-5" />
-              {isBusiness ? "Post Project" : "Post new"}
-            </Link>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleSimulateJob}
+                disabled={isProcessing === "simulating"}
+                className="text-purple-600 font-bold hover:underline flex items-center gap-1 disabled:opacity-50"
+              >
+                {isProcessing === "simulating" ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                Simulate Demo Job
+              </button>
+              <Link 
+                to="/post-job"
+                className="text-orange-500 font-bold hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-5 h-5" />
+                {isBusiness ? "Post Project" : "Post new"}
+              </Link>
+            </div>
           )}
         </div>
 

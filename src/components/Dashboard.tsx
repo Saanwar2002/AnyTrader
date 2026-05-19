@@ -63,7 +63,7 @@ export default function Dashboard() {
       collectionGroup(db, "quotes"),
       where("homeownerId", "==", user.uid),
       orderBy("createdAt", "desc"),
-      limit(5)
+      limit(20)
     );
 
     const unsubscribeQuotes = onSnapshot(quotesQuery, (snapshot) => {
@@ -78,14 +78,14 @@ export default function Dashboard() {
     const allJobsQuery = query(
       collection(db, "jobs"),
       where("homeownerId", "==", user.uid),
-      orderBy("postedDate", "desc")
+      orderBy("createdAt", "desc")
     );
 
     const unsubscribeAllJobs = onSnapshot(allJobsQuery, (snapshot) => {
       let jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       jobsData = jobsData.filter(j => j.clientDeleted !== true);
       setAllJobs(jobsData);
-      setActiveJobs(jobsData.filter(j => ["posted", "quoting", "accepted", "in_progress", "pending_admin_review"].includes(j.status)));
+      setActiveJobs(jobsData.filter(j => j.status !== "completed" && j.status !== "cancelled"));
       setLoading(false);
     }, (error) => {
       console.error("Error fetching all jobs:", error);
@@ -162,9 +162,21 @@ export default function Dashboard() {
 
   const stats = {
     total: allJobs.length,
-    active: allJobs.filter(j => ["posted", "quoting", "accepted", "in_progress", "pending_admin_review"].includes(j.status)).length,
+    active: allJobs.filter(j => j.status !== "completed" && j.status !== "cancelled").length,
     done: allJobs.filter(j => j.status === "completed").length
   };
+
+  const displayQuotes = recentQuotes
+    .filter((q) => {
+      // Only show accepted quotes
+      if (q.status !== "accepted") return false;
+      // Find the associated job
+      const job = allJobs.find((j) => j.id === q.jobId);
+      // Hide if job is not found, completed, or cancelled
+      if (!job || job.status === "completed" || job.status === "cancelled") return false;
+      return true;
+    })
+    .slice(0, 5);
 
   return (
     <div className="space-y-8 pb-24">
@@ -497,7 +509,7 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Quotes Section */}
-        {recentQuotes.length > 0 && (
+        {displayQuotes.length > 0 && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
@@ -508,7 +520,7 @@ export default function Dashboard() {
               </h2>
             </div>
             <div className="space-y-4">
-              {recentQuotes.map((quote) => (
+              {displayQuotes.map((quote) => (
                 <Link
                   key={quote.id}
                   to={`/job/${quote.jobId}`}

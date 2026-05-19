@@ -82,7 +82,7 @@ export default function JobTimeline() {
     {
       id: 'in_progress',
       title: 'Work In Progress',
-      description: 'The tradesperson is working on your job. Funds are held securely in escrow.',
+      description: 'The tradesperson is working on your job. Fast payment unlocks upon completion.',
       icon: Wrench,
       status: job.status === 'in_progress' ? 'active' : (job.status === 'completed' ? 'completed' : 'pending')
     },

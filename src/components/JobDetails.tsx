@@ -3589,13 +3589,13 @@ const libraries: any[] = ['places'];
                 Quotes ({job.quoteCount || quotes.length})
               </h3>
               <div className="flex items-center gap-3">
-                {isHomeowner && quotes.length > 1 && (
+                {isHomeowner && quotes.length > 1 && job.status === "posted" && (
                   <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
                     <Sparkles className="w-3.5 h-3.5 text-blue-600" />
                     <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Smart Sorted</span>
                   </div>
                 )}
-                {quotes.length > 1 && isHomeowner && (
+                {quotes.length > 1 && isHomeowner && job.status === "posted" && (
                   <button 
                     onClick={() => setIsComparisonModalOpen(true)}
                     className="bg-blue-600 text-white px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2 active:scale-95"
@@ -3643,8 +3643,9 @@ const libraries: any[] = ['places'];
               }
 
               return (
-                <div key={quote.id} className="bg-white p-6 rounded-3xl border border-black shadow-sm flex items-start justify-between gap-4">
-                  <div className="flex-1 space-y-3">
+                <div key={quote.id} className="bg-white p-6 rounded-3xl border border-black shadow-sm flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4 w-full">
+                    <div className="flex-1 min-w-0 space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-slate-100 rounded-full overflow-hidden border border-black relative">
                         {tpProfile?.avatarUrl ? (
@@ -3874,168 +3875,15 @@ const libraries: any[] = ['places'];
                       </div>
                     )}
                     
-                    {(isHomeowner || (user?.uid === quote.tradespersonId && quote.status === "accepted")) && (
+                    {quote.status === "accepted" && (
                       <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-4">
-                          <button 
-                            onClick={() => handleStartChat(quote, tpProfile)}
-                            className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                            Message Tradesperson
-                          </button>
-                          
-                          {quote.history && quote.history.length > 0 && (
-                            <button 
-                              onClick={() => setShowHistoryId(showHistoryId === quote.id ? null : quote.id)}
-                              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors"
-                            >
-                              <History className="w-4 h-4" />
-                              {showHistoryId === quote.id ? "Hide History" : "View History"}
-                            </button>
-                          )}
-                        </div>
-
-                        {quote.status === "accepted" && (
-                          <div className="flex flex-col gap-3">
-                            <button 
+                        <button 
                               onClick={() => handleDownloadQuote(quote)}
                               className="flex items-center gap-1.5 text-xs font-bold text-green-600 hover:text-green-700 transition-colors bg-green-50 self-start px-3 py-1.5 rounded-lg border border-green-100"
                             >
                               <Download className="w-4 h-4" />
                               Download Agreed Quote (PDF)
                             </button>
-
-                            {/* Milestones & Escrow Section */}
-                            <div className="mt-4 p-4 bg-[#1e3a5f]/5 border border-[#1e3a5f]/10 rounded-2xl space-y-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <ShieldCheck className="w-5 h-5 text-[#1e3a5f]" />
-                                  <h4 className="text-sm font-black text-[#1e3a5f] uppercase tracking-wider">
-                                    {quote.paymentTrack === 'quick' ? 'Quick Settle Protected' : 'Escrow Protection Active'}
-                                  </h4>
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Funds Secured by AnyTrader</span>
-                              </div>
-
-                              {quote.paymentTrack === 'quick' ? (
-                                <div className="space-y-4">
-                                  <div className="bg-white p-4 rounded-xl border border-black flex items-center justify-between shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                                        <QrCode className="w-6 h-6" />
-                                      </div>
-                                      <div>
-                                        <p className="text-xs font-bold text-slate-900">Digital Handshake</p>
-                                        <p className="text-[10px] font-medium text-slate-500">Scan QR code at completion</p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="text-lg font-black text-[#1e3a5f]">£{quote.amount}</p>
-                                      <p className="text-[10px] text-slate-400 uppercase font-bold">Single Payout</p>
-                                    </div>
-                                  </div>
-
-                                  {!isHomeowner ? (
-                                    <button 
-                                      onClick={() => handleGenerateQr(quote)}
-                                      disabled={isProcessingQr || quote.milestones?.[0]?.status === 'funds_released'}
-                                      className="w-full bg-[#1e3a5f] text-white p-3 rounded-xl text-xs font-bold hover:bg-[#162a45] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                                    >
-                                      {isProcessingQr ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
-                                      {quote.milestones?.[0]?.status === 'funds_released' ? 'Handshake Complete' : 'Generate Completion QR'}
-                                    </button>
-                                  ) : (
-                                    quote.milestones?.[0]?.status !== 'funds_released' && (
-                                      <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-2">
-                                        <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                                        <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
-                                          To finalize this service, scan the QR code on the tradesperson's phone once the work is done. This initiates the immediate payout process.
-                                        </p>
-                                      </div>
-                                    )
-                                  )}
-
-                                  {quote.milestones?.[0]?.status === 'funds_released' && (
-                                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
-                                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                                        <Clock className="w-4 h-4 text-amber-600" />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <p className="text-xs font-bold text-amber-900">24-Hour Guarantee Window Active</p>
-                                        <p className="text-[10px] text-amber-800 leading-tight">
-                                          Your payment has been captured. You have until **{quote.guaranteeExpiresAt ? format(new Date(quote.guaranteeExpiresAt), 'hh:mm a, dd MMM') : '24 hours'}** to raise any quality concerns. After this, the platform guarantee will expire.
-                                        </p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="space-y-3">
-                                  {(quote.milestones || []).map((milestone: any, idx: number) => (
-                                    <div key={milestone.id} className="bg-white p-3 rounded-xl border border-black flex items-center justify-between shadow-sm">
-                                      <div className="flex items-center gap-3">
-                                        <div className={cn(
-                                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                                          milestone.status === "funded" ? "bg-green-100 text-green-600" :
-                                          milestone.status === "funds_released" ? "bg-blue-100 text-blue-600" :
-                                          "bg-slate-100 text-slate-400"
-                                        )}>
-                                          {idx + 1}
-                                        </div>
-                                        <div>
-                                          <p className="text-xs font-bold text-slate-900">{milestone.title}</p>
-                                          <p className="text-[10px] font-medium text-slate-500 capitalize">{milestone.status.replace('_', ' ')}</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-4">
-                                        <p className="text-sm font-black text-slate-900">£{milestone.amount}</p>
-                                        {isHomeowner ? (
-                                          milestone.status === 'pending_funding' ? (
-                                            <button 
-                                              onClick={() => handleFundMilestone(quote, milestone)}
-                                              disabled={isProcessing}
-                                              className="bg-[#1e3a5f] text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-[#162a45] transition-all"
-                                            >
-                                              Fund Escrow
-                                            </button>
-                                          ) : milestone.status === 'funded' ? (
-                                            <button 
-                                              onClick={() => handleReleaseMilestone(quote, milestone)}
-                                              disabled={isProcessing}
-                                              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-green-700 transition-all"
-                                            >
-                                              Release Funds
-                                            </button>
-                                          ) : (
-                                            <div className="flex items-center gap-1 text-blue-600">
-                                              <CheckCircle2 className="w-3.5 h-3.5" />
-                                              <span className="text-[10px] font-bold uppercase">Paid</span>
-                                            </div>
-                                          )
-                                        ) : (
-                                          <div className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 text-slate-400">
-                                            {milestone.status === 'pending_funding' ? "Awaiting Deposit" : 
-                                             milestone.status === 'funded' ? "Ready to Release" : "Disbursed"}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              <div className="bg-[#1e3a5f] p-3 rounded-xl flex items-start gap-2">
-                                <Info className="w-4 h-4 text-white flex-shrink-0 mt-0.5" />
-                                <p className="text-[10px] text-blue-50 font-medium leading-relaxed">
-                                  {quote.paymentTrack === 'quick' 
-                                    ? "Small jobs under £400 use our Handshake Protocol. Payout is initiated immediately upon scan, with a high-priority 24-hour guarantee window for quality verification."
-                                    : "Our **Platform Guarantee** ensures that funds held in escrow are only released once you confirm satisfaction. Released funds are subject to a 7-day cooling-off period before final payout to the trader."}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
 
@@ -4076,7 +3924,7 @@ const libraries: any[] = ['places'];
                       </div>
                     )}
                   </div>
-                  <div className="text-right space-y-2">
+                  <div className="text-right space-y-2 flex-shrink-0">
                     <p className="text-2xl font-black text-slate-900">£{quote.amount}</p>
                     <div className="flex flex-col items-end gap-1">
                       {quote.paymentPreference && (
@@ -4090,35 +3938,260 @@ const libraries: any[] = ['places'];
                         </span>
                       )}
                     </div>
-                    <span className={cn(
-                      "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block",
-                      quote.status === "accepted" ? "text-green-600 bg-green-50" : 
-                      quote.status === "rejected" ? "text-red-600 bg-red-50" : 
-                      quote.status === "withdrawn" ? "text-slate-600 bg-slate-100" : 
-                      "text-amber-600 bg-amber-50"
-                    )}>
-                      {quote.status.replace('_', ' ')}
-                    </span>
-                    
-                    {isHomeowner && (quote.status === "pending" || quote.status === "requote_requested") && job.status === "posted" && (
-                      <div className="flex flex-col gap-2 pt-2">
-                        {activeQuoteId === quote.id ? (
+                    {quote.status === "rejected" ? (
+                      <div className="mt-4 translate-x-2 -translate-y-2">
+                        <span className="text-sm font-black tracking-widest uppercase text-red-600 border-[3px] border-red-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm">
+                          DECLINED
+                        </span>
+                      </div>
+                    ) : (
+                      <span className={cn(
+                        "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block",
+                        quote.status === "accepted" ? "text-green-600 bg-green-50" : 
+                        quote.status === "withdrawn" ? "text-slate-600 bg-slate-100" : 
+                        "text-amber-600 bg-amber-50"
+                      )}>
+                        {quote.status.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {quote.status === "accepted" && (
+                  <div className="w-full">
+                  {/* Milestones & Guarantee Section */}
+                  <div className="mt-4 p-4 bg-[#1e3a5f]/5 border border-[#1e3a5f]/10 rounded-2xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-start sm:items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-[#1e3a5f] shrink-0" />
+                        <h4 className="text-sm font-black text-[#1e3a5f] uppercase tracking-wider leading-tight">
+                          {quote.paymentTrack === 'quick' ? 'Quick Settle Protected' : 'Platform Guarantee Active'}
+                        </h4>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter sm:text-right">Settlement Secured via Stripe</span>
+                    </div>
+
+                    {quote.paymentTrack === 'quick' ? (
+                      <div className="space-y-4">
+                        <div className="bg-white p-4 rounded-xl border border-black flex items-center justify-between shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                              <QrCode className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">Digital Handshake</p>
+                              <p className="text-[10px] font-medium text-slate-500">Scan QR code at completion</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-black text-[#1e3a5f]">£{quote.amount}</p>
+                            <p className="text-[10px] text-slate-400 uppercase font-bold">Single Payout</p>
+                          </div>
+                        </div>
+
+                        {!isHomeowner ? (
+                          <button 
+                            onClick={() => handleGenerateQr(quote)}
+                            disabled={isProcessingQr || quote.milestones?.[0]?.status === 'funds_released'}
+                            className="w-full bg-[#1e3a5f] text-white p-3 rounded-xl text-xs font-bold hover:bg-[#162a45] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            {isProcessingQr ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                            {quote.milestones?.[0]?.status === 'funds_released' ? 'Handshake Complete' : 'Generate Completion QR'}
+                          </button>
+                        ) : (
+                          quote.milestones?.[0]?.status !== 'funds_released' && (
+                            <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-2">
+                              <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                              <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
+                                To finalize this service, scan the QR code on the tradesperson's phone once the work is done. This initiates the immediate payout process.
+                              </p>
+                            </div>
+                          )
+                        )}
+
+                        {quote.milestones?.[0]?.status === 'funds_released' && (
+                          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                              <Clock className="w-4 h-4 text-amber-600" />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-bold text-amber-900">24-Hour Guarantee Window Active</p>
+                              <p className="text-[10px] text-amber-800 leading-tight">
+                                Your payment has been captured. You have until **{quote.guaranteeExpiresAt ? format(new Date(quote.guaranteeExpiresAt), 'hh:mm a, dd MMM') : '24 hours'}** to raise any quality concerns. After this, the platform guarantee will expire.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {(quote.milestones || []).map((milestone: any, idx: number) => (
+                          <div key={milestone.id} className="bg-white p-3 rounded-xl border border-black flex items-center justify-between shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                                milestone.status === "funded" ? "bg-green-100 text-green-600" :
+                                milestone.status === "funds_released" ? "bg-blue-100 text-blue-600" :
+                                "bg-slate-100 text-slate-400"
+                              )}>
+                                {idx + 1}
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900">{milestone.title}</p>
+                                <p className="text-[10px] font-medium text-slate-500 capitalize">{milestone.status.replace('_', ' ')}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <p className="text-sm font-black text-slate-900">£{milestone.amount}</p>
+                              {isHomeowner ? (
+                                milestone.status === 'pending_funding' ? (
+                                  <button 
+                                    onClick={() => handleFundMilestone(quote, milestone)}
+                                    disabled={isProcessing}
+                                    className="bg-[#1e3a5f] text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-[#162a45] transition-all"
+                                  >
+                                    Authorize Payment
+                                  </button>
+                                ) : milestone.status === 'funded' ? (
+                                  <button 
+                                    onClick={() => handleReleaseMilestone(quote, milestone)}
+                                    disabled={isProcessing}
+                                    className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-green-700 transition-all"
+                                  >
+                                    Release Funds
+                                  </button>
+                                ) : (
+                                  <div className="flex items-center gap-1 text-blue-600">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span className="text-[10px] font-bold uppercase">Paid</span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-50 text-slate-400">
+                                  {milestone.status === 'pending_funding' ? "Awaiting Deposit" : 
+                                   milestone.status === 'funded' ? "Ready to Release" : "Disbursed"}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="bg-[#1e3a5f] p-3 rounded-xl flex items-start gap-2">
+                      <Info className="w-4 h-4 text-white flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-blue-50 font-medium leading-relaxed">
+                        {quote.paymentTrack === 'quick' 
+                          ? "Small jobs under £400 use our Handshake Protocol. Payment transfers directly to the trader's Stripe account upon scan, with a high-priority 24-hour window for dispute clawbacks."
+                          : "Our **Platform Guarantee** ensures your payment routes directly to the trader's Stripe account. Payout settlement is delayed by a 7-day cooling-off period, allowing us to process automatic clawbacks if you raise a valid dispute."}
+                      </p>
+                    </div>
+                  </div>
+                 </div>
+                )}
+
+                {(((isHomeowner && quote.status !== "rejected" && quote.status !== "withdrawn") || (user?.uid === quote.tradespersonId && quote.status === "accepted")) || (quote.history && quote.history.length > 0)) && (
+                   <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100 mt-2">
+                      {((isHomeowner && quote.status !== "rejected" && quote.status !== "withdrawn") || (user?.uid === quote.tradespersonId && quote.status === "accepted")) && (
+                        <button 
+                          onClick={() => handleStartChat(quote, tpProfile)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          Message Tradesperson
+                        </button>
+                      )}
+                      
+                      {quote.history && quote.history.length > 0 && (
+                        <button 
+                          onClick={() => setShowHistoryId(showHistoryId === quote.id ? null : quote.id)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors ml-auto flex-shrink-0"
+                        >
+                          <History className="w-4 h-4" />
+                          {showHistoryId === quote.id ? "Hide History" : "View History"}
+                        </button>
+                      )}
+                   </div>
+                )}
+
+                {isHomeowner && (quote.status === "pending" || quote.status === "requote_requested") && job.status === "posted" && (
+                     <div className="pt-3 flex flex-col gap-3">
+                       {activeQuoteId === quote.id ? (
+                         <div className="space-y-2 mt-1">
+                           <textarea
+                             className="w-full p-2 border border-black rounded-xl text-xs"
+                             placeholder="Enter requote details..."
+                             value={requoteMessage}
+                             onChange={(e) => setRequoteMessage(e.target.value)}
+                           />
+                           <div className="flex gap-2">
+                             <button
+                               onClick={() => handleRequoteQuote(quote)}
+                               className="flex-1 bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors"
+                             >
+                               Send Request
+                             </button>
+                             <button
+                               onClick={() => setActiveQuoteId(null)}
+                               className="flex-1 border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                             >
+                               Cancel
+                             </button>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="flex items-center gap-2 mt-1">
+                           <button 
+                             onClick={() => handleAcceptQuote(quote)}
+                             className="flex-1 bg-green-600 text-white px-1 py-2 rounded-full text-[10px] sm:text-xs font-bold hover:bg-green-700 transition-all shadow-sm whitespace-nowrap"
+                           >
+                             Accept
+                           </button>
+                           <button 
+                             onClick={() => handleRejectQuote(quote)}
+                             className="flex-1 border border-red-300 text-red-600 bg-white hover:bg-red-50 px-1 py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap shadow-sm"
+                           >
+                             Decline
+                           </button>
+                           <button 
+                             onClick={() => setActiveQuoteId(quote.id)}
+                             className="flex-1 border border-amber-300 text-amber-600 bg-white hover:bg-amber-50 px-1 py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap shadow-sm"
+                           >
+                             Request Requote
+                           </button>
+                         </div>
+                       )}
+                     </div>
+                  )}
+
+                  {!isHomeowner && quote.tradespersonId === user?.uid && quote.status === "pending" && job.status === "posted" && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 mt-2">
+                      {quote.paymentPreference === "negotiable" && !quote.pendingRevision && (
+                        isEditingRevision ? (
                           <div className="space-y-2">
+                            <input
+                              type="number"
+                              className="w-full p-2 border border-black rounded-xl text-xs"
+                              placeholder="New Amount (£)"
+                              value={revisionAmount}
+                              onChange={(e) => setRevisionAmount(e.target.value)}
+                            />
                             <textarea
                               className="w-full p-2 border border-black rounded-xl text-xs"
-                              placeholder="Enter requote details..."
-                              value={requoteMessage}
-                              onChange={(e) => setRequoteMessage(e.target.value)}
+                              placeholder="Reason for revision..."
+                              value={revisionMessage}
+                              onChange={(e) => setRevisionMessage(e.target.value)}
                             />
                             <div className="flex gap-2">
                               <button
-                                onClick={() => handleRequoteQuote(quote)}
-                                className="flex-1 bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors"
+                                onClick={handleRequestRevision}
+                                disabled={isProcessing || !revisionAmount || !revisionMessage}
+                                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
                               >
                                 Send Request
                               </button>
                               <button
-                                onClick={() => setActiveQuoteId(null)}
+                                onClick={() => setIsEditingRevision(false)}
                                 className="flex-1 border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
                               >
                                 Cancel
@@ -4126,90 +4199,30 @@ const libraries: any[] = ['places'];
                             </div>
                           </div>
                         ) : (
-                          <>
-                            <button 
-                              onClick={() => handleAcceptQuote(quote)}
-                              className="w-full bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-colors"
-                            >
-                              Accept
-                            </button>
-                            <button 
-                              onClick={() => handleRejectQuote(quote)}
-                              className="w-full border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
-                            >
-                              Decline
-                            </button>
-                            <button 
-                              onClick={() => setActiveQuoteId(quote.id)}
-                              className="w-full border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
-                            >
-                              Request Requote
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {!isHomeowner && quote.tradespersonId === user?.uid && quote.status === "pending" && job.status === "posted" && (
-                      <div className="flex flex-col gap-2 pt-2">
-                        {quote.paymentPreference === "negotiable" && !quote.pendingRevision && (
-                          isEditingRevision ? (
-                            <div className="space-y-2">
-                              <input
-                                type="number"
-                                className="w-full p-2 border border-black rounded-xl text-xs"
-                                placeholder="New Amount (£)"
-                                value={revisionAmount}
-                                onChange={(e) => setRevisionAmount(e.target.value)}
-                              />
-                              <textarea
-                                className="w-full p-2 border border-black rounded-xl text-xs"
-                                placeholder="Reason for revision..."
-                                value={revisionMessage}
-                                onChange={(e) => setRevisionMessage(e.target.value)}
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={handleRequestRevision}
-                                  disabled={isProcessing || !revisionAmount || !revisionMessage}
-                                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
-                                >
-                                  Send Request
-                                </button>
-                                <button
-                                  onClick={() => setIsEditingRevision(false)}
-                                  className="flex-1 border border-black text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={() => {
-                                setRevisionAmount(quote.amount.toString());
-                                setRevisionMessage("");
-                                setIsEditingRevision(true);
-                              }}
-                              disabled={(quote.revisionCount || 0) >= 2}
-                              className="w-full border border-blue-200 text-blue-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                              {(quote.revisionCount || 0) >= 2 ? "Max Revisions Reached" : "Request Revision"}
-                            </button>
-                          )
-                        )}
-                        <button 
-                          onClick={() => setWithdrawingQuote(quote)}
-                          disabled={isProcessing}
-                          className="w-full border border-red-200 text-red-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Withdraw Quote
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                          <button 
+                            onClick={() => {
+                              setRevisionAmount(quote.amount.toString());
+                              setRevisionMessage("");
+                              setIsEditingRevision(true);
+                            }}
+                            disabled={(quote.revisionCount || 0) >= 2}
+                            className="w-full border border-blue-200 text-blue-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            {(quote.revisionCount || 0) >= 2 ? "Max Revisions Reached" : "Request Revision"}
+                          </button>
+                        )
+                      )}
+                      <button 
+                        onClick={() => setWithdrawingQuote(quote)}
+                        disabled={isProcessing}
+                        className="w-full border border-red-200 text-red-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Withdraw Quote
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}

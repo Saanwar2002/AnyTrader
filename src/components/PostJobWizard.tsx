@@ -1571,7 +1571,7 @@ export default function PostJobWizard() {
                           { step: 1, title: "Describe your job", desc: "Add photos and details for accurate quotes", icon: FileText },
                           { step: 2, title: "AI price estimate", desc: "Get an instant estimate before quotes arrive", icon: Zap },
                           { step: 3, title: "Compare quotes", desc: "Up to 5 verified tradespeople will quote", icon: Search },
-                          { step: 4, title: "Accept & pay safely", desc: "Escrow protects your payment until complete", icon: ShieldCheck },
+                          { step: 4, title: "Accept & pay safely", desc: "Our 7-day guarantee protects your payment", icon: ShieldCheck },
                         ].map((item) => (
                           <div key={item.step} className="flex gap-4">
                             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#1e3a5f] text-white flex items-center justify-center font-bold text-sm">
