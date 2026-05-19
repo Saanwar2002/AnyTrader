@@ -491,10 +491,21 @@ export default function PassengerBooking() {
 
   // Map States
   const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [mapZoom, setMapZoom] = useState(14);
   const [pickupCoords, setPickupCoords] = useState<{lat: number, lng: number} | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<{lat: number, lng: number} | null>(null);
   const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
   const [routeLine, setRouteLine] = useState<{lat: number, lng: number}[]>([]);
+
+  // Adjust map zooming dynamically on ride status change
+  useEffect(() => {
+    if (assignedDriverInfo?.status === "arrived") {
+      setMapZoom(17);
+      if (pickupCoords) setMapCenter(pickupCoords);
+    } else if (assignedDriverInfo?.status === "accepted") {
+      setMapZoom(14);
+    }
+  }, [assignedDriverInfo?.status, pickupCoords]);
 
   // Long press to drag markers
   const [draggablePin, setDraggablePin] = useState<string | null>(null);
@@ -592,47 +603,49 @@ export default function PassengerBooking() {
             routeReq.waypoints = validStops;
           }
 
-          const result = await directionsService.route(routeReq);
-          
-          // Draw the line
-          const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-          setRouteLine(path);
+          directionsService.route(routeReq, (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
+              // Draw the line
+              const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+              setRouteLine(path);
 
-          // Fit bounds
-          if (map) {
-            const bounds = new window.google.maps.LatLngBounds();
-            path.forEach((p: any) => bounds.extend(p));
-            map.fitBounds(bounds, { 
-              padding: { top: 60, right: 50, bottom: 60, left: 50 } 
-            });
-            
-            // Zoom out 1-2 ticks after bounds are set to give more breathing room
-            setTimeout(() => {
-              const currentZoom = map.getZoom();
-              if (currentZoom) {
-                 map.setZoom(currentZoom - 1);
+              // Fit bounds
+              if (map) {
+                const bounds = new window.google.maps.LatLngBounds();
+                path.forEach((p: any) => bounds.extend(p));
+                map.fitBounds(bounds, { 
+                  padding: { top: 60, right: 50, bottom: 60, left: 50 } 
+                });
+                
+                // Zoom out 1-2 ticks after bounds are set to give more breathing room
+                setTimeout(() => {
+                  const currentZoom = map.getZoom();
+                  if (currentZoom) {
+                     map.setZoom(currentZoom - 1);
+                  }
+                }, 150);
               }
-            }, 150);
-          }
 
-          // Calculate distance/fare
-          let totalDistanceMeters = 0;
-          let totalDurationSeconds = 0;
-          result.routes[0].legs.forEach((leg: any) => {
-            if (leg.distance) totalDistanceMeters += leg.distance.value;
-            if (leg.duration) totalDurationSeconds += leg.duration.value;
+              // Calculate distance/fare
+              let totalDistanceMeters = 0;
+              let totalDurationSeconds = 0;
+              result.routes[0].legs.forEach((leg: any) => {
+                if (leg.distance) totalDistanceMeters += leg.distance.value;
+                if (leg.duration) totalDurationSeconds += leg.duration.value;
+              });
+              const dMiles = totalDistanceMeters / 1609.34;
+              const dMins = totalDurationSeconds / 60;
+              
+              setDistanceMiles(dMiles);
+              setDurationMinutes(dMins);
+
+              if (!currentRideId && !editId || hasModifiedRouteByUser) {
+                // Base Fare + Distance + Time
+                const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
+                setFareEstimate(Math.max(calcFare, fareConfig.minFare));
+              }
+            }
           });
-          const dMiles = totalDistanceMeters / 1609.34;
-          const dMins = totalDurationSeconds / 60;
-          
-          setDistanceMiles(dMiles);
-          setDurationMinutes(dMins);
-
-          if (!currentRideId && !editId || hasModifiedRouteByUser) {
-            // Base Fare + Distance + Time
-            const calcFare = fareConfig.baseFare + (dMiles * fareConfig.distanceRate) + (dMins * fareConfig.timeRate);
-            setFareEstimate(Math.max(calcFare, fareConfig.minFare));
-          }
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise
         }
@@ -2246,28 +2259,28 @@ export default function PassengerBooking() {
 
         try {
           const directionsService = new window.google.maps.DirectionsService();
-          const result = await directionsService.route({
+          directionsService.route({
             origin: new window.google.maps.LatLng(currentDriverPos.lat, currentDriverPos.lng),
             destination: new window.google.maps.LatLng(destinationCoords.lat, destinationCoords.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
-          });
-          
-          if (result && result.routes[0]) {
-            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-            setLiveRouteLine(path);
-            
-            let totalSecs = 0;
-            result.routes[0].legs.forEach((leg: any) => {
-              if (leg.duration?.value) totalSecs += leg.duration.value;
-            });
-            
-            if (assignedDriverInfo?.status === "accepted" && assignedDriverInfo?.stackedDriverDelay) {
-               totalSecs += assignedDriverInfo.stackedDriverDelay * 60;
-            }
+          }, (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result && result.routes && result.routes[0]) {
+              const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+              setLiveRouteLine(path);
+              
+              let totalSecs = 0;
+              result.routes[0].legs.forEach((leg: any) => {
+                if (leg.duration?.value) totalSecs += leg.duration.value;
+              });
+              
+              if (assignedDriverInfo?.status === "accepted" && assignedDriverInfo?.stackedDriverDelay) {
+                 totalSecs += assignedDriverInfo.stackedDriverDelay * 60;
+              }
 
-            setLiveEtaMins(Math.ceil(totalSecs / 60));
-            setLiveEtaSeconds(totalSecs);
-          }
+              setLiveEtaMins(Math.ceil(totalSecs / 60));
+              setLiveEtaSeconds(totalSecs);
+            }
+          });
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise
         }
@@ -2408,11 +2421,21 @@ export default function PassengerBooking() {
           <GoogleMap
             mapContainerStyle={containerStyle}
             center={mapCenter}
-            zoom={
-              assignedDriverInfo?.status === "arrived"
-                ? 17 
-                : 14
-            }
+            zoom={mapZoom}
+            onZoomChanged={() => {
+              if (map) {
+                const z = map.getZoom();
+                if (z !== undefined && z !== mapZoom) setMapZoom(z);
+              }
+            }}
+            onDragEnd={() => {
+              if (map) {
+                const c = map.getCenter();
+                if (c) {
+                  setMapCenter({ lat: c.lat(), lng: c.lng() });
+                }
+              }
+            }}
             onLoad={setMap}
             options={premiumMapOptions}
             onClick={async (e) => {
@@ -2569,14 +2592,8 @@ export default function PassengerBooking() {
             ))}
              {passengerPos && (
               <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div 
-                  ref={(el) => {
-                    if (el && el.parentElement) {
-                      el.parentElement.style.transition = 'left 1s linear, top 1s linear';
-                    }
-                  }}
-                  className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50">
-                  <div className="absolute top-[50px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
+                <div className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[40px] z-50 pointer-events-none">
+                  <div className="absolute top-[38px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                   
                   {/* Pulsing ring */}
                   <div className="absolute top-0 left-0 w-[32px] h-[32px] bg-[#9333ea] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-60"></div>
@@ -2584,11 +2601,11 @@ export default function PassengerBooking() {
                   <div className="bg-[#9333ea] w-[32px] h-[32px] rounded-full border-2 border-white flex items-center justify-center relative shadow-[0_0_15px_rgba(147,51,234,0.5)] z-20">
                     <User className="w-[16px] h-[16px] text-white" fill="currentColor" strokeWidth={2} />
                     {/* The leg */}
-                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[4px] h-[20px] bg-white flex justify-center">
+                    <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[4px] h-[8px] bg-white flex justify-center">
                       <div className="w-[1.5px] h-full bg-[#9333ea]"></div>
                     </div>
                     {/* The base dot */}
-                    <div className="absolute top-[calc(100%+17px)] left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-[#9333ea] border-2 border-white rounded-full shadow-[0_0_10px_rgba(147,51,234,0.8)]"></div>
+                    <div className="absolute top-[calc(100%+5px)] left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-[#9333ea] border-2 border-white rounded-full shadow-[0_0_10px_rgba(147,51,234,0.8)]"></div>
                   </div>
                 </div>
               </OverlayViewF>
@@ -2612,13 +2629,7 @@ export default function PassengerBooking() {
 
             {driverPos && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div 
-                  ref={(el) => {
-                    if (el && el.parentElement) {
-                      el.parentElement.style.transition = 'left 1s linear, top 1s linear';
-                    }
-                  }}
-                  className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
+                <div className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
                   <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                   {currentRideId && (assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "arrived") && (
                     <div className="absolute top-0 left-0 w-[36px] h-[36px] bg-[#FACC15] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
