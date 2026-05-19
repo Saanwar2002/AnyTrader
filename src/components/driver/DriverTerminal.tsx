@@ -3114,11 +3114,11 @@ export default function DriverTerminal() {
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="absolute bottom-[160px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4"
+                    className="absolute bottom-[230px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4"
                   >
-                    <div className="flex-1 w-full max-w-sm flex flex-col items-center">
+                    <div className="flex-1 w-full max-w-sm flex flex-col items-center bg-slate-900 border border-white rounded-lg p-3 shadow-[0_8px_30px_rgb(0,0,0,0.5)]">
                       <p
-                        className="text-[20px] text-[#007AFF] font-normal leading-tight drop-shadow-[0_2px_10px_rgba(255,255,255,1)] [text-shadow:_0_2px_8px_rgb(255_255_255_/_80%),_0_1px_2px_rgb(255_255_255_/_100%)] px-2"
+                        className="text-[16px] text-[#FF9500] font-bold leading-tight drop-shadow-md px-2"
                         dangerouslySetInnerHTML={{
                           __html: (() => {
                             const step0 = directions.routes[0].legs[0].steps[0];
@@ -3132,8 +3132,8 @@ export default function DriverTerminal() {
                           })()
                         }}
                       />
-                      <div className="mt-2 inline-flex bg-[#1A1A1E] px-4 py-1.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#333338]">
-                        <p className="text-[16px] text-[#00D26A] font-bold tracking-wider uppercase">
+                      <div className="mt-2 inline-flex bg-slate-900 px-4 py-1.5 rounded shadow-sm border border-white/20">
+                        <p className="text-[14px] text-[#00D26A] font-bold tracking-wider uppercase">
                           {formatNavigateDistance(
                             mapCenter ? getRemainingStepDistance(mapCenter, directions.routes[0].legs[0].steps[0]) : directions.routes[0].legs[0].steps[0].distance?.value
                           )}
@@ -3612,6 +3612,7 @@ export default function DriverTerminal() {
                     "I'll be right there",
                     "Traffic is heavy",
                     "I'll be outside shortly",
+                    "I'm at location but can not find you."
                   ].map((msg, i) => (
                     <button
                       key={i}
@@ -6564,6 +6565,7 @@ export default function DriverTerminal() {
                               "I'll be right there",
                               "Traffic is heavy",
                               "I'm outside",
+                              "I'm at location but can not find you."
                             ].map((msg, i) => (
                               <button
                                 key={i}

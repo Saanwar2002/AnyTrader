@@ -2668,6 +2668,13 @@ export default function PassengerBooking() {
            onClose={() => setIsChatOpen(false)}
            otherPartyName={assignedDriverInfo?.name || "Driver"}
            otherPartyPhone={assignedDriverInfo?.phone || undefined}
+           quickReplies={[
+             "OK, got it!",
+             "I'll be right there",
+             "Ok I will find you",
+             "I'll be outside shortly",
+             "I'm at location but can not find you."
+           ]}
          />
        )}
        
@@ -4138,8 +4145,9 @@ export default function PassengerBooking() {
                   Driver Found!
                 </motion.h2>
 
-                <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-lg font-medium text-slate-700 text-center max-w-[280px] leading-relaxed">
-                  <span className="font-bold">{assignedDriverInfo.name?.split(' ')[0] || "Driver"}</span> is on {assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sim") || assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sara") ? "her" : "their"} way in a <span className="font-bold">{assignedDriverInfo.vehicle || "Silver Toyota"}</span>
+                <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="text-lg font-medium text-slate-700 text-center max-w-[320px] leading-relaxed">
+                  <span className="font-bold">{assignedDriverInfo.name?.split(' ')[0] || "Driver"}</span> is on {assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sim") || assignedDriverInfo.name && assignedDriverInfo.name.toLowerCase().includes("sara") ? "her" : "their"} way in a <br/>
+                  <span className="font-bold text-xl inline-block mt-1">{assignedDriverInfo.vehicle || "Silver Toyota"}</span>
                 </motion.p>
                 
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.35 }} className="mt-8">

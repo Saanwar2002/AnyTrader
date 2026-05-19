@@ -198,7 +198,7 @@ export default function PostJobWizard() {
     id: 'google-map-script',
     googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
-    version: "weekly"
+    version: "quarterly"
   });
   const [titleError, setTitleError] = useState("");
   const [descriptionError, setDescriptionError] = useState("");

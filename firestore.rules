@@ -55,9 +55,9 @@ service cloud.firestore {
       // Prevent privilege escalation
       allow update: if (
         isSignedIn() && (
-          (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified'])) || 
+          (isOwner(userId) && (resource == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified']))) || 
           isAdmin() ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'cancellationCount', 'abandonmentStrikes'])
+          (resource != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'cancellationCount', 'abandonmentStrikes']))
         )
       ) || userId.matches('^mock-trader-.*$');
     }

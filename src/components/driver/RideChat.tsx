@@ -15,13 +15,24 @@ interface RideChatProps {
   otherPartyPhone?: string;
   passengerId?: string;
   canSendSMS?: boolean;
+  quickReplies?: string[];
 }
 
-export default function RideChat({ rideId, isOpen, onClose, otherPartyName, otherPartyPhone, passengerId, canSendSMS = false }: RideChatProps) {
+export default function RideChat({ rideId, isOpen, onClose, otherPartyName, otherPartyPhone, passengerId, canSendSMS = false, quickReplies }: RideChatProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const defaultQuickReplies = [
+    "OK, got it!",
+    "I'll be right there",
+    "Traffic is heavy",
+    "I'll be outside shortly",
+    "I'm at location but can not find you."
+  ];
+  
+  const activeReplies = quickReplies || defaultQuickReplies;
 
   useEffect(() => {
     if (!rideId || !isOpen) return;
@@ -185,12 +196,7 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
 
           {/* Quick Replies */}
           <div className="px-3 pb-2 pt-2 border-t border-[#333338] bg-[#1A1A1E] flex overflow-x-auto no-scrollbar gap-2 w-full">
-            {[
-              "OK, got it!",
-              "I'll be right there",
-              "Traffic is heavy",
-              "I'll be outside shortly"
-            ].map((msg, i) => (
+            {activeReplies.map((msg, i) => (
               <button
                 key={i}
                 type="button"
