@@ -61,7 +61,8 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
     distanceRate: number;
     minFare: number;
     commissionRate: number;
-  }>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12 });
+    fixedTripFee: number;
+  }>({ baseFare: 3.5, distanceRate: 1.3, minFare: 5.0, commissionRate: 0.12, fixedTripFee: 0 });
   const [period, setPeriod] = useState<"today" | "week" | "month">("today");
   const [metrics, setMetrics] = useState({
     today: { earnings: 0, jobs: 0, goal: 200 },
@@ -275,7 +276,8 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           if (taxiTier?.commission !== undefined) {
              setFareConfig(prev => ({
                ...prev,
-               commissionRate: taxiTier.commission
+               commissionRate: taxiTier.commission,
+               fixedTripFee: taxiTier.fixedTripFee || 0
              }));
           }
         }
@@ -294,7 +296,8 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
             distanceRate: Number(data.distanceRate) || 1.3,
             minFare: Number(data.minFare) || 5.0,
             // Keep commission from global_tiers if loaded, or fallback
-            commissionRate: prev.commissionRate || (data.commission ? Number(data.commission) / 100 : 0.12)
+            commissionRate: prev.commissionRate || (data.commission ? Number(data.commission) / 100 : 0.12),
+            fixedTripFee: prev.fixedTripFee || (data.fixedTripFee ? Number(data.fixedTripFee) : 0)
           }));
         }
       },
@@ -349,9 +352,9 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           const tip = data.tipAmount || 0;
           let netFare = 0;
           if (data.finalFare) {
-             netFare = (data.finalFare - tip) * 0.88 + tip;
+             netFare = (data.finalFare - tip) * (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0) + tip;
           } else {
-             netFare = data.driverEarnings || (grossFare * 0.88) + tip;
+             netFare = data.driverEarnings || (grossFare * (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0)) + tip;
           }
 
           if (createdAt >= todayStart) {
@@ -747,7 +750,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
         <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-5">
           <ArrowUpRight className="w-5 h-5 text-[#E4E4E7] mb-3" />
           <p className="text-2xl font-black text-white -mt-1 leading-none">
-            £{(displayEarnings / (1 - fareConfig.commissionRate)).toFixed(2)}
+            £{((displayEarnings + displayJobs * (fareConfig.fixedTripFee || 0)) / (1 - fareConfig.commissionRate)).toFixed(2)}
           </p>
           <p className="text-[10px] font-bold text-[#A1A1AA] uppercase tracking-wider mt-2">
             Gross Fares

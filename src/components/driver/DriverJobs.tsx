@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { Clock, Car, ChevronDown, ChevronUp, CheckCircle2, Navigation, PoundSterling, X, MapPin, Zap, Search } from "lucide-react";
@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 export default function DriverJobs({ onClose }: { onClose?: () => void }) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<any[]>([]);
+  const [fareConfig, setFareConfig] = useState({ commissionRate: 0.12, fixedTripFee: 0 });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
@@ -19,6 +20,17 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
   const [filterYear, setFilterYear] = useState("----");
 
   useEffect(() => {
+    const globalQ = doc(db, "platform_config", "rides");
+    const unsubGlobal = onSnapshot(globalQ, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFareConfig({
+          commissionRate: data.commission ? Number(data.commission) / 100 : 0.12,
+          fixedTripFee: data.fixedTripFee ? Number(data.fixedTripFee) : 0
+        });
+      }
+    });
+
     if (!user) return;
 
 
@@ -33,7 +45,7 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
       setLoading(false);
     });
 
-    return () => unsub();
+    return () => { unsub(); unsubGlobal(); };
   }, [user]);
 
   // Reset list expansion when filters change
@@ -212,7 +224,7 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
                       </div>
                       <div className="text-right flex flex-col items-end">
                         <p className="text-[10px] font-black uppercase text-[#00D26A] tracking-widest mb-0.5">Earned</p>
-                        <h4 className="font-black text-xl text-white">£{(job.finalFare ? (job.finalFare - (job.tipAmount || 0)) * 0.88 + (job.tipAmount || 0) : driverEarnings + (job.tipAmount || 0)).toFixed(2)}</h4>
+                        <h4 className="font-black text-xl text-white">£{(job.finalFare ? (job.finalFare - (job.tipAmount || 0)) * (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0) + (job.tipAmount || 0) : driverEarnings + (job.tipAmount || 0)).toFixed(2)}</h4>
                       </div>
                     </div>
                     
@@ -306,7 +318,7 @@ export default function DriverJobs({ onClose }: { onClose?: () => void }) {
                             
                             <div className="border-t-2 border-[#00D26A]/30 pt-3 mt-3 flex justify-between items-end">
                               <span className="text-xs font-black uppercase tracking-widest text-[#00D26A]">Net Earnings</span>
-                              <span className="text-xl font-black text-[#00D26A]">£{(job.finalFare ? (job.finalFare - (job.tipAmount || 0)) * 0.88 + (job.tipAmount || 0) : driverEarnings + (job.tipAmount || 0)).toFixed(2)}</span>
+                              <span className="text-xl font-black text-[#00D26A]">£{(job.finalFare ? (job.finalFare - (job.tipAmount || 0)) * (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0) + (job.tipAmount || 0) : driverEarnings + (job.tipAmount || 0)).toFixed(2)}</span>
                             </div>
                           </div>
                           

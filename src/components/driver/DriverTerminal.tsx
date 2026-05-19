@@ -436,6 +436,7 @@ export default function DriverTerminal() {
     minFare: number;
     priorityFee: number;
     commissionRate: number;
+    fixedTripFee?: number;
     allowRiderAbandonment?: boolean;
     surgeEnabled?: boolean;
     surgeModel?: "fixed" | "multiplier";
@@ -489,7 +490,8 @@ export default function DriverTerminal() {
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
   const [isAutoNavPaused, setIsAutoNavPaused] = useState(false);
-  const [navVoiceVolume, setNavVoiceVolume] = useState<number>(1.0);
+  const isMuted = profile?.muteHeadsUpVolume === true;
+  const navVoiceVolume = isMuted ? 0.0 : 1.0;
   const autoNavPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastDirectionsFetchRef = useRef<{
     originLat: number;
@@ -499,6 +501,8 @@ export default function DriverTerminal() {
     time: number;
   } | null>(null);
   const [lastSpokenInstruction, setLastSpokenInstruction] =
+    useState<string>("");
+  const [lastSpokenUpcomingStep, setLastSpokenUpcomingStep] =
     useState<string>("");
   const [hasAnnouncedArrival, setHasAnnouncedArrival] = useState(false);
 
@@ -580,7 +584,22 @@ export default function DriverTerminal() {
       const htmlInstruction =
         directions.routes[0].legs[0].steps[0].instructions;
       // Strip HTML tags to get readable text
-      const plainText = htmlInstruction.replace(/<[^>]*>?/gm, "");
+      let plainText = htmlInstruction.replace(/<[^>]*>?/gm, "");
+
+      // UK navigation terminology adjustments
+      // Remove compass directions which drivers find confusing
+      plainText = plainText.replace(/Head (north|south|east|west|northeast|northwest|southeast|southwest)(?:ward)?/i, 'Proceed');
+      plainText = plainText.replace(/head (north|south|east|west|northeast|northwest|southeast|southwest)/i, 'proceed');
+      plainText = plainText.replace(/Merge onto/i, 'Join');
+      plainText = plainText.replace(/merge onto/i, 'join');
+      plainText = plainText.replace(/Traffic circle/i, 'Roundabout');
+      plainText = plainText.replace(/traffic circle/i, 'roundabout');
+      // Change exit numbers to spoken text for better TTS
+      plainText = plainText.replace(/1st exit/i, 'first exit');
+      plainText = plainText.replace(/2nd exit/i, 'second exit');
+      plainText = plainText.replace(/3rd exit/i, 'third exit');
+      plainText = plainText.replace(/4th exit/i, 'fourth exit');
+      plainText = plainText.replace(/5th exit/i, 'fifth exit');
 
       if (plainText && plainText !== lastSpokenInstruction) {
         setLastSpokenInstruction(plainText);
@@ -595,12 +614,47 @@ export default function DriverTerminal() {
           window.speechSynthesis.speak(utterance);
         }
       }
+
+      // Lookahead logic for upcoming turn (when <= 150 meters away)
+      const currentDistance = directions.routes[0].legs[0].steps[0].distance;
+      if (
+        currentDistance?.value &&
+        currentDistance.value <= 150 &&
+        directions.routes[0].legs[0].steps.length > 1
+      ) {
+        let nextPlain = directions.routes[0].legs[0].steps[1].instructions.replace(/<[^>]*>?/gm, "");
+        nextPlain = nextPlain.replace(/Head (north|south|east|west|northeast|northwest|southeast|southwest)(?:ward)?/i, 'Proceed');
+        nextPlain = nextPlain.replace(/head (north|south|east|west|northeast|northwest|southeast|southwest)/i, 'proceed');
+        nextPlain = nextPlain.replace(/Merge onto/i, 'Join');
+        nextPlain = nextPlain.replace(/merge onto/i, 'join');
+        nextPlain = nextPlain.replace(/Traffic circle/i, 'Roundabout');
+        nextPlain = nextPlain.replace(/traffic circle/i, 'roundabout');
+        nextPlain = nextPlain.replace(/1st exit/i, 'first exit');
+        nextPlain = nextPlain.replace(/2nd exit/i, 'second exit');
+        nextPlain = nextPlain.replace(/3rd exit/i, 'third exit');
+        nextPlain = nextPlain.replace(/4th exit/i, 'fourth exit');
+        nextPlain = nextPlain.replace(/5th exit/i, 'fifth exit');
+
+        if (nextPlain && nextPlain !== lastSpokenUpcomingStep) {
+          setLastSpokenUpcomingStep(nextPlain);
+          if ("speechSynthesis" in window && navVoiceVolume > 0) {
+            window.speechSynthesis.cancel();
+            const prepPhrase = `In ${currentDistance.text}`;
+            const utterance = new SpeechSynthesisUtterance(`${prepPhrase}, ${nextPlain}`);
+            utterance.lang = "en-GB";
+            utterance.rate = 1.0;
+            utterance.volume = navVoiceVolume;
+            window.speechSynthesis.speak(utterance);
+          }
+        }
+      }
     }
   }, [
     directions,
     currentLegIndex,
     isAutoNavHeadUp,
     lastSpokenInstruction,
+    lastSpokenUpcomingStep,
     navVoiceVolume,
   ]);
 
@@ -648,15 +702,6 @@ export default function DriverTerminal() {
     mapInstance,
     isAutoNavHeadUp,
   ]);
-
-  const handleToggleVoiceVolume = () => {
-    setNavVoiceVolume((prev) => {
-      if (prev === 1.0) return 0.5;
-      if (prev === 0.5) return 0.0;
-      return 1.0;
-    });
-    triggerHaptic(ImpactStyle.Light);
-  };
 
   const handleStartExternalNavigation = () => {
     if (!activeRide) return;
@@ -821,6 +866,8 @@ export default function DriverTerminal() {
           origin: new window.google.maps.LatLng(originLat, originLng),
           destination: new window.google.maps.LatLng(destLat, destLng),
           travelMode: window.google.maps.TravelMode.DRIVING,
+          region: "GB",
+          language: "en-GB",
         });
         setDirections(result);
         if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
@@ -1051,6 +1098,7 @@ export default function DriverTerminal() {
               data.commissionRate !== undefined
                 ? Number(data.commissionRate)
                 : 0.12,
+            fixedTripFee: data.fixedTripFee !== undefined ? Number(data.fixedTripFee) : 0,
             allowRiderAbandonment: data.allowRiderAbandonment || false,
             surgeEnabled:
               data.surgeEnabled !== undefined
@@ -2764,7 +2812,7 @@ export default function DriverTerminal() {
           (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
         const baseFare = (activeRide.fareEstimate || 0) + waitFare;
         const totalFare = baseFare + (activeRide.tipAmount || 0);
-        const platformFee = baseFare * fareConfig.commissionRate;
+        const platformFee = (baseFare * fareConfig.commissionRate) + (fareConfig.fixedTripFee || 0);
 
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "completed",
@@ -2810,7 +2858,7 @@ export default function DriverTerminal() {
         );
 
         toast.warning("Cash Trip Recorded", {
-          description: `£${platformFee.toFixed(2)} (${(fareConfig.commissionRate * 100).toFixed(0)}%) platform fee has been added to your pending account balance.`,
+          description: `£${platformFee.toFixed(2)} (${(fareConfig.commissionRate * 100).toFixed(0)}%${fareConfig.fixedTripFee ? ` + £${fareConfig.fixedTripFee.toFixed(2)}` : ''}) platform fee has been added to your pending account balance.`,
           duration: 5000,
         });
       } catch (err) {
@@ -2830,7 +2878,7 @@ export default function DriverTerminal() {
           : null,
       );
       toast.warning("Demo: Cash Trip Recorded", {
-        description: `${(fareConfig.commissionRate * 100).toFixed(0)}% platform fee added to pending balance.`,
+        description: `${(fareConfig.commissionRate * 100).toFixed(0)}%${fareConfig.fixedTripFee ? ` + £${fareConfig.fixedTripFee.toFixed(2)}` : ''} platform fee added to pending balance.`,
       });
     }
 
@@ -2898,8 +2946,10 @@ export default function DriverTerminal() {
                       <p
                         className="text-[26px] text-[#007AFF] font-normal leading-tight drop-shadow-[0_2px_10px_rgba(255,255,255,1)] [text-shadow:_0_2px_8px_rgb(255_255_255_/_80%),_0_1px_2px_rgb(255_255_255_/_100%)] line-clamp-2"
                         dangerouslySetInnerHTML={{
-                          __html:
-                            directions.routes[0].legs[0].steps[0].instructions,
+                          __html: directions.routes[0].legs[0].steps[0].instructions
+                            .replace(/\bHead\b\s*(?:<[^>]*>)?\s*(?:north|south|east|west|northeast|northwest|southeast|southwest)(?:ward)?\s*(?:<[^>]*>)?/ig, 'Proceed')
+                            .replace(/\bMerge onto\b/ig, 'Join')
+                            .replace(/\bTraffic circle\b/ig, 'Roundabout')
                         }}
                       />
                       <div className="mt-2 inline-flex bg-[#1A1A1E] px-4 py-1.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-[#333338]">
@@ -3322,18 +3372,6 @@ export default function DriverTerminal() {
                                 : "text-[#00D26A]",
                             )}
                           />
-                        </button>
-                        <button
-                          onClick={handleToggleVoiceVolume}
-                          className="w-[34px] h-[34px] rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(0,0,0,0.4)] active:scale-95 transition-transform shrink-0 mt-3 bg-[#1A1A1E] border border-[#333338]"
-                        >
-                          {navVoiceVolume === 1.0 ? (
-                            <Volume2 className="w-[16px] h-[16px] text-white" />
-                          ) : navVoiceVolume === 0.5 ? (
-                            <Volume1 className="w-[16px] h-[16px] text-white" />
-                          ) : (
-                            <VolumeX className="w-[16px] h-[16px] text-[#A0A0A5]" />
-                          )}
                         </button>
                       </>
                     )}
@@ -3835,7 +3873,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (activeRide?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !activeRide?.isSimulated
@@ -4102,7 +4140,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !stackedRideOffer?.isSimulated
@@ -4463,7 +4501,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !stackedRideOffer?.isSimulated
@@ -4732,7 +4770,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !stackedRideOffer?.isSimulated
@@ -5093,7 +5131,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !stackedRideOffer?.isSimulated
@@ -5362,7 +5400,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !stackedRideOffer?.isSimulated
@@ -5723,7 +5761,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !stackedRideOffer?.isSimulated
@@ -5992,7 +6030,7 @@ export default function DriverTerminal() {
                           {(() => {
                             let finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate);
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
                             if (
                               fareConfig.surgeEnabled &&
                               !stackedRideOffer?.isSimulated
@@ -6902,7 +6940,7 @@ export default function DriverTerminal() {
                               : (activeRide?.fareEstimate || 38.5) +
                                 (totalPaidWaitSeconds / 60) *
                                   fareConfig.waitRatePerMinute) *
-                              (1 - fareConfig.commissionRate) +
+                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0) +
                             (activeRide?.tipAmount || 0)
                           ).toFixed(2)}
                         </p>
@@ -6999,8 +7037,7 @@ export default function DriverTerminal() {
                           : (activeRide?.fareEstimate || 38.5) +
                             (totalPaidWaitSeconds / 60) *
                               fareConfig.waitRatePerMinute;
-                        const commission =
-                          baseJobFare * fareConfig.commissionRate;
+                        const commission = baseJobFare * fareConfig.commissionRate + (fareConfig.fixedTripFee || 0);
                         const normalEarnings = baseJobFare - commission;
                         const totalEarnings =
                           normalEarnings + (activeRide?.tipAmount || 0);
@@ -7015,7 +7052,7 @@ export default function DriverTerminal() {
                               <span>
                                 Commission (
                                 {(fareConfig.commissionRate * 100).toFixed(0)}
-                                %):
+                                %{fareConfig.fixedTripFee ? ` + £${fareConfig.fixedTripFee.toFixed(2)}` : ''}):
                               </span>
                               <span>-£{commission.toFixed(2)}</span>
                             </div>

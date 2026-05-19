@@ -3,7 +3,7 @@ import { db, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, collect
 import { 
   Car, MapPin, DollarSign, Clock, Globe, AlertCircle, Save, Loader2, 
   Settings2, Activity, Play, CheckCircle2, Calendar, ClipboardList, TrendingUp, Users, X,
-  Map, Navigation, Send, CheckCircle, Trash2, QrCode
+  Map, Navigation, Send, CheckCircle, Trash2, QrCode, Banknote
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
@@ -26,6 +26,7 @@ export default function RidesCommandCenter() {
     waitRatePerMinute: 0.25,
     minFare: 5.0,
     commission: 12,
+    fixedTripFee: 0.20,
     allowRiderAbandonment: false,
     dispatchRadiusMiles: 15,
     dispatchTimeoutSeconds: 15,
@@ -126,7 +127,7 @@ export default function RidesCommandCenter() {
 
   const isConfigEqual = (c1: any, c2: any) => {
     if (!c1 || !c2) return false;
-    const keys = ['baseFare', 'distanceRate', 'timeRate', 'waitRatePerMinute', 'minFare', 'commission', 'vehicleTypes', 'peakMultipliers', 'surcharges', 'allowRiderAbandonment', 'dispatchRadiusMiles', 'dispatchTimeoutSeconds', 'autoDispatchEnabled'];
+    const keys = ['baseFare', 'distanceRate', 'timeRate', 'waitRatePerMinute', 'minFare', 'commission', 'fixedTripFee', 'vehicleTypes', 'peakMultipliers', 'surcharges', 'allowRiderAbandonment', 'dispatchRadiusMiles', 'dispatchTimeoutSeconds', 'autoDispatchEnabled'];
     return keys.every(key => JSON.stringify(c1[key]) === JSON.stringify(c2[key]));
   };
 
@@ -144,6 +145,8 @@ export default function RidesCommandCenter() {
         waitRatePerMinute: Number(config.waitRatePerMinute) || 0,
         minFare: Number(config.minFare) || 0,
         commission: Number(config.commission) || 0,
+        commissionRate: (Number(config.commission) || 12) / 100,
+        fixedTripFee: Number(config.fixedTripFee) || 0,
         allowRiderAbandonment: Boolean(config.allowRiderAbandonment),
         dispatchRadiusMiles: Number(config.dispatchRadiusMiles) || 15,
         dispatchTimeoutSeconds: Number(config.dispatchTimeoutSeconds) || 15,
@@ -955,6 +958,20 @@ export default function RidesCommandCenter() {
                   className="w-full bg-white border-2 border-emerald-100 rounded-2xl px-4 py-3 font-black text-slate-900 focus:border-emerald-500 outline-none shadow-sm transition-all" 
                 />
                 <p className="text-[10px] font-medium text-emerald-700">Disrupter Value! {config.commission}% commission leaves £{(100-config.commission)/100 * 10} take home on £10.</p>
+              </div>
+
+              <div className="space-y-3 p-6 bg-emerald-50/50 rounded-3xl border border-emerald-100">
+                <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                  <Banknote className="w-3 h-3" /> Fixed Trip Fee (£)
+                </label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={isNaN(config.fixedTripFee) ? "" : config.fixedTripFee} 
+                  onChange={e => setConfig({...config, fixedTripFee: parseFloat(e.target.value)})}
+                  className="w-full bg-white border-2 border-emerald-100 rounded-2xl px-4 py-3 font-black text-slate-900 focus:border-emerald-500 outline-none shadow-sm transition-all" 
+                />
+                <p className="text-[10px] font-medium text-emerald-700">Flat fee charged to driver per completed trip (e.g. £0.20).</p>
               </div>
 
               <button 
