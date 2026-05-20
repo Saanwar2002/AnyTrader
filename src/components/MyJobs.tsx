@@ -24,7 +24,7 @@ export default function MyJobs() {
   const isHistoryView = new URLSearchParams(location.search).get("history") === "true";
   const propertyId = new URLSearchParams(location.search).get("propertyId");
 
-  const [filter, setFilter] = useState<"all" | "pending" | "cancelled" | "completed">(propertyId ? "all" : "pending");
+  const [filter, setFilter] = useState<"all" | "active" | "cancelled" | "completed">(propertyId ? "all" : "active");
   const [selectedJobMedia, setSelectedJobMedia] = useState<any | null>(null);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export default function MyJobs() {
     // If filtering by a specific property, show all its jobs (unless a specific tab is selected)
     if (propertyId) {
       if (filter === "all") return true;
-      if (filter === "pending") return job.status !== "completed" && job.status !== "cancelled";
+      if (filter === "active") return job.status !== "completed" && job.status !== "cancelled";
       if (filter === "cancelled") return job.status === "cancelled";
       if (filter === "completed") return job.status === "completed";
       return true;
@@ -83,7 +83,7 @@ export default function MyJobs() {
 
     // Apply UI filters on top of visibility logic
     if (filter === "all") return true;
-    if (filter === "pending") return job.status !== "completed" && job.status !== "cancelled";
+    if (filter === "active") return job.status !== "completed" && job.status !== "cancelled";
     if (filter === "cancelled") return job.status === "cancelled";
     if (filter === "completed") return job.status === "completed";
     return true;
@@ -306,7 +306,7 @@ export default function MyJobs() {
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
             {[
               { id: "all", label: "All" },
-              { id: "pending", label: "Pending" },
+              { id: "active", label: "Active" },
               { id: "completed", label: "Completed" },
               { id: "cancelled", label: "Cancelled" }
             ].map((tab) => (

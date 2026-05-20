@@ -835,20 +835,27 @@ export function ConsultancyProjects({ clientId }: { clientId?: string }) {
                         {expandedId === project.id ? <ChevronUp className="w-4 h-4 text-black" /> : <ChevronDown className="w-4 h-4 text-black" />}
                      </div>
                   </div>
-                  <div className="pt-3 border-t border-black/10">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="w-3 h-3 text-slate-400" />
-                          <span className="text-xs font-bold text-black">{project.completedTasks || 0} / {project.totalTasks || 0} Tasks</span>
+                      <div className="pt-3 border-t border-black/10 relative">
+                        {project.status === 'completed' && expandedId === project.id && (
+                          <div className="absolute top-2 right-2 z-10 pointer-events-none">
+                             <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm whitespace-pre-line text-center">
+                               COMPLETED
+                             </span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="w-3 h-3 text-slate-400" />
+                              <span className="text-xs font-bold text-black">{project.completedTasks || 0} / {project.totalTasks || 0} Tasks</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span className="text-xs font-bold text-black">{project.loggedHours || 0} hrs</span>
+                            </div>
+                          </div>
+                          <div />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span className="text-xs font-bold text-black">{project.loggedHours || 0} hrs</span>
-                        </div>
-                      </div>
-                      <div />
-                    </div>
                     {expandedId === project.id && (
                       <div className="space-y-4 mt-4">
                         <ProjectMilestones projectId={project.id} />

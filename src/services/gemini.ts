@@ -64,11 +64,12 @@ async function callGemini(params: {
     });
     return response;
   } catch (error: any) {
-    const errorMsg = error?.message || String(error);
+    const errorStr = typeof error === 'object' ? JSON.stringify(error) : String(error);
+    const errorMsg = error?.message || errorStr;
     if (!(errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("rate limit"))) {
       console.error("Gemini API Error:", error);
     }
-    throw error;
+    throw new Error(errorMsg);
   }
 }
 
@@ -953,7 +954,20 @@ export async function getMaintenancePredictions(
     const text = response.text || "[]";
     const jsonMatch = text.match(/\[.*\]/s);
     return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-  } catch (error) {
+  } catch (error: any) {
+    const errorStr = typeof error === 'object' ? JSON.stringify(error) : String(error);
+    if (error?.status === 429 || error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED" || error?.message?.includes("quota") || errorStr.includes("429") || errorStr.includes("quota") || errorStr.includes("RESOURCE_EXHAUSTED")) {
+      console.warn("Gemini Rate Limit Exceeded - using fallback prediction.");
+      return [
+        {
+          Title: "Annual System Check",
+          Category: "MAINTENANCE",
+          DueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+          Reason: "Regular maintenance ensures optimal performance.",
+          Urgency: "Medium"
+        }
+      ];
+    }
     console.error("Gemini Maintenance Prediction Error:", error);
     return [];
   }

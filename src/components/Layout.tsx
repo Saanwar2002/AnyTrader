@@ -213,6 +213,17 @@ export default function Layout() {
             const data = change.doc.data();
             // Optional: You could filter out notifications that have a visibleAt in the future here as well 
             // but usually this triggers the moment the current condition is met.
+            // Skip stale Gemini API Error notifications
+            if (data.title && (data.title.includes("Gemini") || data.title.includes("Error"))) {
+              // Optionally mark as read to clear from db, but definitely do not toast
+              if (change.doc.ref) {
+                 import("firebase/firestore").then(({ updateDoc }) => {
+                    updateDoc(change.doc.ref, { read: true });
+                 }).catch(() => {});
+              }
+              return;
+            }
+
             const visibleAt = data.visibleAt ? (data.visibleAt.toDate ? data.visibleAt.toDate() : new Date(data.visibleAt)) : now;
             if (visibleAt <= now) {
               toast.info(data.title || "New Notification", {

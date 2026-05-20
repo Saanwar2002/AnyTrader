@@ -384,7 +384,7 @@ export default function DriverExpenses({ onClose }: { onClose?: () => void }) {
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#1A1A1E', borderColor: '#2C2C30', borderRadius: '12px' }}
                     itemStyle={{ color: 'white', fontWeight: 'bold' }}
-                    formatter={(value: number) => [`£${value.toFixed(2)}`, 'Spend']}
+                    formatter={(value: any) => [`£${(value || 0).toFixed(2)}`, 'Spend']}
                   />
                   <Pie
                     data={chartData}

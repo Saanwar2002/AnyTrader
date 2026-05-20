@@ -119,7 +119,7 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
               <div className="bg-[#1A1A1E] border border-white/20 p-4 rounded-xl flex items-center justify-between">
                 <div className="flex flex-col gap-1">
                   <span className="text-white font-medium">{homeLocation.address}</span>
-                  <span className="text-xs text-slate-400">Lat: {homeLocation.lat.toFixed(4)}, Lng: {homeLocation.lng.toFixed(4)}</span>
+                  <span className="text-xs text-slate-400">Lat: {homeLocation.lat?.toFixed(4)}, Lng: {homeLocation.lng?.toFixed(4)}</span>
                 </div>
                 <button onClick={() => setHomeLocation(null)} className="text-[#A1A1AA] text-sm underline px-2 py-1">
                   Change

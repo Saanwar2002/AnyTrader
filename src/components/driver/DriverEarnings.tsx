@@ -1056,7 +1056,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                             cursor={{ fill: '#252529' }}
                             contentStyle={{ backgroundColor: '#1A1A1E', borderColor: '#2C2C30', borderRadius: '12px' }}
                             itemStyle={{ color: '#00D26A', fontWeight: 'bold' }}
-                            formatter={(value: number) => [`£${value.toFixed(2)}`, 'Earnings']}
+                            formatter={(value: any) => [`£${(value || 0).toFixed(2)}`, 'Earnings']}
                           />
                           <Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                         </BarChart>
@@ -1073,7 +1073,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                           <Tooltip 
                             contentStyle={{ backgroundColor: '#1A1A1E', borderColor: '#2C2C30', borderRadius: '12px' }}
                             itemStyle={{ color: '#00D26A', fontWeight: 'bold' }}
-                            formatter={(value: number) => [`£${value.toFixed(2)}`, 'Earnings']}
+                            formatter={(value: any) => [`£${(value || 0).toFixed(2)}`, 'Earnings']}
                           />
                           <Area type="monotone" dataKey="value" stroke="#00D26A" strokeWidth={3} fillOpacity={1} fill="url(#colorEarnings)" />
                         </AreaChart>

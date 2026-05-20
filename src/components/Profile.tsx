@@ -1765,7 +1765,7 @@ export default function Profile() {
                     <div className="flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
                       <Star className="w-3 h-3 text-blue-600 fill-blue-600" />
                       <span className="text-[10px] font-bold text-blue-700">
-                        Homeowner Rating: {profile.homeownerRating.toFixed(1)} ({profile.totalHomeownerReviews || 0})
+                        Homeowner Rating: {profile.homeownerRating?.toFixed(1) || '5.0'} ({profile.totalHomeownerReviews || 0})
                       </span>
                     </div>
                   )}

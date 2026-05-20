@@ -2261,7 +2261,7 @@ export default function PostJobWizard() {
 
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-black mt-2">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">House / Flat *</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">House / Flat</label>
                     <input 
                       type="text" 
                       placeholder="e.g. 42 or Flat 3B"
@@ -2637,7 +2637,7 @@ export default function PostJobWizard() {
                     </div>
                     <div className="flex-1 pr-6">
                       <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-base font-extrabold text-slate-900 tracking-tight">Instant Match <span className="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="font-black ml-0.5">From £{(instantMatchCopy.price || 2.49).toFixed(2)}</span></h4>
+                        <h4 className="text-base font-extrabold text-slate-900 tracking-tight">Instant Match <span className="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="font-black ml-0.5">From £{(instantMatchCopy?.price || 2.49).toFixed(2)}</span></h4>
                       </div>
                       <p className="text-sm text-slate-600 leading-snug">
                         Instant Match premium value gets you started and connects you to a record number of tradespeople.
@@ -2743,11 +2743,11 @@ export default function PostJobWizard() {
             <div className="flex-[3] flex gap-3">
               <button 
                 onClick={handleEstimate} 
-                disabled={!formData.houseNumber || !formData.city || !formData.postcode || !!postcodeError || isUploading || isEstimating || (formData.urgency === "specific_date" && !formData.jobDate)}
+                disabled={!formData.city || !formData.postcode || !!postcodeError || isUploading || isEstimating || (formData.urgency === "specific_date" && !formData.jobDate)}
                 id="wizard-next-step-4"
                 className={cn(
                   "flex-[2] p-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all",
-                  (formData.houseNumber && formData.city && formData.postcode && !postcodeError && !isUploading && !isEstimating && (formData.urgency !== "specific_date" || formData.jobDate))
+                  (formData.city && formData.postcode && !postcodeError && !isUploading && !isEstimating && (formData.urgency !== "specific_date" || formData.jobDate))
                     ? "bg-[#0084a5] text-white shadow-xl shadow-cyan-500/20 active:scale-95" 
                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
                 )}

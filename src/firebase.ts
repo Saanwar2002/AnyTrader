@@ -109,7 +109,14 @@ export const submitReview = async (
     const isLowRating = rating <= 2 && type === "tradesperson_review";
     
     await runTransaction(db, async (transaction) => {
-      // 1. Create the review document
+      // 1. ALL READS FIRST
+      const userRef = doc(db, "users", revieweeId);
+      let userSnap = null;
+      if (!isLowRating) {
+        userSnap = await transaction.get(userRef);
+      }
+
+      // 2. ALL WRITES AFTER READS
       const reviewRef = doc(collection(db, "reviews"));
       const status = isLowRating ? "cooling_off" : "published";
       const publishAt = isLowRating ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) : new Date();
@@ -128,41 +135,36 @@ export const submitReview = async (
         createdAt: serverTimestamp()
       });
 
-      // 2. Update the reviewee's profile (only if not in cooling off)
-      if (!isLowRating) {
-        const userRef = doc(db, "users", revieweeId);
-        const userSnap = await transaction.get(userRef);
+      // Update the reviewee's profile (only if not in cooling off)
+      if (!isLowRating && userSnap && userSnap.exists()) {
+        const userData = userSnap.data();
         
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
+        if (type === "tradesperson_review") {
+          const currentRating = userData.rating || 0;
+          const currentTotalReviews = userData.totalReviews || 0;
+          const currentTotalRecommendations = userData.totalRecommendations || 0;
           
-          if (type === "tradesperson_review") {
-            const currentRating = userData.rating || 0;
-            const currentTotalReviews = userData.totalReviews || 0;
-            const currentTotalRecommendations = userData.totalRecommendations || 0;
-            
-            const newTotalReviews = currentTotalReviews + 1;
-            const newRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
-            const newTotalRecommendations = recommended ? currentTotalRecommendations + 1 : currentTotalRecommendations;
-            
-            transaction.update(userRef, {
-              rating: newRating,
-              totalReviews: newTotalReviews,
-              totalRecommendations: newTotalRecommendations
-            });
-          } else {
-            // Homeowner review
-            const currentRating = userData.homeownerRating || 0;
-            const currentTotalReviews = userData.totalHomeownerReviews || 0;
-            
-            const newTotalReviews = currentTotalReviews + 1;
-            const newRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
-            
-            transaction.update(userRef, {
-              homeownerRating: newRating,
-              totalHomeownerReviews: newTotalReviews
-            });
-          }
+          const newTotalReviews = currentTotalReviews + 1;
+          const newRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
+          const newTotalRecommendations = recommended ? currentTotalRecommendations + 1 : currentTotalRecommendations;
+          
+          transaction.update(userRef, {
+            rating: newRating,
+            totalReviews: newTotalReviews,
+            totalRecommendations: newTotalRecommendations
+          });
+        } else {
+          // Homeowner review
+          const currentRating = userData.homeownerRating || 0;
+          const currentTotalReviews = userData.totalHomeownerReviews || 0;
+          
+          const newTotalReviews = currentTotalReviews + 1;
+          const newRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
+          
+          transaction.update(userRef, {
+            homeownerRating: newRating,
+            totalHomeownerReviews: newTotalReviews
+          });
         }
       }
 

@@ -1017,8 +1017,11 @@ const libraries: any[] = ['places'];
         paymentStatus: newPaymentStatus
       }));
       
-      // Notify tradesperson and update their stats
+      // Determine who initiated and notify the other party
+      const isHomeownerCall = user.uid === job.homeownerId;
       const acceptedQuote = quotes.find(q => q.status === "accepted");
+      const otherUserId = isHomeownerCall ? (acceptedQuote?.tradespersonId) : job.homeownerId;
+      
       if (acceptedQuote) {
         // Phantom Billing Calculation
         const potentialFee = (acceptedQuote.amount || 0) * 0.15; // 15% Success Fee (PAYG rate)
@@ -1039,14 +1042,22 @@ const libraries: any[] = ['places'];
           tpUpdateData.boostedEmergencyJobsDone = increment(1);
         }
 
-        if (Object.keys(tpUpdateData).length > 0) {
-          await updateDoc(tpRef, tpUpdateData);
+        try {
+          if (Object.keys(tpUpdateData).length > 0) {
+            await updateDoc(tpRef, tpUpdateData);
+          }
+        } catch (tpErr) {
+          console.error("Error updating tradesperson profile:", tpErr);
         }
+      }
 
+      if (otherUserId) {
         await sendNotification(
-          acceptedQuote.tradespersonId,
-          "Job Completed!",
-          `The homeowner has marked "${job.title}" as completed. You can now review them.`,
+          otherUserId,
+          isHomeownerCall ? "Job Completed!" : "Payment Requested",
+          isHomeownerCall 
+            ? `The homeowner has marked "${job.title}" as completed. You can now review them.`
+            : `The tradesperson has marked "${job.title}" as completed and requested payment.`,
           "status",
           `/job/${id}`
         );
@@ -1908,16 +1919,26 @@ const libraries: any[] = ['places'];
   };
 
   const handleDownloadInvoice = () => {
-    if (!job || !myQuote || !profile) return;
+    const activeQuote = myQuote || quotes.find(q => q.status === "accepted");
+    if (!job || !activeQuote) return;
     
+    const tpProfile = tradespersonProfiles[activeQuote.tradespersonId] || profile;
+
     const invoiceWindow = window.open('', '_blank');
     if (!invoiceWindow) return;
+
+    const isPaid = job.paymentStatus === 'paid' || job.paymentStatus === 'handshake_complete' || job.isPaid;
+    const documentType = isPaid ? 'RECEIPT' : 'INVOICE';
+    
+    const baseAmount = activeQuote.amount;
+    const vatAmount = baseAmount * 0.20;
+    const totalAmount = baseAmount + vatAmount;
 
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Invoice - ${job.title}</title>
+        <title>${documentType} - ${job.title}</title>
         <style>
           body { font-family: system-ui, -apple-system, sans-serif; color: #333; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px; }
           .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
@@ -1926,7 +1947,7 @@ const libraries: any[] = ['places'];
           .section { margin-bottom: 30px; }
           .section-title { font-size: 14px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-          table { w-full; border-collapse: collapse; margin-top: 20px; width: 100%; }
+          table { border-collapse: collapse; margin-top: 20px; width: 100%; }
           th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
           th { background-color: #f8fafc; font-weight: bold; color: #64748b; }
           .total-row { font-weight: bold; font-size: 18px; }
@@ -1937,21 +1958,21 @@ const libraries: any[] = ['places'];
       <body>
         <div class="header">
           <div>
-            <h1 class="title">INVOICE</h1>
+            <h1 class="title">${documentType}</h1>
             <p style="margin-top: 5px; color: #666;">Job No: ${job.jobNo || job.id.substring(0, 8).toUpperCase()}</p>
           </div>
           <div class="invoice-details">
             <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-            <p><strong>Status:</strong> Paid / Completed</p>
+            <p><strong>Status:</strong> ${isPaid ? 'Paid / Completed' : 'Pending Payment'}</p>
           </div>
         </div>
 
         <div class="grid section">
           <div>
             <div class="section-title">From (Tradesperson)</div>
-            <p><strong>${profile.name}</strong></p>
-            <p>${profile.trades?.join(', ') || 'Professional Tradesperson'}</p>
-            <p>${profile.email || ''}</p>
+            <p><strong>${tpProfile?.name || 'Tradesperson'}</strong></p>
+            <p>${tpProfile?.trades?.join(', ') || 'Professional Tradesperson'}</p>
+            <p>${tpProfile?.email || ''}</p>
           </div>
           <div>
             <div class="section-title">To (Customer)</div>
@@ -1978,19 +1999,23 @@ const libraries: any[] = ['places'];
               <td>
                 Agreed Quote for Services
                 <br>
-                <small style="color: #666;">Scope: ${myQuote.quoteScope === 'labour_only' ? 'Labour Only' : 'Complete Package (Labour & Materials)'}</small>
+                <small style="color: #666;">Scope: ${activeQuote.quoteScope === 'labour_only' ? 'Labour Only' : 'Complete Package (Labour & Materials)'}</small>
               </td>
-              <td style="text-align: right;">£${myQuote.amount.toFixed(2)}</td>
+              <td style="text-align: right;">£${baseAmount.toFixed(2)}</td>
             </tr>
-            ${myQuote.revisionCount && myQuote.revisionCount > 0 ? `
+            ${activeQuote.revisionCount && activeQuote.revisionCount > 0 ? `
             <tr>
               <td>Agreed Revisions / Scope Changes</td>
               <td style="text-align: right;">Included</td>
             </tr>
             ` : ''}
+            <tr>
+              <td>VAT (20%)</td>
+              <td style="text-align: right;">£${vatAmount.toFixed(2)}</td>
+            </tr>
             <tr class="total-row">
               <td style="text-align: right; padding-top: 20px;">Total Due:</td>
-              <td style="text-align: right; padding-top: 20px;">£${myQuote.amount.toFixed(2)}</td>
+              <td style="text-align: right; padding-top: 20px;">£${totalAmount.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
@@ -3188,6 +3213,11 @@ const libraries: any[] = ['places'];
               {job.category} • {job.subcategory}
             </p>
             <h1 className="text-3xl font-black text-slate-900 leading-tight">
+              {job.status === 'completed' && (
+                <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm mr-2 mb-2 whitespace-pre-line text-center align-middle">
+                  COMPLETED{job.completedAt ? ` ON\n${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
+                </span>
+              )}
               {job.title}
             </h1>
           </div>
@@ -4144,7 +4174,7 @@ const libraries: any[] = ['places'];
                       <p className="text-[10px] text-blue-50 font-medium leading-relaxed">
                         {quote.paymentTrack === 'quick' 
                           ? "Small jobs under £400 use our Handshake Protocol. Payment transfers directly to the trader's Stripe account upon scan, with a high-priority 24-hour window for dispute clawbacks."
-                          : "Our **Platform Guarantee** ensures your payment routes directly to the trader's Stripe account. Payout settlement is delayed by a 7-day cooling-off period, allowing us to process automatic clawbacks if you raise a valid dispute."}
+                          : "Our **Platform Guarantee** ensures your payment routes directly to the trader's Stripe account. Payout settlement is delayed by a 48-hour cooling-off period, allowing us to process automatic clawbacks if you raise a valid dispute."}
                       </p>
                     </div>
                   </div>

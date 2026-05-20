@@ -1,0 +1,88 @@
+src/components/shared/ProMatchmakerModal.tsx:221:                            {m.averageRating ? m.averageRating.toFixed(1) : "New"}
+src/components/ConsultancyProjects.tsx:553:          NET: <span className={netProfit >= 0 ? "text-emerald-600" : "text-rose-600"}>£{netProfit.toFixed(2)}</span>
+src/components/ConsultancyProjects.tsx:561:            <span className="text-xs font-bold text-black font-mono">£{totalExpenses.toFixed(2)} / £{budget.toFixed(2)}</span>
+src/components/ConsultancyProjects.tsx:575:          <div className="font-mono text-black font-bold">£{totalInvoiced.toFixed(2)}</div>
+src/components/ConsultancyProjects.tsx:579:          <div className="font-mono text-black font-bold">£{totalExpenses.toFixed(2)}</div>
+src/components/driver/DriverTerminal.tsx:302:  return `${miles.toFixed(1)} MILES`;
+src/components/driver/DriverTerminal.tsx:1411:                description: `You have been credited £${data.cancellationFee.toFixed(2)} for the cancellation.`,
+src/components/driver/DriverTerminal.tsx:3722:                        Includes £{activeRide.tipAmount.toFixed(2)} Tip
+src/components/driver/DriverTerminal.tsx:4092:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:4355:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:4721:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:4985:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:5351:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:5615:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:5981:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:6245:                                You earn: £{finalPayout.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:7111:                          Includes £{activeRide.tipAmount.toFixed(2)} Tip
+src/components/driver/DriverTerminal.tsx:7142:                            £{fareConfig.baseFare.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:7183:                              +£{fareConfig.priorityFee.toFixed(2)}
+src/components/driver/DriverTerminal.tsx:7233:                              <span>£{baseJobFare.toFixed(2)}</span>
+src/components/driver/DriverTerminal.tsx:7239:                                %{fareConfig.fixedTripFee ? ` + £${fareConfig.fixedTripFee.toFixed(2)}` : ''}):
+src/components/driver/DriverTerminal.tsx:7241:                              <span>-£{commission.toFixed(2)}</span>
+src/components/driver/DriverTerminal.tsx:7245:                              <span>£{normalEarnings.toFixed(2)}</span>
+src/components/driver/DriverTerminal.tsx:7250:                                <span>+£{activeRide.tipAmount.toFixed(2)}</span>
+src/components/driver/DriverTerminal.tsx:7255:                              <span>£{totalEarnings.toFixed(2)}</span>
+src/components/driver/InsuranceMarketplace.tsx:184:                                   <span className="font-bold text-white">{partner.rating.toFixed(1)}</span>
+src/components/driver/DriverExpenses.tsx:366:                £{totalSpend.toFixed(2)}
+src/components/driver/DriverExpenses.tsx:387:                    formatter={(value: number) => [`£${value.toFixed(2)}`, 'Spend']}
+src/components/driver/DriverExpenses.tsx:407:                <span className="text-sm font-black text-white">£{totalSpend.toFixed(0)}</span>
+src/components/driver/DriverExpenses.tsx:420:                      <span className="text-sm font-black text-white">£{amnt.toFixed(2)}</span>
+src/components/driver/DriverFullTripHistory.tsx:142:                        £{totalFare.toFixed(2)}
+src/components/driver/DriverFullTripHistory.tsx:215:                                     <span>£{totalFare.toFixed(2)}</span>
+src/components/driver/DriverFullTripHistory.tsx:219:                                     <span>-£{commission.toFixed(2)}</span>
+src/components/driver/DriverFullTripHistory.tsx:224:                                        <span>+£{trip.tipAmount.toFixed(2)}</span>
+src/components/driver/DriverEarnings.tsx:183:        const earnings = driverEarned.toFixed(2);
+src/components/driver/DriverEarnings.tsx:184:        const gross = grossFare.toFixed(2);
+src/components/driver/DriverEarnings.tsx:528:        toast.success(`Withdrawal of £${stripeBalance.available.toFixed(2)} initiated.`);
+src/components/driver/DriverEarnings.tsx:622:                : `£${stripeBalance.available.toFixed(2)}`}
+src/components/driver/DriverEarnings.tsx:634:                £{stripeBalance.pending.toFixed(2)}
+src/components/driver/DriverEarnings.tsx:985:                                  <p className="text-sm font-black text-[#00D26A] shrink-0">£{driverEarned.toFixed(2)}</p>
+src/components/driver/DriverEarnings.tsx:1059:                            formatter={(value: number) => [`£${value.toFixed(2)}`, 'Earnings']}
+src/components/driver/DriverEarnings.tsx:1076:                            formatter={(value: number) => [`£${value.toFixed(2)}`, 'Earnings']}
+src/components/driver/DriverEarnings.tsx:1098:                      <p className="text-lg font-black text-[#00D26A]">£{item.total.toFixed(2)}</p>
+src/components/driver/DriverEarnings.tsx:1175:                           Insufficient Earnings (£{stripeBalance.available.toFixed(2)})
+src/components/driver/DriverAvailability.tsx:218:                   <span className="text-white">{onlineHours.toFixed(1)}h driven</span>
+src/components/driver/DriverAvailability.tsx:219:                   <span className="text-[#00D26A]">{remainingHours.toFixed(1)}h remaining</span>
+src/components/driver/DriverJobs.tsx:291:                                  <span className="font-bold">+£{job.tipAmount.toFixed(2)}</span>
+src/components/driver/DriverZones.tsx:122:                  <span className="text-xs text-slate-400">Lat: {homeLocation.lat.toFixed(4)}, Lng: {homeLocation.lng.toFixed(4)}</span>
+src/components/TradesDashboard.tsx:731:          <p className="text-lg sm:text-lg font-black text-slate-900 truncate leading-none">{profile?.rating ? profile.rating.toFixed(1) : "N/A"}</p>
+src/components/passenger/PassengerRideHistory.tsx:638:                      <span>+£{selectedRideDetails.tipAmount.toFixed(2)}</span>
+src/components/passenger/PassengerBooking.tsx:1393:      toast.error(`Account Hold: You have £${pendingCharges.toFixed(2)} in unpaid cancellation fees. Please pay the outstanding balance to book another ride.`);
+src/components/passenger/PassengerBooking.tsx:1398:      toast.warning(`Notice: £${pendingCharges.toFixed(2)} unpaid cancellation fee will be added to this trip's fare.`);
+src/components/passenger/PassengerBooking.tsx:1423:        distanceMiles: Number(distanceMiles.toFixed(1)),
+src/components/passenger/PassengerBooking.tsx:1424:        durationMinutes: Number(durationMinutes.toFixed(0)),
+src/components/passenger/PassengerBooking.tsx:3286:                                 <div className="flex justify-between"><span>Journey Fare:</span><span>£{base.toFixed(2)}</span></div>
+src/components/passenger/PassengerBooking.tsx:3287:                                 {vehicleExtra > 0 && <div className="flex justify-between text-slate-600"><span>Vehicle Upgrade ({CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}):</span><span>+£{vehicleExtra.toFixed(2)}</span></div>}
+src/components/passenger/PassengerBooking.tsx:3288:                                 {surgeExtra > 0 && <div className="flex justify-between text-red-600 font-bold"><span>High Demand Surge:</span><span>+£{surgeExtra.toFixed(2)}</span></div>}
+src/components/passenger/PassengerBooking.tsx:3720:                              Includes{isPriority ? " £3.00 priority" : ""}{isPriority && (assignedDriverInfo?.tipAmount || 0) > 0 ? " & " : ""}{(assignedDriverInfo?.tipAmount || 0) > 0 ? `£${assignedDriverInfo!.tipAmount.toFixed(2)} tip` : ""}
+src/components/passenger/PassengerBooking.tsx:3783:                          {((assignedDriverInfo?.tipAmount || 0) > 0 && ![2, 3, 5].includes(assignedDriverInfo?.tipAmount || 0)) ? `£${assignedDriverInfo!.tipAmount.toFixed(2)}` : "Custom"}
+src/components/passenger/PassengerBooking.tsx:3834:                            <>Your driver has been on the way for over 2 minutes. A cancellation fee of <span className="text-slate-900 font-bold">£{cancelFeeToApply.toFixed(2)}</span> will apply.</>
+src/components/passenger/PassengerBooking.tsx:3951:                          Includes{completedRideData.isPriority ? " £3.00 priority" : ""}{completedRideData.isPriority && (completedRideData.tipAmount || 0) > 0 ? " & " : ""}{(completedRideData.tipAmount || 0) > 0 ? `£${completedRideData.tipAmount.toFixed(2)} tip` : ""}
+src/components/passenger/PassengerBooking.tsx:3989:                      <span>+£{completedRideData.tipAmount.toFixed(2)}</span>
+src/components/passenger/PassengerBooking.tsx:4268:                                 <span className="text-[#0a1930]">£{base.toFixed(2)}</span>
+src/components/passenger/PassengerBooking.tsx:4273:                                   <span>+£{vehicleExtra.toFixed(2)}</span>
+src/components/passenger/PassengerBooking.tsx:4279:                                   <span>+£{surgeExtra.toFixed(2)}</span>
+src/components/TraderAdStudio.tsx:282:                <p><strong>Your CPC:</strong> £{tierCost.toFixed(2)}/click (Based on {profile?.subscriptionType || 'Free'} Tier)</p>
+src/components/AnyTraderAdmin.tsx:1991:                              ROI: £{u.phantomFeesSaved.toFixed(2)}
+src/components/AnyTraderAdmin.tsx:3734:                  <p className="text-3xl font-black text-slate-900 mt-1">£{mrr.toFixed(2)}</p>
+src/components/Profile.tsx:1768:                        Homeowner Rating: {profile.homeownerRating.toFixed(1)} ({profile.totalHomeownerReviews || 0})
+src/components/QuoteComparisonModal.tsx:170:                                {tpProfile?.rating ? tpProfile.rating.toFixed(1) : "5.0"}
+src/components/TradesBannerAdStudio.tsx:67:      alert(`Insufficient funds. Your wallet balance is £${walletBalance.toFixed(2)}, but this campaign costs £${totalCost.toFixed(2)}.`);
+src/components/TradesBannerAdStudio.tsx:171:              £{walletBalance.toFixed(2)}
+src/components/TradesBannerAdStudio.tsx:193:            <h3 className="text-4xl font-black text-amber-400 mb-1">£{DAILY_RATE.toFixed(2)}<span className="text-xl text-slate-400">/day</span></h3>
+src/components/RidesCommandCenter.tsx:1107:                          <p className="text-6xl font-black text-white tracking-tighter">£{displayedPrice.toFixed(2)}</p>
+src/components/RidesCommandCenter.tsx:1128:                          <p className="text-6xl font-black text-emerald-400 tracking-tighter">£{finalDriverPayout.toFixed(2)}</p>
+src/components/JobDetails.tsx:2004:              <td style="text-align: right;">£${baseAmount.toFixed(2)}</td>
+src/components/JobDetails.tsx:2014:              <td style="text-align: right;">£${vatAmount.toFixed(2)}</td>
+src/components/JobDetails.tsx:2018:              <td style="text-align: right; padding-top: 20px;">£${totalAmount.toFixed(2)}</td>
+src/components/JobDetails.tsx:3774:                            {tpProfile?.rating ? tpProfile.rating.toFixed(1) : "5.0"} ({tpProfile?.totalReviews || 0} reviews)
+src/components/JobDetails.tsx:4535:                      <span>-£{payoutSummary.platformCommission.toFixed(2)}</span>
+src/components/JobDetails.tsx:4539:                      <span>-£{payoutSummary.stripeFee.toFixed(2)}</span>
+src/components/JobDetails.tsx:4544:                      <span className="text-sm font-black text-green-600">£{payoutSummary.netPayout.toFixed(2)}</span>
+src/components/PostJobWizard.tsx:593:                console.log(`Upload started! Progress: ${progress.toFixed(2)}%`);
+src/components/PostJobWizard.tsx:838:              console.log(`Video upload state: ${snapshot.state}, progress: ${progress.toFixed(2)}%`);
+src/components/BillingTab.tsx:46:          £{totalSpent.toFixed(2)}
+src/services/surgeHeatmapService.ts:135:          label: isFixedModel ? `£${extraFee.toFixed(2)} Surge` : `${multiplier}x Surge`, 
+src/services/surgeHeatmapService.ts:147:      zones.push({ lat: 53.6458, lng: -1.7850, radius: 800, intensity: "high", label: isFixedModel ? `£${rules.highFee.toFixed(2)} Surge` : `${rules.highMultiplier}x Surge`, surgeMultiplier: rules.highMultiplier, extraFee: rules.highFee, isFixedModel });
+src/services/surgeHeatmapService.ts:148:      zones.push({ lat: 53.6558, lng: -1.7750, radius: 600, intensity: "medium", label: isFixedModel ? `£${rules.mediumFee.toFixed(2)} Surge` : `${rules.mediumMultiplier}x Surge`, surgeMultiplier: rules.mediumMultiplier, extraFee: rules.mediumFee, isFixedModel });
