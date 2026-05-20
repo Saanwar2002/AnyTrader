@@ -371,15 +371,20 @@ export default function Dashboard() {
                         Emergency
                       </span>
                     )}
-                    <span className={cn(
-                      "px-4 py-1.5 rounded-full text-[10px] font-bold shadow-sm",
-                      job.status === "posted" ? "bg-blue-50 text-blue-600" : 
-                      job.status === "accepted" ? "bg-green-50 text-green-600" :
-                      job.status === "completed" ? "bg-slate-100 text-slate-600" :
-                      "bg-red-50 text-red-600"
-                    )}>
-                      {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace("_", " ")}
-                    </span>
+                    {job.status === 'completed' ? (
+                      <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm mr-2 mt-2 whitespace-pre-line text-center">
+                        COMPLETED{job.completedAt ? ` ON\n${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
+                      </span>
+                    ) : (
+                      <span className={cn(
+                        "px-4 py-1.5 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
+                        job.status === "posted" ? "bg-blue-50 text-blue-600" : 
+                        job.status === "accepted" ? "bg-green-50 text-green-600" :
+                        "bg-red-50 text-red-600"
+                      )}>
+                        {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace("_", " ")}
+                      </span>
+                    )}
                   </div>
 
                   <div className="p-6 space-y-3">

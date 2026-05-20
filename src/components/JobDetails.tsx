@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from 'qrcode.react';
-import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch } from "@/src/firebase";
+import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch, addDoc } from "@/src/firebase";
 import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { useAuth } from "./AuthProvider";
@@ -1649,18 +1649,35 @@ const libraries: any[] = ['places'];
   };
 
   const handleRepostJob = async () => {
-    if (!id) return;
+    if (!id || !job) return;
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, "jobs", id), {
+      const {
+        id: _id, createdAt, postedDate, status, quoteCount,
+        acceptedTradespersonId, paymentStatus, isPaid, completedAt,
+        startedAt, scheduledDate, isConfirmedByTradesperson,
+        trackingStatus, trackingHistory, verificationPin,
+        clientDeleted,
+        hasReview, hasTradespersonReview, dispute, rescheduleProposal,
+        recurringConfig, isRecurringTemplate, isRecurringInstance, recurringDismissedBy,
+        beforePhotos, afterPhotos,
+        boostTier, isBoosted, isInstantMatch,
+        ...baseJob
+      } = job;
+
+      const jobRef = await addDoc(collection(db, "jobs"), {
+        ...baseJob,
         status: "posted",
-        postedDate: serverTimestamp(),
-        createdAt: serverTimestamp()
+        quoteCount: 0,
+        createdAt: serverTimestamp(),
+        postedDate: serverTimestamp()
       });
-      setJob((prev: any) => ({ ...prev, status: "posted", postedDate: new Date().toISOString(), createdAt: new Date().toISOString() }));
       setShowActions(false);
+      toast.success("Job reposted successfully!");
+      navigate(`/job/${jobRef.id}`); // navigate to the new job
     } catch (err) {
       console.error(err);
+      toast.error("Failed to repost job");
     } finally {
       setIsProcessing(false);
     }
@@ -2055,13 +2072,15 @@ const libraries: any[] = ['places'];
                       exit={{ opacity: 0, scale: 0.95, y: -10 }}
                       className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-black z-20 py-2"
                     >
-                      <button
-                        onClick={() => navigate(`/post-job`, { state: { editJob: job } })}
-                        className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        Edit Job
-                      </button>
+                      {job.status !== "completed" && (
+                        <button
+                          onClick={() => navigate(`/post-job`, { state: { editJob: job } })}
+                          className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Edit Job
+                        </button>
+                      )}
                       
                       {(job.status === "posted" || job.status === "accepted") && (
                         <button
@@ -4723,7 +4742,7 @@ const libraries: any[] = ['places'];
                 jobId={id!}
                 reviewerId={user!.uid}
                 revieweeId={quotes.find(q => q.status === "accepted")?.tradespersonId || job.acceptedTradespersonId}
-                type="homeowner_review"
+                type="tradesperson_review"
                 onSuccess={() => {
                   setShowReviewForm(false);
                   setJob((prev: any) => ({ ...prev, hasReview: true }));
@@ -4894,7 +4913,7 @@ const libraries: any[] = ['places'];
                   jobId={id!}
                   reviewerId={user!.uid}
                   revieweeId={job.homeownerId}
-                  type="tradesperson_review"
+                  type="homeowner_review"
                   onSuccess={() => {
                     setShowTradespersonReviewForm(false);
                     setJob((prev: any) => ({ ...prev, hasTradespersonReview: true }));

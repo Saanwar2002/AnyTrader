@@ -57,7 +57,7 @@ service cloud.firestore {
         isSignedIn() && (
           (isOwner(userId) && (resource == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified']))) || 
           isAdmin() ||
-          (resource != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'cancellationCount', 'abandonmentStrikes']))
+          (resource != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'cancellationCount', 'abandonmentStrikes', 'totalJobsDone', 'phantomFeesSaved', 'completedJobsRevenue', 'boostedEmergencyJobsDone', 'rating', 'totalReviews', 'totalRecommendations', 'homeownerRating', 'totalHomeownerReviews']))
         )
       ) || userId.matches('^mock-trader-.*$');
     }
@@ -282,7 +282,7 @@ service cloud.firestore {
     match /jobs/{jobId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.homeownerId == request.auth.uid || request.resource.data.isRecurringInstance == true || isAdmin());
-      allow update: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || (resource.data.acceptedTradespersonId == request.auth.uid) || isAdmin());
       allow delete: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || isAdmin());
     }
 

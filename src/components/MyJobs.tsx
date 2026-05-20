@@ -4,6 +4,7 @@ import { useAuth } from "./AuthProvider";
 import { usePortal } from "@/src/lib/PortalContext";
 import { motion, AnimatePresence } from "motion/react";
 import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, AlertTriangle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap, Building2 } from "lucide-react";
+import { toast } from "sonner";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { EmergencyTimer } from "./EmergencyTimer";
@@ -27,6 +28,8 @@ export default function MyJobs() {
   const [selectedJobMedia, setSelectedJobMedia] = useState<any | null>(null);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [confirmRepostId, setConfirmRepostId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -169,13 +172,31 @@ export default function MyJobs() {
   const handleRepost = async (job: any) => {
     setIsProcessing(job.id);
     try {
-      await updateDoc(doc(db, "jobs", job.id), {
+      const {
+        id, createdAt, postedDate, status, quoteCount,
+        acceptedTradespersonId, paymentStatus, isPaid, completedAt,
+        startedAt, scheduledDate, isConfirmedByTradesperson,
+        trackingStatus, trackingHistory, verificationPin,
+        clientDeleted,
+        hasReview, hasTradespersonReview, dispute, rescheduleProposal,
+        recurringConfig, isRecurringTemplate, isRecurringInstance, recurringDismissedBy,
+        beforePhotos, afterPhotos,
+        boostTier, isBoosted, isInstantMatch,
+        ...baseJob
+      } = job;
+
+      await addDoc(collection(db, "jobs"), {
+        ...baseJob,
         status: "posted",
-        createdAt: serverTimestamp()
+        quoteCount: 0,
+        createdAt: serverTimestamp(),
+        postedDate: serverTimestamp()
       });
       setActionId(null);
+      toast.success("Job reposted successfully!");
     } catch (error) {
       console.error("Error reposting job:", error);
+      toast.error("Failed to repost job");
     } finally {
       setIsProcessing(null);
     }
@@ -183,12 +204,15 @@ export default function MyJobs() {
 
   const confirmDelete = async () => {
     if (!jobToDelete) return;
-    
-    setIsProcessing(jobToDelete);
+    await executeDelete(jobToDelete);
+    setJobToDelete(null);
+  };
+
+  const executeDelete = async (jobId: string) => {
+    setIsProcessing(jobId);
     try {
-      await updateDoc(doc(db, "jobs", jobToDelete), { clientDeleted: true });
+      await updateDoc(doc(db, "jobs", jobId), { clientDeleted: true });
       setActionId(null);
-      setJobToDelete(null);
     } catch (error) {
       console.error("Error deleting job:", error);
     } finally {
@@ -399,15 +423,20 @@ export default function MyJobs() {
                           Emergency
                         </span>
                       )}
-                      <span className={cn(
-                        "px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
-                        job.status === "posted" ? "bg-blue-50 text-blue-600" : 
-                        job.status === "accepted" ? "bg-green-50 text-green-600" :
-                        job.status === "completed" ? "bg-slate-100 text-slate-600" :
-                        "bg-red-50 text-red-600"
-                      )}>
-                        {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace(/_/g, " ")}
-                      </span>
+                      {job.status === 'completed' ? (
+                        <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm mr-2 mt-2 whitespace-pre-line text-center">
+                          COMPLETED{job.completedAt ? ` ON\n${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
+                        </span>
+                      ) : (
+                        <span className={cn(
+                          "px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
+                          job.status === "posted" ? "bg-blue-50 text-blue-600" : 
+                          job.status === "accepted" ? "bg-green-50 text-green-600" :
+                          "bg-red-50 text-red-600"
+                        )}>
+                          {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace(/_/g, " ")}
+                        </span>
+                      )}
                       {job.status === "posted" && job.boostTier === "instant_match" && (
                         <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1 animate-pulse border border-amber-200">
                           <Zap className="w-3 h-3" />
@@ -492,28 +521,82 @@ export default function MyJobs() {
                       <div className="relative flex items-center gap-1">
                         {(job.status === "cancelled" || job.status === "completed") && (
                           <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRepost(job);
-                              }}
-                              disabled={isProcessing === job.id}
-                              className="p-2 hover:bg-blue-50 rounded-xl text-slate-400 hover:text-blue-500 transition-colors"
-                              title="Repost Job"
-                            >
-                              {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <RotateCcw className="w-5 h-5" />}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(job.id);
-                              }}
-                              disabled={isProcessing === job.id}
-                              className="p-2 hover:bg-red-50 rounded-xl text-slate-400 hover:text-red-500 transition-colors"
-                              title="Delete Job"
-                            >
-                              {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-                            </button>
+                            <div className="relative">
+                              <AnimatePresence>
+                                {confirmRepostId === job.id && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 5 }}
+                                    className="absolute bottom-full right-1/2 translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs font-medium rounded-lg shadow-lg whitespace-nowrap pointer-events-none"
+                                  >
+                                    Click again to Repost
+                                    <div className="absolute top-full left-1/2 -ml-1 -mt-1 w-2 h-2 bg-slate-800 transform rotate-45" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirmRepostId === job.id) {
+                                    handleRepost(job);
+                                    setConfirmRepostId(null);
+                                  } else {
+                                    setConfirmRepostId(job.id);
+                                    setConfirmDeleteId(null);
+                                    setTimeout(() => setConfirmRepostId(null), 3000);
+                                  }
+                                }}
+                                disabled={isProcessing === job.id}
+                                className={cn(
+                                  "p-2 rounded-xl transition-colors",
+                                  confirmRepostId === job.id ? "bg-blue-100 text-blue-600" : "hover:bg-blue-50 text-slate-400 hover:text-blue-500"
+                                )}
+                                title={confirmRepostId === job.id ? "Confirm Repost" : "Repost Job"}
+                              >
+                                {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <RotateCcw className="w-5 h-5" />}
+                              </button>
+                            </div>
+                            
+                            <div className="relative">
+                              <AnimatePresence>
+                                {confirmDeleteId === job.id && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 5 }}
+                                    className="absolute bottom-full right-1/2 translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs font-medium rounded-lg shadow-lg whitespace-nowrap pointer-events-none"
+                                  >
+                                    Click again to Delete
+                                    <div className="absolute top-full left-1/2 -ml-1 -mt-1 w-2 h-2 bg-slate-800 transform rotate-45" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirmDeleteId === job.id) {
+                                    setJobToDelete(job.id); // This will open the existing delete modal, wait, let's just do it directly.
+                                    // Actually, since there is a modal already, maybe they want double click INSTEAD of modal?
+                                    // Let's just execute delete directly.
+                                    executeDelete(job.id);
+                                    setConfirmDeleteId(null);
+                                  } else {
+                                    setConfirmDeleteId(job.id);
+                                    setConfirmRepostId(null);
+                                    setTimeout(() => setConfirmDeleteId(null), 3000);
+                                  }
+                                }}
+                                disabled={isProcessing === job.id}
+                                className={cn(
+                                  "p-2 rounded-xl transition-colors",
+                                  confirmDeleteId === job.id ? "bg-red-100 text-red-600" : "hover:bg-red-50 text-slate-400 hover:text-red-500"
+                                )}
+                                title={confirmDeleteId === job.id ? "Confirm Delete" : "Delete Job"}
+                              >
+                                {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                              </button>
+                            </div>
                           </>
                         )}
                         <button 
@@ -536,16 +619,18 @@ export default function MyJobs() {
                                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
                                 className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-2xl shadow-xl border border-black z-20 py-2 overflow-hidden"
                               >
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/post-job`, { state: { editJob: job } });
-                                  }}
-                                  className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3"
-                                >
-                                  <Edit2 className="w-4 h-4 text-slate-400" />
-                                  Edit Job
-                                </button>
+                                {job.status !== "completed" && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/post-job`, { state: { editJob: job } });
+                                    }}
+                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                                  >
+                                    <Edit2 className="w-4 h-4 text-slate-400" />
+                                    Edit Job
+                                  </button>
+                                )}
                                 
                                 {(job.status === "posted" || job.status === "accepted" || job.status === "pending_admin_review") && (
                                   <button
@@ -580,24 +665,42 @@ export default function MyJobs() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleRepost(job);
+                                      if (confirmRepostId === job.id) {
+                                        handleRepost(job);
+                                        setConfirmRepostId(null);
+                                      } else {
+                                        setConfirmRepostId(job.id);
+                                        setConfirmDeleteId(null);
+                                        setTimeout(() => setConfirmRepostId(null), 3000);
+                                      }
                                     }}
                                     disabled={isProcessing === job.id}
-                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-3 disabled:opacity-50"
+                                    className={cn("w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-3 disabled:opacity-50",
+                                      confirmRepostId === job.id ? "text-blue-700 bg-blue-50" : "text-blue-600 hover:bg-blue-50"
+                                    )}
                                   >
-                                    {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                                    Repost / Request Quote
+                                    {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : confirmRepostId === job.id ? <RotateCcw className="w-4 h-4 text-blue-700" /> : <RotateCcw className="w-4 h-4" />}
+                                    {confirmRepostId === job.id ? "Click again to Repost" : "Repost / Request Quote"}
                                   </button>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleDelete(job.id);
+                                      if (confirmDeleteId === job.id) {
+                                        executeDelete(job.id);
+                                        setConfirmDeleteId(null);
+                                      } else {
+                                        setConfirmDeleteId(job.id);
+                                        setConfirmRepostId(null);
+                                        setTimeout(() => setConfirmDeleteId(null), 3000);
+                                      }
                                     }}
                                     disabled={isProcessing === job.id}
-                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-3 disabled:opacity-50"
+                                    className={cn("w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-3 disabled:opacity-50",
+                                      confirmDeleteId === job.id ? "text-red-700 bg-red-50" : "text-red-600 hover:bg-red-50"
+                                    )}
                                   >
-                                    {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                    Delete Job
+                                    {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : confirmDeleteId === job.id ? <AlertTriangle className="w-4 h-4 text-red-700" /> : <Trash2 className="w-4 h-4" />}
+                                    {confirmDeleteId === job.id ? "Click again to Delete" : "Delete Job"}
                                   </button>
                                   </>
                                 )}
