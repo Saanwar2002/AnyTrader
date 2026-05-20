@@ -647,6 +647,52 @@ export default function DriverTerminal() {
     formatted = formatted.replace(/4th exit/ig, 'fourth exit');
     formatted = formatted.replace(/5th exit/ig, 'fifth exit');
 
+    // Common UK abbreviations
+    const abbreviations: Record<string, string> = {
+      'St': 'Street',
+      'Rd': 'Road',
+      'Dr': 'Drive',
+      'Ave': 'Avenue',
+      'Ln': 'Lane',
+      'Blvd': 'Boulevard',
+      'Ct': 'Court',
+      'Pl': 'Place',
+      'Sq': 'Square',
+      'Terr': 'Terrace',
+      'Wy': 'Way',
+      'Apts': 'Apartments',
+      'Bldg': 'Building',
+      'Hwy': 'Highway',
+      'Cl': 'Close',
+      'N': 'North',
+      'S': 'South',
+      'E': 'East',
+      'W': 'West',
+      'NE': 'Northeast',
+      'NW': 'Northwest',
+      'SE': 'Southeast',
+      'SW': 'Southwest'
+    };
+
+    // Replace abbreviations with full words, ensuring word boundaries
+    // We add an optional dot in case Maps returns 'Rd.' and use ignore case
+    // We use a negative lookahead to ensure we don't accidentally replace inside HTML tags
+    Object.entries(abbreviations).forEach(([abbr, full]) => {
+      // The word to replace, maybe with a dot
+      const regex = new RegExp(`\\b${abbr}\\b\\.?(?![^<]*>)`, 'gi');
+      
+      // Preserve the original casing of the first letter if possible, 
+      // but simplistic replacement works fine here since routes are usually Title Case.
+      formatted = formatted.replace(regex, (match) => {
+        // If it was all caps, return all caps
+        if (match.toUpperCase() === match) return full.toUpperCase();
+        // If it was lowercase, return lowercase
+        if (match.toLowerCase() === match) return full.toLowerCase();
+        // Default to the full string (typically Title Case)
+        return full;
+      });
+    });
+
     return formatted;
   };
 
@@ -671,6 +717,7 @@ export default function DriverTerminal() {
       'Apts': 'Apartments',
       'Bldg': 'Building',
       'Hwy': 'Highway',
+      'Cl': 'Close',
       'N': 'North',
       'S': 'South',
       'E': 'East',
@@ -3114,11 +3161,14 @@ export default function DriverTerminal() {
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="absolute bottom-[230px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4"
+                    className="absolute bottom-[140px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4 p-4 drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)]"
                   >
-                    <div className="flex-1 w-full max-w-sm flex flex-col items-center bg-slate-900 border border-white rounded-lg p-3 shadow-[0_8px_30px_rgb(0,0,0,0.5)]">
+                    <div className="flex-1 w-full max-w-sm flex flex-col items-center">
+                      {/* !!! USER REQUESTED DESIGN LOCK !!! */}
+                      {/* The styling for this heads-up instruction text is explicitly locked by the user. */}
+                      {/* IT MUST REMAIN: transparent background, #2563EB text color, white drop shadow, no webkit text stroke, no black box. */}
                       <p
-                        className="text-[16px] text-[#FF9500] font-bold leading-tight drop-shadow-md px-2"
+                        className="text-[22px] text-[#2563EB] font-black leading-tight px-2 mb-2 drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)]"
                         dangerouslySetInnerHTML={{
                           __html: (() => {
                             const step0 = directions.routes[0].legs[0].steps[0];
@@ -3132,7 +3182,7 @@ export default function DriverTerminal() {
                           })()
                         }}
                       />
-                      <div className="mt-2 inline-flex bg-slate-900 px-4 py-1.5 rounded shadow-sm border border-white/20">
+                      <div className="inline-flex bg-slate-900/90 backdrop-blur-sm px-4 py-1.5 rounded-lg shadow-lg border border-white/20">
                         <p className="text-[14px] text-[#00D26A] font-bold tracking-wider uppercase">
                           {formatNavigateDistance(
                             mapCenter ? getRemainingStepDistance(mapCenter, directions.routes[0].legs[0].steps[0]) : directions.routes[0].legs[0].steps[0].distance?.value

@@ -27,6 +27,7 @@
 - **Typography**: Always use jet black (`text-black`) for any text which is meant to be readable.
 - **Icons**: Lucide React.
 - **Animations**: Motion (framer-motion).
+- **Driver Terminal UI**: The styling for the heads-up navigation text (directions over the map) MUST REMAIN transparent background, dark blue (`#2563EB`) font color, with a faint white drop shadow (`drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)]`), no text stroke, and no black background box. This has been explicitly locked by the user.
 - **Database**: Firestore (Enterprise Edition).
 - **AI**: Gemini API (@google/genai) for all intelligent features.
 - **Review System**: 14-day cooling-off period for low ratings, anonymous reviews, and notification fuzzing for low-rating alerts.
