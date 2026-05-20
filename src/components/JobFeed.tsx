@@ -245,6 +245,11 @@ export default function JobFeed() {
       return false;
     }
 
+    // Hide if job has reached maximum quotes limit (5)
+    if ((job.quoteCount || 0) >= 5) {
+      return false;
+    }
+
     const searchLower = searchTerm.toLowerCase();
     const normalizedSearch = searchLower.replace(/[^a-z0-9]/g, '');
     const jobNoNormalized = job.jobNo?.toLowerCase().replace(/[^a-z0-9]/g, '') || "";
@@ -1067,7 +1072,7 @@ export default function JobFeed() {
                   )}
                   {profile?.role === "tradesperson" && (
                     (job.quoteCount || 0) >= 5 ? (
-                      <div className="mt-4 w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 border border-black">
+                      <div className="mt-4 w-full bg-yellow-50 text-yellow-700 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 border border-black">
                         <FileText className="w-4 h-4" />
                         Quote Limit Reached
                       </div>

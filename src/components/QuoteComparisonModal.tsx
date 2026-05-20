@@ -19,10 +19,13 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
   const [requestingRevisionId, setRequestingRevisionId] = React.useState<string | null>(null);
   const [revisionMessage, setRevisionMessage] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isAcceptingId, setIsAcceptingId] = React.useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const sortedQuotes = [...quotes].sort((a, b) => {
+  const activeQuotes = quotes.filter(q => q.status !== "rejected");
+
+  const sortedQuotes = [...activeQuotes].sort((a, b) => {
     // 1. Accepted first
     if (a.status === "accepted" && b.status !== "accepted") return -1;
     if (b.status === "accepted" && a.status !== "accepted") return 1;
@@ -52,12 +55,12 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
     return a.amount - b.amount;
   });
 
-  const fastestStartId = [...quotes]
+  const fastestStartId = [...activeQuotes]
     .filter(q => q.startDate)
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())[0]?.id;
 
-  const lowestPriceId = [...quotes].sort((a, b) => a.amount - b.amount)[0]?.id;
-  const highestRatingId = [...quotes].sort((a, b) => {
+  const lowestPriceId = [...activeQuotes].sort((a, b) => a.amount - b.amount)[0]?.id;
+  const highestRatingId = [...activeQuotes].sort((a, b) => {
     const rA = tradespersonProfiles[a.tradespersonId]?.rating || 0;
     const rB = tradespersonProfiles[b.tradespersonId]?.rating || 0;
     return rB - rA;
@@ -92,11 +95,10 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="fixed inset-4 md:inset-10 z-50 bg-slate-50 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20"
           >
-            <div className="p-6 bg-white border-b border-black flex items-center justify-between">
+            <div className="py-3 px-4 md:px-6 bg-white border-b border-black flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-black text-slate-900">Compare Quotes</h2>
-                <p className="text-sm text-slate-500 font-medium">Review and compare all received offers side-by-side</p>
-                <div className="flex items-center gap-2 mt-2">
+                <h2 className="text-xl font-black text-slate-900">Compare Quotes</h2>
+                <div className="flex items-center gap-2 mt-1">
                   <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-purple-50 text-purple-600 rounded-full">
                     {job.paymentPreference?.replace('_', ' ')}
                   </span>
@@ -105,14 +107,14 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                   </span>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <X className="w-6 h-6 text-slate-500" />
+              <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
               </button>
             </div>
             
-            <div className="flex-1 overflow-x-auto p-6 no-scrollbar">
-              <div className="flex gap-6 min-w-max pb-4">
-                {quotes.map((quote) => {
+            <div className="flex-1 overflow-x-auto px-4 py-4 md:px-6 md:py-4 no-scrollbar">
+              <div className="flex gap-6 min-w-max pb-2">
+                {sortedQuotes.map((quote) => {
                   const tpProfile = tradespersonProfiles[quote.tradespersonId];
                   const analysis = quoteAnalyses[quote.id];
                   const isLowestPrice = quote.id === lowestPriceId;
@@ -122,7 +124,7 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                     <div 
                       key={quote.id} 
                       className={cn(
-                        "w-80 bg-white rounded-[2rem] p-8 border transition-all flex flex-col relative",
+                        "w-72 bg-white rounded-[2rem] p-5 border transition-all flex flex-col relative",
                         quote.status === "accepted" ? "border-green-500 ring-2 ring-green-500/20" : "border-black shadow-sm hover:shadow-md"
                       )}
                     >
@@ -145,25 +147,25 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                         )}
                       </div>
 
-                      <div className="flex flex-col items-center text-center mb-6">
-                        <div className="w-20 h-20 bg-slate-100 rounded-3xl overflow-hidden border-4 border-slate-50 shadow-inner mb-4 relative">
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="w-14 h-14 bg-slate-100 rounded-2xl overflow-hidden border-4 border-slate-50 shadow-inner relative flex-shrink-0">
                           {tpProfile?.avatarUrl ? (
                             <img src={tpProfile.avatarUrl} alt={tpProfile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-300">
-                              <Star className="w-10 h-10" />
+                              <Star className="w-6 h-6" />
                             </div>
                           )}
                           <BadgeOverlay 
                             badges={getTraderBadges(tpProfile)} 
-                            className="absolute -bottom-1 -left-1 -right-1 justify-center z-10 scale-75" 
+                            className="absolute -bottom-1 -left-2 -right-2 justify-center z-10 scale-[0.6]" 
                           />
                         </div>
-                        <div>
-                          <h3 className="font-black text-slate-900 text-lg leading-tight mb-1">{tpProfile?.name || "Tradesperson"}</h3>
-                          <div className="flex items-center justify-center gap-1.5">
-                            <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-lg">
-                              <Star className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                        <div className="flex flex-col text-left">
+                          <h3 className="font-black text-slate-900 text-base leading-tight mb-1">{tpProfile?.name || "Tradesperson"}</h3>
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded-md text-amber-500">
+                              <Star className="w-3.5 h-3.5 fill-current" />
                               <span className="text-xs font-black text-amber-700">
                                 {tpProfile?.rating ? tpProfile.rating.toFixed(1) : "5.0"}
                               </span>
@@ -201,10 +203,10 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                           </div>
                         )}
 
-                        <div className="bg-slate-50 p-5 rounded-2xl border border-black">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Quote Amount</p>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-black flex items-center justify-between">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quote Amount</p>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-3xl font-black text-slate-900">£{quote.amount}</span>
+                            <span className="text-2xl font-black text-slate-900">£{quote.amount}</span>
                             <span className="text-xs font-bold text-slate-400">total</span>
                           </div>
                         </div>
@@ -279,15 +281,21 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                             ) : (
                               <div className="flex flex-col gap-2">
                                 <button 
-                                  onClick={() => {
+                                  disabled={isSubmitting || isAcceptingId === quote.id}
+                                  onClick={async () => {
                                     if (window.confirm(`Are you sure you want to accept the quote from ${tpProfile?.name} for £${quote.amount}?`)) {
-                                      onAccept(quote);
-                                      onClose();
+                                      try {
+                                        setIsAcceptingId(quote.id);
+                                        await onAccept(quote);
+                                        onClose();
+                                      } catch (err) {
+                                        setIsAcceptingId(null);
+                                      }
                                     }
                                   }}
-                                  className="w-full bg-[#1e3a5f] text-white p-4 rounded-2xl font-black hover:bg-blue-900 transition-all shadow-lg shadow-blue-100 active:scale-95"
+                                  className="w-full bg-[#1e3a5f] text-white p-4 rounded-2xl font-black hover:bg-blue-900 transition-all shadow-lg shadow-blue-100 active:scale-95 disabled:opacity-50"
                                 >
-                                  ACCEPT QUOTE
+                                  {isAcceptingId === quote.id ? "ACCEPTING..." : "ACCEPT QUOTE"}
                                 </button>
                                 {quote.status === "pending" && (
                                   <button 

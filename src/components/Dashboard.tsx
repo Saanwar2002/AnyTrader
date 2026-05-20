@@ -378,11 +378,11 @@ export default function Dashboard() {
                     ) : (
                       <span className={cn(
                         "px-4 py-1.5 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
-                        job.status === "posted" ? "bg-blue-50 text-blue-600" : 
+                        job.status === "posted" ? ((quoteCounts[job.id] || 0) >= 5 ? "bg-yellow-50 text-yellow-700 border border-black" : "bg-blue-50 text-blue-600") : 
                         job.status === "accepted" ? "bg-green-50 text-green-600" :
                         "bg-red-50 text-red-600"
                       )}>
-                        {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace("_", " ")}
+                        {job.status === 'posted' ? ((quoteCounts[job.id] || 0) >= 5 ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace("_", " ")}
                       </span>
                     )}
                   </div>
@@ -500,10 +500,16 @@ export default function Dashboard() {
                             <MessageSquare className="w-5 h-5" />
                           </Link>
                         )}
-                        <p className="text-orange-500 font-black text-xs">
-                          {job.quoteCount || quoteCounts[job.id] || 0} quotes
-                        </p>
-                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                        <Link
+                          to={`/job/${job.id}#quote-form-section`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 group/quotes hover:opacity-80 transition-opacity"
+                        >
+                          <p className="text-orange-500 font-black text-xs">
+                            {job.quoteCount || quoteCounts[job.id] || 0} quotes
+                          </p>
+                          <ChevronRight className="w-5 h-5 text-slate-800 transition-colors" />
+                        </Link>
                       </div>
                     </div>
                   </div>

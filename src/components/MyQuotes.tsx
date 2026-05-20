@@ -111,8 +111,35 @@ export default function MyQuotes() {
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
-      setQuotes(quotesData);
+      const quotesData = snapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          ref: doc.ref,
+          ...data
+        };
+      });
+
+      const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
+      const validQuotes = [];
+
+      for (const quote of quotesData) {
+        if (quote.status === "rejected") {
+           const rejectedTime = quote.rejectedAt?.seconds ? quote.rejectedAt.seconds * 1000 : 
+                              (quote.updatedAt?.seconds ? quote.updatedAt.seconds * 1000 : quote.createdAt?.seconds * 1000);
+           
+           if (rejectedTime && rejectedTime < fortyEightHoursAgo) {
+             // Delete stale rejected quote in the background
+             import("firebase/firestore").then(({ deleteDoc }) => {
+               deleteDoc(quote.ref).catch(err => console.error("Error deleting stale rejected quote:", err));
+             });
+             continue; // Skip adding to state
+           }
+        }
+        validQuotes.push(quote);
+      }
+
+      setQuotes(validQuotes);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching quotes:", error);

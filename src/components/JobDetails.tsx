@@ -265,11 +265,42 @@ const libraries: any[] = ['places'];
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setQuotes(quotesData);
+      const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ref: doc.ref, ...doc.data() }));
+      
+      const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
+      const validQuotes = [];
+      let deletedCount = 0;
+
+      for (const quote of quotesData as any[]) {
+        if (quote.status === "rejected") {
+           const rejectedTime = quote.rejectedAt?.seconds ? quote.rejectedAt.seconds * 1000 : 
+                              (quote.updatedAt?.seconds ? quote.updatedAt.seconds * 1000 : quote.createdAt?.seconds * 1000);
+           
+           if (rejectedTime && rejectedTime < fortyEightHoursAgo) {
+             // Delete stale rejected quote in the background
+             import("firebase/firestore").then(({ deleteDoc }) => {
+               deleteDoc(quote.ref).catch(err => console.error("Error deleting stale rejected quote:", err));
+             });
+             deletedCount++;
+             continue; // Skip adding to state
+           }
+        }
+        validQuotes.push(quote);
+      }
+      
+      // Update quote count if any were deleted
+      if (deletedCount > 0 && user?.uid === job.homeownerId) {
+         import("firebase/firestore").then(({ updateDoc, doc, increment }) => {
+            updateDoc(doc(db, "jobs", id), {
+              quoteCount: increment(-deletedCount)
+            }).catch(console.error);
+         });
+      }
+
+      setQuotes(validQuotes);
       
       // Auto-draft quote message if tradesperson has no quote yet
-      if (user?.uid !== job.homeownerId && profile?.role === "tradesperson" && quotesData.length === 0 && !hasAutoDrafted && !quoteMessage) {
+      if (user?.uid !== job.homeownerId && profile?.role === "tradesperson" && validQuotes.length === 0 && !hasAutoDrafted && !quoteMessage) {
         setHasAutoDrafted(true);
         const autoDraft = async () => {
           setIsDraftingAI(true);
@@ -734,50 +765,57 @@ const libraries: any[] = ['places'];
         `/job/${id}`
       );
 
-      // 4. Reject other quotes and notify them
+      // 4. Reject other quotes and notify them in the background (fire-and-forget)
       const otherQuotes = quotes.filter(q => q.id !== quote.id && q.status === "pending");
-      await Promise.all(otherQuotes.map(async (q) => {
-        // Generate AI rejection feedback
-        const feedback = await getRejectionFeedback(job, q, quote);
-        
-        await updateDoc(doc(db, "jobs", id, "quotes", q.id), {
-          status: "rejected",
-          rejectionFeedback: feedback
-        });
-        
-        await sendNotification(
-          q.tradespersonId,
-          "Job Awarded to Another Trader",
-          `The homeowner for "${job.title}" has accepted another quote. AI Insight: ${feedback.reason}`,
-          "status",
-          `/job/${id}`
-        );
-      }));
+      Promise.all(otherQuotes.map(async (q) => {
+        try {
+          // Generate AI rejection feedback
+          const feedback = await getRejectionFeedback(job, q, quote);
+          
+          await updateDoc(doc(db, "jobs", id, "quotes", q.id), {
+            status: "rejected",
+            rejectionFeedback: feedback,
+            rejectedAt: serverTimestamp()
+          });
+          
+          await sendNotification(
+            q.tradespersonId,
+            "Job Awarded to Another Trader",
+            `The homeowner for "${job.title}" has accepted another quote. AI Insight: ${feedback.reason}`,
+            "status",
+            `/job/${id}`
+          );
+        } catch (err) {
+          console.error(`Error generating rejection for quote ${q.id}:`, err);
+        }
+      })).catch(console.error);
       
       // Refresh local job state
       setJob((prev: any) => ({ ...prev, status: "accepted" }));
 
-      // 5. Ecosystem Synergy: Trigger AI equipment alerts for high-tier traders
+      // 5. Ecosystem Synergy: Trigger AI equipment alerts for high-tier traders (background)
       const acceptedTraderDoc = await getDoc(doc(db, "users", quote.tradespersonId));
       if (acceptedTraderDoc.exists()) {
         const traderData = acceptedTraderDoc.data();
         const tier = traderData.subscriptionType; // Simplified tier check
         if (tier === "Gold Elite" || tier === "Platinum Enterprise") {
-          try {
-            const recommendations = await getEquipmentRecommendations(job.title, job.description, job.category);
-            if (recommendations.length > 0) {
-              const recText = recommendations.map(r => `• ${r.item}: ${r.reason}`).join("\n");
-              await sendNotification(
-                quote.tradespersonId,
-                "AI Tool Recommendations",
-                `Based on this job scope, we recommend: \n${recText}`,
-                "status",
-                `/chat/${id}` // Or link to shop
-              );
+          Promise.resolve().then(async () => {
+            try {
+              const recommendations = await getEquipmentRecommendations(job.title, job.description, job.category);
+              if (recommendations.length > 0) {
+                const recText = recommendations.map(r => `• ${r.item}: ${r.reason}`).join("\n");
+                await sendNotification(
+                  quote.tradespersonId,
+                  "AI Tool Recommendations",
+                  `Based on this job scope, we recommend: \n${recText}`,
+                  "status",
+                  `/chat/${id}` // Or link to shop
+                );
+              }
+            } catch (aiErr) {
+              console.error("Failed to generate equipment alerts:", aiErr);
             }
-          } catch (aiErr) {
-            console.error("Failed to generate equipment alerts:", aiErr);
-          }
+          });
         }
       }
     } catch (err) {
@@ -796,8 +834,10 @@ const libraries: any[] = ['places'];
     if (!id) return;
     setError(null);
     try {
+      const { serverTimestamp } = await import("firebase/firestore");
       await updateDoc(doc(db, "jobs", id, "quotes", quote.id), {
-        status: "rejected"
+        status: "rejected",
+        rejectedAt: serverTimestamp()
       });
 
       // Decrement quoteCount on job
@@ -1187,6 +1227,8 @@ const libraries: any[] = ['places'];
     sms: false
   });
   const [payoutSummary, setPayoutSummary] = useState<PayoutBreakdown | null>(null);
+  const [confirmAcceptQuoteId, setConfirmAcceptQuoteId] = useState<string | null>(null);
+  const [confirmDeclineQuoteId, setConfirmDeclineQuoteId] = useState<string | null>(null);
   
   useEffect(() => {
     const amount = parseFloat(quoteAmount);
@@ -2991,12 +3033,12 @@ const libraries: any[] = ['places'];
             )}
             <span className={cn(
               "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-              job.status === "posted" ? "bg-blue-50 text-blue-600" :
+              job.status === "posted" ? ((job.quoteCount || 0) >= 5 ? "bg-yellow-50 text-yellow-700 border border-black" : "bg-blue-50 text-blue-600") :
               job.status === "accepted" ? "bg-green-50 text-green-600" :
               job.status === "in_progress" ? "bg-orange-50 text-orange-600" :
               "bg-slate-100 text-slate-600"
             )}>
-              {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace('_', ' ')}
+              {job.status === 'posted' ? ((job.quoteCount || 0) >= 5 ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace('_', ' ')}
             </span>
             {job.status === "accepted" && job.scheduledDate && (
               <div className="flex items-center gap-2">
@@ -4161,16 +4203,40 @@ const libraries: any[] = ['places'];
                        ) : (
                          <div className="flex items-center gap-2 mt-1">
                            <button 
-                             onClick={() => handleAcceptQuote(quote)}
-                             className="flex-1 bg-green-600 text-white px-1 py-2 rounded-full text-[10px] sm:text-xs font-bold hover:bg-green-700 transition-all shadow-sm whitespace-nowrap"
+                             onClick={() => {
+                               if (confirmAcceptQuoteId === quote.id) {
+                                 handleAcceptQuote(quote);
+                                 setConfirmAcceptQuoteId(null);
+                               } else {
+                                 setConfirmAcceptQuoteId(quote.id);
+                                 setConfirmDeclineQuoteId(null);
+                                 setTimeout(() => setConfirmAcceptQuoteId(null), 3000);
+                               }
+                             }}
+                             className={cn("flex-1 text-white px-1 py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all shadow-sm whitespace-nowrap",
+                               confirmAcceptQuoteId === quote.id ? "bg-green-700 ring-2 ring-green-600 ring-offset-1" : "bg-green-600 hover:bg-green-700"
+                             )}
+                             title={confirmAcceptQuoteId === quote.id ? "Confirm Accept" : "Accept Quote"}
                            >
-                             Accept
+                             {confirmAcceptQuoteId === quote.id ? "Confirm Accept" : "Accept"}
                            </button>
                            <button 
-                             onClick={() => handleRejectQuote(quote)}
-                             className="flex-1 border border-red-300 text-red-600 bg-white hover:bg-red-50 px-1 py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap shadow-sm"
+                             onClick={() => {
+                               if (confirmDeclineQuoteId === quote.id) {
+                                 handleRejectQuote(quote);
+                                 setConfirmDeclineQuoteId(null);
+                               } else {
+                                 setConfirmDeclineQuoteId(quote.id);
+                                 setConfirmAcceptQuoteId(null);
+                                 setTimeout(() => setConfirmDeclineQuoteId(null), 3000);
+                               }
+                             }}
+                             className={cn("flex-1 border px-1 py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap shadow-sm",
+                               confirmDeclineQuoteId === quote.id ? "border-red-500 text-red-700 bg-red-50 ring-2 ring-red-500 ring-offset-1" : "border-red-300 text-red-600 bg-white hover:bg-red-50"
+                             )}
+                             title={confirmDeclineQuoteId === quote.id ? "Confirm Decline" : "Decline Quote"}
                            >
-                             Decline
+                             {confirmDeclineQuoteId === quote.id ? "Confirm Decline" : "Decline"}
                            </button>
                            <button 
                              onClick={() => setActiveQuoteId(quote.id)}

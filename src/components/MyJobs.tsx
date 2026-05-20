@@ -430,11 +430,11 @@ export default function MyJobs() {
                       ) : (
                         <span className={cn(
                           "px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
-                          job.status === "posted" ? "bg-blue-50 text-blue-600" : 
+                          job.status === "posted" ? ((quoteCounts[job.id] || 0) >= 5 ? "bg-yellow-50 text-yellow-700 border border-black" : "bg-blue-50 text-blue-600") : 
                           job.status === "accepted" ? "bg-green-50 text-green-600" :
                           "bg-red-50 text-red-600"
                         )}>
-                          {job.status === 'posted' ? 'Seeking Quotes' : job.status.replace(/_/g, " ")}
+                          {job.status === 'posted' ? ((quoteCounts[job.id] || 0) >= 5 ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace(/_/g, " ")}
                         </span>
                       )}
                       {job.status === "posted" && job.boostTier === "instant_match" && (
@@ -514,9 +514,15 @@ export default function MyJobs() {
                     </div>
                     
                     <div className="flex items-center gap-4">
-                      <p className="text-orange-500 font-black text-sm">
-                        {quoteCounts[job.id] || 0} quotes
-                      </p>
+                      <Link 
+                        to={`/job/${job.id}#quote-form-section`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:opacity-80 transition-opacity"
+                      >
+                        <p className="text-orange-500 font-black text-sm">
+                          {quoteCounts[job.id] || 0} quotes
+                        </p>
+                      </Link>
                       
                       <div className="relative flex items-center gap-1">
                         {(job.status === "cancelled" || job.status === "completed") && (
