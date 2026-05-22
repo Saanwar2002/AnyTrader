@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from 'qrcode.react';
 import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch, addDoc } from "@/src/firebase";
@@ -104,6 +104,9 @@ export default function JobDetails() {
   const [reviewSummaries, setReviewSummaries] = useState<Record<string, string>>({});
   const [quoteAnalyses, setQuoteAnalyses] = useState<Record<string, QuoteAnalysis>>({});
   const [homeownerProfile, setHomeownerProfile] = useState<any>(null);
+  const fetchedHomeownerIdRef = useRef<string | null>(null);
+  const fetchedTradespersonIdRef = useRef<string | null>(null);
+  const checkedRecurringIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [quoteAmount, setQuoteAmount] = useState("");
   const [quoteMessage, setQuoteMessage] = useState("");
@@ -182,21 +185,26 @@ const libraries: any[] = ['places'];
   useEffect(() => {
     if (!id) return;
 
-    const fetchJob = async () => {
+    setLoading(true);
+
+    const unsubscribe = onSnapshot(doc(db, "jobs", id), async (jobDoc) => {
       try {
-        const jobDoc = await getDoc(doc(db, "jobs", id));
         if (jobDoc.exists()) {
           const data = jobDoc.data();
           setJob({ id: jobDoc.id, ...data });
-          
-          // Fetch homeowner profile
-          const hoDoc = await getDoc(doc(db, "users", data.homeownerId));
-          if (hoDoc.exists()) {
-            setHomeownerProfile(hoDoc.data());
+
+          // Fetch homeowner profile once
+          if (data.homeownerId && fetchedHomeownerIdRef.current !== data.homeownerId) {
+            fetchedHomeownerIdRef.current = data.homeownerId;
+            const hoDoc = await getDoc(doc(db, "users", data.homeownerId));
+            if (hoDoc.exists()) {
+              setHomeownerProfile(hoDoc.data());
+            }
           }
 
-          // Fetch accepted tradesperson profile if not in quotes yet
-          if (data.acceptedTradespersonId) {
+          // Fetch accepted tradesperson profile if not already fetched
+          if (data.acceptedTradespersonId && fetchedTradespersonIdRef.current !== data.acceptedTradespersonId) {
+            fetchedTradespersonIdRef.current = data.acceptedTradespersonId;
             const tpDoc = await getDoc(doc(db, "users", data.acceptedTradespersonId));
             if (tpDoc.exists()) {
               setTradespersonProfiles(prev => ({
@@ -206,8 +214,9 @@ const libraries: any[] = ['places'];
             }
           }
 
-          // Check if a recurring schedule already exists for this job
-          if (user?.uid) {
+          // Check if recurring schedule already exists for this job once
+          if (user?.uid && checkedRecurringIdRef.current !== `${id}_${user.uid}`) {
+            checkedRecurringIdRef.current = `${id}_${user.uid}`;
             const recurringQuery = query(
               collection(db, "recurring_schedules"), 
               and(
@@ -226,13 +235,18 @@ const libraries: any[] = ['places'];
           }
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error in job live listener:", err);
       } finally {
         setLoading(false);
       }
-    };
+    }, (err) => {
+      console.error("Failed to subscribe to job snapshot:", err);
+      setLoading(false);
+    });
 
-    fetchJob();
+    return () => {
+      unsubscribe();
+    };
   }, [id, user?.uid]);
 
   useEffect(() => {
