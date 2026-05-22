@@ -549,7 +549,7 @@ export default function Portfolio() {
             </div>
 
             {/* Static Footer */}
-            <div className="p-4 bg-white border-t border-black flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="p-4 bg-white border-t border-black flex gap-3 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
               <button 
                 type="button" 
                 onClick={() => setIsAdding(false)} 

@@ -47,5 +47,15 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>AnyTrader needs your location to find nearby drivers and jobs.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>AnyTrader needs your location to continuously track active rides.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>AnyTrader needs camera access to let you upload photos for your jobs.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>AnyTrader needs photo library access to upload photos for your jobs.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>AnyTrader needs photo library access to save photos.</string>
 </dict>
 </plist>

@@ -347,6 +347,8 @@ export default function DriverTerminal() {
 
   // Ride Simulation State
   const [rideState, setRideState] = useState<RideState>("idle");
+  const [declineConfirmActive, setDeclineConfirmActive] = useState(false);
+  const [declineConfirmStacked, setDeclineConfirmStacked] = useState(false);
   const [showFareBreakdown, setShowFareBreakdown] = useState(false);
   const [incomingTimer, setIncomingTimer] = useState(15);
   const [stackedRideOffer, setStackedRideOffer] = useState<any>(null);
@@ -3114,7 +3116,7 @@ export default function DriverTerminal() {
       {activeTab === "home" && (
         <>
           {/* Simulation Trigger (Dev Only) */}
-          <div className="absolute top-[48px] left-4 z-[150] flex flex-col items-start gap-2 pointer-events-auto">
+          <div className="absolute top-[calc(48px+env(safe-area-inset-top))] left-4 z-[150] flex flex-col items-start gap-2 pointer-events-auto">
             <button
               onClick={simulateIncomingRide}
               className="bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
@@ -3698,7 +3700,7 @@ export default function DriverTerminal() {
             )}
 
           {/* Floating Map Controls & SOS */}
-          <div className="absolute top-[100px] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
+          <div className="absolute top-[calc(100px+env(safe-area-inset-top))] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
             <button
               onClick={() => setShowHazardModal(true)}
               className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -3717,7 +3719,7 @@ export default function DriverTerminal() {
             rideState === "waiting" ||
             rideState === "in_progress") &&
             activeRide?.id && (
-              <div className="absolute top-[100px] left-4 z-50 pointer-events-auto flex flex-col gap-6">
+              <div className="absolute top-[calc(100px+env(safe-area-inset-top))] left-4 z-50 pointer-events-auto flex flex-col gap-6">
                 <button
                   onClick={handleStartExternalNavigation}
                   className="w-10 h-10 rounded-full flex items-center justify-center bg-[#007AFF] shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform"
@@ -3730,7 +3732,7 @@ export default function DriverTerminal() {
           {/* 2. Top UI: Menu button */}
           <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
             {/* Status Header (Sticky) */}
-            <div className="absolute top-12 left-4 right-4 z-40 flex items-center justify-end pointer-events-none">
+            <div className="absolute top-[calc(3rem+env(safe-area-inset-top))] left-4 right-4 z-40 flex items-center justify-end pointer-events-none">
               <button
                 onClick={() => setActiveTab("menu")}
                 className="w-10 h-10 bg-[#1A1A1E]/95 backdrop-blur-md rounded-full border border-[#2C2C30] text-white flex items-center justify-center shadow-lg pointer-events-auto active:scale-95 transition-transform"
@@ -3888,10 +3890,10 @@ export default function DriverTerminal() {
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
+                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom,0px)+0.25rem)] pointer-events-none"
               >
                 {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
+                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full max-h-[calc(100vh-8.5rem-env(safe-area-inset-top,0px))]">
                   {/* Highlight header */}
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
 
@@ -3903,100 +3905,8 @@ export default function DriverTerminal() {
                   </div>
 
                   <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-1">
-                    {/* Map Section (Moved to top) */}
-                    {isLoaded &&
-                      activeRide?.pickupLat &&
-                      activeRide?.dropoffLat && (
-                        <div className="w-full h-[140px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-2">
-                          <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
-                          <GoogleMap
-                            mapContainerStyle={{
-                              width: "100%",
-                              height: "100%",
-                            }}
-                            onLoad={(map) => {
-                              setMiniMapInstance(map);
-                              const bounds =
-                                new window.google.maps.LatLngBounds();
-                              if (activeRide.pickupLat && activeRide.pickupLng)
-                                bounds.extend({
-                                  lat: activeRide.pickupLat,
-                                  lng: activeRide.pickupLng,
-                                });
-                              if (
-                                activeRide.dropoffLat &&
-                                activeRide.dropoffLng
-                              )
-                                bounds.extend({
-                                  lat: activeRide.dropoffLat,
-                                  lng: activeRide.dropoffLng,
-                                });
-                              (activeRide.stops || []).forEach((s: any) => {
-                                if (s.coords) bounds.extend(s.coords);
-                              });
-                              map.fitBounds(bounds, {
-                                top: 10,
-                                bottom: 10,
-                                left: 10,
-                                right: 10,
-                              });
-                              // Apply a max zoom in case points are very close
-                              const listener =
-                                window.google.maps.event.addListener(
-                                  map,
-                                  "idle",
-                                  () => {
-                                    if ((map.getZoom() || 0) > 17)
-                                      map.setZoom(17); // Restrict to 17 as user mentioned
-                                    window.google.maps.event.removeListener(
-                                      listener,
-                                    );
-                                  },
-                                );
-                            }}
-                            options={premiumMapOptions}
-                          >
-                            {activeRide.pickupLat && (
-                              <MarkerF
-                                position={{
-                                  lat: activeRide.pickupLat,
-                                  lng: activeRide.pickupLng,
-                                }}
-                                label="P"
-                              />
-                            )}
-                            {activeRide.dropoffLat && (
-                              <MarkerF
-                                position={{
-                                  lat: activeRide.dropoffLat,
-                                  lng: activeRide.dropoffLng,
-                                }}
-                                label="D"
-                              />
-                            )}
-                            {(activeRide.stops || []).map(
-                              (s: any, i: number) =>
-                                s.coords && (
-                                  <React.Fragment key={i}>
-                                    <MarkerF
-                                      position={s.coords}
-                                      label={`${i + 1}`}
-                                    />
-                                  </React.Fragment>
-                                ),
-                            )}
-                          </GoogleMap>
-                          {miniMapInstance && (
-                            <MapZoomControls
-                              mapInstance={miniMapInstance}
-                              className="absolute bottom-2 right-2 z-20"
-                            />
-                          )}
-                        </div>
-                      )}
-
                     {/* Rider Details */}
-                    <div className="border-t border-[#2C2C30] pt-2 pb-1 relative">
+                    <div className="pt-2 pb-1 relative">
                       {/* Circular Timer Ring */}
                       <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
                         <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
@@ -4196,17 +4106,111 @@ export default function DriverTerminal() {
                           </div>
                         </div>
                       </div>
+
+                    {/* Map Section (Moved to bottom) */}
+                    {isLoaded &&
+                      activeRide?.pickupLat &&
+                      activeRide?.dropoffLat && (
+                        <div className="w-full h-[140px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-2">
+                          <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
+                          <GoogleMap
+                            mapContainerStyle={{
+                              width: "100%",
+                              height: "100%",
+                            }}
+                            onLoad={(map) => {
+                              setMiniMapInstance(map);
+                              const bounds =
+                                new window.google.maps.LatLngBounds();
+                              if (activeRide.pickupLat && activeRide.pickupLng)
+                                bounds.extend({
+                                  lat: activeRide.pickupLat,
+                                  lng: activeRide.pickupLng,
+                                });
+                              if (
+                                activeRide.dropoffLat &&
+                                activeRide.dropoffLng
+                              )
+                                bounds.extend({
+                                  lat: activeRide.dropoffLat,
+                                  lng: activeRide.dropoffLng,
+                                });
+                              (activeRide.stops || []).forEach((s: any) => {
+                                if (s.coords) bounds.extend(s.coords);
+                              });
+                              map.fitBounds(bounds, {
+                                top: 10,
+                                bottom: 10,
+                                left: 10,
+                                right: 10,
+                              });
+                              // Apply a max zoom in case points are very close
+                              const listener =
+                                window.google.maps.event.addListener(
+                                  map,
+                                  "idle",
+                                  () => {
+                                    if ((map.getZoom() || 0) > 17)
+                                      map.setZoom(17); // Restrict to 17 as user mentioned
+                                    window.google.maps.event.removeListener(
+                                      listener,
+                                    );
+                                  },
+                                );
+                            }}
+                            options={premiumMapOptions}
+                          >
+                            {activeRide.pickupLat && (
+                              <MarkerF
+                                position={{
+                                  lat: activeRide.pickupLat,
+                                  lng: activeRide.pickupLng,
+                                }}
+                                label="P"
+                              />
+                            )}
+                            {activeRide.dropoffLat && (
+                              <MarkerF
+                                position={{
+                                  lat: activeRide.dropoffLat,
+                                  lng: activeRide.dropoffLng,
+                                }}
+                                label="D"
+                              />
+                            )}
+                            {(activeRide.stops || []).map(
+                              (s: any, i: number) =>
+                                s.coords && (
+                                  <React.Fragment key={i}>
+                                    <MarkerF
+                                      position={s.coords}
+                                      label={`${i + 1}`}
+                                    />
+                                  </React.Fragment>
+                                ),
+                            )}
+                          </GoogleMap>
+                          {miniMapInstance && (
+                            <MapZoomControls
+                              mapInstance={miniMapInstance}
+                              className="absolute bottom-2 right-2 z-20"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                    
                     </div>
                   </div>
 
                   {activeRide?.comments && (
                     <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
                       <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70 leading-none">
                           Passenger Note
                         </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                        <p className="text-[#1A1A1E] text-[10px] font-bold leading-tight mt-[1px]">
                           {activeRide.comments}
                         </p>
                       </div>
@@ -4214,19 +4218,28 @@ export default function DriverTerminal() {
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
+                  <div className="flex gap-2 mt-0 shrink-0 relative z-20">
+                    {declineConfirmActive ? (
+                      <button
+                        onClick={() => { setDeclineConfirmActive(false); handleDeclineRide(); }}
+                        className="w-[100px] h-10 bg-[#FF3B30] text-white rounded-[10px] font-black text-[12px] flex items-center justify-center active:scale-[0.98] shadow-sm transition-transform shrink-0"
+                      >
+                        CONFIRM
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setDeclineConfirmActive(true)}
+                        className="w-10 h-10 bg-slate-900 border border-[#2C2C30] text-[#E4E4E7] rounded-[10px] flex items-center justify-center active:scale-[0.98] shadow-sm transition-transform shrink-0 hover:bg-slate-800"
+                      >
+                        <X className="w-5 h-5 stroke-[3]" />
+                      </button>
+                    )}
                     <button
-                      onClick={handleAcceptRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                      onClick={() => { setDeclineConfirmActive(false); handleAcceptRide(); }}
+                      className="flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
                     >
                       <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
                     </button>
-                    <button
-                      onClick={handleDeclineRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
-                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -4241,274 +4254,10 @@ export default function DriverTerminal() {
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
+                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom,0px)+0.25rem)] pointer-events-none"
               >
                 {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
-                  {/* Highlight header */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
-
-                  <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
-                      <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
-                      Next Ride Request (Stacked)
-                    </h2>
-                  </div>
-
-                  <div className="flex-1 flex flex-col min-h-0 scrollbar-hide">
-                    {/* Rider Details */}
-                    <div className="pt-1 pb-1 relative">
-                      {/* Circular Timer Ring */}
-                      <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
-                        <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
-                          <circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className="stroke-[#2C2C30] fill-none"
-                            strokeWidth="3"
-                          />
-                          <motion.circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className={cn(
-                              "fill-none",
-                              stackedIncomingTimer > 5
-                                ? "stroke-[#00D26A]"
-                                : "stroke-[#FF3B30]",
-                            )}
-                            strokeWidth="3"
-                            strokeDasharray="88"
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{
-                              strokeDashoffset:
-                                88 - 88 * (stackedIncomingTimer / 15),
-                            }}
-                            transition={{ duration: 1, ease: "linear" }}
-                          />
-                        </svg>
-                        <span
-                          className={cn(
-                            "absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]",
-                            stackedIncomingTimer > 5
-                              ? "text-[#00D26A]"
-                              : "text-[#FF3B30]",
-                          )}
-                        >
-                          {stackedIncomingTimer}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-2 pr-10">
-                        <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
-                          {(stackedRideOffer?.name || "S")[0]}
-                        </div>
-                        <div className="flex-1 min-w-0 flex justify-between items-start">
-                          <div>
-                            <h3 className="text-[13px] font-bold text-white leading-tight truncate">
-                              {stackedRideOffer?.name || "Sarah T."}
-                            </h3>
-                            <p className="text-[11px] text-[#FF9500] font-bold">
-                              ⭐ 4.7{" "}
-                              <span className="text-[#E4E4E7] font-normal">
-                                (124 trips)
-                              </span>
-                            </p>
-                          </div>
-                          {stackedRideOffer?.isRiderPlus !== false && (
-                            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white">
-                              <Star className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                              Rider Plus
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {/* Fare Section (Moved below rider profile) */}
-                        <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
-                          <div className="flex justify-between items-end mb-1">
-                            <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
-                              £
-                              {stackedRideOffer?.fareEstimate?.toFixed(2) ||
-                                "38.50"}
-                              <div className="flex flex-col items-center justify-end leading-none mb-0.5">
-                                <span className="text-[15px] font-black text-yellow-400">
-                                  {stackedRideOffer?.distanceToPickupMiles ||
-                                    1.2}{" "}
-                                  + {stackedRideOffer?.distanceMiles || 22}
-                                </span>
-                                <span className="text-[16px] font-bold text-yellow-400">
-                                  (
-                                  {(
-                                    (stackedRideOffer?.distanceToPickupMiles ||
-                                      1.2) +
-                                    (stackedRideOffer?.distanceMiles || 22)
-                                  ).toFixed(1)}{" "}
-                                  mi)
-                                </span>
-                              </div>
-                            </h1>
-                            <div className="flex gap-1 items-center">
-                              {stackedRideOffer?.isPriority && (
-                                <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white">
-                                  <Zap className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                                  Priority
-                                </div>
-                              )}
-                              {fareConfig.surgeEnabled && (
-                                <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
-                                  <span className="text-[10px]">🔥</span>{" "}
-                                  {stackedRideOffer?.surgeModel === "fixed"
-                                    ? "+£" +
-                                      (stackedRideOffer?.surgeFixed || "2.00")
-                                    : (stackedRideOffer?.surgeMultiplier ||
-                                        "1.4") + "x"}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(() => {
-                            let finalPayout =
-                              (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !stackedRideOffer?.isSimulated
-                            ) {
-                              const hasNoSurgeApplied =
-                                stackedRideOffer?.baseCalc
-                                  ? Math.abs(
-                                      stackedRideOffer.fareEstimate -
-                                        stackedRideOffer.baseCalc,
-                                    ) < 2.0
-                                  : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                stackedRideOffer?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  finalPayout +=
-                                    (stackedRideOffer?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
-                            return (
-                              <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
-                              </p>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-1 mb-1">
-                          <div className="relative pl-5 space-y-2 flex-1">
-                            {/* Route Line indicator */}
-                            <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
-
-                            <div className="relative">
-                              <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">
-                                Next Pickup After Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.pickupAddress ||
-                                  "12 Elm Street, SE15"}
-                              </p>
-                              <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">
-                                {stackedRideOffer?.distanceToPickupMiles ||
-                                  "1.2"}{" "}
-                                mi from next dropoff
-                              </p>
-                            </div>
-
-                            {(stackedRideOffer?.stops || []).map(
-                              (stop: any, idx: number) => (
-                                <div key={idx} className="relative mt-2">
-                                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                                  <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">
-                                    Stop {idx + 1}
-                                  </p>
-                                  <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                    {stop.address}
-                                  </p>
-                                </div>
-                              ),
-                            )}
-
-                            <div className="relative mt-2">
-                              <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">
-                                Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.dropoffAddress ||
-                                  "Bristol Temple Meads"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceMiles || "22"} mi
-                                from pickup
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {stackedRideOffer?.comments && (
-                    <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                      <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
-                          Passenger Note
-                        </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                          {stackedRideOffer.comments}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
-                    <button
-                      onClick={handleAcceptStackedRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
-                    >
-                      <Check className="w-5 h-5 stroke-[3]" /> ACCEPT NEXT JOB
-                    </button>
-                    <button
-                      onClick={handleDeclineStackedRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Screen 3b: Stacked Incoming Ride Request Overlay */}
-          <AnimatePresence>
-            {stackedRideOffer && rideState === "in_progress" && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
-              >
-                {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
+                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full max-h-[calc(100vh-8.5rem-env(safe-area-inset-top,0px))]">
                   {/* Highlight header */}
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
 
@@ -4520,105 +4269,8 @@ export default function DriverTerminal() {
                   </div>
 
                   <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-1">
-                    {/* Map Section (Moved to top) */}
-                    {isLoaded &&
-                      stackedRideOffer?.pickupLat &&
-                      stackedRideOffer?.dropoffLat && (
-                        <div className="w-full h-[140px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-2">
-                          <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
-                          <GoogleMap
-                            mapContainerStyle={{
-                              width: "100%",
-                              height: "100%",
-                            }}
-                            onLoad={(map) => {
-                              setMiniMapInstance(map);
-                              const bounds =
-                                new window.google.maps.LatLngBounds();
-                              if (
-                                stackedRideOffer.pickupLat &&
-                                stackedRideOffer.pickupLng
-                              )
-                                bounds.extend({
-                                  lat: stackedRideOffer.pickupLat,
-                                  lng: stackedRideOffer.pickupLng,
-                                });
-                              if (
-                                stackedRideOffer.dropoffLat &&
-                                stackedRideOffer.dropoffLng
-                              )
-                                bounds.extend({
-                                  lat: stackedRideOffer.dropoffLat,
-                                  lng: stackedRideOffer.dropoffLng,
-                                });
-                              (stackedRideOffer.stops || []).forEach(
-                                (s: any) => {
-                                  if (s.coords) bounds.extend(s.coords);
-                                },
-                              );
-                              map.fitBounds(bounds, {
-                                top: 10,
-                                bottom: 10,
-                                left: 10,
-                                right: 10,
-                              });
-                              // Apply a max zoom in case points are very close
-                              const listener =
-                                window.google.maps.event.addListener(
-                                  map,
-                                  "idle",
-                                  () => {
-                                    if ((map.getZoom() || 0) > 17)
-                                      map.setZoom(17); // Restrict to 17 as user mentioned
-                                    window.google.maps.event.removeListener(
-                                      listener,
-                                    );
-                                  },
-                                );
-                            }}
-                            options={premiumMapOptions}
-                          >
-                            {stackedRideOffer.pickupLat && (
-                              <MarkerF
-                                position={{
-                                  lat: stackedRideOffer.pickupLat,
-                                  lng: stackedRideOffer.pickupLng,
-                                }}
-                                label="P"
-                              />
-                            )}
-                            {stackedRideOffer.dropoffLat && (
-                              <MarkerF
-                                position={{
-                                  lat: stackedRideOffer.dropoffLat,
-                                  lng: stackedRideOffer.dropoffLng,
-                                }}
-                                label="D"
-                              />
-                            )}
-                            {(stackedRideOffer.stops || []).map(
-                              (s: any, i: number) =>
-                                s.coords && (
-                                  <React.Fragment key={i}>
-                                    <MarkerF
-                                      position={s.coords}
-                                      label={`${i + 1}`}
-                                    />
-                                  </React.Fragment>
-                                ),
-                            )}
-                          </GoogleMap>
-                          {miniMapInstance && (
-                            <MapZoomControls
-                              mapInstance={miniMapInstance}
-                              className="absolute bottom-2 right-2 z-20"
-                            />
-                          )}
-                        </div>
-                      )}
-
                     {/* Rider Details */}
-                    <div className="border-t border-[#2C2C30] pt-2 pb-1 relative">
+                    <div className="pt-2 pb-1 relative">
                       {/* Circular Timer Ring */}
                       <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
                         <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
@@ -4826,331 +4478,8 @@ export default function DriverTerminal() {
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {stackedRideOffer?.comments && (
-                    <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                      <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
-                          Passenger Note
-                        </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                          {stackedRideOffer.comments}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
-                    <button
-                      onClick={handleAcceptStackedRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
-                    >
-                      <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
-                    </button>
-                    <button
-                      onClick={handleDeclineStackedRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Screen 3b: Stacked Incoming Ride Request Overlay */}
-          <AnimatePresence>
-            {stackedRideOffer && rideState === "in_progress" && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
-              >
-                {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
-                  {/* Highlight header */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
-
-                  <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
-                      <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
-                      Next Ride Request (Stacked)
-                    </h2>
-                  </div>
-
-                  <div className="flex-1 flex flex-col min-h-0 scrollbar-hide">
-                    {/* Rider Details */}
-                    <div className="pt-1 pb-1 relative">
-                      {/* Circular Timer Ring */}
-                      <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
-                        <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
-                          <circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className="stroke-[#2C2C30] fill-none"
-                            strokeWidth="3"
-                          />
-                          <motion.circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className={cn(
-                              "fill-none",
-                              stackedIncomingTimer > 5
-                                ? "stroke-[#00D26A]"
-                                : "stroke-[#FF3B30]",
-                            )}
-                            strokeWidth="3"
-                            strokeDasharray="88"
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{
-                              strokeDashoffset:
-                                88 - 88 * (stackedIncomingTimer / 15),
-                            }}
-                            transition={{ duration: 1, ease: "linear" }}
-                          />
-                        </svg>
-                        <span
-                          className={cn(
-                            "absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]",
-                            stackedIncomingTimer > 5
-                              ? "text-[#00D26A]"
-                              : "text-[#FF3B30]",
-                          )}
-                        >
-                          {stackedIncomingTimer}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-2 pr-10">
-                        <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
-                          {(stackedRideOffer?.name || "S")[0]}
-                        </div>
-                        <div className="flex-1 min-w-0 flex justify-between items-start">
-                          <div>
-                            <h3 className="text-[13px] font-bold text-white leading-tight truncate">
-                              {stackedRideOffer?.name || "Sarah T."}
-                            </h3>
-                            <p className="text-[11px] text-[#FF9500] font-bold">
-                              ⭐ 4.7{" "}
-                              <span className="text-[#E4E4E7] font-normal">
-                                (124 trips)
-                              </span>
-                            </p>
-                          </div>
-                          {stackedRideOffer?.isRiderPlus !== false && (
-                            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white">
-                              <Star className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                              Rider Plus
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {/* Fare Section (Moved below rider profile) */}
-                        <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
-                          <div className="flex justify-between items-end mb-1">
-                            <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
-                              £
-                              {stackedRideOffer?.fareEstimate?.toFixed(2) ||
-                                "38.50"}
-                              <div className="flex flex-col items-center justify-end leading-none mb-0.5">
-                                <span className="text-[15px] font-black text-yellow-400">
-                                  {stackedRideOffer?.distanceToPickupMiles ||
-                                    1.2}{" "}
-                                  + {stackedRideOffer?.distanceMiles || 22}
-                                </span>
-                                <span className="text-[16px] font-bold text-yellow-400">
-                                  (
-                                  {(
-                                    (stackedRideOffer?.distanceToPickupMiles ||
-                                      1.2) +
-                                    (stackedRideOffer?.distanceMiles || 22)
-                                  ).toFixed(1)}{" "}
-                                  mi)
-                                </span>
-                              </div>
-                            </h1>
-                            <div className="flex gap-1 items-center">
-                              {stackedRideOffer?.isPriority && (
-                                <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white">
-                                  <Zap className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                                  Priority
-                                </div>
-                              )}
-                              {fareConfig.surgeEnabled && (
-                                <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
-                                  <span className="text-[10px]">🔥</span>{" "}
-                                  {stackedRideOffer?.surgeModel === "fixed"
-                                    ? "+£" +
-                                      (stackedRideOffer?.surgeFixed || "2.00")
-                                    : (stackedRideOffer?.surgeMultiplier ||
-                                        "1.4") + "x"}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(() => {
-                            let finalPayout =
-                              (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !stackedRideOffer?.isSimulated
-                            ) {
-                              const hasNoSurgeApplied =
-                                stackedRideOffer?.baseCalc
-                                  ? Math.abs(
-                                      stackedRideOffer.fareEstimate -
-                                        stackedRideOffer.baseCalc,
-                                    ) < 2.0
-                                  : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                stackedRideOffer?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  finalPayout +=
-                                    (stackedRideOffer?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
-                            return (
-                              <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
-                              </p>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-1 mb-1">
-                          <div className="relative pl-5 space-y-2 flex-1">
-                            {/* Route Line indicator */}
-                            <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
-
-                            <div className="relative">
-                              <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">
-                                Next Pickup After Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.pickupAddress ||
-                                  "12 Elm Street, SE15"}
-                              </p>
-                              <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">
-                                {stackedRideOffer?.distanceToPickupMiles ||
-                                  "1.2"}{" "}
-                                mi from next dropoff
-                              </p>
-                            </div>
-
-                            {(stackedRideOffer?.stops || []).map(
-                              (stop: any, idx: number) => (
-                                <div key={idx} className="relative mt-2">
-                                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                                  <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">
-                                    Stop {idx + 1}
-                                  </p>
-                                  <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                    {stop.address}
-                                  </p>
-                                </div>
-                              ),
-                            )}
-
-                            <div className="relative mt-2">
-                              <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">
-                                Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.dropoffAddress ||
-                                  "Bristol Temple Meads"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceMiles || "22"} mi
-                                from pickup
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {stackedRideOffer?.comments && (
-                    <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                      <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
-                          Passenger Note
-                        </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                          {stackedRideOffer.comments}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
-                    <button
-                      onClick={handleAcceptStackedRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
-                    >
-                      <Check className="w-5 h-5 stroke-[3]" /> ACCEPT NEXT JOB
-                    </button>
-                    <button
-                      onClick={handleDeclineStackedRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Screen 3b: Stacked Incoming Ride Request Overlay */}
-          <AnimatePresence>
-            {stackedRideOffer && rideState === "in_progress" && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
-              >
-                {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
-                  {/* Highlight header */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
-
-                  <div className="flex items-center justify-between mb-2 shrink-0">
-                    <h2 className="text-sm font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
-                      <span className="w-2 h-2 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
-                      Next Ride Request (Stacked)
-                    </h2>
-                  </div>
-
-                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-1">
-                    {/* Map Section (Moved to top) */}
+                    {/* Map Section (Moved to bottom) */}
                     {isLoaded &&
                       stackedRideOffer?.pickupLat &&
                       stackedRideOffer?.dropoffLat && (
@@ -5247,226 +4576,18 @@ export default function DriverTerminal() {
                         </div>
                       )}
 
-                    {/* Rider Details */}
-                    <div className="border-t border-[#2C2C30] pt-2 pb-1 relative">
-                      {/* Circular Timer Ring */}
-                      <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
-                        <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
-                          <circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className="stroke-[#2C2C30] fill-none"
-                            strokeWidth="3"
-                          />
-                          <motion.circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className={cn(
-                              "fill-none",
-                              stackedIncomingTimer > 5
-                                ? "stroke-[#00D26A]"
-                                : "stroke-[#FF3B30]",
-                            )}
-                            strokeWidth="3"
-                            strokeDasharray="88"
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{
-                              strokeDashoffset:
-                                88 - 88 * (stackedIncomingTimer / 15),
-                            }}
-                            transition={{ duration: 1, ease: "linear" }}
-                          />
-                        </svg>
-                        <span
-                          className={cn(
-                            "absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]",
-                            stackedIncomingTimer > 5
-                              ? "text-[#00D26A]"
-                              : "text-[#FF3B30]",
-                          )}
-                        >
-                          {stackedIncomingTimer}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-2 pr-10">
-                        <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
-                          {(stackedRideOffer?.name || "S")[0]}
-                        </div>
-                        <div className="flex-1 min-w-0 flex justify-between items-start">
-                          <div>
-                            <h3 className="text-[13px] font-bold text-white leading-tight truncate">
-                              {stackedRideOffer?.name || "Sarah T."}
-                            </h3>
-                            <p className="text-[11px] text-[#FF9500] font-bold">
-                              ⭐ 4.7{" "}
-                              <span className="text-[#E4E4E7] font-normal">
-                                (124 trips)
-                              </span>
-                            </p>
-                          </div>
-                          {stackedRideOffer?.isRiderPlus !== false && (
-                            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white">
-                              <Star className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                              Rider Plus
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {/* Fare Section (Moved below rider profile) */}
-                        <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
-                          <div className="flex justify-between items-end mb-1">
-                            <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
-                              £
-                              {stackedRideOffer?.fareEstimate?.toFixed(2) ||
-                                "38.50"}
-                              <div className="flex flex-col items-center justify-end leading-none mb-0.5">
-                                <span className="text-[15px] font-black text-yellow-400">
-                                  {stackedRideOffer?.distanceToPickupMiles ||
-                                    1.2}{" "}
-                                  + {stackedRideOffer?.distanceMiles || 22}
-                                </span>
-                                <span className="text-[16px] font-bold text-yellow-400">
-                                  (
-                                  {(
-                                    (stackedRideOffer?.distanceToPickupMiles ||
-                                      1.2) +
-                                    (stackedRideOffer?.distanceMiles || 22)
-                                  ).toFixed(1)}{" "}
-                                  mi)
-                                </span>
-                              </div>
-                            </h1>
-                            <div className="flex gap-1 items-center">
-                              {stackedRideOffer?.isPriority && (
-                                <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white">
-                                  <Zap className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                                  Priority
-                                </div>
-                              )}
-                              {fareConfig.surgeEnabled && (
-                                <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
-                                  <span className="text-[10px]">🔥</span>{" "}
-                                  {stackedRideOffer?.surgeModel === "fixed"
-                                    ? "+£" +
-                                      (stackedRideOffer?.surgeFixed || "2.00")
-                                    : (stackedRideOffer?.surgeMultiplier ||
-                                        "1.4") + "x"}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(() => {
-                            let finalPayout =
-                              (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !stackedRideOffer?.isSimulated
-                            ) {
-                              // Note: simulated already bundles it in fareEstimate
-                              // Absorb surge cost for driver payout if the passenger fare didn't include it explicitly
-                              // If baseCalc exists and it roughly matches fareEstimate, it means surge wasn't applied on the passenger side
-                              // We dynamically inject it into the driver payout here.
-                              const hasNoSurgeApplied =
-                                stackedRideOffer?.baseCalc
-                                  ? Math.abs(
-                                      stackedRideOffer.fareEstimate -
-                                        stackedRideOffer.baseCalc,
-                                    ) < 2.0
-                                  : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                stackedRideOffer?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  // Multiplier style
-                                  finalPayout +=
-                                    (stackedRideOffer?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
-                            return (
-                              <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
-                              </p>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-1 mb-1">
-                          <div className="relative pl-5 space-y-2 flex-1">
-                            {/* Route Line indicator */}
-                            <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
-
-                            <div className="relative">
-                              <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">
-                                Pickup
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.pickupAddress ||
-                                  "12 Elm Street, SE15"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceToPickupMiles ||
-                                  "1.2"}{" "}
-                                mi from you
-                              </p>
-                            </div>
-
-                            {(stackedRideOffer?.stops || []).map(
-                              (stop: any, idx: number) => (
-                                <div key={idx} className="relative mt-2">
-                                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                                  <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">
-                                    Stop {idx + 1}
-                                  </p>
-                                  <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                    {stop.address}
-                                  </p>
-                                </div>
-                              ),
-                            )}
-
-                            <div className="relative mt-2">
-                              <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">
-                                Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.dropoffAddress ||
-                                  "Bristol Temple Meads"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceMiles || "22"} mi
-                                from pickup
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                    
                     </div>
                   </div>
 
                   {stackedRideOffer?.comments && (
                     <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
                       <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70 leading-none">
                           Passenger Note
                         </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                        <p className="text-[#1A1A1E] text-[10px] font-bold leading-tight mt-[1px]">
                           {stackedRideOffer.comments}
                         </p>
                       </div>
@@ -5474,912 +4595,27 @@ export default function DriverTerminal() {
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
+                  <div className="flex gap-2 mt-0 shrink-0 relative z-20">
+                    {declineConfirmStacked ? (
+                      <button
+                        onClick={() => { setDeclineConfirmStacked(false); handleDeclineStackedRide(); }}
+                        className="w-[100px] h-10 bg-[#FF3B30] text-white rounded-[10px] font-black text-[12px] flex items-center justify-center active:scale-[0.98] shadow-sm transition-transform shrink-0"
+                      >
+                        CONFIRM
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setDeclineConfirmStacked(true)}
+                        className="w-10 h-10 bg-slate-900 border border-[#2C2C30] text-[#E4E4E7] rounded-[10px] flex items-center justify-center active:scale-[0.98] shadow-sm transition-transform shrink-0 hover:bg-slate-800"
+                      >
+                        <X className="w-5 h-5 stroke-[3]" />
+                      </button>
+                    )}
                     <button
-                      onClick={handleAcceptStackedRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                      onClick={() => { setDeclineConfirmStacked(false); handleAcceptStackedRide(); }}
+                      className="flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
                     >
                       <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
-                    </button>
-                    <button
-                      onClick={handleDeclineStackedRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Screen 3b: Stacked Incoming Ride Request Overlay */}
-          <AnimatePresence>
-            {stackedRideOffer && rideState === "in_progress" && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
-              >
-                {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
-                  {/* Highlight header */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
-
-                  <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
-                      <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
-                      Next Ride Request (Stacked)
-                    </h2>
-                  </div>
-
-                  <div className="flex-1 flex flex-col min-h-0 scrollbar-hide">
-                    {/* Rider Details */}
-                    <div className="pt-1 pb-1 relative">
-                      {/* Circular Timer Ring */}
-                      <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
-                        <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
-                          <circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className="stroke-[#2C2C30] fill-none"
-                            strokeWidth="3"
-                          />
-                          <motion.circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className={cn(
-                              "fill-none",
-                              stackedIncomingTimer > 5
-                                ? "stroke-[#00D26A]"
-                                : "stroke-[#FF3B30]",
-                            )}
-                            strokeWidth="3"
-                            strokeDasharray="88"
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{
-                              strokeDashoffset:
-                                88 - 88 * (stackedIncomingTimer / 15),
-                            }}
-                            transition={{ duration: 1, ease: "linear" }}
-                          />
-                        </svg>
-                        <span
-                          className={cn(
-                            "absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]",
-                            stackedIncomingTimer > 5
-                              ? "text-[#00D26A]"
-                              : "text-[#FF3B30]",
-                          )}
-                        >
-                          {stackedIncomingTimer}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-2 pr-10">
-                        <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
-                          {(stackedRideOffer?.name || "S")[0]}
-                        </div>
-                        <div className="flex-1 min-w-0 flex justify-between items-start">
-                          <div>
-                            <h3 className="text-[13px] font-bold text-white leading-tight truncate">
-                              {stackedRideOffer?.name || "Sarah T."}
-                            </h3>
-                            <p className="text-[11px] text-[#FF9500] font-bold">
-                              ⭐ 4.7{" "}
-                              <span className="text-[#E4E4E7] font-normal">
-                                (124 trips)
-                              </span>
-                            </p>
-                          </div>
-                          {stackedRideOffer?.isRiderPlus !== false && (
-                            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white">
-                              <Star className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                              Rider Plus
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {/* Fare Section (Moved below rider profile) */}
-                        <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
-                          <div className="flex justify-between items-end mb-1">
-                            <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
-                              £
-                              {stackedRideOffer?.fareEstimate?.toFixed(2) ||
-                                "38.50"}
-                              <div className="flex flex-col items-center justify-end leading-none mb-0.5">
-                                <span className="text-[15px] font-black text-yellow-400">
-                                  {stackedRideOffer?.distanceToPickupMiles ||
-                                    1.2}{" "}
-                                  + {stackedRideOffer?.distanceMiles || 22}
-                                </span>
-                                <span className="text-[16px] font-bold text-yellow-400">
-                                  (
-                                  {(
-                                    (stackedRideOffer?.distanceToPickupMiles ||
-                                      1.2) +
-                                    (stackedRideOffer?.distanceMiles || 22)
-                                  ).toFixed(1)}{" "}
-                                  mi)
-                                </span>
-                              </div>
-                            </h1>
-                            <div className="flex gap-1 items-center">
-                              {stackedRideOffer?.isPriority && (
-                                <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white">
-                                  <Zap className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                                  Priority
-                                </div>
-                              )}
-                              {fareConfig.surgeEnabled && (
-                                <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
-                                  <span className="text-[10px]">🔥</span>{" "}
-                                  {stackedRideOffer?.surgeModel === "fixed"
-                                    ? "+£" +
-                                      (stackedRideOffer?.surgeFixed || "2.00")
-                                    : (stackedRideOffer?.surgeMultiplier ||
-                                        "1.4") + "x"}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(() => {
-                            let finalPayout =
-                              (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !stackedRideOffer?.isSimulated
-                            ) {
-                              const hasNoSurgeApplied =
-                                stackedRideOffer?.baseCalc
-                                  ? Math.abs(
-                                      stackedRideOffer.fareEstimate -
-                                        stackedRideOffer.baseCalc,
-                                    ) < 2.0
-                                  : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                stackedRideOffer?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  finalPayout +=
-                                    (stackedRideOffer?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
-                            return (
-                              <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
-                              </p>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-1 mb-1">
-                          <div className="relative pl-5 space-y-2 flex-1">
-                            {/* Route Line indicator */}
-                            <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
-
-                            <div className="relative">
-                              <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">
-                                Next Pickup After Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.pickupAddress ||
-                                  "12 Elm Street, SE15"}
-                              </p>
-                              <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">
-                                {stackedRideOffer?.distanceToPickupMiles ||
-                                  "1.2"}{" "}
-                                mi from next dropoff
-                              </p>
-                            </div>
-
-                            {(stackedRideOffer?.stops || []).map(
-                              (stop: any, idx: number) => (
-                                <div key={idx} className="relative mt-2">
-                                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                                  <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">
-                                    Stop {idx + 1}
-                                  </p>
-                                  <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                    {stop.address}
-                                  </p>
-                                </div>
-                              ),
-                            )}
-
-                            <div className="relative mt-2">
-                              <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">
-                                Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.dropoffAddress ||
-                                  "Bristol Temple Meads"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceMiles || "22"} mi
-                                from pickup
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {stackedRideOffer?.comments && (
-                    <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                      <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
-                          Passenger Note
-                        </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                          {stackedRideOffer.comments}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
-                    <button
-                      onClick={handleAcceptStackedRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
-                    >
-                      <Check className="w-5 h-5 stroke-[3]" /> ACCEPT NEXT JOB
-                    </button>
-                    <button
-                      onClick={handleDeclineStackedRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Screen 3b: Stacked Incoming Ride Request Overlay */}
-          <AnimatePresence>
-            {stackedRideOffer && rideState === "in_progress" && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
-              >
-                {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
-                  {/* Highlight header */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
-
-                  <div className="flex items-center justify-between mb-2 shrink-0">
-                    <h2 className="text-sm font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
-                      <span className="w-2 h-2 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
-                      Next Ride Request (Stacked)
-                    </h2>
-                  </div>
-
-                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide -mx-2 px-2 pb-1">
-                    {/* Map Section (Moved to top) */}
-                    {isLoaded &&
-                      stackedRideOffer?.pickupLat &&
-                      stackedRideOffer?.dropoffLat && (
-                        <div className="w-full h-[140px] rounded-xl overflow-hidden relative border border-[#2C2C30] shrink-0 mb-2">
-                          <div className="absolute inset-0 pointer-events-none z-10 rounded-xl ring-1 ring-inset ring-white/10" />
-                          <GoogleMap
-                            mapContainerStyle={{
-                              width: "100%",
-                              height: "100%",
-                            }}
-                            onLoad={(map) => {
-                              setMiniMapInstance(map);
-                              const bounds =
-                                new window.google.maps.LatLngBounds();
-                              if (
-                                stackedRideOffer.pickupLat &&
-                                stackedRideOffer.pickupLng
-                              )
-                                bounds.extend({
-                                  lat: stackedRideOffer.pickupLat,
-                                  lng: stackedRideOffer.pickupLng,
-                                });
-                              if (
-                                stackedRideOffer.dropoffLat &&
-                                stackedRideOffer.dropoffLng
-                              )
-                                bounds.extend({
-                                  lat: stackedRideOffer.dropoffLat,
-                                  lng: stackedRideOffer.dropoffLng,
-                                });
-                              (stackedRideOffer.stops || []).forEach(
-                                (s: any) => {
-                                  if (s.coords) bounds.extend(s.coords);
-                                },
-                              );
-                              map.fitBounds(bounds, {
-                                top: 10,
-                                bottom: 10,
-                                left: 10,
-                                right: 10,
-                              });
-                              // Apply a max zoom in case points are very close
-                              const listener =
-                                window.google.maps.event.addListener(
-                                  map,
-                                  "idle",
-                                  () => {
-                                    if ((map.getZoom() || 0) > 17)
-                                      map.setZoom(17); // Restrict to 17 as user mentioned
-                                    window.google.maps.event.removeListener(
-                                      listener,
-                                    );
-                                  },
-                                );
-                            }}
-                            options={premiumMapOptions}
-                          >
-                            {stackedRideOffer.pickupLat && (
-                              <MarkerF
-                                position={{
-                                  lat: stackedRideOffer.pickupLat,
-                                  lng: stackedRideOffer.pickupLng,
-                                }}
-                                label="P"
-                              />
-                            )}
-                            {stackedRideOffer.dropoffLat && (
-                              <MarkerF
-                                position={{
-                                  lat: stackedRideOffer.dropoffLat,
-                                  lng: stackedRideOffer.dropoffLng,
-                                }}
-                                label="D"
-                              />
-                            )}
-                            {(stackedRideOffer.stops || []).map(
-                              (s: any, i: number) =>
-                                s.coords && (
-                                  <React.Fragment key={i}>
-                                    <MarkerF
-                                      position={s.coords}
-                                      label={`${i + 1}`}
-                                    />
-                                  </React.Fragment>
-                                ),
-                            )}
-                          </GoogleMap>
-                          {miniMapInstance && (
-                            <MapZoomControls
-                              mapInstance={miniMapInstance}
-                              className="absolute bottom-2 right-2 z-20"
-                            />
-                          )}
-                        </div>
-                      )}
-
-                    {/* Rider Details */}
-                    <div className="border-t border-[#2C2C30] pt-2 pb-1 relative">
-                      {/* Circular Timer Ring */}
-                      <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
-                        <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
-                          <circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className="stroke-[#2C2C30] fill-none"
-                            strokeWidth="3"
-                          />
-                          <motion.circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className={cn(
-                              "fill-none",
-                              stackedIncomingTimer > 5
-                                ? "stroke-[#00D26A]"
-                                : "stroke-[#FF3B30]",
-                            )}
-                            strokeWidth="3"
-                            strokeDasharray="88"
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{
-                              strokeDashoffset:
-                                88 - 88 * (stackedIncomingTimer / 15),
-                            }}
-                            transition={{ duration: 1, ease: "linear" }}
-                          />
-                        </svg>
-                        <span
-                          className={cn(
-                            "absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]",
-                            stackedIncomingTimer > 5
-                              ? "text-[#00D26A]"
-                              : "text-[#FF3B30]",
-                          )}
-                        >
-                          {stackedIncomingTimer}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-2 pr-10">
-                        <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
-                          {(stackedRideOffer?.name || "S")[0]}
-                        </div>
-                        <div className="flex-1 min-w-0 flex justify-between items-start">
-                          <div>
-                            <h3 className="text-[13px] font-bold text-white leading-tight truncate">
-                              {stackedRideOffer?.name || "Sarah T."}
-                            </h3>
-                            <p className="text-[11px] text-[#FF9500] font-bold">
-                              ⭐ 4.7{" "}
-                              <span className="text-[#E4E4E7] font-normal">
-                                (124 trips)
-                              </span>
-                            </p>
-                          </div>
-                          {stackedRideOffer?.isRiderPlus !== false && (
-                            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white">
-                              <Star className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                              Rider Plus
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {/* Fare Section (Moved below rider profile) */}
-                        <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
-                          <div className="flex justify-between items-end mb-1">
-                            <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
-                              £
-                              {stackedRideOffer?.fareEstimate?.toFixed(2) ||
-                                "38.50"}
-                              <div className="flex flex-col items-center justify-end leading-none mb-0.5">
-                                <span className="text-[15px] font-black text-yellow-400">
-                                  {stackedRideOffer?.distanceToPickupMiles ||
-                                    1.2}{" "}
-                                  + {stackedRideOffer?.distanceMiles || 22}
-                                </span>
-                                <span className="text-[16px] font-bold text-yellow-400">
-                                  (
-                                  {(
-                                    (stackedRideOffer?.distanceToPickupMiles ||
-                                      1.2) +
-                                    (stackedRideOffer?.distanceMiles || 22)
-                                  ).toFixed(1)}{" "}
-                                  mi)
-                                </span>
-                              </div>
-                            </h1>
-                            <div className="flex gap-1 items-center">
-                              {stackedRideOffer?.isPriority && (
-                                <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white">
-                                  <Zap className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                                  Priority
-                                </div>
-                              )}
-                              {fareConfig.surgeEnabled && (
-                                <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
-                                  <span className="text-[10px]">🔥</span>{" "}
-                                  {stackedRideOffer?.surgeModel === "fixed"
-                                    ? "+£" +
-                                      (stackedRideOffer?.surgeFixed || "2.00")
-                                    : (stackedRideOffer?.surgeMultiplier ||
-                                        "1.4") + "x"}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(() => {
-                            let finalPayout =
-                              (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !stackedRideOffer?.isSimulated
-                            ) {
-                              // Note: simulated already bundles it in fareEstimate
-                              // Absorb surge cost for driver payout if the passenger fare didn't include it explicitly
-                              // If baseCalc exists and it roughly matches fareEstimate, it means surge wasn't applied on the passenger side
-                              // We dynamically inject it into the driver payout here.
-                              const hasNoSurgeApplied =
-                                stackedRideOffer?.baseCalc
-                                  ? Math.abs(
-                                      stackedRideOffer.fareEstimate -
-                                        stackedRideOffer.baseCalc,
-                                    ) < 2.0
-                                  : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                stackedRideOffer?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  // Multiplier style
-                                  finalPayout +=
-                                    (stackedRideOffer?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
-                            return (
-                              <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
-                              </p>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-1 mb-1">
-                          <div className="relative pl-5 space-y-2 flex-1">
-                            {/* Route Line indicator */}
-                            <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
-
-                            <div className="relative">
-                              <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">
-                                Pickup
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.pickupAddress ||
-                                  "12 Elm Street, SE15"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceToPickupMiles ||
-                                  "1.2"}{" "}
-                                mi from you
-                              </p>
-                            </div>
-
-                            {(stackedRideOffer?.stops || []).map(
-                              (stop: any, idx: number) => (
-                                <div key={idx} className="relative mt-2">
-                                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                                  <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">
-                                    Stop {idx + 1}
-                                  </p>
-                                  <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                    {stop.address}
-                                  </p>
-                                </div>
-                              ),
-                            )}
-
-                            <div className="relative mt-2">
-                              <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">
-                                Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.dropoffAddress ||
-                                  "Bristol Temple Meads"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceMiles || "22"} mi
-                                from pickup
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {stackedRideOffer?.comments && (
-                    <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                      <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
-                          Passenger Note
-                        </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                          {stackedRideOffer.comments}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
-                    <button
-                      onClick={handleAcceptStackedRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
-                    >
-                      <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
-                    </button>
-                    <button
-                      onClick={handleDeclineStackedRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Screen 3b: Stacked Incoming Ride Request Overlay */}
-          <AnimatePresence>
-            {stackedRideOffer && rideState === "in_progress" && (
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end px-2 sm:px-4 md:px-0 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pb-[calc(4rem+env(safe-area-inset-bottom)+0.25rem)] pointer-events-none"
-              >
-                {/* Same content as before */}
-                <div className="bg-[#1A1A1E] border border-[#2C2C30] rounded-3xl p-3 shadow-2xl relative overflow-hidden pointer-events-auto flex flex-col w-full">
-                  {/* Highlight header */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00D26A] to-transparent shrink-0"></div>
-
-                  <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h2 className="text-base font-black text-[#FF3B30] px-1 tracking-wider flex items-center gap-2 uppercase">
-                      <span className="w-2.5 h-2.5 bg-[#FF3B30] rounded-full animate-pulse shadow-[0_0_8px_#FF3B30]"></span>
-                      Next Ride Request (Stacked)
-                    </h2>
-                  </div>
-
-                  <div className="flex-1 flex flex-col min-h-0 scrollbar-hide">
-                    {/* Rider Details */}
-                    <div className="pt-1 pb-1 relative">
-                      {/* Circular Timer Ring */}
-                      <div className="absolute top-1 right-0 w-9 h-9 flex items-center justify-center shrink-0">
-                        <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_4px_rgba(255,255,255,0.1)]">
-                          <circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className="stroke-[#2C2C30] fill-none"
-                            strokeWidth="3"
-                          />
-                          <motion.circle
-                            cx="18"
-                            cy="18"
-                            r="14"
-                            className={cn(
-                              "fill-none",
-                              stackedIncomingTimer > 5
-                                ? "stroke-[#00D26A]"
-                                : "stroke-[#FF3B30]",
-                            )}
-                            strokeWidth="3"
-                            strokeDasharray="88"
-                            strokeLinecap="round"
-                            initial={{ strokeDashoffset: 0 }}
-                            animate={{
-                              strokeDashoffset:
-                                88 - 88 * (stackedIncomingTimer / 15),
-                            }}
-                            transition={{ duration: 1, ease: "linear" }}
-                          />
-                        </svg>
-                        <span
-                          className={cn(
-                            "absolute text-[15px] font-medium tabular-nums font-mono drop-shadow-[0_0_6px_currentColor]",
-                            stackedIncomingTimer > 5
-                              ? "text-[#00D26A]"
-                              : "text-[#FF3B30]",
-                          )}
-                        >
-                          {stackedIncomingTimer}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-2 pr-10">
-                        <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800 text-sm border border-white shrink-0">
-                          {(stackedRideOffer?.name || "S")[0]}
-                        </div>
-                        <div className="flex-1 min-w-0 flex justify-between items-start">
-                          <div>
-                            <h3 className="text-[13px] font-bold text-white leading-tight truncate">
-                              {stackedRideOffer?.name || "Sarah T."}
-                            </h3>
-                            <p className="text-[11px] text-[#FF9500] font-bold">
-                              ⭐ 4.7{" "}
-                              <span className="text-[#E4E4E7] font-normal">
-                                (124 trips)
-                              </span>
-                            </p>
-                          </div>
-                          {stackedRideOffer?.isRiderPlus !== false && (
-                            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] shrink-0 mt-0.5 border border-white">
-                              <Star className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                              Rider Plus
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        {/* Fare Section (Moved below rider profile) */}
-                        <div className="bg-[#252529] rounded-xl p-2 relative overflow-hidden shrink-0">
-                          <div className="flex justify-between items-end mb-1">
-                            <h1 className="text-2xl leading-[1] font-black text-white flex items-end gap-2.5 shrink-0">
-                              £
-                              {stackedRideOffer?.fareEstimate?.toFixed(2) ||
-                                "38.50"}
-                              <div className="flex flex-col items-center justify-end leading-none mb-0.5">
-                                <span className="text-[15px] font-black text-yellow-400">
-                                  {stackedRideOffer?.distanceToPickupMiles ||
-                                    1.2}{" "}
-                                  + {stackedRideOffer?.distanceMiles || 22}
-                                </span>
-                                <span className="text-[16px] font-bold text-yellow-400">
-                                  (
-                                  {(
-                                    (stackedRideOffer?.distanceToPickupMiles ||
-                                      1.2) +
-                                    (stackedRideOffer?.distanceMiles || 22)
-                                  ).toFixed(1)}{" "}
-                                  mi)
-                                </span>
-                              </div>
-                            </h1>
-                            <div className="flex gap-1 items-center">
-                              {stackedRideOffer?.isPriority && (
-                                <div className="bg-white text-black px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[0_0_10px_rgba(255,255,255,0.2)] border border-white">
-                                  <Zap className="w-2.5 h-2.5 fill-black text-black" />{" "}
-                                  Priority
-                                </div>
-                              )}
-                              {fareConfig.surgeEnabled && (
-                                <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
-                                  <span className="text-[10px]">🔥</span>{" "}
-                                  {stackedRideOffer?.surgeModel === "fixed"
-                                    ? "+£" +
-                                      (stackedRideOffer?.surgeFixed || "2.00")
-                                    : (stackedRideOffer?.surgeMultiplier ||
-                                        "1.4") + "x"}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(() => {
-                            let finalPayout =
-                              (stackedRideOffer?.fareEstimate || 38.5) *
-                              (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !stackedRideOffer?.isSimulated
-                            ) {
-                              const hasNoSurgeApplied =
-                                stackedRideOffer?.baseCalc
-                                  ? Math.abs(
-                                      stackedRideOffer.fareEstimate -
-                                        stackedRideOffer.baseCalc,
-                                    ) < 2.0
-                                  : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                stackedRideOffer?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  finalPayout +=
-                                    (stackedRideOffer?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
-                            return (
-                              <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
-                              </p>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-1 mb-1">
-                          <div className="relative pl-5 space-y-2 flex-1">
-                            {/* Route Line indicator */}
-                            <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-[#2C2C30] rounded-full"></div>
-
-                            <div className="relative">
-                              <div className="absolute w-2.5 h-2.5 rounded-full bg-[#00D26A] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#00D26A] tracking-wider leading-none mb-0.5">
-                                Next Pickup After Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.pickupAddress ||
-                                  "12 Elm Street, SE15"}
-                              </p>
-                              <p className="text-[12px] font-bold text-[#00E5FF] mt-0.5">
-                                {stackedRideOffer?.distanceToPickupMiles ||
-                                  "1.2"}{" "}
-                                mi from next dropoff
-                              </p>
-                            </div>
-
-                            {(stackedRideOffer?.stops || []).map(
-                              (stop: any, idx: number) => (
-                                <div key={idx} className="relative mt-2">
-                                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#FF9500] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                                  <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-wider leading-none mb-0.5">
-                                    Stop {idx + 1}
-                                  </p>
-                                  <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                    {stop.address}
-                                  </p>
-                                </div>
-                              ),
-                            )}
-
-                            <div className="relative mt-2">
-                              <div className="absolute w-2.5 h-2.5 bg-[#FF3B30] border-[1.5px] border-[#1A1A1E] -left-[18.5px] top-[3px] z-10"></div>
-                              <p className="text-[9px] font-black uppercase text-[#FF3B30] tracking-wider leading-none mb-0.5">
-                                Drop-off
-                              </p>
-                              <p className="text-[16px] font-semibold text-white drop-shadow-sm leading-tight line-clamp-2">
-                                {stackedRideOffer?.dropoffAddress ||
-                                  "Bristol Temple Meads"}
-                              </p>
-                              <p className="text-[15px] font-bold text-yellow-400 mt-0.5">
-                                {stackedRideOffer?.distanceMiles || "22"} mi
-                                from pickup
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {stackedRideOffer?.comments && (
-                    <div className="mb-1.5 bg-[#FFD60A] border rounded-[8px] px-2 py-1.5 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] shrink-0">
-                      <MessageSquare className="w-3 h-3 text-[#1A1A1E] shrink-0 mt-[3px]" />
-                      <div>
-                        <span className="text-[#1A1A1E] text-[8px] font-black uppercase tracking-wider block mb-0 opacity-70">
-                          Passenger Note
-                        </span>
-                        <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
-                          {stackedRideOffer.comments}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col gap-1 mt-0 shrink-0 relative z-20">
-                    <button
-                      onClick={handleAcceptStackedRide}
-                      className="w-full h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
-                    >
-                      <Check className="w-5 h-5 stroke-[3]" /> ACCEPT NEXT JOB
-                    </button>
-                    <button
-                      onClick={handleDeclineStackedRide}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#E4E4E7] uppercase tracking-wider hover:text-white transition-colors"
-                    >
-                      Decline
                     </button>
                   </div>
                 </div>
@@ -6565,20 +4801,20 @@ export default function DriverTerminal() {
                           className="overflow-hidden flex flex-col gap-3"
                         >
                           {activeRide?.comments && (
-                            <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
+                            <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full min-w-0">
                               <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
-                              <div>
+                              <div className="min-w-0 flex-1">
                                 <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">
                                   Passenger Note
                                 </span>
-                                <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                                <p className="text-[#1A1A1E] text-[10px] font-bold leading-tight mt-[1px]">
                                   {activeRide.comments}
                                 </p>
                               </div>
                             </div>
                           )}
 
-                          <div className="flex justify-center gap-2">
+                          <div className="flex justify-center gap-2 mb-3 pb-3">
                             <button
                               onClick={() => setShowJobDetails(true)}
                               className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
@@ -6708,13 +4944,13 @@ export default function DriverTerminal() {
                           className="overflow-hidden flex flex-col gap-3"
                         >
                           {activeRide?.comments && (
-                            <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full">
+                            <div className="bg-[#FFD60A] border rounded-[8px] p-2 flex items-start gap-2 shadow-[0_4px_10px_rgba(255,214,10,0.2)] max-w-full min-w-0">
                               <MessageSquare className="w-3.5 h-3.5 text-[#1A1A1E] shrink-0 mt-0.5" />
-                              <div>
+                              <div className="min-w-0 flex-1">
                                 <span className="text-[#1A1A1E] text-[9px] font-black uppercase tracking-wider block mb-0.5 opacity-70">
                                   Passenger Note
                                 </span>
-                                <p className="text-[#1A1A1E] text-[11px] font-bold leading-snug truncate whitespace-normal line-clamp-2">
+                                <p className="text-[#1A1A1E] text-[10px] font-bold leading-tight mt-[1px]">
                                   {activeRide.comments}
                                 </p>
                               </div>
@@ -6739,7 +4975,7 @@ export default function DriverTerminal() {
                               </div>
                             )}
 
-                          <div className="flex justify-center gap-2 mt-1">
+                          <div className="flex justify-center gap-2 mt-1 mb-3 pb-3">
                             <button
                               onClick={() => setShowJobDetails(true)}
                               className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
@@ -6906,7 +5142,7 @@ export default function DriverTerminal() {
                           exit={{ height: 0, opacity: 0, marginTop: 0 }}
                           className="overflow-hidden flex flex-col gap-3"
                         >
-                          {activeRide?.stops?.length > 0 && (
+                          {activeRide?.stops?.length > 0 && currentLegIndex < (activeRide?.stops?.length || 0) && (
                             <div className="flex flex-col gap-2">
                               <button
                                 onClick={handleToggleWaitAtStop}
@@ -6951,7 +5187,7 @@ export default function DriverTerminal() {
                             </div>
                           )}
 
-                          <div className="flex justify-center gap-2">
+                          <div className="flex justify-center gap-2 mb-3 pb-3">
                             <button
                               onClick={() => setShowJobDetails(true)}
                               className="w-[15%] h-10 bg-[#2C2C30] rounded-[10px] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
@@ -7316,7 +5552,7 @@ export default function DriverTerminal() {
                         Rate Passenger
                       </h3>
 
-                      <div className="flex justify-center gap-2 mb-2">
+                      <div className="flex justify-center gap-2 mb-4 pb-3">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <button
                             key={star}
@@ -7657,7 +5893,7 @@ export default function DriverTerminal() {
       </AnimatePresence>
       {/* Bottom Status Widget (Sticky Floating above global nav) */}
       {rideState === "idle" && (
-        <div className="fixed bottom-[74px] left-0 right-0 px-4 z-50 pointer-events-none flex flex-col items-center">
+        <div className="fixed left-0 right-0 px-4 z-50 pointer-events-none flex flex-col items-center" style={{ bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

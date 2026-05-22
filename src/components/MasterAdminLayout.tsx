@@ -66,7 +66,7 @@ export default function MasterAdminLayout() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Universal Top Nav for Portals */}
-      <div className="bg-white border-b border-black px-4 h-16 flex items-center justify-between shadow-sm z-50 sticky top-0">
+      <div className="bg-white border-b border-black px-4 h-[calc(4rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] flex items-center justify-between shadow-sm z-50 sticky top-0">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">

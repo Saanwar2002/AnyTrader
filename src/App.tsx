@@ -56,6 +56,10 @@ import CorporatePortal from "./components/anyroller/CorporatePortal";
 import AdReport from "./components/AdReport";
 import TraderAdStudio from "./components/TraderAdStudio";
 
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
+import { Camera } from '@capacitor/camera';
+
 function IndexRoute() {
   const { activePortal, activeRole } = usePortal();
 
@@ -100,6 +104,21 @@ export default function App() {
   }, [isAuthReady]);
 
   // Global auto-scroll for inputs to keep them in view, especially on mobile
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      const requestNativePermissions = async () => {
+        try {
+          await Geolocation.requestPermissions();
+          await Camera.requestPermissions();
+        } catch (e) {
+          console.error("Error requesting permissions", e);
+        }
+      };
+      // Delay it slightly so it doesn't interrupt immediate rendering
+      setTimeout(requestNativePermissions, 1500);
+    }
+  }, []);
+
   useEffect(() => {
     const handleFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement;

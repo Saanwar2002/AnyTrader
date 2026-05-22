@@ -3005,7 +3005,7 @@ export default function PassengerBooking() {
                         initial={{ y: "100%", opacity: 0 }} 
                         animate={{ y: 0, opacity: 1 }} 
                         exit={{ y: "100%", opacity: 0 }}
-                        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-0 left-0 right-0 z-[250] bg-white rounded-t-[32px] border-t-2 border-black shadow-[0_-10px_40px_rgba(0,0,0,0.15)] flex flex-col max-h-[70vh] w-full"
+                        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-0 left-0 right-0 z-[250] bg-white rounded-t-[32px] border-t-2 border-black shadow-[0_-10px_40px_rgba(0,0,0,0.15)] flex flex-col max-h-[70vh] w-full"
                       >
                         <div className="flex justify-between items-center p-4 border-b border-black bg-slate-50 rounded-t-[32px] shrink-0">
                           <span className="font-black text-sm tracking-widest uppercase text-slate-700">
@@ -3025,7 +3025,7 @@ export default function PassengerBooking() {
                           </button>
                         </div>
 
-                        <div className="p-4 overflow-y-auto w-full max-w-[500px] mx-auto space-y-3 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+                        <div className="p-4 overflow-y-auto w-full max-w-[500px] mx-auto space-y-3 pb-[calc(env(safe-area-inset-bottom,0px)+2rem)]">
                           {showHomeBlank && (
                              <div className="text-center py-6 text-slate-500">
                                <p className="font-bold text-[15px] mb-2 text-slate-800">No home address saved.</p>
@@ -3452,7 +3452,7 @@ export default function PassengerBooking() {
                   </AnimatePresence>
                   </>
                   )}
-                  <div className="shrink-0 w-full h-[calc(6rem+env(safe-area-inset-bottom))] transition-all duration-300" />
+                  <div className="shrink-0 w-full h-[calc(6rem+env(safe-area-inset-bottom,0px))] transition-all duration-300" />
                 </div>
               </motion.div>
             )}
@@ -3535,7 +3535,7 @@ export default function PassengerBooking() {
                   <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-bold text-[15px] py-4 rounded-[16px] border border-black bg-[#dcfce7] text-[#15803d] hover:bg-[#bbf7d0] transition-colors active:scale-[0.98]">Cancel</button>
                 </div>
                 {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-[320px] font-black text-[15px] py-4 rounded-[16px] border border-black bg-[#e0e7ff] text-[#4338ca] hover:bg-[#c7d2fe] active:scale-[0.98] transition-transform">Simulate Match</button>}
-                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />
+                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom,0px))] w-full mt-auto" />
               </motion.div>
             )}
 
@@ -3902,14 +3902,14 @@ export default function PassengerBooking() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom))] w-full mt-auto" />
+                <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom,0px))] w-full mt-auto" />
               </motion.div>
               </>
             )}
 
             {step === "receipt" && completedRideData && (
               <motion.div key="receipt" initial={{ y: "100%" }} animate={{ y: 0 }} className="bg-card rounded-t-[40px] border border-border-main pointer-events-auto h-full w-full overflow-hidden relative z-[200] flex flex-col shadow-2xl">
-                <div className="flex-1 overflow-y-auto w-full p-6 no-scrollbar pb-[calc(6rem+env(safe-area-inset-bottom))]">
+                <div className="flex-1 overflow-y-auto w-full p-6 no-scrollbar pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
                   <div className="flex justify-between items-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
                     <Check className="w-6 h-6 text-emerald-600" />
@@ -4173,7 +4173,7 @@ export default function PassengerBooking() {
                 </motion.div>
               </div>
 
-              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] relative z-10 w-full mt-auto flex flex-col items-center">
+              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] relative z-10 w-full mt-auto flex flex-col items-center">
                 <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-slate-500 font-bold mb-4 text-[13px] uppercase tracking-wider">
                   Proceeding to tracking in <span className="text-slate-700 font-black">{driverFoundCountdown}</span> sec
                 </motion.p>
@@ -4197,7 +4197,7 @@ export default function PassengerBooking() {
                  onDragEnd={(e, info) => {
                    if (info.offset.y > 50) setShowRideInfo(false);
                  }}
-                 className="absolute inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-0 max-h-[85vh] bg-[#f4f7fa] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.25)] flex flex-col pointer-events-auto overflow-hidden"
+                 className="absolute inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-0 max-h-[85vh] bg-[#f4f7fa] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.25)] flex flex-col pointer-events-auto overflow-hidden"
               >
                   {/* Handle */}
                   <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 shrink-0"/>
@@ -4383,7 +4383,7 @@ export default function PassengerBooking() {
 
         <AnimatePresence>
           {isEditingJourney && (
-            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col max-h-[85vh]">
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-0 z-[400] bg-white rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col max-h-[85vh]">
                 <div className="p-4 border-b border-black flex items-center justify-between shrink-0">
                     <h2 className="text-2xl font-black text-[#0a1930] tracking-tight">Edit Journey</h2>
                     <button onClick={() => setIsEditingJourney(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
@@ -4574,7 +4574,7 @@ export default function PassengerBooking() {
                    </div>
                 </div>
                 
-                <div className="p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] border-t border-black shrink-0 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                <div className="p-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] border-t border-black shrink-0 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
                     <button 
                        onClick={async () => {
                            await handleConfirmBooking();

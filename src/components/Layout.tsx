@@ -430,7 +430,7 @@ export default function Layout() {
     <div className={cn("min-h-screen flex flex-col w-full overflow-x-hidden relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
       {/* Scheduled Maintenance Banner */}
       {showMaintenanceBanner && platformConfig?.scheduledMaintenance && (
-        <div className="bg-primary text-white px-4 py-3 flex items-center justify-between gap-4 shadow-lg z-[60]">
+        <div className="bg-primary text-white px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] flex items-center justify-between gap-4 shadow-lg z-[60]">
           <div className="flex items-center gap-3 max-w-4xl mx-auto">
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
               <Calendar className="w-6 h-6" />
@@ -451,7 +451,7 @@ export default function Layout() {
 
       {/* Guest Banner */}
       {isAnonymous && (
-        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-center gap-2 text-amber-800 text-xs font-medium">
+        <div className={cn("bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-center gap-2 text-amber-800 text-xs font-medium", !showMaintenanceBanner && "pt-[calc(0.5rem+env(safe-area-inset-top,0px))]")}>
           <AlertCircle className="w-4 h-4 text-amber-600" />
           <span>You are using a guest account. Sign up to save your data permanently.</span>
           <Link to="/profile" className="underline font-bold hover:text-amber-900 ml-1">
@@ -465,7 +465,7 @@ export default function Layout() {
 
       {/* Header */}
       {!isDriverTerminal && activePortal !== 'anyroller' && (
-      <header className="bg-slate-50/95 backdrop-blur-md border-b border-black sticky top-0 z-50">
+      <header className={cn("bg-slate-50/95 backdrop-blur-md border-b border-black sticky top-0 z-50", !isAnonymous && !showMaintenanceBanner && "pt-[env(safe-area-inset-top,0px)]")}>
           <div className="max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
               {activePortal === "anyroller" && (
@@ -1147,7 +1147,7 @@ export default function Layout() {
       {/* Bottom Navigation (Mobile) */}
       {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && !location.pathname.startsWith('/profile') && (
         <nav id="mobile-bottom-nav" className={cn(
-          "sm:hidden fixed bottom-0 left-0 right-0 w-full backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t pb-[env(safe-area-inset-bottom)] h-[calc(4.5rem+env(safe-area-inset-bottom))] flex items-center justify-between z-[100] transition-all duration-300",
+          "sm:hidden fixed bottom-0 left-0 right-0 w-full backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t pb-[env(safe-area-inset-bottom,0px)] h-[calc(4.5rem+env(safe-area-inset-bottom,0px))] flex items-center justify-between z-[100] transition-all duration-300",
           isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : 
             (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'properties') ? "bg-slate-100/95 border-black" :
             (activePortal === "anytrader" && activeRole === 'business' && activeTab === 'field_services') ? (activeSubTab === "hire_b2b" ? "bg-sky-50/95 border-sky-200" : "bg-blue-50/95 border-blue-200") :

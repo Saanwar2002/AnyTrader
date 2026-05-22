@@ -92,7 +92,7 @@ export default function CrossPortalBanner() {
           switchPortal('anyroller');
           navigate('/my-rides');
         }}
-        className="w-full bg-[#00D26A] text-[#0D0D0F] px-4 py-3 flex items-center justify-center gap-3 shadow-lg z-[60] sticky top-0 active:scale-[0.98] transition-all border-b border-[#00D26A]/80 cursor-pointer"
+        className="w-full bg-[#00D26A] text-[#0D0D0F] px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] flex items-center justify-center gap-3 shadow-lg z-[60] sticky top-0 active:scale-[0.98] transition-all border-b border-[#00D26A]/80 cursor-pointer"
       >
         <Car className="w-5 h-5 flex-shrink-0" />
         <span className="font-bold text-sm tracking-wide">
