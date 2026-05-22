@@ -108,10 +108,27 @@ export default function App() {
     if (Capacitor.isNativePlatform()) {
       const requestNativePermissions = async () => {
         try {
+          // Request Location permission
           await Geolocation.requestPermissions();
+        } catch (e) {
+          console.error("Error requesting geolocation permission at startup:", e);
+        }
+
+        try {
+          // Request Camera permission
           await Camera.requestPermissions();
         } catch (e) {
-          console.error("Error requesting permissions", e);
+          console.error("Error requesting camera permission at startup:", e);
+        }
+
+        try {
+          // Request Microphone permission via standard Web API inside WebView
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+          }
+        } catch (e) {
+          console.error("Error requesting microphone permission at startup:", e);
         }
       };
       // Delay it slightly so it doesn't interrupt immediate rendering
