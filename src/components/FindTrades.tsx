@@ -934,7 +934,7 @@ export default function FindTrades() {
                     {tp.trades?.[0] || 'Professional'}
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-slate-600">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 text-[11px] font-bold text-slate-600 leading-normal">
                      <div className="flex items-center gap-1">
                       <Star className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
                       <span className="text-slate-900">{tp.rating?.toFixed(1) || '5.0'}</span>

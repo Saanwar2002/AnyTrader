@@ -160,7 +160,8 @@ export default function EmergencyJobWizard() {
         // Attempt 1: Resumable Upload
         console.log("Attempt 1: uploadBytesResumable...");
         try {
-          const uploadTask = uploadBytesResumable(storageRef, file);
+          const arrayBuffer = await file.arrayBuffer();
+          const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: file.type });
           await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => { uploadTask.cancel(); reject(new Error("TIMEOUT_RESUMABLE")); }, 90000);
             uploadTask.on('state_changed', 

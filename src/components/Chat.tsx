@@ -128,7 +128,7 @@ export default function Chat() {
     setIsUploading(true);
     try {
       const storageRef = ref(storage, `chats/${conversationId}/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
+      const snapshot = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
       const url = await getDownloadURL(snapshot.ref);
 
       await addDoc(collection(db, "conversations", conversationId, "messages"), {
@@ -214,7 +214,7 @@ export default function Chat() {
     setIsUploading(true);
     try {
       const storageRef = ref(storage, `chats/${conversationId}/${Date.now()}_voice.webm`);
-      const snapshot = await uploadBytes(storageRef, blob);
+      const snapshot = await uploadBytes(storageRef, await blob.arrayBuffer(), { contentType: blob.type });
       const url = await getDownloadURL(snapshot.ref);
 
       await addDoc(collection(db, "conversations", conversationId, "messages"), {

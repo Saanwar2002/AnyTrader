@@ -1174,7 +1174,7 @@ export default function Layout() {
                 to={item.path}
                 state={(item as any).state}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 transition-colors relative flex-1 min-w-0 mx-1 h-[60px] rounded-[16px] z-10",
+                  "flex flex-col items-center justify-center gap-0.5 transition-colors relative flex-1 min-w-0 mx-0.5 h-[58px] rounded-[16px] z-10 px-0.5",
                   isActive 
                     ? "text-white font-black"
                     : (isDriverTerminal ? "text-[#E4E4E7] hover:text-white font-bold" : "text-slate-900 font-bold"),
@@ -1182,7 +1182,7 @@ export default function Layout() {
                 )}
               >
                 <div className="relative flex-shrink-0 mt-0.5">
-                  <Icon className={cn(isActive ? "w-6 h-6" : "w-5 h-5", item.isCta && "w-6 h-6")} />
+                  <Icon className={cn(isActive ? "w-5.5 h-5.5" : "w-5 h-5", item.isCta && "w-6 h-6")} />
                   {hasUnread && (
                     <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -1190,7 +1190,7 @@ export default function Layout() {
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] min-[380px]:text-[11px] sm:text-[12px] tracking-tight text-center leading-none truncate w-full">{item.name}</span>
+                <span className="text-[9px] min-[360px]:text-[10px] min-[400px]:text-[11px] tracking-tighter text-center leading-tight truncate w-full px-0.5">{item.name}</span>
                 {isActive && (
                    <motion.div 
                      layoutId="navActiveBg"

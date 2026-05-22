@@ -633,7 +633,7 @@ export default function Profile() {
         downloadUrl = `https://placehold.co/200x200?text=Guest+Avatar`;
       } else {
         const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
+        await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
         downloadUrl = await getDownloadURL(storageRef);
       }
       
@@ -664,7 +664,7 @@ export default function Profile() {
         downloadUrl = `https://placehold.co/600x400?text=Portfolio+Item`;
       } else {
         const storageRef = ref(storage, `portfolio/${user.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
+        await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
         downloadUrl = await getDownloadURL(storageRef);
       }
       
@@ -729,7 +729,7 @@ export default function Profile() {
         const storageRef = ref(storage, `verifications/${user.uid}/${certType.replace(/\s/g, '_')}_${Date.now()}_${file.name}`);
         console.log("Uploading to:", storageRef.fullPath);
         
-        const uploadResult = await uploadBytes(storageRef, file);
+        const uploadResult = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
         downloadUrlFinal = await getDownloadURL(uploadResult.ref);
       }
 

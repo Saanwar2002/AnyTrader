@@ -576,37 +576,39 @@ export default function PostJobWizard() {
       console.log("Attempt 1: uploadBytesResumable...");
       try {
         const url = await new Promise<string>((resolve, reject) => {
-          const uploadTask = uploadBytesResumable(storageRef, blob!);
-          
-          const timeout = setTimeout(() => {
-            console.warn("Resumable upload timed out at 0% (30s)");
-            uploadTask.cancel();
-            reject(new Error("TIMEOUT_0"));
-          }, 30000);
+          blob!.arrayBuffer().then((arrayBuffer) => {
+            const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: blob!.type });
+            
+            const timeout = setTimeout(() => {
+              console.warn("Resumable upload timed out at 0% (30s)");
+              uploadTask.cancel();
+              reject(new Error("TIMEOUT_0"));
+            }, 30000);
 
-          uploadTask.on('state_changed', 
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
-              if (progress > 0) {
+            uploadTask.on('state_changed', 
+              (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+                if (progress > 0) {
+                  clearTimeout(timeout);
+                  console.log(`Upload started! Progress: ${progress.toFixed(2)}%`);
+                }
+              }, 
+              (error) => {
                 clearTimeout(timeout);
-                console.log(`Upload started! Progress: ${progress.toFixed(2)}%`);
+                if (error.code === 'storage/canceled') return; 
+                if (error.code === 'storage/unauthorized') {
+                  console.error("STORAGE_PERMISSION_DENIED: Check your Firebase Storage rules.");
+                }
+                reject(error);
+              }, 
+              async () => {
+                clearTimeout(timeout);
+                const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(downloadUrl);
               }
-            }, 
-            (error) => {
-              clearTimeout(timeout);
-              if (error.code === 'storage/canceled') return; 
-              if (error.code === 'storage/unauthorized') {
-                console.error("STORAGE_PERMISSION_DENIED: Check your Firebase Storage rules.");
-              }
-              reject(error);
-            }, 
-            async () => {
-              clearTimeout(timeout);
-              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadUrl);
-            }
-          );
+            );
+          }).catch(reject);
         });
         
         setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
@@ -621,7 +623,8 @@ export default function PostJobWizard() {
       // Attempt 2: uploadBytes (Simpler binary upload)
       console.log("Attempt 2: uploadBytes fallback...");
       try {
-        const uploadPromise = uploadBytes(storageRef, blob);
+        const arrayBuffer = await blob.arrayBuffer();
+        const uploadPromise = uploadBytes(storageRef, arrayBuffer, { contentType: blob.type });
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error("TIMEOUT_FALLBACK")), 90000)
         );
@@ -695,7 +698,8 @@ export default function PostJobWizard() {
         const fileName = `jobs/${user.uid}/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, fileName);
         
-        const uploadTask = uploadBytesResumable(storageRef, file);
+        const arrayBuffer = await file.arrayBuffer();
+        const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: file.type });
         
         return new Promise<string>((resolve, reject) => {
           uploadTask.on('state_changed', 
@@ -740,7 +744,7 @@ export default function PostJobWizard() {
         const fileName = `jobs/${user.uid}/docs/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, fileName);
         
-        const snapshot = await uploadBytes(storageRef, file);
+        const snapshot = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
         const url = await getDownloadURL(snapshot.ref);
         return { name: file.name, url };
       });
@@ -820,7 +824,8 @@ export default function PostJobWizard() {
         const storageRef = ref(storage, fileName);
         
         console.log("Uploading video to Firebase Storage:", fileName);
-        const uploadTask = uploadBytesResumable(storageRef, blob);
+        const arrayBuffer = await blob.arrayBuffer();
+        const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: blob.type });
         
         const url = await new Promise<string>((resolve, reject) => {
           let isTimedOut = false;

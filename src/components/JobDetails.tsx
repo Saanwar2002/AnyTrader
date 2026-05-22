@@ -1276,7 +1276,7 @@ const libraries: any[] = ['places'];
       const photoUrls: string[] = [];
       for (const file of disputePhotos) {
         const storageRef = ref(storage, `disputes/${id}/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(storageRef, file);
+        const snapshot = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
         const url = await getDownloadURL(snapshot.ref);
         photoUrls.push(url);
       }
@@ -1790,7 +1790,7 @@ const libraries: any[] = ['places'];
       
       for (const file of files) {
         const fileRef = ref(storage, `jobs/${id}/before_photos/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(fileRef, file);
+        const snapshot = await uploadBytes(fileRef, await file.arrayBuffer(), { contentType: file.type });
         const url = await getDownloadURL(snapshot.ref);
         urls.push(url);
       }
