@@ -25,11 +25,13 @@ export const getGoogleMapsApiKey = (): string => {
     );
   };
 
-  if (Capacitor.isNativePlatform() && isValid(androidKey)) {
-    return androidKey.trim();
-  }
+  // For Maps JavaScript API, we MUST use a Web key (HTTP Referrer restricted)
+  // even on Android Capacitor, because it runs in a WebView.
   if (isValid(webKey)) {
     return webKey.trim();
+  }
+  if (Capacitor.isNativePlatform() && isValid(androidKey)) {
+    return androidKey.trim();
   }
   return "";
 };
