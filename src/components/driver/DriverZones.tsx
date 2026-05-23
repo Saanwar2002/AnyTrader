@@ -33,12 +33,38 @@ export default function DriverZones({ onClose }: { onClose: () => void }) {
     const timer = setTimeout(async () => {
       try {
         if (!window.google) return;
-        const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
-        const request = {
-          input: searchQuery,
-          includedRegionCodes: ["gb"]
-        };
-        const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+        let predictions: any[] = [];
+        try {
+          const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
+          const request = {
+            input: searchQuery,
+            includedRegionCodes: ["gb"]
+          };
+          const res = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+          predictions = res.suggestions || [];
+        } catch (newApiError: any) {
+          console.warn("New Places API fetch failed in DriverZones, trying classic AutocompleteService:", newApiError);
+          const classicService = new google.maps.places.AutocompleteService();
+          const request = {
+            input: searchQuery,
+            componentRestrictions: { country: "gb" }
+          };
+          predictions = await new Promise<any[]>((resolve) => {
+            classicService.getPlacePredictions(request, (classicPredictions, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && classicPredictions) {
+                resolve(classicPredictions.map((cp: any) => ({
+                  placePrediction: {
+                    text: { text: cp.description },
+                    placeId: cp.place_id
+                  }
+                })));
+              } else {
+                resolve([]);
+              }
+            });
+          });
+        }
+
         if (predictions && predictions.length > 0) {
           const cleaned = predictions.map((p: any) => ({
             description: p.placePrediction.text.text,

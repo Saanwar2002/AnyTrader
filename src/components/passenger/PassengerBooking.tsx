@@ -1200,22 +1200,48 @@ export default function PassengerBooking() {
           throw new Error("Google Maps not loaded. Check API Key or libraries.");
         }
 
-        const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
-
+        let predictions: any[] = [];
         const userLat = passengerPos?.lat || mapCenter?.lat || 53.6458;
         const userLng = passengerPos?.lng || mapCenter?.lng || -1.7850;
 
-        const request = {
-          input: val,
-          includedRegionCodes: ['GB'],
-          locationBias: {
-            center: { lat: userLat, lng: userLng },
+        try {
+          const { AutocompleteSuggestion } = await window.google.maps.importLibrary("places") as any;
+          const request = {
+            input: val,
+            includedRegionCodes: ['GB'],
+            locationBias: {
+              center: { lat: userLat, lng: userLng },
+              radius: 50000
+            },
+            origin: { lat: userLat, lng: userLng }
+          };
+          const res = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+          predictions = res.suggestions || [];
+        } catch (newApiError: any) {
+          console.warn("New Places API fetch failed, trying classic AutocompleteService fallback:", newApiError);
+          const classicService = new window.google.maps.places.AutocompleteService();
+          const request = {
+            input: val,
+            componentRestrictions: { country: 'gb' },
+            location: new window.google.maps.LatLng(userLat, userLng),
             radius: 50000
-          },
-          origin: { lat: userLat, lng: userLng }
-        };
-
-        const { suggestions: predictions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+          };
+          predictions = await new Promise<any[]>((resolve) => {
+            classicService.getPlacePredictions(request as any, (classicPredictions, status) => {
+              if (status === window.google.maps.places.PlacesServiceStatus.OK && classicPredictions) {
+                resolve(classicPredictions.map((cp: any) => ({
+                  placePrediction: {
+                    text: { text: cp.description },
+                    placeId: cp.place_id,
+                    distanceMeters: undefined
+                  }
+                })));
+              } else {
+                resolve([]);
+              }
+            });
+          });
+        }
 
         setIsLoadingAddress(false);
         let finalSuggestions: any[] = [];
@@ -2154,7 +2180,7 @@ export default function PassengerBooking() {
       }
     };
 
-    if (s.placePrediction) {
+    if (s.placePrediction && typeof s.placePrediction.toPlace === "function") {
       if (!window.google || !window.google.maps) {
         import("sonner").then(({ toast }) => toast.error("Google Maps not loaded"));
         return;

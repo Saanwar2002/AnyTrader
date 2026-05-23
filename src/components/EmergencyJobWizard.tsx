@@ -513,26 +513,45 @@ export default function EmergencyJobWizard() {
                   }
                   
                   const timeout = setTimeout(async () => {
+                    let predictions: any[] = [];
                     try {
                       const { AutocompleteSuggestion } = await google.maps.importLibrary("places") as any;
                       const request = {
                         input: val,
                         includedRegionCodes: ['gb']
                       };
-                      
-                      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
-                      
-                      if (suggestions && suggestions.length > 0) {
-                        setAddressSuggestions(suggestions.map((p: any) => ({
-                          label: p.placePrediction.text.text,
-                          placeId: p.placePrediction.placeId,
-                          placePrediction: p.placePrediction
-                        })));
-                      } else {
-                        setAddressSuggestions([]);
-                      }
-                    } catch (err) {
-                      console.error(err);
+                      const res = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+                      predictions = res.suggestions || [];
+                    } catch (newApiError: any) {
+                      console.warn("New Places API fetch failed in EmergencyJobWizard, trying classic AutocompleteService:", newApiError);
+                      const classicService = new google.maps.places.AutocompleteService();
+                      const request = {
+                        input: val,
+                        componentRestrictions: { country: 'gb' }
+                      };
+                      predictions = await new Promise<any[]>((resolve) => {
+                        classicService.getPlacePredictions(request, (classicPredictions, status) => {
+                          if (status === google.maps.places.PlacesServiceStatus.OK && classicPredictions) {
+                            resolve(classicPredictions.map((cp: any) => ({
+                              placePrediction: {
+                                text: { text: cp.description },
+                                placeId: cp.place_id
+                              }
+                            })));
+                          } else {
+                            resolve([]);
+                          }
+                        });
+                      });
+                    }
+
+                    if (predictions && predictions.length > 0) {
+                      setAddressSuggestions(predictions.map((p: any) => ({
+                        label: p.placePrediction.text.text,
+                        placeId: p.placePrediction.placeId,
+                        placePrediction: p.placePrediction
+                      })));
+                    } else {
                       setAddressSuggestions([]);
                     }
                   }, 500);
@@ -651,7 +670,34 @@ export default function EmergencyJobWizard() {
                               }));
                             }
                           } catch (err) {
-                            console.error(err);
+                            console.warn("New Places fetchFields failed, trying Geocoder fallback:", err);
+                            try {
+                              const geocoder = new google.maps.Geocoder();
+                              const geocodeRes = await geocoder.geocode({ placeId: suggestion.placeId });
+                              if (geocodeRes.results && geocodeRes.results.length > 0) {
+                                const result = geocodeRes.results[0];
+                                let newCity = formData.city;
+                                let newArea = formData.area;
+                                let newPostcode = "";
+                                result.address_components.forEach((comp: any) => {
+                                  if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
+                                  if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
+                                  if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
+                                });
+                                if (!newPostcode) {
+                                  const pcMatch = suggestion.label.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                                  newPostcode = pcMatch ? pcMatch[0] : "";
+                                }
+                                setFormData(prev => ({
+                                  ...prev,
+                                  city: newCity || prev.city,
+                                  area: newArea || prev.area,
+                                  postcode: newPostcode
+                                }));
+                              }
+                            } catch (geoErr) {
+                              console.error("Geocoder fallback failed:", geoErr);
+                            }
                           }
                         }
                       }}
