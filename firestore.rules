@@ -393,6 +393,18 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }
+    match /support_tickets/{ticketId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn();
+    }
+    match /bidding_jobs/{jobId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.tradespersonId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (request.resource.data.tradespersonId == request.auth.uid || isAdmin());
+    }
+    match /affiliates/{affiliateId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
     match /appointments/{appointmentId} {
       allow get: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('traderId', '') == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.traderId == request.auth.uid || isAdmin());

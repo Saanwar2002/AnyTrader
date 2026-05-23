@@ -5,7 +5,7 @@ import { usePortal } from "../../lib/PortalContext";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
-import { triggerHaptic, ImpactStyle, getGoogleMapsApiKey } from "@/src/lib/capacitor";
+import { triggerHaptic, ImpactStyle, getGoogleMapsApiKey, isCapacitor, speakText } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
 import {
   Navigation,
@@ -124,6 +124,7 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
+  mapId: "DEMO_MAP_ID", // Enables Vector Map (WebGL) for smooth rotation (heading/tilt)
   mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
@@ -175,12 +176,17 @@ const premiumMapOptions: google.maps.MapOptions = {
     {
       featureType: "road",
       elementType: "geometry",
-      stylers: [{ color: "#f5f1e6" }],
+      stylers: [{ color: "#ffffff" }],
     },
     {
       featureType: "road.arterial",
       elementType: "geometry",
-      stylers: [{ color: "#fdfcf8" }],
+      stylers: [{ color: "#f8c967" }],
+    },
+    {
+      featureType: "road.arterial",
+      elementType: "geometry.stroke",
+      stylers: [{ color: "#e9bc62" }],
     },
     {
       featureType: "road.highway",
@@ -760,7 +766,7 @@ export default function DriverTerminal() {
   // TTS Interruption Recovery (Resume if interrupted by OS/Phone call)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && window.speechSynthesis && window.speechSynthesis.paused) {
+      if (document.visibilityState === 'visible' && !isCapacitor() && window.speechSynthesis && window.speechSynthesis.paused) {
          window.speechSynthesis.resume();
       }
     };
@@ -768,7 +774,7 @@ export default function DriverTerminal() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     
     const resumeInterval = setInterval(() => {
-      if (window.speechSynthesis && window.speechSynthesis.paused) {
+      if (!isCapacitor() && window.speechSynthesis && window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
     }, 5000);
@@ -804,14 +810,9 @@ export default function DriverTerminal() {
         setLastSpokenInstruction(initialSpokenText);
         spokenDistancesRef.current.clear();
 
-        if ("speechSynthesis" in window && navVoiceVolume > 0) {
+        if (navVoiceVolume > 0) {
           // Speak the initial step instruction
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(initialSpokenText);
-          utterance.lang = "en-GB";
-          utterance.rate = 1.0;
-          utterance.volume = navVoiceVolume;
-          window.speechSynthesis.speak(utterance);
+          speakText(initialSpokenText, navVoiceVolume);
         }
       }
 
@@ -839,14 +840,9 @@ export default function DriverTerminal() {
               }
             }
 
-            if ("speechSynthesis" in window && navVoiceVolume > 0) {
-              window.speechSynthesis.cancel();
+            if (navVoiceVolume > 0) {
               const prepPhrase = `In ${distString}`;
-              const utterance = new SpeechSynthesisUtterance(`${prepPhrase}, ${nextPlain}${doubleTurnPlain}`);
-              utterance.lang = "en-GB";
-              utterance.rate = 1.0;
-              utterance.volume = navVoiceVolume;
-              window.speechSynthesis.speak(utterance);
+              speakText(`${prepPhrase}, ${nextPlain}${doubleTurnPlain}`, navVoiceVolume);
             }
           }
         }
@@ -884,16 +880,12 @@ export default function DriverTerminal() {
         !hasAnnouncedArrival
       ) {
         setHasAnnouncedArrival(true);
-        if ("speechSynthesis" in window && navVoiceVolume > 0) {
-          window.speechSynthesis.cancel();
+        if (navVoiceVolume > 0) {
           const text =
             rideState === "en_route_pickup"
               ? "You have arrived at the pickup location."
               : "You have arrived at your destination.";
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.rate = 1.0;
-          utterance.volume = navVoiceVolume;
-          window.speechSynthesis.speak(utterance);
+          speakText(text, navVoiceVolume);
         }
         if (mapInstance && (mapInstance.getZoom() || 0) < 17) {
           mapInstance.setZoom(17);
@@ -1105,7 +1097,22 @@ export default function DriverTerminal() {
               time: now,
             };
           } else {
-            // Silently handle non-OK statuses (ZERO_RESULTS, UNKNOWN_ERROR, etc.)
+            console.error(
+              "DirectionsService failed:",
+              status,
+              "Origin:",
+              originLat,
+              originLng,
+              "Dest:",
+              destLat,
+              destLng,
+              "Result:",
+              result
+            );
+            // Show alert in capacitor to help debug why it fails
+            if (isCapacitor()) {
+              alert(`Google Maps Directions API failed: ${status}. This is usually because the app restricts referrers, and Android WebViews sometimes drop the Referer header for internal API XHR requests. Try temporarily setting your Directions API key to "None" for restrictions to verify.`);
+            }
           }
         }
       );
@@ -3164,7 +3171,7 @@ export default function DriverTerminal() {
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="absolute bottom-[140px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4 p-4 drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)]"
+                    className="absolute bottom-[220px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4 p-4 drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)]"
                   >
                     <div className="flex-1 w-full max-w-sm flex flex-col items-center">
                       {/* !!! USER REQUESTED DESIGN LOCK !!! */}

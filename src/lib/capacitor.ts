@@ -65,3 +65,35 @@ export const hideNativeKeyboard = async () => {
     }
   }
 };
+
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
+
+export const speakText = async (text: string, volume: number = 1.0) => {
+  if (volume <= 0 || !text) return;
+
+  if (isCapacitor()) {
+    try {
+      await TextToSpeech.speak({
+        text: text,
+        lang: 'en-GB',
+        rate: 1.0,
+        pitch: 1.0,
+        volume: volume,
+        category: 'ambient',
+      });
+    } catch (e) {
+      console.warn('Capacitor TTS failed', e);
+    }
+  } else if ("speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-GB";
+      utterance.rate = 1.0;
+      utterance.volume = volume;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Web TTS failed', e);
+    }
+  }
+};
