@@ -159,13 +159,34 @@ export default function EmergencyJobWizard() {
         const storageRef = ref(storage, fileName);
         console.log("Attempting upload to:", storageRef.fullPath, "Bucket:", storage.app.options.storageBucket);
 
-        // Attempt 1: Resumable Upload
-        console.log("Attempt 1: uploadBytesResumable...");
+        // Directly use uploadBytes (highly performant, robust, and completely bypasses TIMEOUT_RESUMABLE)
+        console.log("Uploading file via robust uploadBytes...");
         try {
+          const arrayBuffer = await file.arrayBuffer();
+          
+          // Let's simulate a quick nice progress bar since uploadBytes doesn't emit progress events
+          let progress = 10;
+          setUploadProgress(progress);
+          const progressInterval = setInterval(() => {
+            if (progress < 90) {
+              progress += 15;
+              setUploadProgress(progress);
+            }
+          }, 150);
+
+          const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+          
+          return await getDownloadURL(snapshot.ref);
+        } catch (err) {
+          console.error("Upload via uploadBytes failed, attempting uploadBytesResumable fallback:", err);
+          
+          // Fallback to uploadBytesResumable only if uploadBytes fails
           const arrayBuffer = await file.arrayBuffer();
           const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: file.type });
           await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => { uploadTask.cancel(); reject(new Error("TIMEOUT_RESUMABLE")); }, 90000);
+            const timeout = setTimeout(() => { uploadTask.cancel(); reject(new Error("TIMEOUT_RESUMABLE")); }, 30000);
             uploadTask.on('state_changed', 
               (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
               (error) => { clearTimeout(timeout); reject(error); },
@@ -173,9 +194,6 @@ export default function EmergencyJobWizard() {
             );
           });
           return await getDownloadURL(storageRef);
-        } catch (err) {
-          console.error("Attempt 1 failed:", err);
-          throw err; // Rethrow to trigger catch block
         }
       });
 

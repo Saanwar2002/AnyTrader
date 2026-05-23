@@ -25,12 +25,16 @@ export const getGoogleMapsApiKey = (): string => {
     );
   };
 
-  // For Maps JavaScript API, we MUST use a Web key (HTTP Referrer restricted)
-  // even on Android Capacitor, because it runs in a WebView.
+  // If we are running inside native Capacitor, check and prefer the Android/Native API key first,
+  // since the Web API key is usually restricted to web referrers which would fail inside WebViews.
+  if (Capacitor.isNativePlatform() && isValid(androidKey)) {
+    return androidKey.trim();
+  }
+
   if (isValid(webKey)) {
     return webKey.trim();
   }
-  if (Capacitor.isNativePlatform() && isValid(androidKey)) {
+  if (isValid(androidKey)) {
     return androidKey.trim();
   }
   return "";

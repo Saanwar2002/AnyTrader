@@ -76,7 +76,7 @@ import {
   addDoc,
   orderBy,
 } from "@/src/firebase";
-import { playSound, speakText } from "@/src/lib/sound";
+import { playSound } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
 import DriverAnalytics from "./DriverAnalytics";
 import DriverInbox from "./DriverInbox";

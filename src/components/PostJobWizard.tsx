@@ -50,7 +50,7 @@ import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
-import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
+import { getGoogleMapsApiKey, isCapacitor } from "@/src/lib/capacitor";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 import { toast } from "sonner";
 
@@ -604,18 +604,34 @@ export default function PostJobWizard() {
       const fileName = `jobs/${user.uid}/${Date.now()}.jpg`;
       const storageRef = ref(storage, fileName);
       
-      // Attempt 1: uploadBytesResumable (Best for progress)
-      console.log("Attempt 1: uploadBytesResumable...");
+      // Attempt 1: uploadBytes (Fastest, simplest, and highly robust)
+      console.log("Attempt 1: uploadBytes (robust standard)...");
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        setUploadProgress(10);
+        const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: blob.type });
+        setUploadProgress(100);
+        const url = await getDownloadURL(snapshot.ref);
+        
+        setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
+        handleStopCamera();
+        return;
+      } catch (err: any) {
+        console.error("Attempt 1 (uploadBytes) failed, trying Attempt 2 (uploadBytesResumable) fallback:", err);
+      }
+
+      // Attempt 2: uploadBytesResumable (Fallback)
+      console.log("Attempt 2: uploadBytesResumable...");
       try {
         const url = await new Promise<string>((resolve, reject) => {
           blob!.arrayBuffer().then((arrayBuffer) => {
             const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: blob!.type });
             
             const timeout = setTimeout(() => {
-              console.warn("Resumable upload timed out at 0% (30s)");
+              console.warn("Resumable upload timed out at 0% (20s)");
               uploadTask.cancel();
               reject(new Error("TIMEOUT_0"));
-            }, 30000);
+            }, 20000);
 
             uploadTask.on('state_changed', 
               (snapshot) => {
@@ -623,15 +639,10 @@ export default function PostJobWizard() {
                 setUploadProgress(progress);
                 if (progress > 0) {
                   clearTimeout(timeout);
-                  console.log(`Upload started! Progress: ${progress.toFixed(2)}%`);
                 }
               }, 
               (error) => {
                 clearTimeout(timeout);
-                if (error.code === 'storage/canceled') return; 
-                if (error.code === 'storage/unauthorized') {
-                  console.error("STORAGE_PERMISSION_DENIED: Check your Firebase Storage rules.");
-                }
                 reject(error);
               }, 
               async () => {
@@ -645,27 +656,7 @@ export default function PostJobWizard() {
         
         setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
         handleStopCamera();
-        return; 
-      } catch (err: any) {
-        if (err.message !== "TIMEOUT_0") {
-          console.error("Resumable upload failed:", err);
-        }
-      }
-
-      // Attempt 2: uploadBytes (Simpler binary upload)
-      console.log("Attempt 2: uploadBytes fallback...");
-      try {
-        const arrayBuffer = await blob.arrayBuffer();
-        const uploadPromise = uploadBytes(storageRef, arrayBuffer, { contentType: blob.type });
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("TIMEOUT_FALLBACK")), 90000)
-        );
-        
-        await Promise.race([uploadPromise, timeoutPromise]);
-        const url = await getDownloadURL(storageRef);
-        setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
-        handleStopCamera();
-        return; 
+        return;
       } catch (err: any) {
         console.error("Simple upload fallback failed:", err.message || err);
         if (err.code === 'storage/unauthorized') {
@@ -730,22 +721,53 @@ export default function PostJobWizard() {
         const fileName = `jobs/${user.uid}/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, fileName);
         
-        const arrayBuffer = await file.arrayBuffer();
-        const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: file.type });
-        
-        return new Promise<string>((resolve, reject) => {
-          uploadTask.on('state_changed', 
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        // Directly use uploadBytes (highly performant, robust, and completely bypasses TIMEOUT_RESUMABLE)
+        console.log("Uploading gallery file via robust uploadBytes...");
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          
+          let progress = 10;
+          setUploadProgress(progress);
+          const progressInterval = setInterval(() => {
+            if (progress < 90) {
+              progress += 15;
               setUploadProgress(progress);
-            }, 
-            (error) => reject(error), 
-            async () => {
-              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadUrl);
             }
-          );
-        });
+          }, 150);
+
+          const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+          
+          return await getDownloadURL(snapshot.ref);
+        } catch (err) {
+          console.error("Gallery upload via uploadBytes failed, attempting uploadBytesResumable fallback:", err);
+          const arrayBuffer = await file.arrayBuffer();
+          const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: file.type });
+          
+          return new Promise<string>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              uploadTask.cancel();
+              reject(new Error("TIMEOUT_RESUMABLE"));
+            }, 30000);
+            
+            uploadTask.on('state_changed', 
+              (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+              }, 
+              (error) => {
+                clearTimeout(timeout);
+                reject(error);
+              }, 
+              async () => {
+                clearTimeout(timeout);
+                const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(downloadUrl);
+              }
+            );
+          });
+        }
       });
 
       const urls = (await Promise.all(uploadPromises)).filter((url): url is string => url !== null);
@@ -855,54 +877,64 @@ export default function PostJobWizard() {
         const fileName = `jobs/${user.uid}/${Date.now()}.${extension}`;
         const storageRef = ref(storage, fileName);
         
-        console.log("Uploading video to Firebase Storage:", fileName);
+        console.log("Uploading video to Firebase Storage via uploadBytes:", fileName);
         const arrayBuffer = await blob.arrayBuffer();
-        const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: blob.type });
         
-        const url = await new Promise<string>((resolve, reject) => {
-          let isTimedOut = false;
-          const timeout = setTimeout(() => {
-            console.warn("Video upload timed out, canceling task...");
-            isTimedOut = true;
-            uploadTask.cancel();
-            reject(new Error("Video upload timed out after 60s. Please check your internet connection."));
-          }, 60000);
-
-          uploadTask.on('state_changed', 
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        let url = "";
+        try {
+          let progress = 5;
+          setUploadProgress(progress);
+          const progressInterval = setInterval(() => {
+            if (progress < 95) {
+              progress += 5;
               setUploadProgress(progress);
-              console.log(`Video upload state: ${snapshot.state}, progress: ${progress.toFixed(2)}%`);
-            }, 
-            (error) => {
-              clearTimeout(timeout);
-              
-              // If we timed out, don't reject again
-              if (isTimedOut && error.code === 'storage/canceled') {
-                console.log("Video task canceled due to timeout.");
-                return;
-              }
-              
-              console.error("Video upload task error details:", {
-                code: error.code,
-                message: error.message,
-                name: error.name
-              });
-              reject(error);
-            }, 
-            async () => {
-              clearTimeout(timeout);
-              console.log("Video upload task completed successfully.");
-              try {
-                const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve(downloadUrl);
-              } catch (err) {
-                console.error("Error getting video download URL:", err);
-                reject(err);
-              }
             }
-          );
-        });
+          }, 300);
+
+          const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: blob.type });
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+          url = await getDownloadURL(snapshot.ref);
+        } catch (err) {
+          console.warn("video upload via uploadBytes failed, trying uploadBytesResumable fallback:", err);
+          
+          url = await new Promise<string>((resolve, reject) => {
+            const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: blob.type });
+            let isTimedOut = false;
+            const timeout = setTimeout(() => {
+              console.warn("Video upload timed out, canceling task...");
+              isTimedOut = true;
+              uploadTask.cancel();
+              reject(new Error("Video upload timed out after 60s. Please check your internet connection."));
+            }, 60000);
+
+            uploadTask.on('state_changed', 
+              (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+                console.log(`Video upload state: ${snapshot.state}, progress: ${progress.toFixed(2)}%`);
+              }, 
+              (error) => {
+                clearTimeout(timeout);
+                if (isTimedOut && error.code === 'storage/canceled') {
+                  console.log("Video task canceled due to timeout.");
+                  return;
+                }
+                reject(error);
+              }, 
+              async () => {
+                clearTimeout(timeout);
+                console.log("Video upload task completed successfully.");
+                try {
+                  const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                  resolve(downloadUrl);
+                } catch (geturlErr) {
+                  reject(geturlErr);
+                }
+              }
+            );
+          });
+        }
         
         console.log("Video download URL obtained:", url);
         
@@ -1538,12 +1570,22 @@ export default function PostJobWizard() {
                     </div>
                   </div>
                 ) : (
-                  <button 
-                    onClick={handleToggleListening}
-                    className="w-full p-3 rounded-xl border-2 border-dashed border-black text-slate-500 font-bold hover:border-blue-600 hover:text-blue-600 transition-all"
-                  >
-                    Tap to speak
-                  </button>
+                  <div className="space-y-3">
+                    <button 
+                      onClick={handleToggleListening}
+                      className="w-full p-4 rounded-xl border border-black text-slate-700 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Mic className="w-5 h-5 text-blue-600" /> Tap to speak with microphone
+                    </button>
+                    {isCapacitor() && (
+                      <button 
+                        onClick={() => audioInputRef.current?.click()}
+                        className="w-full p-3 rounded-xl border border-black bg-blue-50 text-blue-800 font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                      >
+                        🎙️ Use Phone Recorder (Bypass WebView permission)
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
