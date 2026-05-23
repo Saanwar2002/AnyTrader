@@ -124,7 +124,7 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  mapId: "DEMO_MAP_ID", // Enables Vector Map (WebGL) for smooth rotation (heading/tilt)
+  // mapId: "DEMO_MAP_ID", // Enables Vector Map (WebGL) for smooth rotation, but overrides JSON styles
   mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
