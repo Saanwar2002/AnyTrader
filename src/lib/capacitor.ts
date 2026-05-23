@@ -10,9 +10,8 @@ export const isCapacitor = () => {
 };
 
 export const getGoogleMapsApiKey = (): string => {
-  const env = (import.meta as any).env;
-  const androidKey = env.VITE_GOOGLE_MAPS_API_KEY_ANDROID;
-  const webKey = env.VITE_GOOGLE_MAPS_API_KEY;
+  const androidKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID;
+  const webKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
   const isValid = (key?: string) => {
     if (!key) return false;
@@ -27,10 +26,10 @@ export const getGoogleMapsApiKey = (): string => {
   };
 
   if (Capacitor.isNativePlatform() && isValid(androidKey)) {
-    return androidKey!.trim();
+    return androidKey.trim();
   }
   if (isValid(webKey)) {
-    return webKey!.trim();
+    return webKey.trim();
   }
   return "";
 };
