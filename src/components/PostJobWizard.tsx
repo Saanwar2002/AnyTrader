@@ -50,6 +50,7 @@ import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
+import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 import { toast } from "sonner";
 
@@ -197,7 +198,7 @@ export default function PostJobWizard() {
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
     version: "quarterly"
   });

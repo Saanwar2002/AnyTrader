@@ -8,6 +8,7 @@ import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
+import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 
 const libraries: any[] = ["places"];
 
@@ -29,7 +30,7 @@ export default function SavedJourneys() {
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
     version: "quarterly"
   });

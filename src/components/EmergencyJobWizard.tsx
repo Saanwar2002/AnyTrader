@@ -10,6 +10,7 @@ import { useAuth } from "./AuthProvider";
 import { AnimatePresence, motion } from "framer-motion";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
+import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { getInstantMatchCopy } from "@/src/lib/boosts";
 
 const libraries: any[] = ['places'];
@@ -77,7 +78,7 @@ export default function EmergencyJobWizard() {
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
     version: "quarterly"
   });

@@ -15,7 +15,7 @@ import { usePortal } from "../../lib/PortalContext";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { processTaxiVoiceCommand } from "@/src/services/gemini";
-import { triggerHaptic, ImpactStyle, hideNativeKeyboard } from "@/src/lib/capacitor";
+import { triggerHaptic, ImpactStyle, hideNativeKeyboard, getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
 
 // Google Maps Imports
@@ -338,7 +338,7 @@ export default function PassengerBooking() {
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
     version: "quarterly"
   });
@@ -2338,7 +2338,7 @@ export default function PassengerBooking() {
   }, [showRideInfo, rideInfoTimerTick]);
 
   // Handle Google Maps load errors (e.g. ApiProjectMapError)
-  const hasValidMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID);
+  const hasValidMapsKey = !!getGoogleMapsApiKey();
   if (loadError) {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-surface p-8 text-center">

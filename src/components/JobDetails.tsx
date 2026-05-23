@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { Capacitor } from '@capacitor/core';
+import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { ReviewForm } from "./ReviewForm";
@@ -168,7 +169,7 @@ const libraries: any[] = ['places'];
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
     version: "quarterly"
   });

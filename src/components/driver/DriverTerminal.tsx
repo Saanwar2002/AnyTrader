@@ -5,7 +5,7 @@ import { usePortal } from "../../lib/PortalContext";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
-import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
+import { triggerHaptic, ImpactStyle, getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
 import {
   Navigation,
@@ -467,7 +467,7 @@ export default function DriverTerminal() {
 
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
-    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
     version: "quarterly",
   });
