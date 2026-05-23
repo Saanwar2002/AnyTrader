@@ -269,6 +269,7 @@ export default function PostJobWizard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
@@ -353,9 +354,38 @@ export default function PostJobWizard() {
         setVoiceText("Listening...");
       } catch (err) {
         console.error("Microphone permission denied or error:", err);
-        setVoiceText("Microphone access denied. Please allow microphone access.");
+        setVoiceText(`Microphone issue detected. Error: ${err instanceof Error ? err.message : String(err)}. Falling back to local microphone via device prompt...`);
         setIsListening(false);
+        if (audioInputRef.current) audioInputRef.current.click();
       }
+    }
+  };
+
+  const handleFallbackAudio = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsProcessingVoice(true);
+    setVoiceText("Transcribing voice input...");
+    try {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+                 const base64data = reader.result?.toString().split(',')[1];
+                 if (base64data) resolve(base64data);
+                 else reject(new Error("Failed to convert"));
+            };
+            reader.onerror = reject;
+        });
+        reader.readAsDataURL(file);
+        const base64Audio = await base64Promise;
+        const transcribedText = await transcribeVoiceAudio(base64Audio, file.type || 'audio/mp4');
+        setVoiceText(transcribedText || "");
+    } catch (err) {
+        console.error("Transcription error fallback:", err);
+        setVoiceText("Failed to transcribe audio. Please type your job details manually.");
+    } finally {
+        setIsProcessingVoice(false);
     }
   };
 
@@ -692,8 +722,8 @@ export default function PostJobWizard() {
     try {
       const uploadPromises = Array.from(files as FileList).map(async (file: File) => {
         // Basic validation
-        if (!file.type.startsWith('image/')) {
-          console.warn(`File ${file.name} is not an image, skipping.`);
+        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+          console.warn(`File ${file.name} is not media, skipping.`);
           return null;
         }
 
@@ -2001,7 +2031,7 @@ export default function PostJobWizard() {
                     type="file"
                     ref={fileInputRef}
                     className="hidden"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     multiple
                     onChange={handleGalleryUpload}
                   />
@@ -2013,6 +2043,15 @@ export default function PostJobWizard() {
                     accept="application/pdf"
                     multiple
                     onChange={handleDocUpload}
+                  />
+                  
+                  <input 
+                    type="file"
+                    ref={audioInputRef}
+                    className="hidden"
+                    accept="audio/*"
+                    capture="microphone"
+                    onChange={handleFallbackAudio}
                   />
                 </div>
                 <div className="space-y-1">
