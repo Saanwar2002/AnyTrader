@@ -466,7 +466,7 @@ export default function DriverTerminal() {
 
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
-    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
     version: "quarterly",
   });
@@ -4708,7 +4708,7 @@ export default function DriverTerminal() {
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
                 className={cn(
                   "absolute bottom-0 left-0 right-0 z-40 bg-[#1A1A1E] rounded-t-3xl border-t border-[#2C2C30] px-2 sm:px-4 md:max-w-[440px] md:left-1/2 md:-translate-x-1/2 pt-0 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col",
-                  isCardCollapsed ? "pb-3" : "pb-[68px]",
+                  isCardCollapsed ? "pb-[calc(1.750rem+env(safe-area-inset-bottom,0px))]" : "pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]",
                 )}
                 onTouchStartCapture={() => {
                   if (
@@ -4761,19 +4761,34 @@ export default function DriverTerminal() {
                     <div className="flex justify-between items-start mb-2 relative">
                       <div className="flex-1 mr-2 min-w-0">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
-                          <span className="bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap shrink-0">
+                          <span className={cn(
+                            "bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap shrink-0",
+                            isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                          )}>
                             Pick Up
                           </span>
-                          <p className="text-[9px] font-black uppercase text-[#E4E4E7] tracking-widest truncate">
+                          <p className={cn(
+                            "font-black uppercase text-[#E4E4E7] tracking-widest truncate",
+                            isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                          )}>
                             Picking up {activeRide?.name || "Sarah T."}
                           </p>
                         </div>
-                        <p className="text-[17px] font-semibold text-white drop-shadow-sm mb-0 line-clamp-2">
+                        <p className={cn(
+                          "font-semibold text-white drop-shadow-sm mb-0 line-clamp-2",
+                          isCardCollapsed ? "text-[19px]" : "text-[17px]"
+                        )}>
                           {activeRide?.pickupAddress || "12 Elm Street, SE15"}
                         </p>
-                        <p className="text-[16px] font-black text-white leading-none mt-0.5">
+                        <p className={cn(
+                          "font-black text-white leading-none mt-0.5",
+                          isCardCollapsed ? "text-[18px]" : "text-[16px]"
+                        )}>
                           3 min{" "}
-                          <span className="text-white text-[14px] font-bold">
+                          <span className={cn(
+                            "text-white font-bold",
+                            isCardCollapsed ? "text-[16px]" : "text-[14px]"
+                          )}>
                             ·{" "}
                             {activeRide?.distanceToPickupMiles?.toFixed(1) ||
                               "1.2"}{" "}
@@ -4782,7 +4797,10 @@ export default function DriverTerminal() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[#00D26A] font-black text-xl">
+                        <p className={cn(
+                          "text-[#00D26A] font-black",
+                          isCardCollapsed ? "text-2xl" : "text-xl"
+                        )}>
                           £{activeRide?.fareEstimate?.toFixed(2) || "38.50"}
                         </p>
                       </div>
@@ -4880,17 +4898,26 @@ export default function DriverTerminal() {
                   <>
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex-1">
-                        <p className="text-[9px] font-black uppercase text-[#FF9500] tracking-widest mb-0.5 flex items-center gap-1">
+                        <p className={cn(
+                          "font-black uppercase text-[#FF9500] tracking-widest mb-0.5 flex items-center gap-1",
+                          isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                        )}>
                           <AlertCircle className="w-2.5 h-2.5" /> Waiting for
                           Rider
                         </p>
-                        <p className="text-[17px] font-black text-white px-0.5">
+                        <p className={cn(
+                          "font-black text-white px-0.5",
+                          isCardCollapsed ? "text-[19px]" : "text-[17px]"
+                        )}>
                           {Math.floor(elapsedWaitSeconds / 60)}:
                           {(elapsedWaitSeconds % 60)
                             .toString()
                             .padStart(2, "0")}
                         </p>
-                        <p className="text-[11px] font-bold mt-0">
+                        <p className={cn(
+                          "font-bold mt-0",
+                          isCardCollapsed ? "text-[13px]" : "text-[11px]"
+                        )}>
                           {elapsedWaitSeconds < 180 ? (
                             <span className="text-[#00D26A]">
                               Free wait:{" "}
@@ -4918,14 +4945,20 @@ export default function DriverTerminal() {
                       <div className="flex-[1.5] flex justify-center px-1">
                         <div className="bg-[#FF9500]/10 border border-[#FF9500]/30 px-3 py-1.5 rounded flex items-center gap-1.5 overflow-hidden w-full justify-center">
                           <User className="w-3.5 h-3.5 text-[#FF9500] shrink-0" />
-                          <span className="text-white font-black text-xs uppercase tracking-wider truncate">
+                          <span className={cn(
+                            "text-white font-black uppercase tracking-wider truncate",
+                            isCardCollapsed ? "text-sm" : "text-xs"
+                          )}>
                             {activeRide?.name || "Sarah T."}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex-1 text-right">
-                        <p className="text-[#00D26A] font-black text-xl">
+                        <p className={cn(
+                          "text-[#00D26A] font-black",
+                          isCardCollapsed ? "text-2xl" : "text-xl"
+                        )}>
                           £{activeRide?.fareEstimate?.toFixed(2) || "38.50"}
                         </p>
                       </div>
@@ -5049,20 +5082,33 @@ export default function DriverTerminal() {
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
                           {currentLegIndex <
                           (activeRide?.stops?.length || 0) ? (
-                            <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0">
+                            <span className={cn(
+                              "bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0",
+                              isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                            )}>
                               Stop {currentLegIndex + 1}
                             </span>
                           ) : activeRide?.stops?.length > 0 ? (
-                            <span className="bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0">
+                            <span className={cn(
+                              "bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0",
+                              isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                            )}>
                               Drop Off
                             </span>
                           ) : (
-                            <span className="bg-[#FF3B30] text-white px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap shrink-0">
+                            <span className={cn(
+                              "bg-[#FF3B30] text-white px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap shrink-0",
+                              isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                            )}>
                               Drop Off
                             </span>
                           )}
                           <p
-                            className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 truncate ${isWaitingAtStop ? "text-[#FF9500]" : "text-[#00D26A]"}`}
+                            className={cn(
+                              "font-black uppercase tracking-widest flex items-center gap-1 truncate",
+                              isCardCollapsed ? "text-[11px]" : "text-[9px]",
+                              isWaitingAtStop ? "text-[#FF9500]" : "text-[#00D26A]"
+                            )}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse ${isWaitingAtStop ? "bg-[#FF9500]" : "bg-[#00D26A]"}`}
@@ -5074,23 +5120,35 @@ export default function DriverTerminal() {
                             </span>
                           </p>
                         </div>
-                        <p className="text-[17px] font-semibold text-white drop-shadow-sm mb-0 line-clamp-2">
+                        <p className={cn(
+                          "font-semibold text-white drop-shadow-sm mb-0 line-clamp-2",
+                          isCardCollapsed ? "text-[19px]" : "text-[17px]"
+                        )}>
                           {currentLegIndex < (activeRide?.stops?.length || 0)
                             ? activeRide.stops[currentLegIndex].address
                             : activeRide?.dropoffAddress ||
                               "Bristol Temple Meads"}
                         </p>
                         {isWaitingAtStop ? (
-                          <p className="text-[16px] font-black text-[#FF9500] leading-none mt-0.5">
+                          <p className={cn(
+                            "font-black text-[#FF9500] leading-none mt-0.5",
+                            isCardCollapsed ? "text-[18px]" : "text-[16px]"
+                          )}>
                             Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:
                             {(totalPaidWaitSeconds % 60)
                               .toString()
                               .padStart(2, "0")}
                           </p>
                         ) : (
-                          <p className="text-[16px] font-black text-white leading-none mt-0.5">
+                          <p className={cn(
+                            "font-black text-white leading-none mt-0.5",
+                            isCardCollapsed ? "text-[18px]" : "text-[16px]"
+                          )}>
                             {activeRide?.durationMinutes || 38} min left{" "}
-                            <span className="text-white text-[14px] font-bold">
+                            <span className={cn(
+                              "text-white font-bold",
+                              isCardCollapsed ? "text-[16px]" : "text-[14px]"
+                            )}>
                               {" "}
                               •{" "}
                               {activeRide?.distanceMiles?.toFixed(1) ||
@@ -5101,7 +5159,10 @@ export default function DriverTerminal() {
                         )}
                       </div>
                       <div className="text-right flex flex-col items-end shrink-0">
-                        <p className="text-[#00D26A] font-black text-xl leading-none mb-1.5 mt-0.5">
+                        <p className={cn(
+                          "text-[#00D26A] font-black leading-none mb-1.5 mt-0.5",
+                          isCardCollapsed ? "text-2xl" : "text-xl"
+                        )}>
                           £
                           {(
                             (activeRide?.fareEstimate || 38.5) +
@@ -5111,19 +5172,28 @@ export default function DriverTerminal() {
                         </p>
                         {activeRide?.hasCardOnFile ? (
                           <div className="inline-block bg-white border-2 border-[#00D26A] px-2 py-1 rounded-md shadow-sm mt-0.5">
-                            <span className="text-[#059669] text-[9px] font-black uppercase tracking-wider block leading-none">
+                            <span className={cn(
+                              "text-[#059669] font-black uppercase tracking-wider block leading-none",
+                              isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                            )}>
                               Auto Payment
                             </span>
                           </div>
                         ) : (
                           <div className="inline-block bg-white border-2 border-[#EA580C] px-2 py-1 rounded-md shadow-sm mt-0.5">
-                            <span className="text-[#EA580C] text-[10px] font-black uppercase tracking-wider block leading-none">
+                            <span className={cn(
+                              "text-[#EA580C] font-black uppercase tracking-wider block leading-none",
+                              isCardCollapsed ? "text-[12px]" : "text-[10px]"
+                            )}>
                               QR Code
                             </span>
                           </div>
                         )}
                         {totalPaidWaitSeconds > 0 && (
-                          <p className="text-[10px] text-[#FF9500] font-bold mt-1">
+                          <p className={cn(
+                            "text-[#FF9500] font-bold mt-1",
+                            isCardCollapsed ? "text-[12px]" : "text-[10px]"
+                          )}>
                             +Wait
                           </p>
                         )}

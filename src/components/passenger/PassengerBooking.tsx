@@ -337,7 +337,7 @@ export default function PassengerBooking() {
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
     version: "quarterly"
   });
@@ -2311,7 +2311,8 @@ export default function PassengerBooking() {
   }, [showRideInfo, rideInfoTimerTick]);
 
   // Handle Google Maps load errors (e.g. ApiProjectMapError)
-  if (loadError || (!isLoaded && !(import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY)) {
+  const hasValidMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID);
+  if (loadError || (!isLoaded && !hasValidMapsKey)) {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-surface p-8 text-center">
         <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mb-6">
@@ -2319,7 +2320,7 @@ export default function PassengerBooking() {
         </div>
         <h2 className="text-2xl font-black text-text-main mb-2">Maps API Error</h2>
         <p className="text-text-muted max-w-sm mb-8 font-medium">
-          {loadError ? "The Google Maps API failed to load. Please ensure the 'Maps JavaScript API' is enabled in your Google Cloud Console project." : "Google Maps API Key is missing. Please configure VITE_GOOGLE_MAPS_API_KEY."}
+          {loadError ? "The Google Maps API failed to load. Please ensure the 'Maps JavaScript API' is enabled in your Google Cloud Console project." : "Google Maps API Key is missing. Please configure VITE_GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY_ANDROID."}
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <a 

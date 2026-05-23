@@ -76,7 +76,7 @@ export default function EmergencyJobWizard() {
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
     version: "quarterly"
   });
