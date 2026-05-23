@@ -16,6 +16,7 @@ import {
   MessageCircle, Mail, Check, Plus, ImageIcon
 } from "lucide-react";
 import jsPDF from 'jspdf';
+import { Capacitor } from '@capacitor/core';
 import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { ReviewForm } from "./ReviewForm";
@@ -167,7 +168,7 @@ const libraries: any[] = ['places'];
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
     version: "quarterly"
   });

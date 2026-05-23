@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { processTaxiVoiceCommand } from "@/src/services/gemini";
 import { triggerHaptic, ImpactStyle, hideNativeKeyboard } from "@/src/lib/capacitor";
+import { Capacitor } from '@capacitor/core';
 
 // Google Maps Imports
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView } from "@react-google-maps/api";
@@ -337,7 +338,7 @@ export default function PassengerBooking() {
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID) || (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
     version: "quarterly"
   });
@@ -2311,7 +2312,7 @@ export default function PassengerBooking() {
   }, [showRideInfo, rideInfoTimerTick]);
 
   // Handle Google Maps load errors (e.g. ApiProjectMapError)
-  const hasValidMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID);
+  const hasValidMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || (Capacitor.isNativePlatform() && (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY_ANDROID);
   if (loadError || (!isLoaded && !hasValidMapsKey)) {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-surface p-8 text-center">
