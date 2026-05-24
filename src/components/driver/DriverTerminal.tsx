@@ -537,6 +537,7 @@ export default function DriverTerminal() {
     useState<google.maps.Map | null>(null);
   const [mapHeading, setMapHeading] = useState(0);
   const [mapTilt, setMapTilt] = useState(0);
+  const [mapZoom, setMapZoom] = useState<number>(15);
 
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
@@ -545,6 +546,11 @@ export default function DriverTerminal() {
   const navVoiceVolume = isMuted ? 0.0 : 1.0;
   const autoNavPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const spokenDistancesRef = useRef(new Set<number>());
+  const lastZoomResetRef = useRef<{
+    rideId: string | null;
+    rideState: string | null;
+    legIndex: number | null;
+  }>({ rideId: null, rideState: null, legIndex: null });
   const lastDirectionsFetchRef = useRef<{
     originLat: number;
     originLng: number;
@@ -595,7 +601,8 @@ export default function DriverTerminal() {
         lat: mapCenterRef.current[0],
         lng: mapCenterRef.current[1],
       });
-      mapInstance.setZoom(17);
+      mapInstance.setZoom(15);
+      setMapZoom(15);
     } else {
       setMapCenter([mapCenterRef.current[0], mapCenterRef.current[1]]);
     }
@@ -887,8 +894,9 @@ export default function DriverTerminal() {
               : "You have arrived at your destination.";
           speakText(text, navVoiceVolume);
         }
-        if (mapInstance && (mapInstance.getZoom() || 0) < 17) {
-          mapInstance.setZoom(17);
+        if (mapInstance && (mapInstance.getZoom() || 0) < 15) {
+          mapInstance.setZoom(15);
+          setMapZoom(15);
         }
       }
     }
@@ -1223,19 +1231,34 @@ export default function DriverTerminal() {
         }
       }
       setMapHeading(targetBearing);
-      setMapTilt(60); // 3D perspective
-      mapInstance.setHeading(targetBearing);
-      mapInstance.setTilt(60);
+      setMapTilt(0); 
+      mapInstance.setHeading(0);
+      mapInstance.setTilt(0);
       if (directions) {
-        let desiredZoom = 16;
+        let desiredZoom = 14;
         if (
           directions.routes?.[0]?.legs?.[0]?.distance?.value &&
           directions.routes[0].legs[0].distance.value <= 100
         ) {
-          desiredZoom = 17;
+          desiredZoom = 15;
         }
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(desiredZoom);
+        
+        const currentResetKey = {
+          rideId: activeRide?.id || null,
+          rideState: rideState,
+          legIndex: currentLegIndex,
+        };
+        const hasChanged = 
+          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
+          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
+          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
+
+        if (hasChanged) {
+          lastZoomResetRef.current = currentResetKey;
+          setMapZoom(desiredZoom);
+          mapInstance.setZoom(desiredZoom);
+        }
       }
     } else if (
       rideState === "in_progress" &&
@@ -1296,33 +1319,81 @@ export default function DriverTerminal() {
       }
 
       setMapHeading(targetBearing);
-      setMapTilt(60);
-      mapInstance.setHeading(targetBearing);
-      mapInstance.setTilt(60);
+      setMapTilt(0);
+      mapInstance.setHeading(0);
+      mapInstance.setTilt(0);
       if (directions) {
-        let desiredZoom = 16;
+        let desiredZoom = 14;
         if (
           directions.routes?.[0]?.legs?.[0]?.distance?.value &&
           directions.routes[0].legs[0].distance.value <= 100
         ) {
-          desiredZoom = 17;
+          desiredZoom = 15;
         }
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
-        mapInstance.setZoom(desiredZoom);
+        
+        const currentResetKey = {
+          rideId: activeRide?.id || null,
+          rideState: rideState,
+          legIndex: currentLegIndex,
+        };
+        const hasChanged = 
+          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
+          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
+          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
+
+        if (hasChanged) {
+          lastZoomResetRef.current = currentResetKey;
+          setMapZoom(desiredZoom);
+          mapInstance.setZoom(desiredZoom);
+        }
       }
     } else {
       if (driverHeading !== null && driverHeading !== undefined) {
         setMapHeading(driverHeading);
         setMapTilt(0);
-        mapInstance.setHeading(driverHeading);
+        mapInstance.setHeading(0);
         mapInstance.setTilt(0);
-        mapInstance.setZoom(rideState === "waiting" ? 17 : 17); // Set to 17 for waiting and idle to match previous behavior
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
+        
+        let desiredZoom = rideState === "waiting" ? 15 : 15;
+        const currentResetKey = {
+          rideId: null,
+          rideState: rideState,
+          legIndex: null,
+        };
+        const hasChanged = 
+          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
+          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
+          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
+
+        if (hasChanged) {
+          lastZoomResetRef.current = currentResetKey;
+          setMapZoom(desiredZoom);
+          mapInstance.setZoom(desiredZoom);
+        }
       } else {
         setMapHeading(0);
         setMapTilt(0);
         mapInstance.setHeading(0);
         mapInstance.setTilt(0);
+        
+        let desiredZoom = rideState === "waiting" ? 15 : 15;
+        const currentResetKey = {
+          rideId: null,
+          rideState: rideState,
+          legIndex: null,
+        };
+        const hasChanged = 
+          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
+          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
+          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
+
+        if (hasChanged) {
+          lastZoomResetRef.current = currentResetKey;
+          setMapZoom(desiredZoom);
+          mapInstance.setZoom(desiredZoom);
+        }
       }
     }
   }, [
@@ -3239,9 +3310,9 @@ export default function DriverTerminal() {
                 style={{
                   width: "100%",
                   height: "100%",
-                  transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${-mapHeading}deg) scale(1.4)` : "none",
+                  transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${-mapHeading}deg) scale(2.4)` : "none",
                   transformOrigin: "50% 50%",
-                  transition: "transform 0.8s ease-in-out",
+                  transition: "transform 0.5s ease-out",
                 }}
               >
                 <GoogleMap
@@ -3251,16 +3322,15 @@ export default function DriverTerminal() {
                       ? undefined
                       : { lat: mapCenter[0], lng: mapCenter[1] }
                   }
-                  zoom={
-                    directions
-                      ? undefined
-                      : rideState === "waiting"
-                        ? 17
-                        : rideState === "en_route_pickup" ||
-                            rideState === "in_progress"
-                          ? 16
-                          : 11 // Default driver location zoom level when idle
-                  }
+                  zoom={mapZoom}
+                  onZoomChanged={() => {
+                    if (mapInstance) {
+                      const z = mapInstance.getZoom();
+                      if (z !== undefined && z !== mapZoom) {
+                        setMapZoom(z);
+                      }
+                    }
+                  }}
                   onLoad={(map) => setMapInstance(map)}
                   options={{
                     ...premiumMapOptions,
@@ -3271,8 +3341,6 @@ export default function DriverTerminal() {
                       right: 20,
                     },
                   }}
-                  heading={mapHeading}
-                  tilt={mapTilt}
                 >
                   {isOnline && (
                     <OverlayViewF
@@ -3280,16 +3348,12 @@ export default function DriverTerminal() {
                       mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                     >
                       <div
-                        ref={(el) => {
-                          if (el && el.parentElement) {
-                            el.parentElement.style.transition =
-                              "left 1s linear, top 1s linear";
-                          }
-                        }}
                         style={{
-                          transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${mapHeading}deg)` : "none",
+                          transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading 
+                            ? `rotate(${mapHeading}deg) scale(${1 / 2.4})` 
+                            : "none",
                           transformOrigin: "18px 54px",
-                          transition: "transform 0.8s ease-in-out",
+                          transition: "transform 0.5s ease-out",
                         }}
                         className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50"
                       >
@@ -3581,11 +3645,11 @@ export default function DriverTerminal() {
                       mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                     >
                       <div
-                        ref={(el) => {
-                          if (el && el.parentElement) {
-                            el.parentElement.style.transition =
-                              "left 1s linear, top 1s linear";
-                          }
+                        style={{
+                          transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading 
+                            ? `scale(${1 / 2.4})` 
+                            : "none",
+                          transformOrigin: "16px 52px",
                         }}
                         className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50"
                       >
@@ -3654,7 +3718,7 @@ export default function DriverTerminal() {
                           <Compass
                             style={{
                               transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${-mapHeading}deg)` : "none",
-                              transition: "transform 0.8s ease-in-out",
+                              transition: "transform 0.5s ease-out",
                             }}
                             className={cn(
                               "w-[18px] h-[18px]",
@@ -4205,8 +4269,8 @@ export default function DriverTerminal() {
                                   map,
                                   "idle",
                                   () => {
-                                    if ((map.getZoom() || 0) > 17)
-                                      map.setZoom(17); // Restrict to 17 as user mentioned
+                                    if ((map.getZoom() || 0) > 15)
+                                      map.setZoom(15); // Restrict to 15 as user mentioned
                                     window.google.maps.event.removeListener(
                                       listener,
                                     );
@@ -4582,8 +4646,8 @@ export default function DriverTerminal() {
                                   map,
                                   "idle",
                                   () => {
-                                    if ((map.getZoom() || 0) > 17)
-                                      map.setZoom(17); // Restrict to 17 as user mentioned
+                                    if ((map.getZoom() || 0) > 15)
+                                      map.setZoom(15); // Restrict to 15 as user mentioned
                                     window.google.maps.event.removeListener(
                                       listener,
                                     );
