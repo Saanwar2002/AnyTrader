@@ -583,6 +583,7 @@ export default function DriverTerminal() {
 
   const customDragActiveRef = useRef(false);
   const customDragPrevPosRef = useRef({ x: 0, y: 0 });
+  const customPinchPrevDistRef = useRef<number | null>(null);
 
   const handleMapInteraction = () => {
     if (!isAutoNavHeadUp) return;
@@ -601,6 +602,15 @@ export default function DriverTerminal() {
     // Call existing handleMapInteraction to pause auto center/nav
     handleMapInteraction();
 
+    if ("touches" in e && e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      customPinchPrevDistRef.current = dist;
+      customDragActiveRef.current = false;
+      return;
+    }
+
     customDragActiveRef.current = true;
     const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
@@ -608,7 +618,26 @@ export default function DriverTerminal() {
   };
 
   const handleCustomDragMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!customDragActiveRef.current || !mapInstance) return;
+    if (!mapInstance) return;
+
+    if ("touches" in e && e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+      if (customPinchPrevDistRef.current !== null) {
+        const diff = dist - customPinchPrevDistRef.current;
+        const currentZoom = mapInstance.getZoom() || 15;
+        // Continuous fractional zoom increment
+        const zoomChange = diff * 0.0075;
+        const newZoom = Math.max(3, Math.min(21, currentZoom + zoomChange));
+        mapInstance.setZoom(newZoom);
+      }
+      customPinchPrevDistRef.current = dist;
+      return;
+    }
+
+    if (!customDragActiveRef.current) return;
 
     const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
@@ -634,6 +663,7 @@ export default function DriverTerminal() {
 
   const handleCustomDragEnd = () => {
     customDragActiveRef.current = false;
+    customPinchPrevDistRef.current = null;
   };
 
   const getBearing = (
