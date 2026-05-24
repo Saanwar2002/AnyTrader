@@ -4,7 +4,7 @@ import { usePortal } from "@/src/lib/PortalContext";
 import { useNavigate } from "react-router-dom";
 import { logout, db, doc, updateDoc } from "@/src/firebase";
 import { deleteField } from "firebase/firestore";
-import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2, VolumeX, Navigation } from "lucide-react";
+import { ChevronRight, User, Car, BarChart3, Clock, CreditCard, Zap, Share2, Settings, HelpCircle, ShieldCheck, MapPin, X, Repeat, Power, Search, Loader2, Edit2, Trash2, VolumeX, Navigation, ToggleRight } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 
@@ -26,6 +26,7 @@ export default function DriverMenu({
   const navigate = useNavigate();
   const [showMorePrefs, setShowMorePrefs] = useState(false);
   const [showHomeModal, setShowHomeModal] = useState(false);
+  const [confirmToggle, setConfirmToggle] = useState<{ id: string; newState: boolean; label: string } | null>(null);
   const [showNavAppModal, setShowNavAppModal] = useState(false);
   const [homeInput, setHomeInput] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -345,28 +346,11 @@ export default function DriverMenu({
                     onClick={() => {
                       if (item.type === 'toggle') {
                         if (!user?.uid) return;
-                        if (item.action === 'toggle-stacking') {
-                          updateDoc(doc(db, "users", user.uid), { isStackingEnabled: !item.active });
-                        }
-                        if (item.action === 'toggle-passcode') {
-                          updateDoc(doc(db, "users", user.uid), { requirePasscode: !item.active });
-                        }
-                        if (item.action === 'toggle-mute-heads-up') {
-                          updateDoc(doc(db, "users", user.uid), { muteHeadsUpVolume: !item.active });
-                        }
-                        if (item.action === 'toggle-destination-mode') {
-                          if (!profile?.homeLat && !item.active) {
-                             setShowHomeModal(true);
-                          } else {
-                             updateDoc(doc(db, "users", user.uid), { destinationModeActive: !item.active });
-                          }
-                        }
-                        if (item.action === 'toggle-mute-alerts') {
-                          updateDoc(doc(db, "users", user.uid), { muteRideOfferAlerts: !item.active });
-                        }
-                        if (item.action === 'toggle-last-job') {
-                          updateDoc(doc(db, "users", user.uid), { isLastJob: !item.active });
-                        }
+                        setConfirmToggle({
+                          id: item.action,
+                          newState: !item.active,
+                          label: item.label
+                        });
                       } else if (item.type === 'action') {
                         if (item.action === 'choose-nav-app') {
                           setShowNavAppModal(true);
@@ -518,16 +502,81 @@ export default function DriverMenu({
                       : "bg-[#252529] border-white/10 text-white hover:border-white/30"
                   )}
                 >
-                  <span className="font-bold text-sm">{app}</span>
-                  {(profile?.defaultNavApp === app || (!profile?.defaultNavApp && app === 'Google Maps')) && (
-                    <div className="w-2 h-2 rounded-full bg-[#007AFF]"></div>
-                  )}
-                </button>
-              ))}
+                   <span className="font-bold text-sm">{app}</span>
+                   {(profile?.defaultNavApp === app || (!profile?.defaultNavApp && app === 'Google Maps')) && (
+                     <div className="w-2 h-2 rounded-full bg-[#007AFF]"></div>
+                   )}
+                 </button>
+               ))}
+             </div>
+           </div>
+         </div>
+       )}
+
+      {confirmToggle && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1A1A1E] w-full max-w-[320px] rounded-[32px] p-6 shadow-2xl border border-white/20 flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/20 mb-4">
+              <ToggleRight className="w-8 h-8 text-white" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">Confirm {confirmToggle.newState ? 'Enable' : 'Disable'}</h3>
+            <p className="text-sm font-medium text-[#A1A1AA] mb-6">
+              Are you sure you want to turn <strong className="text-white">{confirmToggle.newState ? 'on' : 'off'}</strong> {confirmToggle.label}?
+            </p>
+            <div className="flex items-center gap-3 w-full">
+              <button 
+                onClick={() => setConfirmToggle(null)}
+                className="flex-1 py-3.5 rounded-2xl border border-white/20 bg-transparent text-white font-black text-[11px] uppercase tracking-wider active:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  if (!user?.uid) return;
+                  const newStatus = confirmToggle.newState;
+                  const action = confirmToggle.id;
+                  const label = confirmToggle.label;
+                  
+                  setConfirmToggle(null);
+
+                  try {
+                    if (action === 'toggle-stacking') {
+                      await updateDoc(doc(db, "users", user.uid), { isStackingEnabled: newStatus });
+                    }
+                    if (action === 'toggle-passcode') {
+                      await updateDoc(doc(db, "users", user.uid), { requirePasscode: newStatus });
+                    }
+                    if (action === 'toggle-mute-heads-up') {
+                      await updateDoc(doc(db, "users", user.uid), { muteHeadsUpVolume: newStatus });
+                    }
+                    if (action === 'toggle-destination-mode') {
+                      if (!profile?.homeLat && newStatus) {
+                         setShowHomeModal(true);
+                      } else {
+                         await updateDoc(doc(db, "users", user.uid), { destinationModeActive: newStatus });
+                      }
+                    }
+                    if (action === 'toggle-mute-alerts') {
+                      await updateDoc(doc(db, "users", user.uid), { muteRideOfferAlerts: newStatus });
+                    }
+                    
+                    toast.success(`${label} turned ${newStatus ? 'ON' : 'OFF'}`);
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Failed to update preferences");
+                  }
+                }}
+                className={cn(
+                  "flex-1 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-wider transition-all shadow-lg text-[#0D0D0F]",
+                  confirmToggle.newState ? "bg-[#00D26A] active:bg-[#00ba5d]" : "bg-white active:bg-gray-200"
+                )}
+              >
+                Confirm
+              </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
+     </div>
+   );
+ }

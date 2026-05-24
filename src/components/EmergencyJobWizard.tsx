@@ -43,6 +43,7 @@ export default function EmergencyJobWizard() {
   const [error, setError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isLocating, setIsLocating] = useState(false);
   const [isEmergencyBoost, setIsEmergencyBoost] = useState(false);
   const [isInstantMatch, setIsInstantMatch] = useState(false);
   const [showBoostInfo, setShowBoostInfo] = useState<"emergency" | "instant" | null>(null);
@@ -159,12 +160,14 @@ export default function EmergencyJobWizard() {
         const storageRef = ref(storage, fileName);
         console.log("Attempting upload to:", storageRef.fullPath, "Bucket:", storage.app.options.storageBucket);
 
-        // Directly use uploadBytes (highly performant, robust, and completely bypasses TIMEOUT_RESUMABLE)
-        console.log("Uploading file via robust uploadBytes...");
-        try {
+        // Define a 25-second timeout for the file upload
+        const timeoutPromise = new Promise<null>((_, reject) => {
+          setTimeout(() => reject(new Error("UPLOAD_TIMEOUT")), 25000);
+        });
+
+        const uploadOperationPromise = (async () => {
           const arrayBuffer = await file.arrayBuffer();
           
-          // Let's simulate a quick nice progress bar since uploadBytes doesn't emit progress events
           let progress = 10;
           setUploadProgress(progress);
           const progressInterval = setInterval(() => {
@@ -174,27 +177,22 @@ export default function EmergencyJobWizard() {
             }
           }, 150);
 
-          const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
-          clearInterval(progressInterval);
-          setUploadProgress(100);
-          
-          return await getDownloadURL(snapshot.ref);
-        } catch (err) {
-          console.error("Upload via uploadBytes failed, attempting uploadBytesResumable fallback:", err);
-          
-          // Fallback to uploadBytesResumable only if uploadBytes fails
-          const arrayBuffer = await file.arrayBuffer();
-          const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: file.type });
-          await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => { uploadTask.cancel(); reject(new Error("TIMEOUT_RESUMABLE")); }, 30000);
-            uploadTask.on('state_changed', 
-              (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-              (error) => { clearTimeout(timeout); reject(error); },
-              () => { clearTimeout(timeout); resolve(); }
-            );
-          });
-          return await getDownloadURL(storageRef);
-        }
+          try {
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
+            clearInterval(progressInterval);
+            setUploadProgress(100);
+            return await getDownloadURL(snapshot.ref);
+          } catch (firstErr) {
+            clearInterval(progressInterval);
+            console.warn("First upload attempt failed, retrying once simply:", firstErr);
+            // Simple backup retry attempt
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
+            setUploadProgress(100);
+            return await getDownloadURL(snapshot.ref);
+          }
+        })();
+
+        return Promise.race([uploadOperationPromise, timeoutPromise]);
       });
 
       const results = await Promise.all(uploadPromises);
@@ -203,7 +201,7 @@ export default function EmergencyJobWizard() {
       setFormData(prev => ({ ...prev, photos: [...prev.photos, ...urls] }));
     } catch (err) {
       console.error("Gallery upload error:", err);
-      setError("Failed to upload one or more images. Please check your internet connection or permissions.");
+      setError("Failed to upload one or more images. Please check your internet connection and try again.");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -600,51 +598,66 @@ export default function EmergencyJobWizard() {
               
               <button
                 type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors"
+                disabled={isLocating}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors disabled:opacity-55"
                 title="Auto-detect location"
                 onClick={() => {
                   if ("geolocation" in navigator) {
-                    navigator.geolocation.getCurrentPosition(async (position) => {
-                      try {
-                        const { latitude: lat, longitude: lng } = position.coords;
-                        const geocoder = new google.maps.Geocoder();
-                        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-                          if (status === "OK" && results?.[0]) {
-                            const foundAddress = results[0].formatted_address;
-                            setAddressInput(foundAddress);
-                            setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
-                            
-                            let newCity = "";
-                            let newArea = "";
-                            let newPostcode = "";
+                    setIsLocating(true);
+                    navigator.geolocation.getCurrentPosition(
+                      async (position) => {
+                        try {
+                          const { latitude: lat, longitude: lng } = position.coords;
+                          const geocoder = new google.maps.Geocoder();
+                          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                            if (status === "OK" && results?.[0]) {
+                              const foundAddress = results[0].formatted_address;
+                              setAddressInput(foundAddress);
+                              setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
+                              
+                              let newCity = "";
+                              let newArea = "";
+                              let newPostcode = "";
 
-                            results[0].address_components.forEach((comp) => {
-                              if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
-                              if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
-                              if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
-                            });
+                              results[0].address_components.forEach((comp) => {
+                                if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
+                                if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
+                                if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
+                              });
 
-                            if (!newPostcode) {
-                              const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
-                              newPostcode = pcMatch ? pcMatch[0] : "";
+                              if (!newPostcode) {
+                                const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                                newPostcode = pcMatch ? pcMatch[0] : "";
+                              }
+
+                              setFormData(prev => ({
+                                ...prev,
+                                city: newCity,
+                                area: newArea,
+                                postcode: newPostcode
+                              }));
                             }
-
-                            setFormData(prev => ({
-                              ...prev,
-                              city: newCity,
-                              area: newArea,
-                              postcode: newPostcode
-                            }));
-                          }
-                        });
-                      } catch (err) {
-                        console.error("Geocoding failed:", err);
-                      }
-                    });
+                            setIsLocating(false);
+                          });
+                        } catch (err) {
+                          console.error("Geocoding failed:", err);
+                          setIsLocating(false);
+                        }
+                      },
+                      (err) => {
+                        console.error("Geolocation error:", err);
+                        setIsLocating(false);
+                      },
+                      { timeout: 10000 }
+                    );
                   }
                 }}
               >
-                <Locate className="w-5 h-5" />
+                {isLocating ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                ) : (
+                  <Locate className="w-5 h-5" />
+                )}
               </button>
               
               {addressSuggestions.length > 0 && (

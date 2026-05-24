@@ -3583,7 +3583,7 @@ export default function DriverTerminal() {
                     rideState === "completed"
                     ? "opacity-0 pointer-events-none"
                     : rideState === "idle"
-                      ? "bottom-[140px]"
+                      ? "bottom-[calc(140px+env(safe-area-inset-bottom,0px))]"
                       : isCardCollapsed
                         ? "bottom-[280px]"
                         : "bottom-[420px]",
@@ -3720,22 +3720,20 @@ export default function DriverTerminal() {
                 )}
               />
             </button>
-          </div>
 
-          {/* Floating Map Navigation (Left Side) */}
-          {(rideState === "en_route_pickup" ||
-            rideState === "waiting" ||
-            rideState === "in_progress") &&
-            activeRide?.id && (
-              <div className="absolute top-[calc(100px+env(safe-area-inset-top))] left-4 z-50 pointer-events-auto flex flex-col gap-6">
+            {/* Navigation Button */}
+            {(rideState === "en_route_pickup" ||
+              rideState === "waiting" ||
+              rideState === "in_progress") &&
+              activeRide?.id && (
                 <button
                   onClick={handleStartExternalNavigation}
                   className="w-10 h-10 rounded-full flex items-center justify-center bg-[#007AFF] shadow-[0_6px_16px_rgba(0,122,255,0.5)] active:scale-95 transition-transform"
                 >
                   <Navigation className="w-5 h-5 text-white fill-white" />
                 </button>
-              </div>
-            )}
+              )}
+          </div>
 
           {/* 2. Top UI: Menu button */}
           <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">

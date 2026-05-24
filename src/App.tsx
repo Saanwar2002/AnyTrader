@@ -191,7 +191,11 @@ export default function App() {
 
   return (
     <CategoryProvider>
-      <Toaster position="top-center" richColors />
+      <Toaster 
+        position="top-center" 
+        richColors 
+        style={{ marginTop: 'max(env(safe-area-inset-top), 48px)' }}
+      />
       <BrowserRouter>
         <ReferralTracker />
         <PortalProvider>

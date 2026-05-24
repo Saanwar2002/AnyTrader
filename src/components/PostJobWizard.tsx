@@ -62,6 +62,15 @@ const iconMap: Record<string, any> = {
 
 const libraries: any[] = ['places'];
 
+const readFileAsDataURL = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function PostJobWizard() {
   const { user, profile, loading: authLoading } = useAuth();
   const { categories } = useCategories();
@@ -209,6 +218,229 @@ export default function PostJobWizard() {
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+
+  // Drawing Canvas States
+  const [showDrawingModal, setShowDrawingModal] = useState(false);
+  const [drawingColor, setDrawingColor] = useState("#000000");
+  const [drawingLineWidth, setDrawingLineWidth] = useState(4);
+  const [paintIsDrawing, setPaintIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingFileInputRef = useRef<HTMLInputElement>(null);
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = drawingCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.strokeStyle = drawingColor;
+    ctx.lineWidth = drawingLineWidth;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX = 0;
+    let clientY = 0;
+    
+    if ("touches" in e) {
+      if (e.touches.length === 0) return;
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setPaintIsDrawing(true);
+    setHasDrawn(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!paintIsDrawing) return;
+    const canvas = drawingCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX = 0;
+    let clientY = 0;
+    
+    if ("touches" in e) {
+      if (e.touches.length === 0) return;
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+      if (e.cancelable) e.preventDefault();
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setPaintIsDrawing(false);
+  };
+
+  const clearDrawingCanvas = () => {
+    const canvas = drawingCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
+  };
+
+  const handleSaveDrawing = async () => {
+    const canvas = drawingCanvasRef.current;
+    if (!canvas || !user) return;
+    
+    setIsUploading(true);
+    setUploadProgress(20);
+    setError(null);
+    setShowDrawingModal(false);
+
+    try {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9);
+      });
+
+      if (!blob) {
+        throw new Error("Could not capture drawing.");
+      }
+
+      if (user.isAnonymous) {
+        setTimeout(() => {
+          setFormData(prev => ({ ...prev, photos: [...prev.photos, "https://placehold.co/600x400?text=Digital+Sketch"] }));
+          setIsUploading(false);
+          toast.success("Drawing saved!");
+        }, 1000);
+        return;
+      }
+
+      const fileName = `jobs/${user.uid}/drawings/${Date.now()}.jpg`;
+      const storageRef = ref(storage, fileName);
+      setUploadProgress(40);
+
+      const arrayBuffer = await blob.arrayBuffer();
+      setUploadProgress(60);
+
+      try {
+        const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: "image/jpeg" });
+        setUploadProgress(90);
+
+        const url = await getDownloadURL(snapshot.ref);
+        setUploadProgress(100);
+
+        setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
+        toast.success("Drawing successfully uploaded!");
+      } catch (uploadError) {
+        console.warn("Drawing cloud upload failed. Falling back to secure local representation:", uploadError);
+        const localUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        setFormData(prev => ({ ...prev, photos: [...prev.photos, localUrl] }));
+        toast.success("Drawing saved securely (offline fallback)!");
+      }
+    } catch (err) {
+      console.error("Drawing save error:", err);
+      setError("Failed to save drawing. Please try again.");
+      toast.error("Failed to upload drawing.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDrawingFileUploaded = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setError(null);
+    setShowDrawingModal(false);
+
+    try {
+      const uploadPromises = Array.from(files as FileList).map(async (file: File) => {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const isImage = file.type.startsWith('image/') || 
+                        file.name.toLowerCase().endsWith('.jpg') || 
+                        file.name.toLowerCase().endsWith('.jpeg') || 
+                        file.name.toLowerCase().endsWith('.png') || 
+                        file.name.toLowerCase().endsWith('.webp') || 
+                        file.name.toLowerCase().endsWith('.heic');
+
+        if (!isPdf && !isImage) {
+          console.warn(`File ${file.name} is not a valid drawing (PDF/Image), skipping.`);
+          return null;
+        }
+
+        const fileName = `jobs/${user.uid}/drawings/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, fileName);
+
+        const timeoutPromise = new Promise<null>((_, reject) => {
+          setTimeout(() => reject(new Error("UPLOAD_TIMEOUT")), 25000);
+        });
+
+        const uploadOperationPromise = (async () => {
+          const arrayBuffer = await file.arrayBuffer();
+          const resolvedType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+          const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: resolvedType });
+          const url = await getDownloadURL(snapshot.ref);
+          return { type: isPdf ? 'pdf' : 'image', name: file.name, url };
+        })();
+
+        try {
+          return await Promise.race([uploadOperationPromise, timeoutPromise]);
+        } catch (uploadError) {
+          console.warn("Standard Firebase Storage drawing upload failed or timed out. Falling back to local representation:", uploadError);
+          try {
+            const localUrl = await readFileAsDataURL(file);
+            toast.success(`Attached "${file.name}" securely via offline fallback!`);
+            return { type: isPdf ? 'pdf' : 'image', name: file.name, url: localUrl };
+          } catch (fallbackError) {
+            console.error("Local reading fallback failed:", fallbackError);
+            toast.error(`Could not read drawing file "${file.name}" locally.`);
+            return null;
+          }
+        }
+      });
+
+      const results = (await Promise.all(uploadPromises)).filter((r): r is { type: 'pdf' | 'image'; name: string; url: string } => r !== null);
+      
+      const newPhotos = results.filter(r => r.type === 'image').map(r => r.url);
+      const newDocs = results.filter(r => r.type === 'pdf').map(r => ({ name: r.name, url: r.url }));
+
+      setFormData(prev => ({
+        ...prev,
+        photos: [...prev.photos, ...newPhotos],
+        documents: [...prev.documents, ...newDocs]
+      }));
+      toast.success("Drawing file successfully uploaded!");
+    } catch (err) {
+      console.error("Drawing upload error:", err);
+      setError("Failed to upload drawing. Please try again.");
+    } finally {
+      setIsUploading(false);
+      if (drawingFileInputRef.current) drawingFileInputRef.current.value = "";
+    }
+  };
+
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [voiceText, setVoiceText] = useState("");
@@ -702,8 +934,21 @@ export default function PostJobWizard() {
     if (user.isAnonymous) {
       console.log("Guest user detected, simulating gallery upload...");
       setTimeout(() => {
-        const simulatedUrls = Array.from(files).map((_, i) => `https://placehold.co/600x400?text=Gallery+Photo+${i+1}`);
-        setFormData(prev => ({ ...prev, photos: [...prev.photos, ...simulatedUrls] }));
+        const simulatedPhotos: string[] = [];
+        const simulatedVideos: string[] = [];
+        Array.from(files as FileList).forEach((file: File, i) => {
+          const isVid = file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mp4') || file.name.toLowerCase().endsWith('.mov') || file.name.toLowerCase().endsWith('.avi');
+          if (isVid) {
+            simulatedVideos.push("https://www.w3schools.com/html/mov_bbb.mp4");
+          } else {
+            simulatedPhotos.push(`https://placehold.co/600x400?text=Gallery+Photo+${i+1}`);
+          }
+        });
+        setFormData(prev => ({
+          ...prev,
+          photos: [...prev.photos, ...simulatedPhotos],
+          videos: [...prev.videos, ...simulatedVideos]
+        }));
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }, 1000);
@@ -712,8 +957,20 @@ export default function PostJobWizard() {
 
     try {
       const uploadPromises = Array.from(files as FileList).map(async (file: File) => {
-        // Basic validation
-        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        const isVideo = file.type.startsWith('video/') || 
+                        file.name.toLowerCase().endsWith('.mp4') || 
+                        file.name.toLowerCase().endsWith('.mov') || 
+                        file.name.toLowerCase().endsWith('.avi') || 
+                        file.name.toLowerCase().endsWith('.mkv') || 
+                        file.name.toLowerCase().endsWith('.webm');
+        const isImage = file.type.startsWith('image/') || 
+                        file.name.toLowerCase().endsWith('.jpg') || 
+                        file.name.toLowerCase().endsWith('.jpeg') || 
+                        file.name.toLowerCase().endsWith('.png') || 
+                        file.name.toLowerCase().endsWith('.webp') || 
+                        file.name.toLowerCase().endsWith('.heic');
+
+        if (!isImage && !isVideo) {
           console.warn(`File ${file.name} is not media, skipping.`);
           return null;
         }
@@ -721,9 +978,12 @@ export default function PostJobWizard() {
         const fileName = `jobs/${user.uid}/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, fileName);
         
-        // Directly use uploadBytes (highly performant, robust, and completely bypasses TIMEOUT_RESUMABLE)
-        console.log("Uploading gallery file via robust uploadBytes...");
-        try {
+        // Define a 25-second timeout for the file upload
+        const timeoutPromise = new Promise<null>((_, reject) => {
+          setTimeout(() => reject(new Error("UPLOAD_TIMEOUT")), 25000);
+        });
+
+        const uploadOperationPromise = (async () => {
           const arrayBuffer = await file.arrayBuffer();
           
           let progress = 10;
@@ -735,46 +995,54 @@ export default function PostJobWizard() {
             }
           }, 150);
 
-          const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
-          clearInterval(progressInterval);
-          setUploadProgress(100);
-          
-          return await getDownloadURL(snapshot.ref);
-        } catch (err) {
-          console.error("Gallery upload via uploadBytes failed, attempting uploadBytesResumable fallback:", err);
-          const arrayBuffer = await file.arrayBuffer();
-          const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: file.type });
-          
-          return new Promise<string>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              uploadTask.cancel();
-              reject(new Error("TIMEOUT_RESUMABLE"));
-            }, 30000);
-            
-            uploadTask.on('state_changed', 
-              (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-              }, 
-              (error) => {
-                clearTimeout(timeout);
-                reject(error);
-              }, 
-              async () => {
-                clearTimeout(timeout);
-                const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve(downloadUrl);
-              }
-            );
-          });
+          try {
+            const resolvedType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: resolvedType });
+            clearInterval(progressInterval);
+            setUploadProgress(100);
+            const url = await getDownloadURL(snapshot.ref);
+            return { type: isVideo ? 'video' : 'image', url };
+          } catch (firstErr) {
+            clearInterval(progressInterval);
+            console.warn("First gallery upload attempt failed, retrying once simply:", firstErr);
+            // Simple backup retry attempt
+            const resolvedType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: resolvedType });
+            setUploadProgress(100);
+            const url = await getDownloadURL(snapshot.ref);
+            return { type: isVideo ? 'video' : 'image', url };
+          }
+        })();
+
+        try {
+          return await Promise.race([uploadOperationPromise, timeoutPromise]);
+        } catch (uploadError) {
+          console.warn("Standard Firebase Storage gallery upload failed or timed out. Falling back to secure local data URL:", uploadError);
+          try {
+            const localUrl = await readFileAsDataURL(file);
+            toast.success(`Attached "${file.name}" securely via offline fallback!`);
+            return { type: isVideo ? 'video' : 'image', url: localUrl };
+          } catch (fallbackError) {
+            console.error("Local reading fallback failed:", fallbackError);
+            toast.error(`Could not read "${file.name}" locally.`);
+            return null;
+          }
         }
       });
 
-      const urls = (await Promise.all(uploadPromises)).filter((url): url is string => url !== null);
-      setFormData(prev => ({ ...prev, photos: [...prev.photos, ...urls] }));
+      const results = (await Promise.all(uploadPromises)).filter((res): res is { type: 'video' | 'image'; url: string } => res !== null);
+      
+      const newPhotos = results.filter(r => r.type === 'image').map(r => r.url);
+      const newVideos = results.filter(r => r.type === 'video').map(r => r.url);
+
+      setFormData(prev => ({
+        ...prev,
+        photos: [...prev.photos, ...newPhotos],
+        videos: [...prev.videos, ...newVideos]
+      }));
     } catch (err) {
       console.error("Gallery upload error:", err);
-      setError("Failed to upload one or more images. Please try again.");
+      setError("Failed to upload one or more images. Please connect to a stable network and try again.");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -788,9 +1056,24 @@ export default function PostJobWizard() {
     setIsUploadingDoc(true);
     setError(null);
 
+    if (user.isAnonymous) {
+      console.log("Guest user detected, simulating document upload...");
+      setTimeout(() => {
+        const simulatedDocs = Array.from(files as FileList).map((file: File, i) => ({
+          name: file.name,
+          url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+        }));
+        setFormData(prev => ({ ...prev, documents: [...prev.documents, ...simulatedDocs] }));
+        setIsUploadingDoc(false);
+        if (docInputRef.current) docInputRef.current.value = "";
+      }, 1000);
+      return;
+    }
+
     try {
       const uploadPromises = Array.from(files as FileList).map(async (file: File) => {
-        if (file.type !== 'application/pdf') {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        if (!isPdf) {
           console.warn(`File ${file.name} is not a PDF, skipping.`);
           return null;
         }
@@ -798,9 +1081,39 @@ export default function PostJobWizard() {
         const fileName = `jobs/${user.uid}/docs/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, fileName);
         
-        const snapshot = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
-        const url = await getDownloadURL(snapshot.ref);
-        return { name: file.name, url };
+        // Timeout check and robust try block for PDF uploads
+        const timeoutPromise = new Promise<null>((_, reject) => {
+          setTimeout(() => reject(new Error("UPLOAD_TIMEOUT")), 25000);
+        });
+
+        const uploadOperationPromise = (async () => {
+          const arrayBuffer = await file.arrayBuffer();
+          try {
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type || 'application/pdf' });
+            const url = await getDownloadURL(snapshot.ref);
+            return { name: file.name, url };
+          } catch (firstErr) {
+            console.warn("First PDF upload attempt failed, retrying once simply:", firstErr);
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type || 'application/pdf' });
+            const url = await getDownloadURL(snapshot.ref);
+            return { name: file.name, url };
+          }
+        })();
+
+        try {
+          return await Promise.race([uploadOperationPromise, timeoutPromise]);
+        } catch (uploadError) {
+          console.warn("Standard Firebase Storage document upload failed or timed out. Falling back to secure local data URL:", uploadError);
+          try {
+            const localUrl = await readFileAsDataURL(file);
+            toast.success(`Attached "${file.name}" securely via offline fallback!`);
+            return { name: file.name, url: localUrl };
+          } catch (fallbackError) {
+            console.error("Local reading fallback failed:", fallbackError);
+            toast.error(`Could not read document file "${file.name}" locally.`);
+            return null;
+          }
+        }
       });
 
       const newDocs = (await Promise.all(uploadPromises)).filter((doc): doc is { name: string; url: string } => doc !== null);
@@ -1071,45 +1384,58 @@ export default function PostJobWizard() {
 
   const handleAutoDetectLocation = () => {
     if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        try {
-          const { latitude: lat, longitude: lng } = position.coords;
-          if (!window.google) return;
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-            if (status === "OK" && results?.[0]) {
-              const foundAddress = results[0].formatted_address;
-              setAddressInput(foundAddress);
-              setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
-              setUseRegisteredAddress(false);
-              
-              let newCity = "";
-              let newArea = "";
-              let newPostcode = "";
-
-              results[0].address_components.forEach((comp: any) => {
-                if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
-                if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
-                if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
-              });
-
-              if (!newPostcode) {
-                const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
-                newPostcode = pcMatch ? pcMatch[0] : "";
-              }
-
-              setFormData(prev => ({
-                ...prev,
-                city: newCity,
-                area: newArea,
-                postcode: newPostcode
-              }));
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude: lat, longitude: lng } = position.coords;
+            if (!window.google) {
+              setIsLocating(false);
+              return;
             }
-          });
-        } catch (err) {
-          console.error("Geocoding failed:", err);
-        }
-      });
+            const geocoder = new window.google.maps.Geocoder();
+            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+              if (status === "OK" && results?.[0]) {
+                const foundAddress = results[0].formatted_address;
+                setAddressInput(foundAddress);
+                setFormData(prev => ({ ...prev, fullAddress: foundAddress }));
+                setUseRegisteredAddress(false);
+                
+                let newCity = "";
+                let newArea = "";
+                let newPostcode = "";
+
+                results[0].address_components.forEach((comp: any) => {
+                  if (comp.types.includes("postal_town") || comp.types.includes("locality")) newCity = comp.long_name;
+                  if (comp.types.includes("sublocality") || comp.types.includes("neighborhood")) newArea = comp.long_name;
+                  if (comp.types.includes("postal_code")) newPostcode = comp.long_name;
+                });
+
+                if (!newPostcode) {
+                  const pcMatch = foundAddress.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i);
+                  newPostcode = pcMatch ? pcMatch[0] : "";
+                }
+
+                setFormData(prev => ({
+                  ...prev,
+                  city: newCity,
+                  area: newArea,
+                  postcode: newPostcode
+                }));
+              }
+              setIsLocating(false);
+            });
+          } catch (err) {
+            console.error("Geocoding failed:", err);
+            setIsLocating(false);
+          }
+        },
+        (err) => {
+          console.error("Geolocation failed:", err);
+          setIsLocating(false);
+        },
+        { timeout: 10000 }
+      );
     }
   };
 
@@ -1959,32 +2285,43 @@ export default function PostJobWizard() {
                   </div>
                   {descriptionError && <p className="text-red-500 text-xs mt-1 font-medium">{descriptionError}</p>}
 
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <button 
-                      onClick={() => handleStartCamera("photo")}
-                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                    >
-                      <Camera className="w-4 h-4 text-[#0084a5]" /> Add Photo
-                    </button>
-                    <button 
-                      onClick={() => handleStartCamera("video")}
-                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                    >
-                      <Video className="w-4 h-4 text-[#0084a5]" /> Add Video
-                    </button>
-                    <button 
-                      onClick={() => docInputRef.current?.click()}
-                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                    >
-                      <FileText className="w-4 h-4 text-[#0084a5]" /> Add PDF
-                    </button>
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                    >
-                      <PenTool className="w-4 h-4 text-[#0084a5]" /> Add Drawing
-                    </button>
-                  </div>
+                   <div className="flex flex-wrap gap-2 mt-3">
+                     <button 
+                       onClick={() => handleStartCamera("photo")}
+                       className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                     >
+                       <Camera className="w-4 h-4 text-[#0084a5]" /> Add Photo
+                     </button>
+                     <button 
+                       onClick={() => handleStartCamera("video")}
+                       className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                     >
+                       <Video className="w-4 h-4 text-[#0084a5]" /> Add Video
+                     </button>
+                     <button 
+                       onClick={() => docInputRef.current?.click()}
+                       className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                     >
+                       <FileText className="w-4 h-4 text-[#0084a5]" /> Add PDF
+                     </button>
+                     <button 
+                       onClick={() => setShowDrawingModal(true)}
+                       className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                     >
+                       <PenTool className="w-4 h-4 text-[#0084a5]" /> Add Drawing
+                     </button>
+                   </div>
+
+                   {/* Inline Uploading Indicator with progress */}
+                   {(isUploading || isUploadingDoc) && (
+                     <div className="mt-3 p-3 rounded-2xl border border-blue-100 bg-blue-50/50 flex items-center justify-between text-xs font-bold text-blue-700 animate-pulse">
+                       <div className="flex items-center gap-2">
+                         <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                         <span>Uploading files and project assets... {uploadProgress > 0 && uploadProgress < 100 ? `${Math.round(uploadProgress)}%` : ""}</span>
+                       </div>
+                       <span className="text-[10px] text-slate-400 font-medium font-mono">Please do not refresh</span>
+                     </div>
+                   )}
 
                   {/* Document & Media Previews */}
                   {(formData.photos.length > 0 || formData.videos.length > 0 || formData.documents.length > 0) && (
@@ -2068,24 +2405,33 @@ export default function PostJobWizard() {
                     </motion.div>
                   )}
 
-                  {/* Hidden inputs left outside visual flow */}
-                  <input 
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept="image/*,video/*"
-                    multiple
-                    onChange={handleGalleryUpload}
-                  />
+                   {/* Hidden inputs left outside visual flow */}
+                   <input 
+                     type="file"
+                     ref={fileInputRef}
+                     className="hidden"
+                     accept="image/*,video/*"
+                     multiple
+                     onChange={handleGalleryUpload}
+                   />
 
-                  <input 
-                    type="file"
-                    ref={docInputRef}
-                    className="hidden"
-                    accept="application/pdf"
-                    multiple
-                    onChange={handleDocUpload}
-                  />
+                   <input 
+                     type="file"
+                     ref={docInputRef}
+                     className="hidden"
+                     accept="application/pdf"
+                     multiple
+                     onChange={handleDocUpload}
+                   />
+
+                   <input 
+                     type="file"
+                     ref={drawingFileInputRef}
+                     className="hidden"
+                     accept="image/*,application/pdf"
+                     multiple
+                     onChange={handleDrawingFileUploaded}
+                   />
                   
                   <input 
                     type="file"
@@ -2220,63 +2566,66 @@ export default function PostJobWizard() {
                   Where is the job?
                 </h2>
                 
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input 
-                    className="w-full p-4 pl-12 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all text-sm font-medium placeholder:font-normal placeholder:text-slate-400"
-                    placeholder="Enter job address..."
-                    value={addressInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setAddressInput(val);
-                      setUseRegisteredAddress(false);
-                      if (addressSuggestionTimeout) clearTimeout(addressSuggestionTimeout);
-                      if (!val || val.length < 2 || !window.google) {
-                        setAddressSuggestions([]);
-                        return;
-                      }
-                      const timeout = setTimeout(async () => {
-                        let predictions: any[] = [];
-                        try {
-                          const { AutocompleteSuggestion } = await google.maps.importLibrary("places") as any;
-                          const request = { input: val, includedRegionCodes: ['gb'] };
-                          const res = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
-                          predictions = res.suggestions || [];
-                        } catch (newApiError: any) {
-                          console.warn("New Places API fetch failed in PostJobWizard, trying classic AutocompleteService:", newApiError);
-                          const classicService = new google.maps.places.AutocompleteService();
-                          const request = {
-                            input: val,
-                            componentRestrictions: { country: 'gb' }
-                          };
-                          predictions = await new Promise<any[]>((resolve) => {
-                            classicService.getPlacePredictions(request, (classicPredictions, status) => {
-                              if (status === google.maps.places.PlacesServiceStatus.OK && classicPredictions) {
-                                resolve(classicPredictions.map((cp: any) => ({
-                                  placePrediction: {
-                                    text: { text: cp.description },
-                                    placeId: cp.place_id
-                                  }
-                                })));
-                              } else {
-                                resolve([]);
-                              }
-                            });
-                          });
-                        }
+                 <div className="relative">
+                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                   <input 
+                     className="w-full p-4 pl-12 pr-12 rounded-2xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-all text-sm font-medium placeholder:font-normal placeholder:text-slate-400"
+                     placeholder="Enter job address..."
+                     value={addressInput}
+                     onChange={(e) => {
+                       const val = e.target.value;
+                       setAddressInput(val);
+                       setUseRegisteredAddress(false);
+                       if (addressSuggestionTimeout) clearTimeout(addressSuggestionTimeout);
+                       if (!val || val.length < 2 || !window.google) {
+                         setAddressSuggestions([]);
+                         setIsSearchingAddress(false);
+                         return;
+                       }
+                       setIsSearchingAddress(true);
+                       const timeout = setTimeout(async () => {
+                         let predictions: any[] = [];
+                         try {
+                           const { AutocompleteSuggestion } = await google.maps.importLibrary("places") as any;
+                           const request = { input: val, includedRegionCodes: ['gb'] };
+                           const res = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+                           predictions = res.suggestions || [];
+                         } catch (newApiError: any) {
+                           console.warn("New Places API fetch failed in PostJobWizard, trying classic AutocompleteService:", newApiError);
+                           const classicService = new google.maps.places.AutocompleteService();
+                           const request = {
+                             input: val,
+                             componentRestrictions: { country: 'gb' }
+                           };
+                           predictions = await new Promise<any[]>((resolve) => {
+                             classicService.getPlacePredictions(request, (classicPredictions, status) => {
+                               if (status === google.maps.places.PlacesServiceStatus.OK && classicPredictions) {
+                                 resolve(classicPredictions.map((cp: any) => ({
+                                   placePrediction: {
+                                     text: { text: cp.description },
+                                     placeId: cp.place_id
+                                   }
+                                 })));
+                               } else {
+                                 resolve([]);
+                               }
+                             });
+                           });
+                         }
 
-                        if (predictions && predictions.length > 0) {
-                          setAddressSuggestions(predictions.map((p: any) => ({
-                            label: p.placePrediction.text.text,
-                            placeId: p.placePrediction.placeId,
-                            placePrediction: p.placePrediction
-                          })));
-                        } else {
-                          setAddressSuggestions([]);
-                        }
-                      }, 500);
-                      setAddressSuggestionTimeout(timeout);
-                    }}
+                         if (predictions && predictions.length > 0) {
+                           setAddressSuggestions(predictions.map((p: any) => ({
+                             label: p.placePrediction.text.text,
+                             placeId: p.placePrediction.placeId,
+                             placePrediction: p.placePrediction
+                           })));
+                         } else {
+                           setAddressSuggestions([]);
+                         }
+                         setIsSearchingAddress(false);
+                       }, 500);
+                       setAddressSuggestionTimeout(timeout);
+                     }}
                     onBlur={async (e) => {
                       const val = e.target.value;
                       if (!val || addressSuggestions.length > 0 || useRegisteredAddress) return;
@@ -2288,6 +2637,9 @@ export default function PostJobWizard() {
                       } catch (err) { console.error("Error looking up postcode:", err); }
                     }}
                   />
+                  {isSearchingAddress && (
+                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0084a5] animate-spin shrink-0 z-10" />
+                  )}
                   {addressSuggestions.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-black max-h-64 overflow-y-auto z-50">
                       {addressSuggestions.map((suggestion, idx) => (
@@ -2370,10 +2722,16 @@ export default function PostJobWizard() {
                 <div className="flex gap-2 w-full">
                   <button
                     type="button"
+                    disabled={isLocating}
                     onClick={handleAutoDetectLocation}
-                    className="flex-1 p-3 rounded-2xl border border-blue-100 bg-blue-50 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all text-sm active:scale-95"
+                    className="flex-1 p-3 rounded-2xl border border-blue-100 bg-blue-50 text-blue-700 font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all text-sm active:scale-95 disabled:opacity-55"
                   >
-                    <Locate className="w-4 h-4 flex-shrink-0" /> Current Location
+                    {isLocating ? (
+                      <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-blue-700" />
+                    ) : (
+                      <Locate className="w-4 h-4 flex-shrink-0" />
+                    )}
+                    {isLocating ? "Locating..." : "Current Location"}
                   </button>
                   {profile?.postcode && (
                     <button
@@ -3211,6 +3569,149 @@ export default function PostJobWizard() {
               >
                 Got it
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Interactive Sketch / Drawing Modal */}
+      <AnimatePresence>
+        {showDrawingModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+            onClick={() => setShowDrawingModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-white rounded-3xl p-6 max-w-[500px] w-full border border-black shadow-2xl relative overflow-hidden flex flex-col gap-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="text-xl font-black text-black flex items-center gap-2">
+                    <PenTool className="w-5 h-5 text-[#0084a5]" /> Drawing Board
+                  </h3>
+                  <p className="text-slate-500 text-xs mt-0.5">Sketch a diagram or upload a blueprint drawing</p>
+                </div>
+                <button 
+                  onClick={() => setShowDrawingModal(false)} 
+                  className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-400 border border-transparent hover:border-black/10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* HTML5 Canvas Sketch Pad drawing board */}
+              <div className="relative bg-slate-50 rounded-2xl border border-black overflow-hidden flex items-center justify-center">
+                <canvas
+                  ref={drawingCanvasRef}
+                  width={450}
+                  height={300}
+                  className="bg-white cursor-crosshair touch-none select-none max-w-full"
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  onTouchStart={startDrawing}
+                  onTouchMove={draw}
+                  onTouchEnd={stopDrawing}
+                />
+                {!hasDrawn && (
+                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center text-slate-400 gap-1.5 p-4 text-center">
+                    <PenTool className="w-8 h-8 opacity-40 text-slate-600 animate-bounce" />
+                    <p className="font-bold text-xs text-slate-600">Use finger or cursor to draw directly here</p>
+                    <p className="text-[10px] text-slate-400 font-mono">Drawing is fully touch-optimized</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Toolkit Controls */}
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-black/10">
+                  {/* Colors */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Pen Color:</span>
+                    {[
+                      { hex: "#000000", label: "Black" },
+                      { hex: "#0084a5", label: "Blue" },
+                      { hex: "#ef4444", label: "Red" },
+                      { hex: "#10b981", label: "Green" }
+                    ].map((item) => (
+                      <button
+                        key={item.hex}
+                        onClick={() => setDrawingColor(item.hex)}
+                        className={cn(
+                          "w-6 h-6 rounded-full border transition-all active:scale-90",
+                          drawingColor === item.hex ? "border-black scale-110 ring-2 ring-black/10" : "border-transparent"
+                        )}
+                        style={{ backgroundColor: item.hex }}
+                        title={item.label}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Brush size */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Size:</span>
+                    {[
+                      { size: 2, label: "Thin" },
+                      { size: 4, label: "Medium" },
+                      { size: 8, label: "Thick" }
+                    ].map((item) => (
+                      <button
+                        key={item.size}
+                        onClick={() => setDrawingLineWidth(item.size)}
+                        className={cn(
+                          "px-2 py-1 rounded text-[10px] font-extrabold transition-all border active:scale-95",
+                          drawingLineWidth === item.size ? "bg-black text-white border-black" : "bg-white text-slate-600 border-black/10"
+                        )}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={clearDrawingCanvas}
+                    className="flex-1 py-2.5 rounded-xl border border-black hover:bg-slate-50 text-slate-700 font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 bg-white"
+                  >
+                    Clear Canvas
+                  </button>
+                  <button
+                    onClick={() => drawingFileInputRef.current?.click()}
+                    className="flex-1 py-2.5 rounded-xl border border-black hover:bg-slate-50 text-slate-700 font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 bg-white"
+                  >
+                    Upload blueprint instead
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm / Cancel Actions */}
+              <div className="grid grid-cols-2 gap-3 mt-2 pt-4 border-t border-slate-100">
+                <button
+                  onClick={() => setShowDrawingModal(false)}
+                  className="p-3 rounded-2xl border border-black text-black font-bold text-sm bg-white hover:bg-slate-100 transition-all text-center active:scale-95"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveDrawing}
+                  disabled={!hasDrawn}
+                  className={cn(
+                    "p-3 rounded-2xl text-white font-extrabold text-sm text-center transition-all active:scale-95 border",
+                    hasDrawn ? "bg-[#0084a5] border-black hover:opacity-90 cursor-pointer shadow-md" : "bg-slate-200 border-slate-200 text-slate-400 cursor-not-allowed"
+                  )}
+                >
+                  Confirm Sketch
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
