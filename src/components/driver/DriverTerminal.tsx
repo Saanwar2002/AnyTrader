@@ -542,6 +542,23 @@ export default function DriverTerminal() {
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
   const [isAutoNavPaused, setIsAutoNavPaused] = useState(false);
+
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== "undefined" ? window.innerWidth : 360,
+    height: typeof window !== "undefined" ? window.innerHeight : 800,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const isMuted = profile?.muteHeadsUpVolume === true;
   const navVoiceVolume = isMuted ? 0.0 : 1.0;
   const autoNavPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -564,6 +581,9 @@ export default function DriverTerminal() {
     useState<string>("");
   const [hasAnnouncedArrival, setHasAnnouncedArrival] = useState(false);
 
+  const customDragActiveRef = useRef(false);
+  const customDragPrevPosRef = useRef({ x: 0, y: 0 });
+
   const handleMapInteraction = () => {
     if (!isAutoNavHeadUp) return;
     setIsAutoNavPaused(true);
@@ -573,6 +593,47 @@ export default function DriverTerminal() {
     autoNavPauseTimeoutRef.current = setTimeout(() => {
       setIsAutoNavPaused(false);
     }, 10000); // Resume auto nav after 10s of no interaction
+  };
+
+  const handleCustomDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isAutoNavHeadUp || !mapInstance) return;
+    
+    // Call existing handleMapInteraction to pause auto center/nav
+    handleMapInteraction();
+
+    customDragActiveRef.current = true;
+    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    customDragPrevPosRef.current = { x: clientX, y: clientY };
+  };
+
+  const handleCustomDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!customDragActiveRef.current || !mapInstance) return;
+
+    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    const dx = clientX - customDragPrevPosRef.current.x;
+    const dy = clientY - customDragPrevPosRef.current.y;
+
+    customDragPrevPosRef.current = { x: clientX, y: clientY };
+
+    // Rotate map panning vector to cancel CSS rotation (-mapHeading)
+    // When the map wrapper is CSS rotated by -mapHeading, standard dragging becomes completely skewed/inverted.
+    // By rotating the visual movement vector (-dx, -dy) by mapHeading, we align custom dragging perfectly
+    // with the screen coordinates relative to the user's touch movement.
+    const panX = -dx;
+    const panY = -dy;
+
+    const angleRad = (mapHeading * Math.PI) / 180;
+    const rotatedPanX = panX * Math.cos(angleRad) - panY * Math.sin(angleRad);
+    const rotatedPanY = panX * Math.sin(angleRad) + panY * Math.cos(angleRad);
+
+    mapInstance.panBy(rotatedPanX, rotatedPanY);
+  };
+
+  const handleCustomDragEnd = () => {
+    customDragActiveRef.current = false;
   };
 
   const getBearing = (
@@ -894,9 +955,9 @@ export default function DriverTerminal() {
               : "You have arrived at your destination.";
           speakText(text, navVoiceVolume);
         }
-        if (mapInstance && (mapInstance.getZoom() || 0) < 15) {
-          mapInstance.setZoom(15);
-          setMapZoom(15);
+        if (mapInstance && (mapInstance.getZoom() || 0) < 18) {
+          mapInstance.setZoom(18);
+          setMapZoom(18);
         }
       }
     }
@@ -1235,12 +1296,12 @@ export default function DriverTerminal() {
       mapInstance.setHeading(0);
       mapInstance.setTilt(0);
       if (directions) {
-        let desiredZoom = 14;
+        let desiredZoom = 17;
         if (
           directions.routes?.[0]?.legs?.[0]?.distance?.value &&
           directions.routes[0].legs[0].distance.value <= 100
         ) {
-          desiredZoom = 15;
+          desiredZoom = 18;
         }
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         
@@ -1323,12 +1384,12 @@ export default function DriverTerminal() {
       mapInstance.setHeading(0);
       mapInstance.setTilt(0);
       if (directions) {
-        let desiredZoom = 14;
+        let desiredZoom = 17;
         if (
           directions.routes?.[0]?.legs?.[0]?.distance?.value &&
           directions.routes[0].legs[0].distance.value <= 100
         ) {
-          desiredZoom = 15;
+          desiredZoom = 18;
         }
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         
@@ -1356,7 +1417,7 @@ export default function DriverTerminal() {
         mapInstance.setTilt(0);
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         
-        let desiredZoom = rideState === "waiting" ? 15 : 15;
+        let desiredZoom = rideState === "waiting" ? 17 : 15;
         const currentResetKey = {
           rideId: null,
           rideState: rideState,
@@ -1378,7 +1439,7 @@ export default function DriverTerminal() {
         mapInstance.setHeading(0);
         mapInstance.setTilt(0);
         
-        let desiredZoom = rideState === "waiting" ? 15 : 15;
+        let desiredZoom = rideState === "waiting" ? 17 : 15;
         const currentResetKey = {
           rideId: null,
           rideState: rideState,
@@ -3218,6 +3279,18 @@ export default function DriverTerminal() {
     setPaymentUrl(null);
   };
 
+  const maxDim = Math.max(windowSize.width, windowSize.height);
+  const mapSize = maxDim * 1.6; // 160vmax equivalent in px
+  const overflowX = (mapSize - windowSize.width) / 2;
+  const overflowY = (mapSize - windowSize.height) / 2;
+
+  const mapPadding = {
+    top: 100 + overflowY,
+    bottom: 350 + overflowY,
+    left: 20 + overflowX,
+    right: 20 + overflowX,
+  };
+
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans min-h-0">
       {" "}
@@ -3260,9 +3333,6 @@ export default function DriverTerminal() {
           {/* 1. Map Layer (Background) */}
           <div
             className="absolute inset-0 z-0 h-full w-full bg-[#1A1A1E]"
-            onTouchStartCapture={handleMapInteraction}
-            onWheelCapture={handleMapInteraction}
-            onMouseDownCapture={handleMapInteraction}
           >
             <AnimatePresence>
               {isAutoNavHeadUp &&
@@ -3307,16 +3377,29 @@ export default function DriverTerminal() {
 
             {isLoaded && (
               <div
+                onMouseDown={handleCustomDragStart}
+                onMouseMove={handleCustomDragMove}
+                onMouseUp={handleCustomDragEnd}
+                onMouseLeave={handleCustomDragEnd}
+                onTouchStart={handleCustomDragStart}
+                onTouchMove={handleCustomDragMove}
+                onTouchEnd={handleCustomDragEnd}
                 style={{
-                  width: "100%",
-                  height: "100%",
-                  transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${-mapHeading}deg) scale(2.4)` : "none",
+                  position: "absolute",
+                  width: `${mapSize}px`,
+                  height: `${mapSize}px`,
+                  left: "50%",
+                  top: "50%",
+                  transform: isAutoNavHeadUp && mapHeading 
+                    ? `translate(-50%, -50%) rotate(${-mapHeading}deg)` 
+                    : `translate(-50%, -50%)`,
                   transformOrigin: "50% 50%",
                   transition: "transform 0.5s ease-out",
                 }}
               >
                 <GoogleMap
                   mapContainerStyle={{ width: "100%", height: "100%" }}
+                  onDragStart={handleMapInteraction}
                   center={
                     directions || rideState === "waiting"
                       ? undefined
@@ -3334,12 +3417,8 @@ export default function DriverTerminal() {
                   onLoad={(map) => setMapInstance(map)}
                   options={{
                     ...premiumMapOptions,
-                    padding: {
-                      bottom: 350, // UI drawer height
-                      top: 100,
-                      left: 20,
-                      right: 20,
-                    },
+                    draggable: !isAutoNavHeadUp,
+                    padding: mapPadding,
                   }}
                 >
                   {isOnline && (
@@ -3349,8 +3428,8 @@ export default function DriverTerminal() {
                     >
                       <div
                         style={{
-                          transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading 
-                            ? `rotate(${mapHeading}deg) scale(${1 / 2.4})` 
+                          transform: isAutoNavHeadUp && mapHeading 
+                            ? `rotate(${mapHeading}deg)` 
                             : "none",
                           transformOrigin: "18px 54px",
                           transition: "transform 0.5s ease-out",
@@ -3646,9 +3725,7 @@ export default function DriverTerminal() {
                     >
                       <div
                         style={{
-                          transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading 
-                            ? `scale(${1 / 2.4})` 
-                            : "none",
+                          transform: "none",
                           transformOrigin: "16px 52px",
                         }}
                         className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50"
@@ -3684,7 +3761,6 @@ export default function DriverTerminal() {
             {/* Main Map Zoom Controls & Overview Nav */}
             {mapInstance && (
               <div
-                onClickCapture={handleMapInteraction}
                 className={cn(
                   "absolute right-4 z-[45] transition-all duration-300 flex flex-col gap-3 items-end",
                   rideState === "incoming" ||
@@ -3717,7 +3793,7 @@ export default function DriverTerminal() {
                         >
                           <Compass
                             style={{
-                              transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${-mapHeading}deg)` : "none",
+                              transform: isAutoNavHeadUp && mapHeading ? `rotate(${-mapHeading}deg)` : "none",
                               transition: "transform 0.5s ease-out",
                             }}
                             className={cn(
