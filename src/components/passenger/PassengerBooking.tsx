@@ -736,6 +736,8 @@ export default function PassengerBooking() {
                 setFareEstimate(Math.max(calcFare, fareConfig.minFare));
               }
             }
+          }).catch(() => {
+            // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
           });
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise
@@ -2397,6 +2399,8 @@ export default function PassengerBooking() {
               setLiveEtaMins(Math.ceil(totalSecs / 60));
               setLiveEtaSeconds(totalSecs);
             }
+          }).catch(() => {
+            // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
           });
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise

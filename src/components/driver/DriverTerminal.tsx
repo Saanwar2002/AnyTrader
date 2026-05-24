@@ -124,7 +124,7 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  // mapId: "DEMO_MAP_ID", // Enables Vector Map (WebGL) for smooth rotation, but overrides JSON styles
+  mapId: "DEMO_MAP_ID", // Enables Vector Map (WebGL) for smooth rotation
   mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
@@ -1097,25 +1097,23 @@ export default function DriverTerminal() {
               time: now,
             };
           } else {
-            console.error(
-              "DirectionsService failed:",
-              status,
-              "Origin:",
-              originLat,
-              originLng,
-              "Dest:",
-              destLat,
-              destLng,
-              "Result:",
-              result
-            );
-            // Show alert in capacitor to help debug why it fails
-            if (isCapacitor()) {
-              alert(`Google Maps Directions API failed: ${status}. This is usually because the app restricts referrers, and Android WebViews sometimes drop the Referer header for internal API XHR requests. Try temporarily setting your Directions API key to "None" for restrictions to verify.`);
+            if (status !== window.google.maps.DirectionsStatus.UNKNOWN_ERROR) {
+              console.warn(
+                "DirectionsService failed:",
+                status,
+                "Origin:",
+                originLat,
+                originLng,
+                "Dest:",
+                destLat,
+                destLng
+              );
             }
           }
         }
-      );
+      ).catch(() => {
+        // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
+      });
     };
 
     const updateDynamicDirections = () => {
@@ -1175,6 +1173,8 @@ export default function DriverTerminal() {
     if (!isAutoNavHeadUp) {
       setMapHeading(0); // Reset to North up when disabled
       setMapTilt(0);
+      mapInstance.setHeading(0);
+      mapInstance.setTilt(0);
       return;
     }
 
@@ -1213,6 +1213,8 @@ export default function DriverTerminal() {
       }
       setMapHeading(targetBearing);
       setMapTilt(60); // 3D perspective
+      mapInstance.setHeading(targetBearing);
+      mapInstance.setTilt(60);
       if (directions) {
         let desiredZoom = 16;
         if (
@@ -1273,6 +1275,8 @@ export default function DriverTerminal() {
 
       setMapHeading(targetBearing);
       setMapTilt(60);
+      mapInstance.setHeading(targetBearing);
+      mapInstance.setTilt(60);
       if (directions) {
         let desiredZoom = 16;
         if (
@@ -1288,11 +1292,15 @@ export default function DriverTerminal() {
       if (driverHeading !== null && driverHeading !== undefined) {
         setMapHeading(driverHeading);
         setMapTilt(0);
+        mapInstance.setHeading(driverHeading);
+        mapInstance.setTilt(0);
         mapInstance.setZoom(rideState === "waiting" ? 17 : 17); // Set to 17 for waiting and idle to match previous behavior
         mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
       } else {
         setMapHeading(0);
         setMapTilt(0);
+        mapInstance.setHeading(0);
+        mapInstance.setTilt(0);
       }
     }
   }, [
