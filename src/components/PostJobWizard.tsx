@@ -324,10 +324,11 @@ export default function PostJobWizard() {
 
       if (user.isAnonymous) {
         setTimeout(() => {
-          setFormData(prev => ({ ...prev, photos: [...prev.photos, "https://placehold.co/600x400?text=Digital+Sketch"] }));
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+          setFormData(prev => ({ ...prev, photos: [...prev.photos, dataUrl] }));
           setIsUploading(false);
           toast.success("Drawing saved!");
-        }, 1000);
+        }, 400);
         return;
       }
 
@@ -799,12 +800,17 @@ export default function PostJobWizard() {
     setUploadProgress(0);
 
     if (user.isAnonymous) {
-      console.log("Guest user detected, simulating photo capture upload...");
-      setTimeout(() => {
+      console.log("Guest user detected, capturing actual photo in base64...");
+      try {
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        setFormData(prev => ({ ...prev, photos: [...prev.photos, dataUrl] }));
+        handleStopCamera();
+      } catch (e) {
+        console.error("Failed to capture local photo base64:", e);
         setFormData(prev => ({ ...prev, photos: [...prev.photos, "https://placehold.co/600x400?text=Captured+Photo"] }));
         handleStopCamera();
-        setIsUploading(false);
-      }, 1000);
+      }
+      setIsUploading(false);
       return;
     }
 
@@ -932,26 +938,43 @@ export default function PostJobWizard() {
     setError(null);
 
     if (user.isAnonymous) {
-      console.log("Guest user detected, simulating gallery upload...");
-      setTimeout(() => {
-        const simulatedPhotos: string[] = [];
-        const simulatedVideos: string[] = [];
-        Array.from(files as FileList).forEach((file: File, i) => {
-          const isVid = file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mp4') || file.name.toLowerCase().endsWith('.mov') || file.name.toLowerCase().endsWith('.avi');
-          if (isVid) {
-            simulatedVideos.push("https://www.w3schools.com/html/mov_bbb.mp4");
-          } else {
-            simulatedPhotos.push(`https://placehold.co/600x400?text=Gallery+Photo+${i+1}`);
+      console.log("Guest user detected, processing gallery upload locally...");
+      (async () => {
+        try {
+          const simulatedPhotos: string[] = [];
+          const simulatedVideos: string[] = [];
+          
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const isVid = file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mp4') || file.name.toLowerCase().endsWith('.mov') || file.name.toLowerCase().endsWith('.avi');
+            if (isVid) {
+              try {
+                simulatedVideos.push(URL.createObjectURL(file));
+              } catch (e) {
+                simulatedVideos.push("https://www.w3schools.com/html/mov_bbb.mp4");
+              }
+            } else {
+              try {
+                const dataUrl = await readFileAsDataURL(file);
+                simulatedPhotos.push(dataUrl);
+              } catch (e) {
+                simulatedPhotos.push(`https://placehold.co/600x400?text=Gallery+Photo+${i+1}`);
+              }
+            }
           }
-        });
-        setFormData(prev => ({
-          ...prev,
-          photos: [...prev.photos, ...simulatedPhotos],
-          videos: [...prev.videos, ...simulatedVideos]
-        }));
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }, 1000);
+          
+          setFormData(prev => ({
+            ...prev,
+            photos: [...prev.photos, ...simulatedPhotos],
+            videos: [...prev.videos, ...simulatedVideos]
+          }));
+        } catch (err) {
+          console.error("Local media processing error:", err);
+        } finally {
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+      })();
       return;
     }
 

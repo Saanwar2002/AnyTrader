@@ -1187,8 +1187,19 @@ export default function DriverTerminal() {
       activeRide?.pickupLat &&
       activeRide?.pickupLng
     ) {
-      let targetBearing = driverHeading;
-      if (targetBearing === null) {
+      let targetBearing = null;
+      if (directions?.routes?.[0]?.legs?.[0]?.steps?.[0]) {
+        const step = directions.routes[0].legs[0].steps[0];
+        const p1 = step.start_location;
+        const p2 = step.end_location;
+        if (p1 && p2) {
+          targetBearing = getBearing(p1.lat(), p1.lng(), p2.lat(), p2.lng());
+        }
+      }
+      if (targetBearing === null || isNaN(targetBearing)) {
+        targetBearing = driverHeading;
+      }
+      if (targetBearing === null || isNaN(targetBearing)) {
         if (
           directions &&
           directions.routes &&
@@ -1246,8 +1257,19 @@ export default function DriverTerminal() {
         }
       }
 
-      let targetBearing = driverHeading;
-      if (targetBearing === null) {
+      let targetBearing = null;
+      if (directions?.routes?.[0]?.legs?.[0]?.steps?.[0]) {
+        const step = directions.routes[0].legs[0].steps[0];
+        const p1 = step.start_location;
+        const p2 = step.end_location;
+        if (p1 && p2) {
+          targetBearing = getBearing(p1.lat(), p1.lng(), p2.lat(), p2.lng());
+        }
+      }
+      if (targetBearing === null || isNaN(targetBearing)) {
+        targetBearing = driverHeading;
+      }
+      if (targetBearing === null || isNaN(targetBearing)) {
         // Try getting path bearing from directions
         if (directions && directions.routes && directions.routes[0]) {
           const leg = directions.routes[0].legs[0];
@@ -3213,50 +3235,64 @@ export default function DriverTerminal() {
             </AnimatePresence>
 
             {isLoaded && (
-              <GoogleMap
-                mapContainerStyle={{ width: "100%", height: "100%" }}
-                center={
-                  directions || rideState === "waiting"
-                    ? undefined
-                    : { lat: mapCenter[0], lng: mapCenter[1] }
-                }
-                zoom={
-                  directions
-                    ? undefined
-                    : rideState === "waiting"
-                      ? 17
-                      : rideState === "en_route_pickup" ||
-                          rideState === "in_progress"
-                        ? 16
-                        : 11 // Default driver location zoom level when idle
-                }
-                onLoad={(map) => setMapInstance(map)}
-                options={{
-                  ...premiumMapOptions,
-                  padding: {
-                    bottom: 350, // UI drawer height
-                    top: 100,
-                    left: 20,
-                    right: 20,
-                  },
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${-mapHeading}deg) scale(1.4)` : "none",
+                  transformOrigin: "50% 50%",
+                  transition: "transform 0.8s ease-in-out",
                 }}
-                heading={mapHeading}
-                tilt={mapTilt}
               >
-                {isOnline && (
-                  <OverlayViewF
-                    position={{ lat: mapCenter[0], lng: mapCenter[1] }}
-                    mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                  >
-                    <div
-                      ref={(el) => {
-                        if (el && el.parentElement) {
-                          el.parentElement.style.transition =
-                            "left 1s linear, top 1s linear";
-                        }
-                      }}
-                      className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50"
+                <GoogleMap
+                  mapContainerStyle={{ width: "100%", height: "100%" }}
+                  center={
+                    directions || rideState === "waiting"
+                      ? undefined
+                      : { lat: mapCenter[0], lng: mapCenter[1] }
+                  }
+                  zoom={
+                    directions
+                      ? undefined
+                      : rideState === "waiting"
+                        ? 17
+                        : rideState === "en_route_pickup" ||
+                            rideState === "in_progress"
+                          ? 16
+                          : 11 // Default driver location zoom level when idle
+                  }
+                  onLoad={(map) => setMapInstance(map)}
+                  options={{
+                    ...premiumMapOptions,
+                    padding: {
+                      bottom: 350, // UI drawer height
+                      top: 100,
+                      left: 20,
+                      right: 20,
+                    },
+                  }}
+                  heading={mapHeading}
+                  tilt={mapTilt}
+                >
+                  {isOnline && (
+                    <OverlayViewF
+                      position={{ lat: mapCenter[0], lng: mapCenter[1] }}
+                      mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                     >
+                      <div
+                        ref={(el) => {
+                          if (el && el.parentElement) {
+                            el.parentElement.style.transition =
+                              "left 1s linear, top 1s linear";
+                          }
+                        }}
+                        style={{
+                          transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${mapHeading}deg)` : "none",
+                          transformOrigin: "18px 54px",
+                          transition: "transform 0.8s ease-in-out",
+                        }}
+                        className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50"
+                      >
                       <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
                       {(!activeRide ||
                         rideState === "en_route_pickup" ||
@@ -3578,7 +3614,8 @@ export default function DriverTerminal() {
                     </OverlayViewF>
                   )}
               </GoogleMap>
-            )}
+            </div>
+          )}
 
             {/* Main Map Zoom Controls & Overview Nav */}
             {mapInstance && (
@@ -3615,6 +3652,10 @@ export default function DriverTerminal() {
                           )}
                         >
                           <Compass
+                            style={{
+                              transform: isAutoNavHeadUp && !isAutoNavPaused && mapHeading ? `rotate(${-mapHeading}deg)` : "none",
+                              transition: "transform 0.8s ease-in-out",
+                            }}
                             className={cn(
                               "w-[18px] h-[18px]",
                               isAutoNavHeadUp

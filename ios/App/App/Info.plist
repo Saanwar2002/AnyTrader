@@ -53,6 +53,8 @@
 	<string>AnyTrader needs your location to continuously track active rides.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>AnyTrader needs camera access to let you upload photos for your jobs.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AnyTrader needs microphone access to let you post jobs by speaking your voice details.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>AnyTrader needs photo library access to upload photos for your jobs.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

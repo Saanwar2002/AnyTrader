@@ -139,13 +139,34 @@ export default function EmergencyJobWizard() {
     setError("");
 
     if (user.isAnonymous) {
-      console.log("Guest user detected, simulating upload...");
-      setTimeout(() => {
-        const simulatedUrls = Array.from(files).map((_, i) => `https://placehold.co/600x400?text=Emergency+Photo+${i+1}`);
-        setFormData(prev => ({ ...prev, photos: [...prev.photos, ...simulatedUrls] }));
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }, 1500);
+      console.log("Guest user detected, processing local images...");
+      (async () => {
+        try {
+          const simulatedUrls: string[] = [];
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (file.type.startsWith('image/')) {
+              try {
+                const dataUrl = await new Promise<string>((res, rej) => {
+                  const reader = new FileReader();
+                  reader.onload = () => res(reader.result as string);
+                  reader.onerror = () => rej(reader.error);
+                  reader.readAsDataURL(file);
+                });
+                simulatedUrls.push(dataUrl);
+              } catch (e) {
+                simulatedUrls.push(`https://placehold.co/600x400?text=Emergency+Photo+${i+1}`);
+              }
+            }
+          }
+          setFormData(prev => ({ ...prev, photos: [...prev.photos, ...simulatedUrls] }));
+        } catch (err) {
+          console.error("Local media processing error:", err);
+        } finally {
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+      })();
       return;
     }
 
