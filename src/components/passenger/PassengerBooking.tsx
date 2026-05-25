@@ -676,6 +676,8 @@ export default function PassengerBooking() {
     let timeoutId: NodeJS.Timeout;
     if (pickupCoords && dropoffCoords && isLoaded) {
       const getRoute = async () => {
+        if (Math.abs(pickupCoords.lat) < 0.1 && Math.abs(pickupCoords.lng) < 0.1) return;
+        if (Math.abs(dropoffCoords.lat) < 0.1 && Math.abs(dropoffCoords.lng) < 0.1) return;
         if (Math.abs(pickupCoords.lat - dropoffCoords.lat) < 0.0001 && Math.abs(pickupCoords.lng - dropoffCoords.lng) < 0.0001) return;
 
         try {
@@ -2372,7 +2374,8 @@ export default function PassengerBooking() {
     if ((assignedDriverInfo?.status === "accepted" || assignedDriverInfo?.status === "in_progress") && destinationCoords && isLoaded) {
       const getLiveRoute = async () => {
         const currentDriverPos = driverPosRef.current;
-        if (!currentDriverPos) return;
+        if (!currentDriverPos || (Math.abs(currentDriverPos.lat) < 0.1 && Math.abs(currentDriverPos.lng) < 0.1)) return;
+        if (!destinationCoords || (Math.abs(destinationCoords.lat) < 0.1 && Math.abs(destinationCoords.lng) < 0.1)) return;
 
         if (Math.abs(currentDriverPos.lat - destinationCoords.lat) < 0.0001 && Math.abs(currentDriverPos.lng - destinationCoords.lng) < 0.0001) return;
 

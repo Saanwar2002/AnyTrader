@@ -652,18 +652,12 @@ export default function DriverTerminal() {
 
     customDragPrevPosRef.current = { x: clientX, y: clientY };
 
-    // Rotate map panning vector to cancel CSS rotation (-mapHeading)
-    // When the map wrapper is CSS rotated by -mapHeading, standard dragging becomes completely skewed/inverted.
-    // By rotating the visual movement vector (-dx, -dy) by mapHeading, we align custom dragging perfectly
-    // with the screen coordinates relative to the user's touch movement.
+    // Since the Google Map now handles rotation internally via the heading option,
+    // panBy operates directly in screen coordinates relative to the user's touch movement.
     const panX = -dx;
     const panY = -dy;
 
-    const angleRad = (mapHeading * Math.PI) / 180;
-    const rotatedPanX = panX * Math.cos(angleRad) - panY * Math.sin(angleRad);
-    const rotatedPanY = panX * Math.sin(angleRad) + panY * Math.cos(angleRad);
-
-    mapInstance.panBy(rotatedPanX, rotatedPanY);
+    mapInstance.panBy(panX, panY);
   };
 
   const handleCustomDragEnd = () => {
@@ -711,7 +705,16 @@ export default function DriverTerminal() {
         // When disabling head up mode, fit to route overview
         const bounds = directions.routes[0]?.bounds;
         if (bounds) {
-          mapInstance.fitBounds(bounds);
+          const maxDim = Math.max(window.innerWidth, window.innerHeight);
+          const mapSize = maxDim * 1.45;
+          const overflowX = (mapSize - window.innerWidth) / 2;
+          const overflowY = (mapSize - window.innerHeight) / 2;
+          mapInstance.fitBounds(bounds, {
+            top: 100 + overflowY,
+            bottom: 350 + overflowY,
+            left: 20 + overflowX,
+            right: 20 + overflowX,
+          });
         }
       }
       return next;
@@ -1189,7 +1192,16 @@ export default function DriverTerminal() {
           if (status === window.google.maps.DirectionsStatus.OK && result) {
             setDirections(result);
             if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
-              mapInstance.fitBounds(result.routes[0].bounds);
+              const maxDim = Math.max(window.innerWidth, window.innerHeight);
+              const mapSize = maxDim * 1.45;
+              const overflowX = (mapSize - window.innerWidth) / 2;
+              const overflowY = (mapSize - window.innerHeight) / 2;
+              mapInstance.fitBounds(result.routes[0].bounds, {
+                top: 100 + overflowY,
+                bottom: 350 + overflowY,
+                left: 20 + overflowX,
+                right: 20 + overflowX,
+              });
               isInitialFitBounds = false;
             }
 
@@ -3400,7 +3412,7 @@ export default function DriverTerminal() {
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="absolute bottom-[220px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4 p-4 drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)]"
+                    className="absolute bottom-[210px] left-0 right-0 z-[60] flex flex-col items-center justify-center pointer-events-none text-center px-4 p-4 drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)]"
                   >
                     <div className="flex-1 w-full max-w-sm flex flex-col items-center">
                       {/* !!! USER REQUESTED DESIGN LOCK !!! */}
