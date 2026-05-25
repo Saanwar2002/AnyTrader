@@ -12,8 +12,69 @@ import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { getInstantMatchCopy } from "@/src/lib/boosts";
+import { toast } from "sonner";
 
 const libraries: any[] = ['places'];
+
+const compressImageFile = (file: File, maxDim = 1200, quality = 0.75): Promise<File> => {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith("image/")) {
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height *= maxDim / width;
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width *= maxDim / height;
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
 
 export default function EmergencyJobWizard() {
   const { user } = useAuth();
@@ -147,11 +208,12 @@ export default function EmergencyJobWizard() {
             const file = files[i];
             if (file.type.startsWith('image/')) {
               try {
+                const compressed = await compressImageFile(file, 1200, 0.75);
                 const dataUrl = await new Promise<string>((res, rej) => {
                   const reader = new FileReader();
                   reader.onload = () => res(reader.result as string);
                   reader.onerror = () => rej(reader.error);
-                  reader.readAsDataURL(file);
+                  reader.readAsDataURL(compressed);
                 });
                 simulatedUrls.push(dataUrl);
               } catch (e) {
@@ -177,7 +239,15 @@ export default function EmergencyJobWizard() {
           return null;
         }
 
-        const fileName = `jobs/${user.uid}/${Date.now()}_${file.name}`;
+        // Compress image first to avoid huge files and prevent UPLOAD_TIMEOUT
+        let processedFile = file;
+        try {
+          processedFile = await compressImageFile(file, 1200, 0.75);
+        } catch (compressErr) {
+          console.warn("Compression failed, using original file instead:", compressErr);
+        }
+
+        const fileName = `jobs/${user.uid}/${Date.now()}_${processedFile.name}`;
         const storageRef = ref(storage, fileName);
         console.log("Attempting upload to:", storageRef.fullPath, "Bucket:", storage.app.options.storageBucket);
 
@@ -187,7 +257,7 @@ export default function EmergencyJobWizard() {
         });
 
         const uploadOperationPromise = (async () => {
-          const arrayBuffer = await file.arrayBuffer();
+          const arrayBuffer = await processedFile.arrayBuffer();
           
           let progress = 10;
           setUploadProgress(progress);
@@ -199,7 +269,7 @@ export default function EmergencyJobWizard() {
           }, 150);
 
           try {
-            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: processedFile.type });
             clearInterval(progressInterval);
             setUploadProgress(100);
             return await getDownloadURL(snapshot.ref);
@@ -207,13 +277,31 @@ export default function EmergencyJobWizard() {
             clearInterval(progressInterval);
             console.warn("First upload attempt failed, retrying once simply:", firstErr);
             // Simple backup retry attempt
-            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: file.type });
+            const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: processedFile.type });
             setUploadProgress(100);
             return await getDownloadURL(snapshot.ref);
           }
         })();
 
-        return Promise.race([uploadOperationPromise, timeoutPromise]);
+        try {
+          return await Promise.race([uploadOperationPromise, timeoutPromise]);
+        } catch (uploadError) {
+          console.warn("Standard Firebase Storage gallery upload failed or timed out. Falling back to secure local data URL:", uploadError);
+          try {
+            const localUrl = await new Promise<string>((res, rej) => {
+              const reader = new FileReader();
+              reader.onload = () => res(reader.result as string);
+              reader.onerror = (error) => rej(error);
+              reader.readAsDataURL(processedFile);
+            });
+            toast.success(`Attached "${file.name}" securely via offline fallback!`);
+            return localUrl;
+          } catch (fallbackError) {
+            console.error("Local reading fallback failed:", fallbackError);
+            toast.error(`Could not read "${file.name}" locally.`);
+            return null;
+          }
+        }
       });
 
       const results = await Promise.all(uploadPromises);
@@ -230,8 +318,20 @@ export default function EmergencyJobWizard() {
   };
 
   const handleInitialSubmit = () => {
-    if (!formData.description.trim() || !formData.postcode.trim() || !formData.mobileNumber.trim()) {
-      setError("Please fill in all fields to post your emergency job.");
+    if (!formData.description.trim()) {
+      setError("Please describe the emergency.");
+      return;
+    }
+    if (formData.photos.length === 0) {
+      setError("Please upload at least one photo of the emergency.");
+      return;
+    }
+    if (!formData.postcode.trim()) {
+      setError("Please search or select an address for the emergency location.");
+      return;
+    }
+    if (!formData.mobileNumber.trim()) {
+      setError("Please provide your mobile number.");
       return;
     }
     if (isEmergencyBoost || isInstantMatch) {
@@ -474,7 +574,7 @@ export default function EmergencyJobWizard() {
             </div>
           )}
 
-          <h2 className="text-xl font-bold">Describe the emergency</h2>
+          <h2 className="text-xl font-bold flex items-center gap-1">Describe the emergency <span className="text-red-500 font-extrabold">*</span></h2>
           <textarea 
             className="w-full p-4 border-2 border-black shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal h-32 resize-none"
             placeholder="e.g. Pipe burst in kitchen..."
@@ -484,7 +584,7 @@ export default function EmergencyJobWizard() {
           />
           
           <div className="space-y-3">
-            <h3 className="font-bold text-slate-900">Add photos (Optional)</h3>
+            <h3 className="font-bold text-slate-900 flex items-center gap-1">Add photos <span className="text-red-500 font-extrabold">*</span></h3>
             <p className="text-sm text-slate-500">Photos help tradespeople understand the problem faster.</p>
             
             <input 
@@ -532,6 +632,7 @@ export default function EmergencyJobWizard() {
           </div>
 
           <div className="space-y-4">
+            <h3 className="font-bold text-slate-900 flex items-center gap-1">Emergency Location <span className="text-red-500 font-extrabold">*</span></h3>
             <div className="relative">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input 
@@ -808,12 +909,15 @@ export default function EmergencyJobWizard() {
             </div>
           </div>
           
-          <input 
-            className="w-full p-4 border-2 border-black shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
-            placeholder="Mobile Number"
-            value={formData.mobileNumber}
-            onChange={(e) => setFormData({...formData, mobileNumber: e.target.value})}
-          />
+          <div className="space-y-2">
+            <h3 className="font-bold text-slate-900 flex items-center gap-1">Mobile Number <span className="text-red-500 font-extrabold">*</span></h3>
+            <input 
+              className="w-full p-4 border-2 border-black shadow-sm rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium placeholder:font-normal"
+              placeholder="e.g. 07123 456789"
+              value={formData.mobileNumber}
+              onChange={(e) => setFormData({...formData, mobileNumber: e.target.value})}
+            />
+          </div>
 
           {/* Premium Job Upgrades */}
           {platformConfig?.premiumJobUpgradesEnabled !== false && (

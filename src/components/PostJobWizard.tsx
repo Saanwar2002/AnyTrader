@@ -71,6 +71,66 @@ const readFileAsDataURL = (file: File): Promise<string> => {
   });
 };
 
+const compressImageFile = (file: File, maxDim = 1200, quality = 0.75): Promise<File> => {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith("image/")) {
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height *= maxDim / width;
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width *= maxDim / height;
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function PostJobWizard() {
   const { user, profile, loading: authLoading } = useAuth();
   const { categories } = useCategories();
@@ -955,7 +1015,8 @@ export default function PostJobWizard() {
               }
             } else {
               try {
-                const dataUrl = await readFileAsDataURL(file);
+                const compressed = await compressImageFile(file, 1200, 0.75);
+                const dataUrl = await readFileAsDataURL(compressed);
                 simulatedPhotos.push(dataUrl);
               } catch (e) {
                 simulatedPhotos.push(`https://placehold.co/600x400?text=Gallery+Photo+${i+1}`);
@@ -998,7 +1059,17 @@ export default function PostJobWizard() {
           return null;
         }
 
-        const fileName = `jobs/${user.uid}/${Date.now()}_${file.name}`;
+        // Compress image first to avoid huge files and prevent UPLOAD_TIMEOUT
+        let processedFile = file;
+        if (isImage) {
+          try {
+            processedFile = await compressImageFile(file, 1200, 0.75);
+          } catch (compressErr) {
+            console.warn("Compression failed, using original file instead:", compressErr);
+          }
+        }
+
+        const fileName = `jobs/${user.uid}/${Date.now()}_${processedFile.name}`;
         const storageRef = ref(storage, fileName);
         
         // Define a 25-second timeout for the file upload
@@ -1007,7 +1078,7 @@ export default function PostJobWizard() {
         });
 
         const uploadOperationPromise = (async () => {
-          const arrayBuffer = await file.arrayBuffer();
+          const arrayBuffer = await processedFile.arrayBuffer();
           
           let progress = 10;
           setUploadProgress(progress);
@@ -1019,7 +1090,7 @@ export default function PostJobWizard() {
           }, 150);
 
           try {
-            const resolvedType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
+            const resolvedType = processedFile.type || (isVideo ? 'video/mp4' : 'image/jpeg');
             const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: resolvedType });
             clearInterval(progressInterval);
             setUploadProgress(100);
@@ -1029,7 +1100,7 @@ export default function PostJobWizard() {
             clearInterval(progressInterval);
             console.warn("First gallery upload attempt failed, retrying once simply:", firstErr);
             // Simple backup retry attempt
-            const resolvedType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
+            const resolvedType = processedFile.type || (isVideo ? 'video/mp4' : 'image/jpeg');
             const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: resolvedType });
             setUploadProgress(100);
             const url = await getDownloadURL(snapshot.ref);
@@ -1042,7 +1113,7 @@ export default function PostJobWizard() {
         } catch (uploadError) {
           console.warn("Standard Firebase Storage gallery upload failed or timed out. Falling back to secure local data URL:", uploadError);
           try {
-            const localUrl = await readFileAsDataURL(file);
+            const localUrl = await readFileAsDataURL(processedFile);
             toast.success(`Attached "${file.name}" securely via offline fallback!`);
             return { type: isVideo ? 'video' : 'image', url: localUrl };
           } catch (fallbackError) {
