@@ -301,6 +301,48 @@ const getRemainingStepDistance = (
   return remainingDist;
 };
 
+const getCurrentStepIndex = (
+  mapCenter: [number, number],
+  steps: google.maps.DirectionsStep[]
+): number => {
+  if (!steps || steps.length === 0) return 0;
+  
+  let minDist = Infinity;
+  let closestStepIdx = 0;
+  
+  for (let s = 0; s < steps.length; s++) {
+    const step = steps[s];
+    if (!step?.path) continue;
+    
+    for (let i = 0; i < step.path.length; i++) {
+      const p = step.path[i];
+      const plat = typeof p.lat === "function" ? p.lat() : (p.lat as unknown as number);
+      const plng = typeof p.lng === "function" ? p.lng() : (p.lng as unknown as number);
+      
+      const dist = getDistanceInMeters(mapCenter[0], mapCenter[1], plat, plng);
+      if (dist < minDist) {
+        minDist = dist;
+        closestStepIdx = s;
+      }
+    }
+  }
+  
+  return closestStepIdx;
+};
+
+const getRemainingLegDistance = (
+  mapCenter: [number, number],
+  steps: google.maps.DirectionsStep[],
+  currentStepIndex: number
+): number => {
+  if (!steps || steps.length === 0) return 0;
+  let total = getRemainingStepDistance(mapCenter, steps[currentStepIndex]);
+  for (let i = currentStepIndex + 1; i < steps.length; i++) {
+    total += steps[i].distance?.value || 0;
+  }
+  return total;
+};
+
 const formatNavigateDistance = (meters: number | undefined): string => {
   if (meters === undefined) return "";
   if (meters < 482.8) { // less than 0.3 miles -> show meters
@@ -576,6 +618,16 @@ export default function DriverTerminal() {
     destLng: number;
     time: number;
   } | null>(null);
+  const [recalcCount, setRecalcCount] = useState<number>(0);
+  const recalcCountRef = useRef<number>(0);
+  const updateRecalcCount = (val: number) => {
+    recalcCountRef.current = val;
+    setRecalcCount(val);
+  };
+
+  useEffect(() => {
+    updateRecalcCount(0);
+  }, [rideState, activeRide?.id]);
   const [lastSpokenInstruction, setLastSpokenInstruction] =
     useState<string>("");
   const [lastSpokenUpcomingStep, setLastSpokenUpcomingStep] =
@@ -681,16 +733,88 @@ export default function DriverTerminal() {
     return (toDeg(Math.atan2(y, x)) + 360) % 360;
   };
 
+  const getOffsetLatLng = (
+    lat: number,
+    lng: number,
+    offsetAheadMeters: number,
+    offsetRightMeters: number,
+    bearingDegrees: number,
+  ): [number, number] => {
+    const bearingRad = (bearingDegrees * Math.PI) / 180;
+    const metersToLatitude = 1 / 111111;
+    const metersToLongitude = 1 / (111111 * Math.cos((lat * Math.PI) / 180));
+
+    // Shift ahead is positive along the travel heading
+    const dLatAhead = offsetAheadMeters * Math.cos(bearingRad) * metersToLatitude;
+    const dLngAhead = offsetAheadMeters * Math.sin(bearingRad) * metersToLongitude;
+
+    // Shift right is positive to the right of travel heading (bearing + 90 degrees)
+    const rightRad = bearingRad + Math.PI / 2;
+    const dLatRight = offsetRightMeters * Math.cos(rightRad) * metersToLatitude;
+    const dLngRight = offsetRightMeters * Math.sin(rightRad) * metersToLongitude;
+
+    return [lat + dLatAhead + dLatRight, lng + dLngAhead + dLngRight];
+  };
+
+  const getDynamicZoomForDistance = (distanceMeters: number): number => {
+    if (distanceMeters <= 80) {
+      return 18.5; // Very close, highly detailed junction view
+    } else if (distanceMeters <= 200) {
+      return 18.0; // Close maneuver view
+    } else if (distanceMeters <= 500) {
+      return 17.5; // Approach view
+    } else if (distanceMeters <= 1000) {
+      return 16.5; // Normal city driving view
+    } else if (distanceMeters <= 2500) {
+      return 15.5; // Regional route view
+    } else {
+      return 14.5; // Large scale preview for highways/long drives
+    }
+  };
+
+  const getDynamicOffsetLatLng = (
+    lat: number,
+    lng: number,
+    bearingDegrees: number,
+    zoomLevel: number
+  ): [number, number] => {
+    // Since the map is standard 2D Raster (always North-Up due to WebGL limitations of custom JSON styling),
+    // we must offset the camera center relative to the physical screen boundaries.
+    // Horizontal: The car marker should be centered (0px horizontal offset).
+    // Vertical: To avoid the bottom card/sheet (which obscures the bottom ~210px) and top control panel (~110px),
+    // we offset the camera Southwards, which visually pushes the car marker UP/Northward on the screen so it is
+    // centered in the remaining visible space.
+    // Centering the marker vertically in the visible window of a standard 800px screen corresponds to
+    // shifting the marker UP by ~75px, meaning we pan the camera center DOWN (South) by 75px.
+    const metersPerPixel = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoomLevel);
+    
+    // We shift the camera center Southwards to move the marker Northwards on the screen.
+    const offsetSouthMeters = 80 * metersPerPixel; // Optimal 80px shift to stay clear of bottom sheet/HUD
+    const metersToLatitude = 1 / 111111;
+    const latOffset = -offsetSouthMeters * metersToLatitude;
+
+    return [lat + latOffset, lng];
+  };
+
   useEffect(() => {
     mapCenterRef.current = mapCenter;
   }, [mapCenter]);
 
   const handleCenterOnMe = () => {
     if (mapInstance && mapCenterRef.current) {
-      mapInstance.panTo({
-        lat: mapCenterRef.current[0],
-        lng: mapCenterRef.current[1],
-      });
+      let lat = mapCenterRef.current[0];
+      let lng = mapCenterRef.current[1];
+      if (isAutoNavHeadUp) {
+        const [offsetLat, offsetLng] = getDynamicOffsetLatLng(
+          lat,
+          lng,
+          mapHeading || 0,
+          15
+        );
+        lat = offsetLat;
+        lng = offsetLng;
+      }
+      mapInstance.panTo({ lat, lng });
       mapInstance.setZoom(15);
       setMapZoom(15);
     } else {
@@ -896,7 +1020,12 @@ export default function DriverTerminal() {
       isAutoNavHeadUp &&
       directions?.routes?.[0]?.legs?.[0]?.steps?.[0]?.instructions
     ) {
-      const step0 = directions.routes[0].legs[0].steps[0];
+      const steps = directions.routes[0].legs[0].steps;
+      const currentStepIndex = mapCenter ? getCurrentStepIndex(mapCenter, steps) : 0;
+      
+      if (currentStepIndex >= steps.length) return;
+      
+      const step0 = steps[currentStepIndex];
       const htmlInstruction = step0.instructions;
       const plainText = formatInstructionForTTS(htmlInstruction);
 
@@ -907,8 +1036,8 @@ export default function DriverTerminal() {
       }
 
       let initialSpokenText = plainText;
-      if (liveDistanceToTurn <= 50 && directions.routes[0].legs[0].steps.length > 1) {
-        const nextPlain = formatInstructionForTTS(directions.routes[0].legs[0].steps[1].instructions);
+      if (liveDistanceToTurn <= 50 && currentStepIndex < steps.length - 1) {
+        const nextPlain = formatInstructionForTTS(steps[currentStepIndex + 1].instructions);
         initialSpokenText = `${plainText} then ${nextPlain}`;
       }
 
@@ -923,8 +1052,9 @@ export default function DriverTerminal() {
       }
 
       // Mark thresholds as passed if user starts closer than them
-      if (liveDistanceToTurn < 1550) spokenDistancesRef.current.add(1609);
+      if (liveDistanceToTurn < 950) spokenDistancesRef.current.add(1000);
       if (liveDistanceToTurn < 350) spokenDistancesRef.current.add(400);
+      if (liveDistanceToTurn < 80) spokenDistancesRef.current.add(100);
 
       const checkAndSpeak = (threshold: number, distString: string, distanceMargin: number) => {
         if (!spokenDistancesRef.current.has(threshold) && liveDistanceToTurn <= threshold) {
@@ -934,14 +1064,14 @@ export default function DriverTerminal() {
             let nextPlain = "arriving at destination";
             let doubleTurnPlain = "";
             
-            if (directions.routes[0].legs[0].steps.length > 1) {
-              const nextHtmlInstruction = directions.routes[0].legs[0].steps[1].instructions;
+            if (currentStepIndex < steps.length - 1) {
+              const nextHtmlInstruction = steps[currentStepIndex + 1].instructions;
               nextPlain = formatInstructionForTTS(nextHtmlInstruction);
               
-              if (directions.routes[0].legs[0].steps.length > 2) {
-                const step2Dist = directions.routes[0].legs[0].steps[1].distance?.value || 0;
+              if (currentStepIndex < steps.length - 2) {
+                const step2Dist = steps[currentStepIndex + 1].distance?.value || 0;
                 if (step2Dist <= 50) {
-                  doubleTurnPlain = " then " + formatInstructionForTTS(directions.routes[0].legs[0].steps[2].instructions);
+                  doubleTurnPlain = " then " + formatInstructionForTTS(steps[currentStepIndex + 2].instructions);
                 }
               }
             }
@@ -954,8 +1084,9 @@ export default function DriverTerminal() {
         }
       };
 
-      checkAndSpeak(1609, "1 mile", 150);
+      checkAndSpeak(1000, "1000 meters", 150);
       checkAndSpeak(400, "400 meters", 100);
+      checkAndSpeak(100, "100 meters", 40);
     }
   }, [
     directions,
@@ -978,7 +1109,11 @@ export default function DriverTerminal() {
       (rideState === "en_route_pickup" || rideState === "in_progress")
     ) {
       const leg = directions.routes[0].legs[0];
-      const remainingDistance = leg.distance?.value || 0;
+      let remainingDistance = leg.distance?.value || 0;
+      if (mapCenter && leg.steps) {
+        const curIdx = getCurrentStepIndex(mapCenter, leg.steps);
+        remainingDistance = getRemainingLegDistance(mapCenter, leg.steps, curIdx);
+      }
 
       if (
         remainingDistance > 0 &&
@@ -1001,6 +1136,7 @@ export default function DriverTerminal() {
     }
   }, [
     directions,
+    mapCenter,
     rideState,
     hasAnnouncedArrival,
     navVoiceVolume,
@@ -1118,6 +1254,7 @@ export default function DriverTerminal() {
 
       // Smart API call reduction logic
       const now = Date.now();
+      let isRecalculation = false;
       if (lastDirectionsFetchRef.current) {
         const last = lastDirectionsFetchRef.current;
         const originMoved = getDistanceInMeters(
@@ -1169,6 +1306,13 @@ export default function DriverTerminal() {
         // AND 2. Less than 60 seconds have passed since last fetch (prevents spamming API for traffic/ETA updates)
         // AND 3. The driver is ON ROUTE (not off route)
         if (destMoved < 50) {
+          isRecalculation = true;
+
+          if (recalcCountRef.current >= 3) {
+            console.log("Recalculation limit reached (3/3). Skipping directions API fetch to save costs.");
+            return;
+          }
+
           if (!isOffRoute && timeSinceLastFetch < 60000) {
             return; // Skip fetch, they are on route and data is fresh enough (saves MASSIVE costs)
           }
@@ -1203,6 +1347,10 @@ export default function DriverTerminal() {
                 right: 20 + overflowX,
               });
               isInitialFitBounds = false;
+            }
+
+            if (isRecalculation) {
+              updateRecalcCount(recalcCountRef.current + 1);
             }
 
             lastDirectionsFetchRef.current = {
@@ -1304,8 +1452,10 @@ export default function DriverTerminal() {
       activeRide?.pickupLng
     ) {
       let targetBearing = null;
-      if (directions?.routes?.[0]?.legs?.[0]?.steps?.[0]) {
-        const step = directions.routes[0].legs[0].steps[0];
+      const legSteps = directions?.routes?.[0]?.legs?.[0]?.steps;
+      if (legSteps && legSteps.length > 0) {
+        const curStepIdx = mapCenter ? getCurrentStepIndex(mapCenter, legSteps) : 0;
+        const step = legSteps[curStepIdx] || legSteps[0];
         const p1 = step.start_location;
         const p2 = step.end_location;
         if (p1 && p2) {
@@ -1343,27 +1493,18 @@ export default function DriverTerminal() {
       mapInstance.setHeading(0);
       mapInstance.setTilt(0);
       if (directions) {
-        let desiredZoom = 17;
-        if (
-          directions.routes?.[0]?.legs?.[0]?.distance?.value &&
-          directions.routes[0].legs[0].distance.value <= 100
-        ) {
-          desiredZoom = 18;
-        }
-        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
+        const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
+        const desiredZoom = getDynamicZoomForDistance(remainingDistance);
         
-        const currentResetKey = {
-          rideId: activeRide?.id || null,
-          rideState: rideState,
-          legIndex: currentLegIndex,
-        };
-        const hasChanged = 
-          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
-          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
-          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
-
-        if (hasChanged) {
-          lastZoomResetRef.current = currentResetKey;
+        const [panLat, panLng] = getDynamicOffsetLatLng(
+          mapCenter[0],
+          mapCenter[1],
+          targetBearing || 0,
+          desiredZoom
+        );
+        mapInstance.panTo({ lat: panLat, lng: panLng });
+        
+        if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
           mapInstance.setZoom(desiredZoom);
         }
@@ -1389,8 +1530,10 @@ export default function DriverTerminal() {
       }
 
       let targetBearing = null;
-      if (directions?.routes?.[0]?.legs?.[0]?.steps?.[0]) {
-        const step = directions.routes[0].legs[0].steps[0];
+      const legSteps = directions?.routes?.[0]?.legs?.[0]?.steps;
+      if (legSteps && legSteps.length > 0) {
+        const curStepIdx = mapCenter ? getCurrentStepIndex(mapCenter, legSteps) : 0;
+        const step = legSteps[curStepIdx] || legSteps[0];
         const p1 = step.start_location;
         const p2 = step.end_location;
         if (p1 && p2) {
@@ -1404,9 +1547,11 @@ export default function DriverTerminal() {
         // Try getting path bearing from directions
         if (directions && directions.routes && directions.routes[0]) {
           const leg = directions.routes[0].legs[0];
-          if (leg && leg.steps.length > 0) {
-            const p1 = leg.steps[0].start_location;
-            const p2 = leg.steps[0].end_location;
+          if (leg && leg.steps && leg.steps.length > 0) {
+            const curStepIdx = mapCenter ? getCurrentStepIndex(mapCenter, leg.steps) : 0;
+            const step = leg.steps[curStepIdx] || leg.steps[0];
+            const p1 = step.start_location;
+            const p2 = step.end_location;
             targetBearing = getBearing(p1.lat(), p1.lng(), p2.lat(), p2.lng());
           } else {
             targetBearing = getBearing(
@@ -1431,27 +1576,18 @@ export default function DriverTerminal() {
       mapInstance.setHeading(0);
       mapInstance.setTilt(0);
       if (directions) {
-        let desiredZoom = 17;
-        if (
-          directions.routes?.[0]?.legs?.[0]?.distance?.value &&
-          directions.routes[0].legs[0].distance.value <= 100
-        ) {
-          desiredZoom = 18;
-        }
-        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
+        const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
+        const desiredZoom = getDynamicZoomForDistance(remainingDistance);
         
-        const currentResetKey = {
-          rideId: activeRide?.id || null,
-          rideState: rideState,
-          legIndex: currentLegIndex,
-        };
-        const hasChanged = 
-          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
-          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
-          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
-
-        if (hasChanged) {
-          lastZoomResetRef.current = currentResetKey;
+        const [panLat, panLng] = getDynamicOffsetLatLng(
+          mapCenter[0],
+          mapCenter[1],
+          targetBearing || 0,
+          desiredZoom
+        );
+        mapInstance.panTo({ lat: panLat, lng: panLng });
+        
+        if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
           mapInstance.setZoom(desiredZoom);
         }
@@ -1462,21 +1598,17 @@ export default function DriverTerminal() {
         setMapTilt(0);
         mapInstance.setHeading(0);
         mapInstance.setTilt(0);
-        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         
-        let desiredZoom = rideState === "waiting" ? 17 : 15;
-        const currentResetKey = {
-          rideId: null,
-          rideState: rideState,
-          legIndex: null,
-        };
-        const hasChanged = 
-          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
-          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
-          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
-
-        if (hasChanged) {
-          lastZoomResetRef.current = currentResetKey;
+        const desiredZoom = rideState === "waiting" ? 17 : 15;
+        const [panLat, panLng] = getDynamicOffsetLatLng(
+          mapCenter[0],
+          mapCenter[1],
+          driverHeading || 0,
+          desiredZoom
+        );
+        mapInstance.panTo({ lat: panLat, lng: panLng });
+        
+        if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
           mapInstance.setZoom(desiredZoom);
         }
@@ -1485,21 +1617,17 @@ export default function DriverTerminal() {
         setMapTilt(0);
         mapInstance.setHeading(0);
         mapInstance.setTilt(0);
-        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         
-        let desiredZoom = rideState === "waiting" ? 17 : 15;
-        const currentResetKey = {
-          rideId: null,
-          rideState: rideState,
-          legIndex: null,
-        };
-        const hasChanged = 
-          lastZoomResetRef.current.rideId !== currentResetKey.rideId ||
-          lastZoomResetRef.current.rideState !== currentResetKey.rideState ||
-          lastZoomResetRef.current.legIndex !== currentResetKey.legIndex;
-
-        if (hasChanged) {
-          lastZoomResetRef.current = currentResetKey;
+        const desiredZoom = rideState === "waiting" ? 17 : 15;
+        const [panLat, panLng] = getDynamicOffsetLatLng(
+          mapCenter[0],
+          mapCenter[1],
+          0,
+          desiredZoom
+        );
+        mapInstance.panTo({ lat: panLat, lng: panLng });
+        
+        if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
           mapInstance.setZoom(desiredZoom);
         }
@@ -3422,11 +3550,16 @@ export default function DriverTerminal() {
                         className="text-[22px] text-[#2563EB] font-black leading-tight px-2 mb-2 drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)]"
                         dangerouslySetInnerHTML={{
                           __html: (() => {
-                            const step0 = directions.routes[0].legs[0].steps[0];
+                            const leg = directions.routes[0].legs[currentLegIndex || 0];
+                            const steps = leg?.steps || [];
+                            const currentStepIndex = mapCenter ? getCurrentStepIndex(mapCenter, steps) : 0;
+                            if (currentStepIndex >= steps.length) return "";
+                            
+                            const step0 = steps[currentStepIndex];
                             const remainingDist = mapCenter ? getRemainingStepDistance(mapCenter, step0) : step0.distance?.value || 0;
                             let html = formatInstructionForDisplay(step0.instructions);
-                            if (remainingDist <= 50 && directions.routes[0].legs[0].steps.length > 1) {
-                              const step1 = directions.routes[0].legs[0].steps[1];
+                            if (remainingDist <= 50 && currentStepIndex < steps.length - 1) {
+                              const step1 = steps[currentStepIndex + 1];
                               html += ' <span style="opacity: 0.8; font-size: 0.85em;">then</span> <br/> ' + formatInstructionForDisplay(step1.instructions);
                             }
                             return html;
@@ -3435,9 +3568,16 @@ export default function DriverTerminal() {
                       />
                       <div className="inline-flex bg-slate-900/90 backdrop-blur-sm px-4 py-1.5 rounded-lg shadow-lg border border-white/20">
                         <p className="text-[14px] text-[#00D26A] font-bold tracking-wider uppercase">
-                          {formatNavigateDistance(
-                            mapCenter ? getRemainingStepDistance(mapCenter, directions.routes[0].legs[0].steps[0]) : directions.routes[0].legs[0].steps[0].distance?.value
-                          )}
+                          {(() => {
+                            const leg = directions.routes[0].legs[currentLegIndex || 0];
+                            const steps = leg?.steps || [];
+                            const currentStepIndex = mapCenter ? getCurrentStepIndex(mapCenter, steps) : 0;
+                            if (currentStepIndex >= steps.length) return "";
+                            const step0 = steps[currentStepIndex];
+                            return formatNavigateDistance(
+                              mapCenter ? getRemainingStepDistance(mapCenter, step0) : step0.distance?.value
+                            );
+                          })()}
                         </p>
                       </div>
                     </div>
@@ -3471,7 +3611,18 @@ export default function DriverTerminal() {
                 <GoogleMap
                   mapContainerStyle={{ width: "100%", height: "100%" }}
                   onDragStart={handleMapInteraction}
-                  center={{ lat: mapCenter[0], lng: mapCenter[1] }}
+                  center={(() => {
+                    if (isAutoNavHeadUp && !isAutoNavPaused) {
+                      const [lat, lng] = getDynamicOffsetLatLng(
+                        mapCenter[0],
+                        mapCenter[1],
+                        mapHeading || 0,
+                        mapZoom
+                      );
+                      return { lat, lng };
+                    }
+                    return { lat: mapCenter[0], lng: mapCenter[1] };
+                  })()}
                   zoom={mapZoom}
                   onZoomChanged={() => {
                     if (mapInstance) {
@@ -3990,6 +4141,30 @@ export default function DriverTerminal() {
                 </button>
               )}
           </div>
+
+          {/* Recalculation Limit Warning Banner */}
+          {recalcCount >= 3 &&
+            (rideState === "en_route_pickup" ||
+              rideState === "waiting" ||
+              rideState === "in_progress") &&
+            activeRide?.id && (
+              <div className="absolute top-[calc(96px+env(safe-area-inset-top))] left-4 right-16 z-40 pointer-events-none flex justify-start animate-fade-in">
+                <div
+                  id="recalc-limit-warning"
+                  className="bg-slate-900 border border-white/20 p-3 rounded-lg shadow-2xl flex items-start gap-2.5 max-w-xs pointer-events-auto"
+                >
+                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse shrink-0 mt-1.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] text-amber-500 font-bold leading-normal mb-0.5">
+                      Recalculation Limit Reached
+                    </p>
+                    <p className="text-[10px] text-slate-300 leading-normal font-sans">
+                      Live rerouting is paused. Press the blue <b className="text-white">Navigation 🚀</b> button for full external turn-by-turn.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
           {/* 2. Top UI: Menu button */}
           <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
