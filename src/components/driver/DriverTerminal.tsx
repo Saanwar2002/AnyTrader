@@ -124,10 +124,10 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  mapId: "DEMO_MAP_ID", // Enables Vector Map (WebGL) for smooth rotation
   mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
+  isFractionalZoomEnabled: true,
   keyboardShortcuts: false,
   styles: [
     { elementType: "geometry", stylers: [{ color: "#ebe3cd" }] },
@@ -603,6 +603,7 @@ export default function DriverTerminal() {
     handleMapInteraction();
 
     if ("touches" in e && e.touches.length === 2) {
+      if (e.cancelable) e.preventDefault();
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -611,6 +612,7 @@ export default function DriverTerminal() {
       return;
     }
 
+    if (e.cancelable) e.preventDefault();
     customDragActiveRef.current = true;
     const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
@@ -621,6 +623,7 @@ export default function DriverTerminal() {
     if (!mapInstance) return;
 
     if ("touches" in e && e.touches.length === 2) {
+      if (e.cancelable) e.preventDefault();
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -629,7 +632,7 @@ export default function DriverTerminal() {
         const diff = dist - customPinchPrevDistRef.current;
         const currentZoom = mapInstance.getZoom() || 15;
         // Continuous fractional zoom increment
-        const zoomChange = diff * 0.0075;
+        const zoomChange = diff * 0.02; // Increased sensitivity
         const newZoom = Math.max(3, Math.min(21, currentZoom + zoomChange));
         mapInstance.setZoom(newZoom);
       }
@@ -638,6 +641,7 @@ export default function DriverTerminal() {
     }
 
     if (!customDragActiveRef.current) return;
+    if (e.cancelable) e.preventDefault();
 
     const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
@@ -1468,6 +1472,7 @@ export default function DriverTerminal() {
         setMapTilt(0);
         mapInstance.setHeading(0);
         mapInstance.setTilt(0);
+        mapInstance.panTo({ lat: mapCenter[0], lng: mapCenter[1] });
         
         let desiredZoom = rideState === "waiting" ? 17 : 15;
         const currentResetKey = {
@@ -1992,47 +1997,69 @@ export default function DriverTerminal() {
   }, [isOnline, onlineStartTime]);
 
   // Real-time GPS Tracking & Status Sync
+  const lastStateUpdateRef = useRef<number>(0);
+
   useEffect(() => {
     if (!isOnline || !user) return;
 
     const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
         const { latitude, longitude, heading } = pos.coords;
-
-        if (heading !== null && !isNaN(heading)) {
-          setDriverHeading(heading);
-        } else if (mapCenterRef.current) {
-          const prevLat = mapCenterRef.current[0];
-          const prevLng = mapCenterRef.current[1];
-          // Only update heading if moved a minimum distance to avoid jitter
-          const dist = Math.sqrt(
-            Math.pow(latitude - prevLat, 2) + Math.pow(longitude - prevLng, 2),
-          );
-          if (dist > 0.00005) {
-            setDriverHeading(getBearing(prevLat, prevLng, latitude, longitude));
-          }
-        }
-
-        setMapCenter([latitude, longitude]);
-
-        // Sync to Firestore for dispatcher / passenger (hybrid throttled: 10s + distance, or 60s max)
-        const now = Date.now();
-        const timeSinceLastSync = now - lastLocationSyncRef.current;
+        const nowMs = Date.now();
+        
+        // Fast-path Firestore sync logic without rate limiting for vital dispatches
+        const timeSinceLastSync = nowMs - lastLocationSyncRef.current;
         const distToLastSync = lastSyncCoordsRef.current
           ? Math.sqrt(
               Math.pow(latitude - lastSyncCoordsRef.current.lat, 2) +
                 Math.pow(longitude - lastSyncCoordsRef.current.lng, 2),
             )
           : 999;
-
-        // Sync if: 1) Never synced, 2) Moved ~15m (0.00015 deg) AND 10s passed, 3) Or 60s passed
+          
         const shouldSync =
           timeSinceLastSync >= 60000 ||
           (timeSinceLastSync >= 10000 && distToLastSync > 0.00015) ||
           !lastSyncCoordsRef.current;
+          
+        // Limit high-frequency React State re-renders to save battery (max 1Hz)
+        if (nowMs - lastStateUpdateRef.current < 1000) {
+          if (!shouldSync) return; // Completely skip if nothing vital to sync
+        } else {
+            lastStateUpdateRef.current = nowMs;
+            if (heading !== null && !isNaN(heading)) {
+              setDriverHeading((prev) => 
+                prev !== null && Math.abs(prev - heading) < 2 ? prev : Math.round(heading)
+              );
+            } else if (mapCenterRef.current) {
+              const prevLat = mapCenterRef.current[0];
+              const prevLng = mapCenterRef.current[1];
+              // Only update heading if moved a minimum distance to avoid jitter
+              const dist = Math.sqrt(
+                Math.pow(latitude - prevLat, 2) + Math.pow(longitude - prevLng, 2),
+              );
+              if (dist > 0.00005) {
+                const newHeading = Math.round(getBearing(prevLat, prevLng, latitude, longitude));
+                setDriverHeading((prev) => 
+                  prev !== null && Math.abs(prev - newHeading) < 2 ? prev : newHeading
+                );
+              }
+            }
+    
+            if (mapCenterRef.current) {
+              const distCenter = Math.sqrt(
+                Math.pow(latitude - mapCenterRef.current[0], 2) + Math.pow(longitude - mapCenterRef.current[1], 2),
+              );
+              if (distCenter > 0.00005) { // ~5.5 meters to prevent jitter
+                setMapCenter([latitude, longitude]);
+              }
+            } else {
+              setMapCenter([latitude, longitude]);
+            }
+        }
 
+        // Sync to Firestore for dispatcher / passenger (hybrid throttled: 10s + distance, or 60s max)
         if (shouldSync) {
-          lastLocationSyncRef.current = now;
+          lastLocationSyncRef.current = nowMs;
           lastSyncCoordsRef.current = { lat: latitude, lng: longitude };
           try {
             await setDoc(
@@ -3310,7 +3337,7 @@ export default function DriverTerminal() {
   };
 
   const maxDim = Math.max(windowSize.width, windowSize.height);
-  const mapSize = maxDim * 1.6; // 160vmax equivalent in px
+  const mapSize = maxDim * 1.45; // slightly larger than sqrt(2) diagonal
   const overflowX = (mapSize - windowSize.width) / 2;
   const overflowY = (mapSize - windowSize.height) / 2;
 
@@ -3407,13 +3434,6 @@ export default function DriverTerminal() {
 
             {isLoaded && (
               <div
-                onMouseDown={handleCustomDragStart}
-                onMouseMove={handleCustomDragMove}
-                onMouseUp={handleCustomDragEnd}
-                onMouseLeave={handleCustomDragEnd}
-                onTouchStart={handleCustomDragStart}
-                onTouchMove={handleCustomDragMove}
-                onTouchEnd={handleCustomDragEnd}
                 style={{
                   position: "absolute",
                   width: `${mapSize}px`,
@@ -3427,14 +3447,20 @@ export default function DriverTerminal() {
                   transition: "transform 0.5s ease-out",
                 }}
               >
+                <div 
+                  className="absolute inset-0 z-50 touch-none"
+                  onMouseDown={handleCustomDragStart}
+                  onMouseMove={handleCustomDragMove}
+                  onMouseUp={handleCustomDragEnd}
+                  onMouseLeave={handleCustomDragEnd}
+                  onTouchStart={handleCustomDragStart}
+                  onTouchMove={handleCustomDragMove}
+                  onTouchEnd={handleCustomDragEnd}
+                />
                 <GoogleMap
                   mapContainerStyle={{ width: "100%", height: "100%" }}
                   onDragStart={handleMapInteraction}
-                  center={
-                    directions || rideState === "waiting"
-                      ? undefined
-                      : { lat: mapCenter[0], lng: mapCenter[1] }
-                  }
+                  center={{ lat: mapCenter[0], lng: mapCenter[1] }}
                   zoom={mapZoom}
                   onZoomChanged={() => {
                     if (mapInstance) {
@@ -3447,6 +3473,7 @@ export default function DriverTerminal() {
                   onLoad={(map) => setMapInstance(map)}
                   options={{
                     ...premiumMapOptions,
+                    gestureHandling: isAutoNavHeadUp ? "none" : "greedy",
                     draggable: !isAutoNavHeadUp,
                     padding: mapPadding,
                   }}

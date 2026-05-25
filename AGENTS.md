@@ -28,6 +28,7 @@
 - **Icons**: Lucide React.
 - **Animations**: Motion (framer-motion).
 - **Driver Terminal UI**: The styling for the heads-up navigation text (directions over the map) MUST REMAIN transparent background, dark blue (`#2563EB`) font color, with a faint white drop shadow (`drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)]`), no text stroke, and no black background box. This has been explicitly locked by the user.
+- **Premium Anti-Glare Golden Map Theme**: The Google Map within the Driver Terminal and Passenger Booking must strictly use the custom "Premium Anti-Glare Golden" JSON styling scheme (found in `premiumMapOptions` with a `#ebe3cd` geometry base and dark contrast labels). Do NOT add a `mapId` parameter to the `<GoogleMap>` component options or hook as it enforces WebGL Vector Map styling which overrides and breaks the custom JSON styles.
 - **Database**: Firestore (Enterprise Edition).
 - **AI**: Gemini API (@google/genai) for all intelligent features.
 - **Review System**: 14-day cooling-off period for low ratings, anonymous reviews, and notification fuzzing for low-rating alerts.
