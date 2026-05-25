@@ -104,7 +104,7 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  // mapId: "DEMO_MAP_ID", // Overrides JSON styles
+  mapId: "8d7f862551b8bb49989453ed",
   mapTypeId: "roadmap",
   styles: [
     { elementType: "geometry", stylers: [{ color: "#ebe3cd" }] },

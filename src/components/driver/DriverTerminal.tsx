@@ -124,6 +124,7 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
+  mapId: "8d7f862551b8bb49989453ed",
   mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
