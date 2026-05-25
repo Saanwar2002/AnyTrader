@@ -4148,7 +4148,7 @@ export default function DriverTerminal() {
               rideState === "waiting" ||
               rideState === "in_progress") &&
             activeRide?.id && (
-              <div className="absolute top-[calc(96px+env(safe-area-inset-top))] left-4 right-16 z-40 pointer-events-none flex justify-start animate-fade-in">
+              <div className="absolute top-[calc(12px+env(safe-area-inset-top))] left-4 right-16 z-40 pointer-events-none flex justify-start animate-fade-in">
                 <div
                   id="recalc-limit-warning"
                   className="bg-slate-900 border border-white/20 p-3 rounded-lg shadow-2xl flex items-start gap-2.5 max-w-xs pointer-events-auto"
@@ -6399,7 +6399,7 @@ export default function DriverTerminal() {
         )}
       </AnimatePresence>
       {/* Bottom Status Widget (Sticky Floating above global nav) */}
-      {rideState === "idle" && (
+      {rideState === "idle" && activeTab === "home" && (
         <div className="fixed left-0 right-0 px-4 z-50 pointer-events-none flex flex-col items-center" style={{ bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
