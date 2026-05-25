@@ -2721,8 +2721,8 @@ export default function PassengerBooking() {
             ))}
              {passengerPos && (
               <OverlayViewF position={passengerPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                <div className="relative flex flex-col items-center justify-start -ml-[13px] -mt-[32px] z-50 pointer-events-none">
-                  <div className="absolute top-[30px] w-5 h-1.5 bg-black/30 rounded-full blur-[1px]"></div>
+                <div className="relative flex flex-col items-center justify-start -ml-[13px] -mt-[38px] z-50 pointer-events-none">
+                  <div className="absolute top-[36px] w-5 h-1.5 bg-black/30 rounded-full blur-[1px]"></div>
                   
                   {/* Pulsing ring */}
                   <div className="absolute top-0 left-0 w-[26px] h-[26px] bg-[#761eb9] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-60"></div>

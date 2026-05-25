@@ -3944,29 +3944,27 @@ export default function DriverTerminal() {
                       <div
                         style={{
                           transform: "none",
-                          transformOrigin: "16px 52px",
+                          transformOrigin: "13px 38px",
                         }}
-                        className="relative flex flex-col items-center justify-start -ml-[16px] -mt-[52px] z-50"
+                        className="relative flex flex-col items-center justify-start -ml-[13px] -mt-[38px] z-50"
                       >
-                        <div className="absolute top-[50px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
+                        <div className="absolute top-[36px] w-5 h-1.5 bg-black/30 rounded-full blur-[1px]"></div>
 
                         {/* Pulsing ring */}
-                        <div className="absolute top-0 left-0 w-[32px] h-[32px] bg-[#9333ea] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-60"></div>
+                        <div className="absolute top-0 left-0 w-[26px] h-[26px] bg-[#761eb9] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-60"></div>
 
-                        <div className="bg-[#9333ea] w-[32px] h-[32px] rounded-full border-2 border-white flex items-center justify-center relative shadow-[0_0_15px_rgba(147,51,234,0.5)] z-20">
-                          <User
-                            className="w-[16px] h-[16px] text-white"
-                            fill="currentColor"
-                            strokeWidth={2}
-                          />
+                        <div className="bg-[#761eb9] w-[26px] h-[26px] rounded-full border-2 border-white flex items-center justify-center relative shadow-[0_0_12px_rgba(118,30,185,0.5)] z-20">
+                          <svg viewBox="0 0 24 24" className="w-[13px] h-[13px]" fill="white">
+                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                          </svg>
                           {/* The leg */}
-                          <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[4px] h-[20px] bg-white flex justify-center">
-                            <div className="w-[1.5px] h-full bg-[#9333ea]"></div>
+                          <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[3px] h-[6px] bg-white flex justify-center">
+                            <div className="w-[1px] h-full bg-[#761eb9]"></div>
                           </div>
                           {/* The base dot */}
-                          <div className="absolute top-[calc(100%+17px)] left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-[#9333ea] border-2 border-white rounded-full shadow-[0_0_10px_rgba(147,51,234,0.8)]"></div>
+                          <div className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 w-[11px] h-[11px] bg-[#761eb9] border-2 border-white rounded-full shadow-[0_0_8px_rgba(118,30,185,0.8)]"></div>
                         </div>
-                        <div className="absolute -top-[28px] bg-black/80 px-2 py-0.5 rounded text-[10px] font-bold text-[#9333ea] whitespace-nowrap shadow border border-[#9333ea]/50 z-30">
+                        <div className="absolute -top-[24px] bg-black/80 px-2 py-0.5 rounded text-[10px] font-bold text-[#761eb9] whitespace-nowrap shadow border border-[#761eb9]/50 z-30">
                           PASSENGER
                         </div>
                       </div>
