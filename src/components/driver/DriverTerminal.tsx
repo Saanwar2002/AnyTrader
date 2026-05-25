@@ -3441,9 +3441,7 @@ export default function DriverTerminal() {
                   height: `${mapSize}px`,
                   left: "50%",
                   top: "50%",
-                  transform: isAutoNavHeadUp && mapHeading 
-                    ? `translate(-50%, -50%) rotate(${-mapHeading}deg)` 
-                    : `translate(-50%, -50%)`,
+                  transform: `translate(-50%, -50%)`,
                   transformOrigin: "50% 50%",
                   transition: "transform 0.5s ease-out",
                 }}
@@ -3474,6 +3472,7 @@ export default function DriverTerminal() {
                   onLoad={(map) => setMapInstance(map)}
                   options={{
                     ...premiumMapOptions,
+                    heading: (isAutoNavHeadUp && mapHeading) ? mapHeading : 0,
                     gestureHandling: isAutoNavHeadUp ? "none" : "greedy",
                     draggable: !isAutoNavHeadUp,
                     padding: mapPadding,
@@ -3486,9 +3485,7 @@ export default function DriverTerminal() {
                     >
                       <div
                         style={{
-                          transform: isAutoNavHeadUp && mapHeading 
-                            ? `rotate(${mapHeading}deg)` 
-                            : "none",
+                          transform: `rotate(${isAutoNavHeadUp ? 0 : (mapHeading || 0)}deg)`,
                           transformOrigin: "18px 54px",
                           transition: "transform 0.5s ease-out",
                         }}
