@@ -362,6 +362,9 @@ export default function DriverTerminal() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([
     53.6458, -1.785,
   ]); // Default to Huddersfield from spec
+  const [driverLocation, setDriverLocation] = useState<[number, number]>([
+    53.6458, -1.785,
+  ]);
   const [isMapTilesLoaded, setIsMapTilesLoaded] = useState(false);
   const [isSyncingMap, setIsSyncingMap] = useState(false);
   const [demandZones, setDemandZones] = useState<any[]>([]);
@@ -587,6 +590,11 @@ export default function DriverTerminal() {
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
   const [isAutoNavPaused, setIsAutoNavPaused] = useState(false);
+  const isAutoNavPausedRef = useRef(false);
+
+  useEffect(() => {
+    isAutoNavPausedRef.current = isAutoNavPaused;
+  }, [isAutoNavPaused]);
 
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== "undefined" ? window.innerWidth : 360,
@@ -825,16 +833,6 @@ export default function DriverTerminal() {
   };
 
   const handleToggleAutoNav = () => {
-    if (isAutoNavHeadUp && isAutoNavPaused) {
-      setIsAutoNavPaused(false);
-      if (autoNavPauseTimeoutRef.current) {
-        clearTimeout(autoNavPauseTimeoutRef.current);
-      }
-      triggerHaptic(ImpactStyle.Light);
-      toast.success("Head-up tracking restored");
-      return;
-    }
-
     setIsAutoNavHeadUp((prev) => {
       const next = !prev;
       if (!next && mapInstance && directions) {
@@ -854,6 +852,10 @@ export default function DriverTerminal() {
         }
       } else {
         setIsAutoNavPaused(false);
+        setDriverLocation(d => {
+          setMapCenter(d);
+          return d;
+        });
         if (autoNavPauseTimeoutRef.current) {
           clearTimeout(autoNavPauseTimeoutRef.current);
         }
@@ -2207,15 +2209,19 @@ export default function DriverTerminal() {
               }
             }
     
-            if (mapCenterRef.current) {
-              const distCenter = Math.sqrt(
-                Math.pow(latitude - mapCenterRef.current[0], 2) + Math.pow(longitude - mapCenterRef.current[1], 2),
-              );
-              if (distCenter > 0.00005) { // ~5.5 meters to prevent jitter
+            setDriverLocation([latitude, longitude]);
+            
+            if (!isAutoNavPausedRef.current) {
+              if (mapCenterRef.current) {
+                const distCenter = Math.sqrt(
+                  Math.pow(latitude - mapCenterRef.current[0], 2) + Math.pow(longitude - mapCenterRef.current[1], 2),
+                );
+                if (distCenter > 0.00005) { // ~5.5 meters to prevent jitter
+                  setMapCenter([latitude, longitude]);
+                }
+              } else {
                 setMapCenter([latitude, longitude]);
               }
-            } else {
-              setMapCenter([latitude, longitude]);
             }
         }
 
@@ -3665,14 +3671,17 @@ export default function DriverTerminal() {
                     }
                   }}
                   center={(() => {
-                    if (isAutoNavHeadUp && !isAutoNavPaused) {
-                      const [lat, lng] = getDynamicOffsetLatLng(
-                        mapCenter[0],
-                        mapCenter[1],
-                        mapHeading || 0,
-                        mapZoom
-                      );
-                      return { lat, lng };
+                    if (!isAutoNavPaused) {
+                      if (isAutoNavHeadUp) {
+                        const [lat, lng] = getDynamicOffsetLatLng(
+                          driverLocation[0],
+                          driverLocation[1],
+                          mapHeading || 0,
+                          mapZoom
+                        );
+                        return { lat, lng };
+                      }
+                      return { lat: driverLocation[0], lng: driverLocation[1] };
                     }
                     return { lat: mapCenter[0], lng: mapCenter[1] };
                   })()}
@@ -3701,7 +3710,7 @@ export default function DriverTerminal() {
                 >
                   {isOnline && (
                     <OverlayViewF
-                      position={{ lat: mapCenter[0], lng: mapCenter[1] }}
+                      position={{ lat: driverLocation[0], lng: driverLocation[1] }}
                       mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                     >
                       <div
