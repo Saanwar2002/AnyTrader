@@ -5,6 +5,7 @@ import { usePortal } from "../../lib/PortalContext";
 import { useAuth } from "../AuthProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
+import { QRCodeSVG } from 'qrcode.react';
 import { triggerHaptic, ImpactStyle, getGoogleMapsApiKey, isCapacitor, speakText } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
 import {
@@ -365,6 +366,11 @@ export default function DriverTerminal() {
   const [driverLocation, setDriverLocation] = useState<[number, number]>([
     53.6458, -1.785,
   ]);
+  const driverLocationRef = useRef(driverLocation);
+  
+  useEffect(() => {
+    driverLocationRef.current = driverLocation;
+  }, [driverLocation]);
   const [isMapTilesLoaded, setIsMapTilesLoaded] = useState(false);
   const [isSyncingMap, setIsSyncingMap] = useState(false);
   const [demandZones, setDemandZones] = useState<any[]>([]);
@@ -649,14 +655,17 @@ export default function DriverTerminal() {
   const customPinchPrevDistRef = useRef<number | null>(null);
 
   const handleMapInteraction = () => {
-    if (!isAutoNavHeadUp) return;
     setIsAutoNavPaused(true);
     if (autoNavPauseTimeoutRef.current) {
       clearTimeout(autoNavPauseTimeoutRef.current);
     }
     autoNavPauseTimeoutRef.current = setTimeout(() => {
       setIsAutoNavPaused(false);
-    }, 10000); // Resume auto nav after 10s of no interaction
+      setDriverLocation(d => {
+        setMapCenter(d);
+        return d;
+      });
+    }, 3000); // Resume auto nav after 3s of no interaction per user request
   };
 
   const handleCustomDragStart = (e: React.MouseEvent | React.TouchEvent) => {
@@ -849,6 +858,18 @@ export default function DriverTerminal() {
             left: 20 + overflowX,
             right: 20 + overflowX,
           });
+          
+          setIsAutoNavPaused(true);
+          if (autoNavPauseTimeoutRef.current) {
+            clearTimeout(autoNavPauseTimeoutRef.current);
+          }
+          autoNavPauseTimeoutRef.current = setTimeout(() => {
+            setIsAutoNavPaused(false);
+            setDriverLocation(d => {
+              setMapCenter(d);
+              return d;
+            });
+          }, 3000); // Wait 3 seconds in overview before tracking driver from top-down
         }
       } else {
         setIsAutoNavPaused(false);
@@ -1241,8 +1262,8 @@ export default function DriverTerminal() {
     const fetchDirections = async (destLat: number, destLng: number) => {
       if (!window.google || !window.google.maps) return;
 
-      const originLat = mapCenterRef.current[0];
-      const originLng = mapCenterRef.current[1];
+      const originLat = driverLocationRef.current[0];
+      const originLng = driverLocationRef.current[1];
 
       if (
         typeof originLat !== "number" ||
@@ -1296,21 +1317,56 @@ export default function DriverTerminal() {
         if (currentDirectionsRef.current?.routes?.[0]?.overview_path) {
           let minDistanceToRoute = Infinity;
           const path = currentDirectionsRef.current.routes[0].overview_path;
-          for (let i = 0; i < path.length; i++) {
-            const p = path[i];
-            const plat =
-              typeof p.lat === "function"
-                ? p.lat()
-                : (p.lat as unknown as number);
-            const plng =
-              typeof p.lng === "function"
-                ? p.lng()
-                : (p.lng as unknown as number);
-            const dist = getDistanceInMeters(plat, plng, originLat, originLng);
-            if (dist < minDistanceToRoute) {
-              minDistanceToRoute = dist;
+          
+          if (path.length > 0) {
+            const toRad = Math.PI / 180;
+            const R = 6371e3; // Earth radius in meters
+            const lat0 = originLat * toRad;
+            const lng0 = originLng * toRad;
+
+            for (let i = 0; i < path.length - 1; i++) {
+              const p1 = path[i];
+              const p2 = path[i + 1];
+              const lat1 = (typeof p1.lat === "function" ? p1.lat() : p1.lat as unknown as number) * toRad;
+              const lng1 = (typeof p1.lng === "function" ? p1.lng() : p1.lng as unknown as number) * toRad;
+              const lat2 = (typeof p2.lat === "function" ? p2.lat() : p2.lat as unknown as number) * toRad;
+              const lng2 = (typeof p2.lng === "function" ? p2.lng() : p2.lng as unknown as number) * toRad;
+
+              const x0 = lng0 * Math.cos(lat1);
+              const y0 = lat0;
+              const x1 = lng1 * Math.cos(lat1);
+              const y1 = lat1;
+              const x2 = lng2 * Math.cos(lat2);
+              const y2 = lat2;
+
+              const dx = x2 - x1;
+              const dy = y2 - y1;
+              const l2 = dx * dx + dy * dy;
+
+              let t = 0;
+              if (l2 > 0) {
+                t = Math.max(0, Math.min(1, ((x0 - x1) * dx + (y0 - y1) * dy) / l2));
+              }
+              const px = x1 + t * dx;
+              const py = y1 + t * dy;
+
+              const dRad = Math.sqrt((x0 - px) ** 2 + (y0 - py) ** 2);
+              const dist = dRad * R;
+
+              if (dist < minDistanceToRoute) {
+                minDistanceToRoute = dist;
+              }
+            }
+            
+            // Handle edge case of 1 waypoint only path
+            if (path.length === 1) {
+              const p = path[0];
+              const plat = typeof p.lat === "function" ? p.lat() : p.lat as unknown as number;
+              const plng = typeof p.lng === "function" ? p.lng() : p.lng as unknown as number;
+              minDistanceToRoute = getDistanceInMeters(plat, plng, originLat, originLng);
             }
           }
+
           // If the minimum distance to the polyline is > 50 meters, they are "off route"
           if (minDistanceToRoute > 50) {
             isOffRoute = true;
@@ -1325,9 +1381,11 @@ export default function DriverTerminal() {
         // AND 2. Less than 60 seconds have passed since last fetch (prevents spamming API for traffic/ETA updates)
         // AND 3. The driver is ON ROUTE (not off route)
         if (destMoved < 50) {
-          isRecalculation = true;
+          if (isOffRoute) {
+            isRecalculation = true;
+          }
 
-          if (recalcCountRef.current >= 3) {
+          if (isRecalculation && recalcCountRef.current >= 3) {
             console.log("Recalculation limit reached (3/3). Skipping directions API fetch to save costs.");
             return;
           }
@@ -4293,17 +4351,11 @@ export default function DriverTerminal() {
                         </div>
                       ) : (
                         <div className="relative group">
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentUrl)}`}
-                            alt="Payment QR"
-                            className="w-[180px] h-[180px] rounded-lg"
-                            referrerPolicy="no-referrer"
-                            loading="eager"
-                            onError={(e) => {
-                              // Fallback UI or retry if QR fails
-                              (e.target as HTMLImageElement).src =
-                                `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(paymentUrl)}`;
-                            }}
+                          <QRCodeSVG 
+                            value={paymentUrl}
+                            size={180}
+                            level="H"
+                            className="w-[180px] h-[180px] rounded-lg bg-white"
                           />
                           <div className="absolute inset-0 border-2 border-emerald-500/20 rounded-lg pointer-events-none"></div>
                         </div>
