@@ -25,7 +25,8 @@ import { fetchLiveDemandZones } from "@/src/services/surgeHeatmapService";
 
 const containerStyle = {
   width: '100%',
-  height: '100%'
+  height: '100%',
+  touchAction: 'none'
 };
 
 const defaultCenter = {

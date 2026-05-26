@@ -825,6 +825,16 @@ export default function DriverTerminal() {
   };
 
   const handleToggleAutoNav = () => {
+    if (isAutoNavHeadUp && isAutoNavPaused) {
+      setIsAutoNavPaused(false);
+      if (autoNavPauseTimeoutRef.current) {
+        clearTimeout(autoNavPauseTimeoutRef.current);
+      }
+      triggerHaptic(ImpactStyle.Light);
+      toast.success("Head-up tracking restored");
+      return;
+    }
+
     setIsAutoNavHeadUp((prev) => {
       const next = !prev;
       if (!next && mapInstance && directions) {
@@ -841,6 +851,11 @@ export default function DriverTerminal() {
             left: 20 + overflowX,
             right: 20 + overflowX,
           });
+        }
+      } else {
+        setIsAutoNavPaused(false);
+        if (autoNavPauseTimeoutRef.current) {
+          clearTimeout(autoNavPauseTimeoutRef.current);
         }
       }
       return next;
@@ -2070,7 +2085,7 @@ export default function DriverTerminal() {
     setIsSyncingMap(true);
     setTimeout(() => {
       setIsSyncingMap(false);
-    }, 1000);
+    }, 1500);
     setActiveTab("home");
 
     if (newStatus) {
@@ -2307,7 +2322,7 @@ export default function DriverTerminal() {
       setIsSyncingMap(true);
       setTimeout(() => {
         setIsSyncingMap(false);
-      }, 1000);
+      }, 1500);
     }
 
     // Pick a random simulated job profile
@@ -3603,8 +3618,8 @@ export default function DriverTerminal() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                  className="absolute inset-0 bg-[#0D0D0F]/95 backdrop-blur-[3px] z-[120] flex flex-col items-center justify-center gap-5 pointer-events-auto"
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  className="absolute inset-0 bg-[#0D0D0F] z-[120] flex flex-col items-center justify-center gap-5 pointer-events-auto"
                 >
                   <div className="relative flex items-center justify-center">
                     <div className="w-16 h-16 border border-[#2563EB]/45 rounded-full animate-ping absolute"></div>
@@ -3638,19 +3653,17 @@ export default function DriverTerminal() {
                   transition: "transform 0.5s ease-out",
                 }}
               >
-                <div 
-                  className="absolute inset-0 z-50 touch-none"
-                  onMouseDown={handleCustomDragStart}
-                  onMouseMove={handleCustomDragMove}
-                  onMouseUp={handleCustomDragEnd}
-                  onMouseLeave={handleCustomDragEnd}
-                  onTouchStart={handleCustomDragStart}
-                  onTouchMove={handleCustomDragMove}
-                  onTouchEnd={handleCustomDragEnd}
-                />
                 <GoogleMap
                   mapContainerStyle={{ width: "100%", height: "100%" }}
                   onDragStart={handleMapInteraction}
+                  onDragEnd={() => {
+                    if (mapInstance) {
+                      const c = mapInstance.getCenter();
+                      if (c) {
+                        setMapCenter([c.lat(), c.lng()]);
+                      }
+                    }
+                  }}
                   center={(() => {
                     if (isAutoNavHeadUp && !isAutoNavPaused) {
                       const [lat, lng] = getDynamicOffsetLatLng(
@@ -3669,6 +3682,7 @@ export default function DriverTerminal() {
                       const z = mapInstance.getZoom();
                       if (z !== undefined && z !== mapZoom) {
                         setMapZoom(z);
+                        handleMapInteraction();
                       }
                     }
                   }}
@@ -3680,8 +3694,8 @@ export default function DriverTerminal() {
                   options={{
                     ...premiumMapOptions,
                     heading: (isAutoNavHeadUp && mapHeading) ? mapHeading : 0,
-                    gestureHandling: isAutoNavHeadUp ? "none" : "greedy",
-                    draggable: !isAutoNavHeadUp,
+                    gestureHandling: "greedy",
+                    draggable: true,
                     padding: mapPadding,
                   }}
                 >
@@ -6161,7 +6175,7 @@ export default function DriverTerminal() {
                         setIsSyncingMap(true);
                         setTimeout(() => {
                           setIsSyncingMap(false);
-                        }, 1000);
+                        }, 1500);
 
                         if (activeRide && !activeRide.isReal && user) {
                           try {
