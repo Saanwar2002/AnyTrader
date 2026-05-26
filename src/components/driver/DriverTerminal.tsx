@@ -362,6 +362,7 @@ export default function DriverTerminal() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([
     53.6458, -1.785,
   ]); // Default to Huddersfield from spec
+  const [isMapTilesLoaded, setIsMapTilesLoaded] = useState(false);
   const [demandZones, setDemandZones] = useState<any[]>([]);
   const [showPredictiveSurge, setShowPredictiveSurge] = useState(false);
 
@@ -2065,6 +2066,7 @@ export default function DriverTerminal() {
 
     const newStatus = !isOnline;
     setIsOnline(newStatus);
+    setIsMapTilesLoaded(false);
     setActiveTab("home");
 
     if (newStatus) {
@@ -3585,6 +3587,22 @@ export default function DriverTerminal() {
                 )}
             </AnimatePresence>
 
+            {/* Premium Map Loader Overlay */}
+            {(!isLoaded || !isMapTilesLoaded) && (
+              <div className="absolute inset-0 bg-[#0D0D0F] z-[120] flex flex-col items-center justify-center gap-5 pointer-events-auto">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-16 h-16 border border-[#2563EB]/40 rounded-full animate-ping absolute"></div>
+                  <div className="w-10 h-10 border-[3px] border-t-[#2563EB] border-[#2563EB]/20 rounded-full animate-spin"></div>
+                </div>
+                <div className="flex flex-col items-center gap-1 text-center px-4">
+                  <p className="text-[15px] font-bold text-white tracking-wide font-sans">Syncing Driver Terminal Map</p>
+                  <p className="text-xs text-[#A1A1AA] max-w-xs leading-relaxed font-sans">
+                    Connecting to high-precision GPS telemetry and loading real-time route optimization layers...
+                  </p>
+                </div>
+              </div>
+            )}
+
             {isLoaded && (
               <div
                 style={{
@@ -3632,7 +3650,11 @@ export default function DriverTerminal() {
                       }
                     }
                   }}
-                  onLoad={(map) => setMapInstance(map)}
+                  onTilesLoaded={() => setIsMapTilesLoaded(true)}
+                  onLoad={(map) => {
+                    setMapInstance(map);
+                    setIsMapTilesLoaded(true);
+                  }}
                   options={{
                     ...premiumMapOptions,
                     heading: (isAutoNavHeadUp && mapHeading) ? mapHeading : 0,
