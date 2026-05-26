@@ -1127,6 +1127,7 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "Wait & Load Service",
       "Mattress Collection & Disposal",
       "White Goods Collection & Recycling",
+      "Scrap Metal Collection",
       "Sofa & Furniture Disposal",
       "Fly-Tipping Cleanup",
       "Confidential Shredding & Disposal",

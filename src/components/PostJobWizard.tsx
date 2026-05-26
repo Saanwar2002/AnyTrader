@@ -505,6 +505,7 @@ export default function PostJobWizard() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [voiceText, setVoiceText] = useState("");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
@@ -583,6 +584,7 @@ export default function PostJobWizard() {
       setIsListening(false);
     } else {
       setVoiceText("");
+      setVoiceError(null);
       audioChunksRef.current = [];
       
       try {
@@ -631,7 +633,7 @@ export default function PostJobWizard() {
             setVoiceText(transcribedText || "");
           } catch (err) {
             console.error("Transcription error:", err);
-            setVoiceText("Failed to transcribe audio. Please type your job details manually.");
+            setVoiceError("Failed to transcribe audio. Please type your job details manually.");
             toast.error("Failed to transcribe audio.");
           } finally {
             setIsProcessingVoice(false);
@@ -647,9 +649,14 @@ export default function PostJobWizard() {
         setVoiceText("Listening...");
       } catch (err) {
         console.error("Microphone permission denied or error:", err);
-        setVoiceText(`Microphone issue detected. Error: ${err instanceof Error ? err.message : String(err)}. Falling back to local microphone via device prompt...`);
+        setVoiceError(`Microphone issue detected (Permission denied or blocked by Android WebView). You can continue typing manually, enable Microphone under AnyTrader's Android Settings, or use the Phone Recorder bypass below.`);
         setIsListening(false);
-        if (audioInputRef.current) audioInputRef.current.click();
+        setVoiceText("");
+        if (audioInputRef.current) {
+          setTimeout(() => {
+            audioInputRef.current?.click();
+          }, 300);
+        }
       }
     }
   };
@@ -658,6 +665,7 @@ export default function PostJobWizard() {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    setVoiceError(null);
     setIsProcessingVoice(true);
     setVoiceText("Transcribing voice input...");
     try {
@@ -676,7 +684,7 @@ export default function PostJobWizard() {
         setVoiceText(transcribedText || "");
     } catch (err) {
         console.error("Transcription error fallback:", err);
-        setVoiceText("Failed to transcribe audio. Please type your job details manually.");
+        setVoiceError("Failed to transcribe audio file. Please type details manually or try again.");
     } finally {
         setIsProcessingVoice(false);
     }
@@ -1942,6 +1950,31 @@ export default function PostJobWizard() {
                   </div>
                   <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NEW</span>
                 </div>
+
+                {voiceError && (
+                  <div className="p-4 bg-amber-50 rounded-xl border border-black text-black text-xs font-semibold leading-relaxed space-y-2 relative">
+                    <button 
+                      type="button"
+                      onClick={() => setVoiceError(null)}
+                      className="absolute top-2 right-2 text-slate-500 hover:text-black p-1"
+                      title="Clear error"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <div className="pr-6">
+                      <p className="font-bold text-[#b91c1c] pr-2 flex items-center gap-1.5">⚠️ Microphone Permission Error</p>
+                      <p className="mt-1 font-normal text-slate-700 leading-normal">
+                        Your device's Android system has denied WebView microphone access. To fix this permanently, please go to:
+                      </p>
+                      <p className="mt-1 font-bold text-black border-l-2 border-black pl-2 leading-tight">
+                        Android Settings → Apps → AnyTrader → Permissions → Microphone → "Allow"
+                      </p>
+                      <p className="mt-2 font-normal text-slate-600 leading-normal">
+                        Alternatively, use the <strong className="font-bold text-black">Phone Recorder bypass</strong> button below to capture standard audio files using your phone's default voice recorder app.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 
                 {isListening || voiceText ? (
                   <div className="space-y-4">
