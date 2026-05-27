@@ -1067,8 +1067,8 @@ export default function FindTrades() {
                 {/* Skills/Trades */}
                 <div className="flex flex-wrap items-center gap-2 mb-6 max-h-[120px] overflow-y-auto no-scrollbar">
                   {(selectedTraderPreview.trades && selectedTraderPreview.trades.length > 0) ? (
-                    selectedTraderPreview.trades.map((trade: string) => (
-                      <span key={trade} className="text-xs leading-tight font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
+                    selectedTraderPreview.trades.map((trade: string, idx: number) => (
+                      <span key={`${trade}-${idx}`} className="text-xs leading-tight font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
                         {trade}
                       </span>
                     ))

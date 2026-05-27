@@ -989,8 +989,8 @@ export default function Onboarding() {
                       >
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Specific Services:</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {t.subcategories.map((sub: string) => (
-                            <label key={sub} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-black group">
+                          {t.subcategories.map((sub: string, subIdx: number) => (
+                            <label key={`${t.id}-${sub}-${subIdx}`} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-black group">
                               <div className="relative flex items-center">
                                 <input 
                                   type="checkbox" 

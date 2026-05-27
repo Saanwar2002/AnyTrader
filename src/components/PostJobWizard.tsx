@@ -2284,9 +2284,9 @@ export default function PostJobWizard() {
                 <p className="text-slate-500 text-sm">Select the subcategory for {formData.category}.</p>
               </div>
               <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 pb-4 no-scrollbar">
-                {categories.find(c => c.name === formData.category)?.subcategories.map((sub) => (
+                {categories.find(c => c.name === formData.category)?.subcategories.map((sub, idx) => (
                   <button
-                    key={`${formData.category}-${sub}`}
+                    key={`${formData.category}-${sub}-${idx}`}
                     onClick={() => {
                       setFormData({ ...formData, subcategory: sub });
                       nextStep();

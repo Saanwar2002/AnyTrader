@@ -852,24 +852,88 @@ export default function DriverTerminal() {
           const mapSize = maxDim * 1.45;
           const overflowX = (mapSize - window.innerWidth) / 2;
           const overflowY = (mapSize - window.innerHeight) / 2;
-          mapInstance.fitBounds(bounds, {
-            top: 100 + overflowY,
-            bottom: 350 + overflowY,
-            left: 20 + overflowX,
-            right: 20 + overflowX,
-          });
+          
+          // Analytical calculation to place the driver's live location marker and route optimally on screen
+          const leg = directions.routes[0]?.legs?.[currentLegIndex || 0] || directions.routes[0]?.legs?.[0];
+          if (leg && leg.end_location) {
+            const destLoc = leg.end_location;
+            const destLat = typeof destLoc.lat === "function" ? destLoc.lat() : destLoc.lat;
+            const destLng = typeof destLoc.lng === "function" ? destLoc.lng() : destLoc.lng;
+            const driverLat = driverLocationRef.current[0];
+            const driverLng = driverLocationRef.current[1];
+            
+            // Calculate lat/lng bounds differences with minimum threshold protection to prevent division by zero
+            const latDiff = Math.max(0.001, Math.abs(destLat - driverLat));
+            const lngDiff = Math.max(0.0012, Math.abs(destLng - driverLng));
+            
+            // Convert differences to approximate physical meters
+            const latMeters = latDiff * 111111;
+            const lngMeters = lngDiff * 111111 * Math.cos((driverLat * Math.PI) / 180);
+            
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            // Limit pixel boundaries to keep destination fully within the screen area
+            const pixelWidthLimit = Math.max(150, width - 160);
+            const pixelHeightLimit = Math.max(150, height - 360); // leaves 220px on one end and 140px on the other
+            
+            // Calculate required Meters Per Pixel on each axis
+            const mppX = lngMeters / pixelWidthLimit;
+            const mppY = latMeters / pixelHeightLimit;
+            const requiredMpp = Math.max(mppX, mppY, 0.1);
+            
+            // Calculate target zoom level using the exact Mercator scale relationship
+            let zoom = Math.log2((156543.03392 * Math.cos((driverLat * Math.PI) / 180)) / requiredMpp);
+            zoom = Math.max(12, Math.min(18, zoom)) - 0.45; // Safe margin subtraction for padding comfort
+            
+            // Determine relative direction of destination to dynamically position driver screen coordinates
+            const isDestNorth = destLat > driverLat;
+            const isDestEast = destLng > driverLng;
+            
+            // Target coordinates for driver marker on screen: opposite of destination quadrant
+            const targetX = isDestEast ? 80 : Math.max(80, width - 80);
+            const targetY = isDestNorth ? (height - 220) : 140;
+            
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            // Pixel offsets from screen center
+            const shiftX_pixels = centerX - targetX; 
+            const shiftY_pixels = centerY - targetY; 
+            
+            const metersPerPixel = (156543.03392 * Math.cos((driverLat * Math.PI) / 180)) / Math.pow(2, zoom);
+            
+            const shiftX_meters = shiftX_pixels * metersPerPixel;
+            const shiftY_meters = -shiftY_pixels * metersPerPixel; // Negated due to inverse screen/geo Y coordinate flow
+            
+            const metersToLatitude = 1 / 111111;
+            const metersToLongitude = 1 / (111111 * Math.cos((driverLat * Math.PI) / 180));
+            
+            const latOffset = shiftY_meters * metersToLatitude;
+            const lngOffset = shiftX_meters * metersToLongitude;
+            
+            const targetCenterLat = driverLat + latOffset;
+            const targetCenterLng = driverLng + lngOffset;
+            
+            // Apply zoom and center atomically
+            mapInstance.setZoom(zoom);
+            setMapZoom(zoom);
+            setMapCenter([targetCenterLat, targetCenterLng]);
+            mapInstance.panTo({ lat: targetCenterLat, lng: targetCenterLng });
+          } else {
+            // Fallback to standard bounds adjustment if legs are not ready
+            mapInstance.fitBounds(bounds, {
+              top: 100 + overflowY,
+              bottom: 350 + overflowY,
+              left: 20 + overflowX,
+              right: 20 + overflowX,
+            });
+          }
           
           setIsAutoNavPaused(true);
           if (autoNavPauseTimeoutRef.current) {
             clearTimeout(autoNavPauseTimeoutRef.current);
           }
-          autoNavPauseTimeoutRef.current = setTimeout(() => {
-            setIsAutoNavPaused(false);
-            setDriverLocation(d => {
-              setMapCenter(d);
-              return d;
-            });
-          }, 3000); // Wait 3 seconds in overview before tracking driver from top-down
         }
       } else {
         setIsAutoNavPaused(false);
@@ -893,7 +957,12 @@ export default function DriverTerminal() {
     if (!isAutoNavHeadUp) {
       const timer = setTimeout(() => {
         setIsAutoNavHeadUp(true);
-      }, 10000);
+        setIsAutoNavPaused(false);
+        setDriverLocation(d => {
+          setMapCenter(d);
+          return d;
+        });
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [isAutoNavHeadUp]);
