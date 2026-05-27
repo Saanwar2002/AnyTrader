@@ -888,11 +888,18 @@ export default function DriverTerminal() {
             
             // Determine relative direction of destination to dynamically position driver screen coordinates
             const isDestNorth = destLat > driverLat;
-            const isDestEast = destLng > driverLng;
+            const heading = isDestNorth ? 0 : 180;
             
-            // Target coordinates for driver marker on screen: opposite of destination quadrant
-            const targetX = isDestEast ? 80 : Math.max(80, width - 80);
-            const targetY = isDestNorth ? (height - 220) : 140;
+            // Apply the map heading dynamically in overview mode so that travel is always oriented upwards!
+            setMapHeading(heading);
+            mapInstance.setHeading(heading);
+            
+            // Since the route direction is rotated to always point UPWARD on screen,
+            // the destination (regardless of physically North/South) will visually be in front (UP),
+            // and the driver marker will visually be in the rear (DOWN).
+            // So we always position the driver marker at the bottom of the screen!
+            const targetX = width / 2; // Clean horizontal centering
+            const targetY = height - 220; // leaves 220px of negative space for bottom sheet interaction
             
             const centerX = width / 2;
             const centerY = height / 2;
@@ -906,11 +913,19 @@ export default function DriverTerminal() {
             const shiftX_meters = shiftX_pixels * metersPerPixel;
             const shiftY_meters = -shiftY_pixels * metersPerPixel; // Negated due to inverse screen/geo Y coordinate flow
             
+            // Apply 2D rotation of the camera shift vector based on the map's compass heading
+            const rad = (heading * Math.PI) / 180;
+            const cosVal = Math.cos(rad);
+            const sinVal = Math.sin(rad);
+            
+            const rotX = shiftX_meters * cosVal - shiftY_meters * sinVal;
+            const rotY = shiftX_meters * sinVal + shiftY_meters * cosVal;
+            
             const metersToLatitude = 1 / 111111;
             const metersToLongitude = 1 / (111111 * Math.cos((driverLat * Math.PI) / 180));
             
-            const latOffset = shiftY_meters * metersToLatitude;
-            const lngOffset = shiftX_meters * metersToLongitude;
+            const latOffset = rotY * metersToLatitude;
+            const lngOffset = rotX * metersToLongitude;
             
             const targetCenterLat = driverLat + latOffset;
             const targetCenterLng = driverLng + lngOffset;
@@ -1581,9 +1596,18 @@ export default function DriverTerminal() {
     if (!mapInstance) return;
 
     if (!isAutoNavHeadUp) {
-      setMapHeading(0); // Reset to North up when disabled
+      let overviewHeading = 0;
+      const leg = directions?.routes?.[0]?.legs?.[currentLegIndex || 0] || directions?.routes?.[0]?.legs?.[0];
+      if (leg && leg.end_location) {
+        const destLoc = leg.end_location;
+        const destLat = typeof destLoc.lat === "function" ? destLoc.lat() : destLoc.lat;
+        const driverLat = driverLocationRef.current[0];
+        const isDestNorth = destLat > driverLat;
+        overviewHeading = isDestNorth ? 0 : 180;
+      }
+      setMapHeading(overviewHeading);
+      mapInstance.setHeading(overviewHeading);
       setMapTilt(0);
-      mapInstance.setHeading(0);
       mapInstance.setTilt(0);
       return;
     }
@@ -3829,7 +3853,7 @@ export default function DriverTerminal() {
                   }}
                   options={{
                     ...premiumMapOptions,
-                    heading: (isAutoNavHeadUp && mapHeading) ? mapHeading : 0,
+                    heading: mapHeading || 0,
                     gestureHandling: "greedy",
                     draggable: true,
                     padding: mapPadding,
@@ -3842,7 +3866,7 @@ export default function DriverTerminal() {
                     >
                       <div
                         style={{
-                          transform: `rotate(${isAutoNavHeadUp ? 0 : (mapHeading || 0)}deg)`,
+                          transform: `rotate(0deg)`,
                           transformOrigin: "18px 54px",
                           transition: "transform 0.5s ease-out",
                         }}
@@ -4203,7 +4227,7 @@ export default function DriverTerminal() {
                         >
                           <Compass
                             style={{
-                              transform: isAutoNavHeadUp && mapHeading ? `rotate(${-mapHeading}deg)` : "none",
+                              transform: mapHeading ? `rotate(${-mapHeading}deg)` : "none",
                               transition: "transform 0.5s ease-out",
                             }}
                             className={cn(
