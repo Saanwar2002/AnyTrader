@@ -145,6 +145,22 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 
 ---
 
+## 🧪 Production Live-Testing & Mock-Data Separation Checklist
+Before releasing the platform for real-world beta testers or live staging:
+1. **Disable Demo Seeds globally**:
+   - Locate files blending state seed values (e.g., `mockRideHistorySeed` in `RideHistory.tsx`, `mockFinancialSeed` in `PaymentsRevenue.tsx`, and driver tracking fallbacks).
+   - Flip the local toggle flags (or search for comments labeled `Demo Seed Data` / `Simulator Sandbox`) to exclude them, ensuring only authentic Firestore documents render.
+2. **Standardize Sandbox Switches**:
+   - Ensure components like `PaymentsRevenue.tsx` have their `Include Demo Seed Data` or `Sandbox Mode` config toggled to `OFF` (or remove the component tab) to keep accounting dashboards completely clean.
+3. **Reset Firestore Counters and Metrics**:
+   - Clear test accounts inside the Firestore console (`users`, `ride_requests`, `driver_metrics`, and `jobs`).
+   - Reset the system counter `platform_counters/member_id` to start pristine registration codes (such as standard starting sequence `10001`).
+4. **Stripe API Gateway Key Flipping**:
+   - Swap mock Stripe ID session keys (`_mock_session`) inside `stripeIntegrationService.ts` for live testing keys.
+   - Configure actual Stripe webhooks to handle Split commissions ($12\%$) for direct-to-driver QR payments.
+
+---
+
 ## ⚡ Recently Completed Feature: Exclusive Job Offers (Fast Pass Leads) & Material Finalization Window
 **Status:** Completed
 *   **Concept:** A "Fast Pass" for tradespeople to pay an extra flat Add-on (£10-£25/mo) to unlock jobs early. Combined with a post-quote Material List adjustment window.
