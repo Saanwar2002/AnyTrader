@@ -88,6 +88,11 @@ const premiumMapOptions: google.maps.MapOptions = {
       stylers: [{ color: "#ffffff" }],
     },
     {
+      featureType: "road",
+      elementType: "geometry.stroke",
+      stylers: [{ color: "#bcab8c" }],
+    },
+    {
       featureType: "road.arterial",
       elementType: "geometry",
       stylers: [{ color: "#f8c967" }],
@@ -289,7 +294,7 @@ export default function LiveMap() {
 
   // Handle data combining (matching Firestore data with high-fidelity local seed records)
   const mergeDataAndApply = (firestoreData: any[]) => {
-    const freshList = mockDriversSeed.map(seeded => {
+    const freshList: any[] = mockDriversSeed.map(seeded => {
       // Find matching live record if any
       const live = firestoreData.find(item => item.driverId === seeded.id || item.id === seeded.id);
       if (live) {

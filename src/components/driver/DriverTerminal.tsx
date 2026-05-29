@@ -125,7 +125,6 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  mapId: "8d7f862551b8bb49989453ed",
   mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
@@ -179,6 +178,11 @@ const premiumMapOptions: google.maps.MapOptions = {
       featureType: "road",
       elementType: "geometry",
       stylers: [{ color: "#ffffff" }],
+    },
+    {
+      featureType: "road",
+      elementType: "geometry.stroke",
+      stylers: [{ color: "#bcab8c" }],
     },
     {
       featureType: "road.arterial",
@@ -363,6 +367,11 @@ export default function DriverTerminal() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([
     53.6458, -1.785,
   ]); // Default to Huddersfield from spec
+  const initialMapCenterRef = useRef({ lat: 53.6458, lng: -1.785 });
+  const [mapCameraCenter, setMapCameraCenter] = useState<{ lat: number; lng: number }>({
+    lat: 53.6458,
+    lng: -1.785,
+  });
   const [driverLocation, setDriverLocation] = useState<[number, number]>([
     53.6458, -1.785,
   ]);
@@ -650,10 +659,6 @@ export default function DriverTerminal() {
     useState<string>("");
   const [hasAnnouncedArrival, setHasAnnouncedArrival] = useState(false);
 
-  const customDragActiveRef = useRef(false);
-  const customDragPrevPosRef = useRef({ x: 0, y: 0 });
-  const customPinchPrevDistRef = useRef<number | null>(null);
-
   const handleMapInteraction = () => {
     setIsAutoNavPaused(true);
     if (autoNavPauseTimeoutRef.current) {
@@ -663,77 +668,10 @@ export default function DriverTerminal() {
       setIsAutoNavPaused(false);
       setDriverLocation(d => {
         setMapCenter(d);
+        setMapCameraCenter({ lat: d[0], lng: d[1] });
         return d;
       });
     }, 3000); // Resume auto nav after 3s of no interaction per user request
-  };
-
-  const handleCustomDragStart = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isAutoNavHeadUp || !mapInstance) return;
-    
-    // Call existing handleMapInteraction to pause auto center/nav
-    handleMapInteraction();
-
-    if ("touches" in e && e.touches.length === 2) {
-      if (e.cancelable) e.preventDefault();
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-      customPinchPrevDistRef.current = dist;
-      customDragActiveRef.current = false;
-      return;
-    }
-
-    if (e.cancelable) e.preventDefault();
-    customDragActiveRef.current = true;
-    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-    customDragPrevPosRef.current = { x: clientX, y: clientY };
-  };
-
-  const handleCustomDragMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!mapInstance) return;
-
-    if ("touches" in e && e.touches.length === 2) {
-      if (e.cancelable) e.preventDefault();
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-
-      if (customPinchPrevDistRef.current !== null) {
-        const diff = dist - customPinchPrevDistRef.current;
-        const currentZoom = mapInstance.getZoom() || 15;
-        // Continuous fractional zoom increment
-        const zoomChange = diff * 0.02; // Increased sensitivity
-        const newZoom = Math.max(3, Math.min(21, currentZoom + zoomChange));
-        mapInstance.setZoom(newZoom);
-      }
-      customPinchPrevDistRef.current = dist;
-      return;
-    }
-
-    if (!customDragActiveRef.current) return;
-    if (e.cancelable) e.preventDefault();
-
-    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-
-    const dx = clientX - customDragPrevPosRef.current.x;
-    const dy = clientY - customDragPrevPosRef.current.y;
-
-    customDragPrevPosRef.current = { x: clientX, y: clientY };
-
-    // Since the Google Map now handles rotation internally via the heading option,
-    // panBy operates directly in screen coordinates relative to the user's touch movement.
-    const panX = -dx;
-    const panY = -dy;
-
-    mapInstance.panBy(panX, panY);
-  };
-
-  const handleCustomDragEnd = () => {
-    customDragActiveRef.current = false;
-    customPinchPrevDistRef.current = null;
   };
 
   const getBearing = (
@@ -834,10 +772,12 @@ export default function DriverTerminal() {
         lng = offsetLng;
       }
       mapInstance.panTo({ lat, lng });
+      setMapCameraCenter({ lat, lng });
       mapInstance.setZoom(15);
       setMapZoom(15);
     } else {
       setMapCenter([mapCenterRef.current[0], mapCenterRef.current[1]]);
+      setMapCameraCenter({ lat: mapCenterRef.current[0], lng: mapCenterRef.current[1] });
     }
   };
 
@@ -892,7 +832,13 @@ export default function DriverTerminal() {
             
             // Apply the map heading dynamically in overview mode so that travel is always oriented upwards!
             setMapHeading(heading);
-            mapInstance.setHeading(heading);
+            if (mapInstance && typeof mapInstance.setHeading === "function") {
+              try {
+                mapInstance.setHeading(heading);
+              } catch (err) {
+                // Silently bypass raster map constraint
+              }
+            }
             
             // Since the route direction is rotated to always point UPWARD on screen,
             // the destination (regardless of physically North/South) will visually be in front (UP),
@@ -934,6 +880,7 @@ export default function DriverTerminal() {
             mapInstance.setZoom(zoom);
             setMapZoom(zoom);
             setMapCenter([targetCenterLat, targetCenterLng]);
+            setMapCameraCenter({ lat: targetCenterLat, lng: targetCenterLng });
             mapInstance.panTo({ lat: targetCenterLat, lng: targetCenterLng });
           } else {
             // Fallback to standard bounds adjustment if legs are not ready
@@ -954,6 +901,7 @@ export default function DriverTerminal() {
         setIsAutoNavPaused(false);
         setDriverLocation(d => {
           setMapCenter(d);
+          setMapCameraCenter({ lat: d[0], lng: d[1] });
           return d;
         });
         if (autoNavPauseTimeoutRef.current) {
@@ -975,6 +923,7 @@ export default function DriverTerminal() {
         setIsAutoNavPaused(false);
         setDriverLocation(d => {
           setMapCenter(d);
+          setMapCameraCenter({ lat: d[0], lng: d[1] });
           return d;
         });
       }, 3000);
@@ -1214,7 +1163,8 @@ export default function DriverTerminal() {
     }
   }, [
     directions,
-    mapCenter,
+    mapCenter[0],
+    mapCenter[1],
     currentLegIndex,
     isAutoNavHeadUp,
     lastSpokenInstruction,
@@ -1260,7 +1210,8 @@ export default function DriverTerminal() {
     }
   }, [
     directions,
-    mapCenter,
+    mapCenter[0],
+    mapCenter[1],
     rideState,
     hasAnnouncedArrival,
     navVoiceVolume,
@@ -1329,10 +1280,15 @@ export default function DriverTerminal() {
         activeRide.pickupLng,
       );
       mapInstance.panTo(pt);
+      setMapCameraCenter({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
 
       // Shift map down by 160px so marker moves UP by 160px visually
       const timer = setTimeout(() => {
         mapInstance.panBy(0, 160);
+        const currentCenter = mapInstance.getCenter();
+        if (currentCenter) {
+          setMapCameraCenter({ lat: currentCenter.lat(), lng: currentCenter.lng() });
+        }
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -1606,9 +1562,17 @@ export default function DriverTerminal() {
         overviewHeading = isDestNorth ? 0 : 180;
       }
       setMapHeading(overviewHeading);
-      mapInstance.setHeading(overviewHeading);
+      if (typeof mapInstance.setHeading === "function") {
+        try {
+          mapInstance.setHeading(overviewHeading);
+        } catch (err) {}
+      }
       setMapTilt(0);
-      mapInstance.setTilt(0);
+      if (typeof mapInstance.setTilt === "function") {
+        try {
+          mapInstance.setTilt(0);
+        } catch (err) {}
+      }
       return;
     }
 
@@ -1660,8 +1624,16 @@ export default function DriverTerminal() {
       }
       setMapHeading(targetBearing);
       setMapTilt(0); 
-      mapInstance.setHeading(0);
-      mapInstance.setTilt(0);
+      if (typeof mapInstance.setHeading === "function") {
+        try {
+          mapInstance.setHeading(0);
+        } catch (err) {}
+      }
+      if (typeof mapInstance.setTilt === "function") {
+        try {
+          mapInstance.setTilt(0);
+        } catch (err) {}
+      }
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
         const desiredZoom = getDynamicZoomForDistance(remainingDistance);
@@ -1673,6 +1645,7 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
+        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1743,8 +1716,16 @@ export default function DriverTerminal() {
 
       setMapHeading(targetBearing);
       setMapTilt(0);
-      mapInstance.setHeading(0);
-      mapInstance.setTilt(0);
+      if (typeof mapInstance.setHeading === "function") {
+        try {
+          mapInstance.setHeading(0);
+        } catch (err) {}
+      }
+      if (typeof mapInstance.setTilt === "function") {
+        try {
+          mapInstance.setTilt(0);
+        } catch (err) {}
+      }
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
         const desiredZoom = getDynamicZoomForDistance(remainingDistance);
@@ -1756,6 +1737,7 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
+        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1766,8 +1748,16 @@ export default function DriverTerminal() {
       if (driverHeading !== null && driverHeading !== undefined) {
         setMapHeading(driverHeading);
         setMapTilt(0);
-        mapInstance.setHeading(0);
-        mapInstance.setTilt(0);
+        if (typeof mapInstance.setHeading === "function") {
+          try {
+            mapInstance.setHeading(0);
+          } catch (err) {}
+        }
+        if (typeof mapInstance.setTilt === "function") {
+          try {
+            mapInstance.setTilt(0);
+          } catch (err) {}
+        }
         
         const desiredZoom = rideState === "waiting" ? 17 : 15;
         const [panLat, panLng] = getDynamicOffsetLatLng(
@@ -1777,6 +1767,7 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
+        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1785,8 +1776,16 @@ export default function DriverTerminal() {
       } else {
         setMapHeading(0);
         setMapTilt(0);
-        mapInstance.setHeading(0);
-        mapInstance.setTilt(0);
+        if (typeof mapInstance.setHeading === "function") {
+          try {
+            mapInstance.setHeading(0);
+          } catch (err) {}
+        }
+        if (typeof mapInstance.setTilt === "function") {
+          try {
+            mapInstance.setTilt(0);
+          } catch (err) {}
+        }
         
         const desiredZoom = rideState === "waiting" ? 17 : 15;
         const [panLat, panLng] = getDynamicOffsetLatLng(
@@ -1796,6 +1795,7 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
+        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1813,7 +1813,8 @@ export default function DriverTerminal() {
     activeRide?.pickupLng,
     activeRide?.dropoffLat,
     activeRide?.dropoffLng,
-    mapCenter,
+    mapCenter[0],
+    mapCenter[1],
     directions,
     currentLegIndex,
   ]);
@@ -2998,7 +2999,7 @@ export default function DriverTerminal() {
     } else {
       setPickupProximityStartTime(null);
     }
-  }, [mapCenter, rideState, activeRide?.pickupLat, activeRide?.pickupLng]);
+  }, [mapCenter?.[0], mapCenter?.[1], rideState, activeRide?.pickupLat, activeRide?.pickupLng]);
 
   useEffect(() => {
     if (pickupProximityStartTime) {
@@ -3108,7 +3109,7 @@ export default function DriverTerminal() {
         setWaitStopLocation(null);
       }
     }
-  }, [mapCenter, isWaitingAtStop, waitStopLocation, currentStopWaitSeconds]);
+  }, [mapCenter?.[0], mapCenter?.[1], isWaitingAtStop, waitStopLocation, currentStopWaitSeconds]);
 
   // Start job reminder if driving away from pickup (>300m)
   useEffect(() => {
@@ -3137,7 +3138,8 @@ export default function DriverTerminal() {
     }
   }, [
     rideState,
-    mapCenter,
+    mapCenter?.[0],
+    mapCenter?.[1],
     activeRide?.pickupLat,
     activeRide?.pickupLng,
     hasDismissedStartJobReminder,
@@ -3179,7 +3181,8 @@ export default function DriverTerminal() {
   }, [
     rideState,
     activeRide,
-    mapCenter,
+    mapCenter?.[0],
+    mapCenter?.[1],
     currentLegIndex,
     hasReachedCurrentStop,
     showLeaveStopReminder,
@@ -3818,24 +3821,11 @@ export default function DriverTerminal() {
                       const c = mapInstance.getCenter();
                       if (c) {
                         setMapCenter([c.lat(), c.lng()]);
+                        setMapCameraCenter({ lat: c.lat(), lng: c.lng() });
                       }
                     }
                   }}
-                  center={(() => {
-                    if (!isAutoNavPaused) {
-                      if (isAutoNavHeadUp) {
-                        const [lat, lng] = getDynamicOffsetLatLng(
-                          driverLocation[0],
-                          driverLocation[1],
-                          mapHeading || 0,
-                          mapZoom
-                        );
-                        return { lat, lng };
-                      }
-                      return { lat: driverLocation[0], lng: driverLocation[1] };
-                    }
-                    return { lat: mapCenter[0], lng: mapCenter[1] };
-                  })()}
+                  center={mapCameraCenter}
                   zoom={mapZoom}
                   onZoomChanged={() => {
                     if (mapInstance) {

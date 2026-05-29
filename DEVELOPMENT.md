@@ -415,7 +415,7 @@ The prefix is determined by the user's primary registration role:
         *   [x] Logic: "Add Agent" and "Assign Job/Task" specific to off-site agents.
         *   [x] Logic: "Hire B2B Service" workflow with persistent linked project header across posting wizards.
         *   [x] Logic: "My Hiring Quotes" (MHQ) module to filter and manage incoming quotes from other traders. Visually decoupled with a sky-blue theme structure.
-        *   [ ] Task: Integrate "My Hiring Quotes" directly with "My Jobs" / "Projects" tabs to ensure state synchronisation and seamless transition from viewing a quote to navigating the active project.
+        *   [x] Task: Integrate "My Hiring Quotes" directly with "My Jobs" / "Projects" tabs to ensure state synchronisation and seamless transition from viewing a quote to navigating the active project.
     *   [x] **19.3: Consultancy Subcategory (Virtual, Remote Advisors)**
         *   [x] Update schema & rules: Added 22 entities in C1 including Consultancy projects, session notes, proposals, etc.
         *   [x] Build Layout: Virtual appointments calendar, active client roster, earning stats (`ConsultancyManager.tsx`).

@@ -105,7 +105,6 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  mapId: "8d7f862551b8bb49989453ed",
   mapTypeId: "roadmap",
   styles: [
     { elementType: "geometry", stylers: [{ color: "#ebe3cd" }] },
@@ -155,6 +154,11 @@ const premiumMapOptions: google.maps.MapOptions = {
       featureType: "road",
       elementType: "geometry",
       stylers: [{ color: "#ffffff" }],
+    },
+    {
+      featureType: "road",
+      elementType: "geometry.stroke",
+      stylers: [{ color: "#bcab8c" }],
     },
     {
       featureType: "road.arterial",

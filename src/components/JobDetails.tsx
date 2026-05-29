@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { setBusinessTab, setBusinessSubTab } from "../store/businessTabStore";
 import { QRCodeSVG } from 'qrcode.react';
 import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch, addDoc } from "@/src/firebase";
 import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
@@ -99,6 +100,7 @@ const formatTimer = (totalSeconds: number) => {
 export default function JobDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuth();
   const [job, setJob] = useState<any>(null);
   const [quotes, setQuotes] = useState<any[]>([]);
@@ -2124,7 +2126,11 @@ const libraries: any[] = ['places'];
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div className="flex items-center gap-3">
             <button onClick={() => {
-              if (window.history.state && window.history.state.idx > 0) {
+              if (location.state?.fromB2B) {
+                setBusinessTab("field_services");
+                setBusinessSubTab("hire_b2b");
+                navigate("/");
+              } else if (window.history.state && window.history.state.idx > 0) {
                 navigate(-1);
               } else {
                 navigate("/");
