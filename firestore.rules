@@ -138,7 +138,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants || isAdmin());
       
       match /messages/{messageId} {
-        allow read: if isSignedIn() && (get(/databases/$(database)/documents/conversations/$(conversationId)) == null || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants || isAdmin());
+        allow read: if isSignedIn() && (!exists(/databases/$(database)/documents/conversations/$(conversationId)) || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants || isAdmin());
         allow create: if isSignedIn() && (request.auth.uid == request.resource.data.senderId || isAdmin());
       }
     }
@@ -260,17 +260,37 @@ service cloud.firestore {
 
     // --- Instant Match and Scores ---
     match /instant_matches/{matchId} {
-      allow get: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('matchedTraderId', '') == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.matchedTraderId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.get('customerId', '') == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) || 
+        ('matchedTraderId' in resource.data && resource.data.matchedTraderId == request.auth.uid) || 
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) || 
+        ('matchedTraderId' in resource.data && resource.data.matchedTraderId == request.auth.uid) || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        ('customerId' in request.resource.data && request.resource.data.customerId == request.auth.uid) || 
+        isAdmin()
+      );
       allow update: if isSignedIn(); // Allow traders to respond to attempts, update match status
     }
 
     match /instant_match_attempts/{attemptId} {
-      allow get: if isSignedIn() && (resource.data.get('traderId', '') == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.traderId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (
+        ('traderId' in resource.data && resource.data.traderId == request.auth.uid) || 
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        ('traderId' in resource.data && resource.data.traderId == request.auth.uid) || 
+        isAdmin()
+      );
       allow create: if isAdmin() || (isSignedIn() && (request.auth.uid == get(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId || request.auth.uid == getAfter(/databases/$(database)/documents/instant_matches/$(request.resource.data.instantMatchId)).data.customerId));
-      allow update: if isSignedIn() && (resource.data.get('traderId', '') == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (
+        ('traderId' in resource.data && resource.data.traderId == request.auth.uid) || 
+        isAdmin()
+      );
     }
 
     match /users/{userId}/trader_match_scores/{categoryId} {
@@ -406,10 +426,25 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /appointments/{appointmentId} {
-      allow get: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('traderId', '') == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || resource.data.traderId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.get('customerId', '') == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('traderId', '') == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) || 
+        ('traderId' in resource.data && resource.data.traderId == request.auth.uid) || 
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) || 
+        ('traderId' in resource.data && resource.data.traderId == request.auth.uid) || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        ('customerId' in request.resource.data && request.resource.data.customerId == request.auth.uid) || 
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) || 
+        ('traderId' in resource.data && resource.data.traderId == request.auth.uid) || 
+        isAdmin()
+      );
       allow delete: if isAdmin();
     }
   }

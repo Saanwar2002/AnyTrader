@@ -34,6 +34,7 @@ import { toast } from "sonner";
 // Premium Anti-Glare Golden Map Options
 const premiumMapOptions: google.maps.MapOptions = {
   mapTypeId: "roadmap",
+  mapId: "8d7f862551b8bb49989453ed",
   disableDefaultUI: true,
   clickableIcons: false,
   isFractionalZoomEnabled: true,
@@ -85,42 +86,52 @@ const premiumMapOptions: google.maps.MapOptions = {
     {
       featureType: "road",
       elementType: "geometry",
-      stylers: [{ color: "#ffffff" }],
+      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
     },
     {
       featureType: "road",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#bcab8c" }],
+      stylers: [{ color: "#bcab8c" }, { visibility: "on" }],
+    },
+    {
+      featureType: "road",
+      elementType: "labels.text.fill",
+      stylers: [{ color: "#523735" }, { visibility: "on" }],
+    },
+    {
+      featureType: "road",
+      elementType: "labels.text.stroke",
+      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
     },
     {
       featureType: "road.arterial",
       elementType: "geometry",
-      stylers: [{ color: "#f8c967" }],
+      stylers: [{ color: "#f8c967" }, { visibility: "on" }],
     },
     {
       featureType: "road.arterial",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#e9bc62" }],
+      stylers: [{ color: "#e9bc62" }, { visibility: "on" }],
     },
     {
       featureType: "road.highway",
       elementType: "geometry",
-      stylers: [{ color: "#f8c967" }],
+      stylers: [{ color: "#f8c967" }, { visibility: "on" }],
     },
     {
       featureType: "road.highway",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#e9bc62" }],
+      stylers: [{ color: "#e9bc62" }, { visibility: "on" }],
     },
     {
       featureType: "road.highway.controlled_access",
       elementType: "geometry",
-      stylers: [{ color: "#e98d58" }],
+      stylers: [{ color: "#e98d58" }, { visibility: "on" }],
     },
     {
       featureType: "road.highway.controlled_access",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#db8555" }],
+      stylers: [{ color: "#db8555" }, { visibility: "on" }],
     },
     {
       featureType: "road.local",
@@ -245,6 +256,10 @@ export default function LiveMap() {
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [mapZoom, setMapZoom] = useState<number>(() => {
+    const saved = localStorage.getItem("admin_live_map_zoom");
+    return saved ? parseInt(saved, 10) : 13;
+  });
 
   // Sync mode state controlling budget optimization
   const [syncMode, setSyncMode] = useState<"realtime" | "buffered" | "suspended">("realtime");
@@ -258,7 +273,8 @@ export default function LiveMap() {
     id: "google-map-script",
     googleMapsApiKey: getGoogleMapsApiKey(),
     libraries: ["places"],
-    version: "quarterly"
+    version: "quarterly",
+    mapIds: ["8d7f862551b8bb49989453ed"]
   });
 
   // Listen to Firestore real-time live_tracking updates
@@ -521,7 +537,16 @@ export default function LiveMap() {
             <GoogleMap
               mapContainerStyle={mapContainerStyle}
               center={mapCenter}
-              zoom={13}
+              zoom={mapZoom}
+              onZoomChanged={() => {
+                if (map) {
+                  const z = map.getZoom();
+                  if (z !== undefined && z !== mapZoom) {
+                    setMapZoom(z);
+                    localStorage.setItem("admin_live_map_zoom", String(z));
+                  }
+                }
+              }}
               options={premiumMapOptions}
               onLoad={(m) => setMap(m)}
             >
