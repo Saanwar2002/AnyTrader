@@ -701,7 +701,7 @@ export default function PassengerBooking() {
             routeReq.waypoints = validStops;
           }
 
-          directionsService.route(routeReq, (result, status) => {
+          const routeRes1 = directionsService.route(routeReq, (result, status) => {
             if (status === window.google.maps.DirectionsStatus.OK && result) {
               // Draw the line
               const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
@@ -743,9 +743,10 @@ export default function PassengerBooking() {
                 setFareEstimate(Math.max(calcFare, fareConfig.minFare));
               }
             }
-          }).catch(() => {
-            // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
           });
+          if (routeRes1 && typeof routeRes1.catch === 'function') {
+             routeRes1.catch(() => {});
+          }
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise
         }
@@ -2388,7 +2389,7 @@ export default function PassengerBooking() {
 
         try {
           const directionsService = new window.google.maps.DirectionsService();
-          directionsService.route({
+          const routeRes2 = directionsService.route({
             origin: new window.google.maps.LatLng(currentDriverPos.lat, currentDriverPos.lng),
             destination: new window.google.maps.LatLng(destinationCoords.lat, destinationCoords.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
@@ -2409,9 +2410,10 @@ export default function PassengerBooking() {
               setLiveEtaMins(Math.ceil(totalSecs / 60));
               setLiveEtaSeconds(totalSecs);
             }
-          }).catch(() => {
-            // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
           });
+          if (routeRes2 && typeof routeRes2.catch === 'function') {
+             routeRes2.catch(() => {});
+          }
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise
         }
