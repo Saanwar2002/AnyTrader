@@ -125,8 +125,8 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  mapTypeId: "roadmap",
   mapId: "8d7f862551b8bb49989453ed",
+  mapTypeId: "roadmap",
   disableDefaultUI: true,
   clickableIcons: false,
   isFractionalZoomEnabled: true,
@@ -178,67 +178,42 @@ const premiumMapOptions: google.maps.MapOptions = {
     {
       featureType: "road",
       elementType: "geometry",
-      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road",
-      elementType: "geometry.stroke",
-      stylers: [{ color: "#bcab8c" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road",
-      elementType: "labels.text.fill",
-      stylers: [{ color: "#523735" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road",
-      elementType: "labels.text.stroke",
-      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
+      stylers: [{ color: "#ffffff" }],
     },
     {
       featureType: "road.arterial",
       elementType: "geometry",
-      stylers: [{ color: "#f8c967" }, { visibility: "on" }],
+      stylers: [{ color: "#f8c967" }],
     },
     {
       featureType: "road.arterial",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#e9bc62" }, { visibility: "on" }],
+      stylers: [{ color: "#e9bc62" }],
     },
     {
       featureType: "road.highway",
       elementType: "geometry",
-      stylers: [{ color: "#f8c967" }, { visibility: "on" }],
+      stylers: [{ color: "#f8c967" }],
     },
     {
       featureType: "road.highway",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#e9bc62" }, { visibility: "on" }],
+      stylers: [{ color: "#e9bc62" }],
     },
     {
       featureType: "road.highway.controlled_access",
       elementType: "geometry",
-      stylers: [{ color: "#e98d58" }, { visibility: "on" }],
+      stylers: [{ color: "#e98d58" }],
     },
     {
       featureType: "road.highway.controlled_access",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#db8555" }, { visibility: "on" }],
+      stylers: [{ color: "#db8555" }],
     },
     {
       featureType: "road.local",
       elementType: "labels.text.fill",
       stylers: [{ color: "#806b63" }],
-    },
-    {
-      featureType: "road.local",
-      elementType: "geometry",
-      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road.local",
-      elementType: "geometry.stroke",
-      stylers: [{ color: "#bcab8c" }, { visibility: "on" }],
     },
     {
       featureType: "transit.line",
@@ -388,11 +363,6 @@ export default function DriverTerminal() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([
     53.6458, -1.785,
   ]); // Default to Huddersfield from spec
-  const initialMapCenterRef = useRef({ lat: 53.6458, lng: -1.785 });
-  const [mapCameraCenter, setMapCameraCenter] = useState<{ lat: number; lng: number }>({
-    lat: 53.6458,
-    lng: -1.785,
-  });
   const [driverLocation, setDriverLocation] = useState<[number, number]>([
     53.6458, -1.785,
   ]);
@@ -560,7 +530,6 @@ export default function DriverTerminal() {
     googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
     version: "quarterly",
-    mapIds: ["8d7f862551b8bb49989453ed"]
   });
 
   // Dynamic Fare & Live Ride Tracking
@@ -622,10 +591,7 @@ export default function DriverTerminal() {
     useState<google.maps.Map | null>(null);
   const [mapHeading, setMapHeading] = useState(0);
   const [mapTilt, setMapTilt] = useState(0);
-  const [mapZoom, setMapZoom] = useState<number>(() => {
-    const saved = localStorage.getItem("driver_preferred_zoom");
-    return saved ? parseFloat(saved) : 17;
-  });
+  const [mapZoom, setMapZoom] = useState<number>(15);
 
   const [driverHeading, setDriverHeading] = useState<number | null>(null);
   const [isAutoNavHeadUp, setIsAutoNavHeadUp] = useState(true);
@@ -635,21 +601,6 @@ export default function DriverTerminal() {
   useEffect(() => {
     isAutoNavPausedRef.current = isAutoNavPaused;
   }, [isAutoNavPaused]);
-
-  useEffect(() => {
-    if (!isAutoNavHeadUp) {
-      const timer = setTimeout(() => {
-        setIsAutoNavHeadUp(true);
-        setIsAutoNavPaused(false);
-        setDriverLocation(d => {
-          setMapCenter(d);
-          setMapCameraCenter({ lat: d[0], lng: d[1] });
-          return d;
-        });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAutoNavHeadUp]);
 
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== "undefined" ? window.innerWidth : 360,
@@ -699,6 +650,10 @@ export default function DriverTerminal() {
     useState<string>("");
   const [hasAnnouncedArrival, setHasAnnouncedArrival] = useState(false);
 
+  const customDragActiveRef = useRef(false);
+  const customDragPrevPosRef = useRef({ x: 0, y: 0 });
+  const customPinchPrevDistRef = useRef<number | null>(null);
+
   const handleMapInteraction = () => {
     setIsAutoNavPaused(true);
     if (autoNavPauseTimeoutRef.current) {
@@ -708,10 +663,77 @@ export default function DriverTerminal() {
       setIsAutoNavPaused(false);
       setDriverLocation(d => {
         setMapCenter(d);
-        setMapCameraCenter({ lat: d[0], lng: d[1] });
         return d;
       });
     }, 3000); // Resume auto nav after 3s of no interaction per user request
+  };
+
+  const handleCustomDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isAutoNavHeadUp || !mapInstance) return;
+    
+    // Call existing handleMapInteraction to pause auto center/nav
+    handleMapInteraction();
+
+    if ("touches" in e && e.touches.length === 2) {
+      if (e.cancelable) e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      customPinchPrevDistRef.current = dist;
+      customDragActiveRef.current = false;
+      return;
+    }
+
+    if (e.cancelable) e.preventDefault();
+    customDragActiveRef.current = true;
+    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    customDragPrevPosRef.current = { x: clientX, y: clientY };
+  };
+
+  const handleCustomDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!mapInstance) return;
+
+    if ("touches" in e && e.touches.length === 2) {
+      if (e.cancelable) e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+      if (customPinchPrevDistRef.current !== null) {
+        const diff = dist - customPinchPrevDistRef.current;
+        const currentZoom = mapInstance.getZoom() || 15;
+        // Continuous fractional zoom increment
+        const zoomChange = diff * 0.02; // Increased sensitivity
+        const newZoom = Math.max(3, Math.min(21, currentZoom + zoomChange));
+        mapInstance.setZoom(newZoom);
+      }
+      customPinchPrevDistRef.current = dist;
+      return;
+    }
+
+    if (!customDragActiveRef.current) return;
+    if (e.cancelable) e.preventDefault();
+
+    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    const dx = clientX - customDragPrevPosRef.current.x;
+    const dy = clientY - customDragPrevPosRef.current.y;
+
+    customDragPrevPosRef.current = { x: clientX, y: clientY };
+
+    // Since the Google Map now handles rotation internally via the heading option,
+    // panBy operates directly in screen coordinates relative to the user's touch movement.
+    const panX = -dx;
+    const panY = -dy;
+
+    mapInstance.panBy(panX, panY);
+  };
+
+  const handleCustomDragEnd = () => {
+    customDragActiveRef.current = false;
+    customPinchPrevDistRef.current = null;
   };
 
   const getBearing = (
@@ -757,15 +779,15 @@ export default function DriverTerminal() {
     if (distanceMeters <= 80) {
       return 18.5; // Very close, highly detailed junction view
     } else if (distanceMeters <= 200) {
-      return 18.2; // Close maneuver view
+      return 18.0; // Close maneuver view
     } else if (distanceMeters <= 500) {
-      return 17.8; // Approach view
+      return 17.5; // Approach view
     } else if (distanceMeters <= 1000) {
-      return 17.5; // Normal city driving view
+      return 16.5; // Normal city driving view
     } else if (distanceMeters <= 2500) {
-      return 17.2; // Regional route view
+      return 15.5; // Regional route view
     } else {
-      return 17.0; // Keep it close enough so that road layouts and minor street grids are always beautiful and visible
+      return 14.5; // Large scale preview for highways/long drives
     }
   };
 
@@ -775,24 +797,22 @@ export default function DriverTerminal() {
     bearingDegrees: number,
     zoomLevel: number
   ): [number, number] => {
+    // Since the map is standard 2D Raster (always North-Up due to WebGL limitations of custom JSON styling),
+    // we must offset the camera center relative to the physical screen boundaries.
+    // Horizontal: The car marker should be centered (0px horizontal offset).
+    // Vertical: To avoid the bottom card/sheet (which obscures the bottom ~210px) and top control panel (~110px),
+    // we offset the camera Southwards, which visually pushes the car marker UP/Northward on the screen so it is
+    // centered in the remaining visible space.
+    // Centering the marker vertically in the visible window of a standard 800px screen corresponds to
+    // shifting the marker UP by ~75px, meaning we pan the camera center DOWN (South) by 75px.
     const metersPerPixel = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoomLevel);
     
-    if (isAutoNavHeadUp) {
-      // With CSS rotation based on heading, to push the marker to the bottom of the screen,
-      // we must shift the camera center AHEAD (forward) along the route bearing.
-      const offsetForwardMeters = 80 * metersPerPixel; 
-      const headingRad = (bearingDegrees * Math.PI) / 180;
-      // Shift coordinate forward
-      const latOffset = (offsetForwardMeters * Math.cos(headingRad)) / 111111;
-      const lngOffset = (offsetForwardMeters * Math.sin(headingRad)) / (111111 * Math.cos((lat * Math.PI) / 180));
-      
-      return [lat + latOffset, lng + lngOffset];
-    } else {
-      // Map is North-up. To push the marker North (up), we shift the camera South (down).
-      const offsetSouthMeters = 80 * metersPerPixel;
-      const latOffset = -offsetSouthMeters / 111111;
-      return [lat + latOffset, lng];
-    }
+    // We shift the camera center Southwards to move the marker Northwards on the screen.
+    const offsetSouthMeters = 80 * metersPerPixel; // Optimal 80px shift to stay clear of bottom sheet/HUD
+    const metersToLatitude = 1 / 111111;
+    const latOffset = -offsetSouthMeters * metersToLatitude;
+
+    return [lat + latOffset, lng];
   };
 
   useEffect(() => {
@@ -808,19 +828,16 @@ export default function DriverTerminal() {
           lat,
           lng,
           mapHeading || 0,
-          17.5
+          15
         );
         lat = offsetLat;
         lng = offsetLng;
       }
       mapInstance.panTo({ lat, lng });
-      setMapCameraCenter({ lat, lng });
-      const targetZoom = isAutoNavHeadUp ? 17.5 : 15.5;
-      mapInstance.setZoom(targetZoom);
-      setMapZoom(targetZoom);
+      mapInstance.setZoom(15);
+      setMapZoom(15);
     } else {
       setMapCenter([mapCenterRef.current[0], mapCenterRef.current[1]]);
-      setMapCameraCenter({ lat: mapCenterRef.current[0], lng: mapCenterRef.current[1] });
     }
   };
 
@@ -831,6 +848,11 @@ export default function DriverTerminal() {
         // When disabling head up mode, fit to route overview
         const bounds = directions.routes[0]?.bounds;
         if (bounds) {
+          const maxDim = Math.max(window.innerWidth, window.innerHeight);
+          const mapSize = maxDim * 1.45;
+          const overflowX = (mapSize - window.innerWidth) / 2;
+          const overflowY = (mapSize - window.innerHeight) / 2;
+          
           // Analytical calculation to place the driver's live location marker and route optimally on screen
           const leg = directions.routes[0]?.legs?.[currentLegIndex || 0] || directions.routes[0]?.legs?.[0];
           if (leg && leg.end_location) {
@@ -862,7 +884,7 @@ export default function DriverTerminal() {
             
             // Calculate target zoom level using the exact Mercator scale relationship
             let zoom = Math.log2((156543.03392 * Math.cos((driverLat * Math.PI) / 180)) / requiredMpp);
-            zoom = Math.max(14.2, Math.min(18, zoom)) - 0.45; // Ensure minimum zoom never drops below 14.2 to preserve road geometries
+            zoom = Math.max(12, Math.min(18, zoom)) - 0.45; // Safe margin subtraction for padding comfort
             
             // Determine relative direction of destination to dynamically position driver screen coordinates
             const isDestNorth = destLat > driverLat;
@@ -870,13 +892,7 @@ export default function DriverTerminal() {
             
             // Apply the map heading dynamically in overview mode so that travel is always oriented upwards!
             setMapHeading(heading);
-            if (mapInstance && typeof mapInstance.setHeading === "function") {
-              try {
-                mapInstance.setHeading(heading);
-              } catch (err) {
-                // Silently bypass raster map constraint
-              }
-            }
+            mapInstance.setHeading(heading);
             
             // Since the route direction is rotated to always point UPWARD on screen,
             // the destination (regardless of physically North/South) will visually be in front (UP),
@@ -918,15 +934,14 @@ export default function DriverTerminal() {
             mapInstance.setZoom(zoom);
             setMapZoom(zoom);
             setMapCenter([targetCenterLat, targetCenterLng]);
-            setMapCameraCenter({ lat: targetCenterLat, lng: targetCenterLng });
             mapInstance.panTo({ lat: targetCenterLat, lng: targetCenterLng });
           } else {
             // Fallback to standard bounds adjustment if legs are not ready
             mapInstance.fitBounds(bounds, {
-              top: 100,
-              bottom: 350,
-              left: 20,
-              right: 20,
+              top: 100 + overflowY,
+              bottom: 350 + overflowY,
+              left: 20 + overflowX,
+              right: 20 + overflowX,
             });
           }
           
@@ -939,7 +954,6 @@ export default function DriverTerminal() {
         setIsAutoNavPaused(false);
         setDriverLocation(d => {
           setMapCenter(d);
-          setMapCameraCenter({ lat: d[0], lng: d[1] });
           return d;
         });
         if (autoNavPauseTimeoutRef.current) {
@@ -961,7 +975,6 @@ export default function DriverTerminal() {
         setIsAutoNavPaused(false);
         setDriverLocation(d => {
           setMapCenter(d);
-          setMapCameraCenter({ lat: d[0], lng: d[1] });
           return d;
         });
       }, 3000);
@@ -1201,8 +1214,7 @@ export default function DriverTerminal() {
     }
   }, [
     directions,
-    mapCenter[0],
-    mapCenter[1],
+    mapCenter,
     currentLegIndex,
     isAutoNavHeadUp,
     lastSpokenInstruction,
@@ -1248,8 +1260,7 @@ export default function DriverTerminal() {
     }
   }, [
     directions,
-    mapCenter[0],
-    mapCenter[1],
+    mapCenter,
     rideState,
     hasAnnouncedArrival,
     navVoiceVolume,
@@ -1318,15 +1329,10 @@ export default function DriverTerminal() {
         activeRide.pickupLng,
       );
       mapInstance.panTo(pt);
-      setMapCameraCenter({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
 
       // Shift map down by 160px so marker moves UP by 160px visually
       const timer = setTimeout(() => {
         mapInstance.panBy(0, 160);
-        const currentCenter = mapInstance.getCenter();
-        if (currentCenter) {
-          setMapCameraCenter({ lat: currentCenter.lat(), lng: currentCenter.lng() });
-        }
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -1479,7 +1485,7 @@ export default function DriverTerminal() {
 
       const directionsService = new window.google.maps.DirectionsService();
 
-      const routeRes = directionsService.route(
+      directionsService.route(
         {
           origin: new window.google.maps.LatLng(originLat, originLng),
           destination: new window.google.maps.LatLng(destLat, destLng),
@@ -1491,11 +1497,15 @@ export default function DriverTerminal() {
           if (status === window.google.maps.DirectionsStatus.OK && result) {
             setDirections(result);
             if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
+              const maxDim = Math.max(window.innerWidth, window.innerHeight);
+              const mapSize = maxDim * 1.45;
+              const overflowX = (mapSize - window.innerWidth) / 2;
+              const overflowY = (mapSize - window.innerHeight) / 2;
               mapInstance.fitBounds(result.routes[0].bounds, {
-                top: 100,
-                bottom: 350,
-                left: 20,
-                right: 20,
+                top: 100 + overflowY,
+                bottom: 350 + overflowY,
+                left: 20 + overflowX,
+                right: 20 + overflowX,
               });
               isInitialFitBounds = false;
             }
@@ -1526,10 +1536,9 @@ export default function DriverTerminal() {
             }
           }
         }
-      );
-      if (routeRes && typeof routeRes.catch === 'function') {
-         routeRes.catch(() => {});
-      }
+      ).catch(() => {
+        // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
+      });
     };
 
     const updateDynamicDirections = () => {
@@ -1597,17 +1606,9 @@ export default function DriverTerminal() {
         overviewHeading = isDestNorth ? 0 : 180;
       }
       setMapHeading(overviewHeading);
-      if (typeof mapInstance.setHeading === "function") {
-        try {
-          mapInstance.setHeading(overviewHeading);
-        } catch (err) {}
-      }
+      mapInstance.setHeading(overviewHeading);
       setMapTilt(0);
-      if (typeof mapInstance.setTilt === "function") {
-        try {
-          mapInstance.setTilt(0);
-        } catch (err) {}
-      }
+      mapInstance.setTilt(0);
       return;
     }
 
@@ -1659,16 +1660,8 @@ export default function DriverTerminal() {
       }
       setMapHeading(targetBearing);
       setMapTilt(0); 
-      if (typeof mapInstance.setHeading === "function") {
-        try {
-          mapInstance.setHeading(targetBearing || 0);
-        } catch (err) {}
-      }
-      if (typeof mapInstance.setTilt === "function") {
-        try {
-          mapInstance.setTilt(0);
-        } catch (err) {}
-      }
+      mapInstance.setHeading(0);
+      mapInstance.setTilt(0);
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
         const desiredZoom = getDynamicZoomForDistance(remainingDistance);
@@ -1680,7 +1673,6 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
-        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1751,16 +1743,8 @@ export default function DriverTerminal() {
 
       setMapHeading(targetBearing);
       setMapTilt(0);
-      if (typeof mapInstance.setHeading === "function") {
-        try {
-          mapInstance.setHeading(targetBearing || 0);
-        } catch (err) {}
-      }
-      if (typeof mapInstance.setTilt === "function") {
-        try {
-          mapInstance.setTilt(0);
-        } catch (err) {}
-      }
+      mapInstance.setHeading(0);
+      mapInstance.setTilt(0);
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
         const desiredZoom = getDynamicZoomForDistance(remainingDistance);
@@ -1772,7 +1756,6 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
-        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1783,18 +1766,10 @@ export default function DriverTerminal() {
       if (driverHeading !== null && driverHeading !== undefined) {
         setMapHeading(driverHeading);
         setMapTilt(0);
-        if (typeof mapInstance.setHeading === "function") {
-          try {
-            mapInstance.setHeading(driverHeading || 0);
-          } catch (err) {}
-        }
-        if (typeof mapInstance.setTilt === "function") {
-          try {
-            mapInstance.setTilt(0);
-          } catch (err) {}
-        }
+        mapInstance.setHeading(0);
+        mapInstance.setTilt(0);
         
-        const desiredZoom = rideState === "waiting" ? 18.0 : 17.5;
+        const desiredZoom = rideState === "waiting" ? 17 : 15;
         const [panLat, panLng] = getDynamicOffsetLatLng(
           mapCenter[0],
           mapCenter[1],
@@ -1802,7 +1777,6 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
-        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1811,18 +1785,10 @@ export default function DriverTerminal() {
       } else {
         setMapHeading(0);
         setMapTilt(0);
-        if (typeof mapInstance.setHeading === "function") {
-          try {
-            mapInstance.setHeading(0);
-          } catch (err) {}
-        }
-        if (typeof mapInstance.setTilt === "function") {
-          try {
-            mapInstance.setTilt(0);
-          } catch (err) {}
-        }
+        mapInstance.setHeading(0);
+        mapInstance.setTilt(0);
         
-        const desiredZoom = rideState === "waiting" ? 18.0 : 17.5;
+        const desiredZoom = rideState === "waiting" ? 17 : 15;
         const [panLat, panLng] = getDynamicOffsetLatLng(
           mapCenter[0],
           mapCenter[1],
@@ -1830,7 +1796,6 @@ export default function DriverTerminal() {
           desiredZoom
         );
         mapInstance.panTo({ lat: panLat, lng: panLng });
-        setMapCameraCenter({ lat: panLat, lng: panLng });
         
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
@@ -1848,8 +1813,7 @@ export default function DriverTerminal() {
     activeRide?.pickupLng,
     activeRide?.dropoffLat,
     activeRide?.dropoffLng,
-    mapCenter[0],
-    mapCenter[1],
+    mapCenter,
     directions,
     currentLegIndex,
   ]);
@@ -2259,23 +2223,12 @@ export default function DriverTerminal() {
       const mDoc = await getDoc(doc(db, "driver_metrics", user.uid));
       if (mDoc.exists()) {
         const secs = mDoc.data().onlineSecondsToday || 0;
-        let max = Number(fareConfig.maxDailyDriverHours);
-        if (isNaN(max) || max <= 0) max = 12;
-        const docDate = mDoc.data().date;
-        const today = new Date().toISOString().split("T")[0];
-        // Allow a small padding or ignore if it's crazily high (bug)
-        if (docDate === today && secs / 3600 >= max && secs < 86400) {
-          toast.error("Safety Limit Reached (Bypassed for testing)", {
-            description: `You reached the max of ${max} hours. Timer has been reset for testing.`,
+        const max = fareConfig.maxDailyDriverHours || 12;
+        if (secs / 3600 >= max) {
+          toast.error("Safety Limit Reached", {
+            description: `You cannot go online. You have reached your daily maximum of ${max} hours.`,
           });
-          await updateDoc(doc(db, "driver_metrics", user.uid), {
-             onlineSecondsToday: 0
-          });
-        } else if (secs >= 86400) {
-          // Bug cleanup: reset if it exceeds 24 hours of seconds for a single day
-          await updateDoc(doc(db, "driver_metrics", user.uid), {
-             onlineSecondsToday: 0
-          });
+          return;
         }
       }
     }
@@ -2318,25 +2271,29 @@ export default function DriverTerminal() {
       if (Math.floor(diffMs / 1000) % 60 < 10) {
         const today = new Date().toISOString().split("T")[0];
         if (user) {
-          getDoc(doc(db, "driver_metrics", user.uid)).then((metricsDoc) => {
-            if (metricsDoc.exists() && metricsDoc.data().date === today) {
-              updateDoc(doc(db, "driver_metrics", user.uid), {
-                onlineSecondsToday: increment(60),
-              }).then(() => {
-                const secs = (metricsDoc.data().onlineSecondsToday || 0) + 60;
-                let max = Number(fareConfig.maxDailyDriverHours);
-                if (isNaN(max) || max <= 0) max = 12;
-                if (secs / 3600 >= max && secs < 86400) {
-                  toast.error("Safety Limit Reached (Bypassed)", {
-                    description: `You have reached the maximum allowed driving time of ${max} hours.`,
-                  });
-                  // setIsOnline(false); // Bypassed for testing
-                  // updateDoc(doc(db, "live_tracking", user.uid), {
-                  //  isOnline: false, // Force them offline
-                  // }).catch(console.error);
+          updateDoc(doc(db, "driver_metrics", user.uid), {
+            date: today,
+            onlineSecondsToday: increment(60),
+          })
+            .then(() => {
+              // Verify limits
+              getDoc(doc(db, "driver_metrics", user.uid)).then((metricsDoc) => {
+                if (metricsDoc.exists()) {
+                  const secs = metricsDoc.data().onlineSecondsToday || 0;
+                  if (secs / 3600 >= (fareConfig.maxDailyDriverHours || 12)) {
+                    toast.error("Safety Limit Reached", {
+                      description: `You have reached the maximum allowed driving time of ${fareConfig.maxDailyDriverHours || 12} hours.`,
+                    });
+                    setIsOnline(false);
+                    updateDoc(doc(db, "live_tracking", user.uid), {
+                      isOnline: false,
+                    }).catch(console.error);
+                  }
                 }
               });
-            } else {
+            })
+            .catch(() => {
+              // Fallback: create if not exists
               setDoc(
                 doc(db, "driver_metrics", user.uid),
                 {
@@ -2346,8 +2303,7 @@ export default function DriverTerminal() {
                 },
                 { merge: true },
               );
-            }
-          });
+            });
         }
       }
     }, 10000); // Check every 10 seconds
@@ -3042,7 +2998,7 @@ export default function DriverTerminal() {
     } else {
       setPickupProximityStartTime(null);
     }
-  }, [mapCenter?.[0], mapCenter?.[1], rideState, activeRide?.pickupLat, activeRide?.pickupLng]);
+  }, [mapCenter, rideState, activeRide?.pickupLat, activeRide?.pickupLng]);
 
   useEffect(() => {
     if (pickupProximityStartTime) {
@@ -3152,7 +3108,7 @@ export default function DriverTerminal() {
         setWaitStopLocation(null);
       }
     }
-  }, [mapCenter?.[0], mapCenter?.[1], isWaitingAtStop, waitStopLocation, currentStopWaitSeconds]);
+  }, [mapCenter, isWaitingAtStop, waitStopLocation, currentStopWaitSeconds]);
 
   // Start job reminder if driving away from pickup (>300m)
   useEffect(() => {
@@ -3181,8 +3137,7 @@ export default function DriverTerminal() {
     }
   }, [
     rideState,
-    mapCenter?.[0],
-    mapCenter?.[1],
+    mapCenter,
     activeRide?.pickupLat,
     activeRide?.pickupLng,
     hasDismissedStartJobReminder,
@@ -3224,8 +3179,7 @@ export default function DriverTerminal() {
   }, [
     rideState,
     activeRide,
-    mapCenter?.[0],
-    mapCenter?.[1],
+    mapCenter,
     currentLegIndex,
     hasReachedCurrentStop,
     showLeaveStopReminder,
@@ -3707,12 +3661,14 @@ export default function DriverTerminal() {
 
   const maxDim = Math.max(windowSize.width, windowSize.height);
   const mapSize = maxDim * 1.45; // slightly larger than sqrt(2) diagonal
+  const overflowX = (mapSize - windowSize.width) / 2;
+  const overflowY = (mapSize - windowSize.height) / 2;
 
   const mapPadding = {
-    top: 100,
-    bottom: 350,
-    left: 20,
-    right: 20,
+    top: 100 + overflowY,
+    bottom: 350 + overflowY,
+    left: 20 + overflowX,
+    right: 20 + overflowX,
   };
 
   return (
@@ -3845,10 +3801,13 @@ export default function DriverTerminal() {
               <div
                 style={{
                   position: "absolute",
-                  width: "100%",
-                  height: "100%",
-                  left: 0,
-                  top: 0,
+                  width: `${mapSize}px`,
+                  height: `${mapSize}px`,
+                  left: "50%",
+                  top: "50%",
+                  transform: `translate(-50%, -50%)`,
+                  transformOrigin: "50% 50%",
+                  transition: "transform 0.5s ease-out",
                 }}
               >
                 <GoogleMap
@@ -3883,9 +3842,6 @@ export default function DriverTerminal() {
                       const z = mapInstance.getZoom();
                       if (z !== undefined && z !== mapZoom) {
                         setMapZoom(z);
-                        if (!activeRide?.id) {
-                          localStorage.setItem("driver_preferred_zoom", String(z));
-                        }
                         handleMapInteraction();
                       }
                     }
@@ -3910,37 +3866,32 @@ export default function DriverTerminal() {
                     >
                       <div
                         style={{
-                          transform: "none",
+                          transform: `rotate(0deg)`,
+                          transformOrigin: "18px 54px",
+                          transition: "transform 0.5s ease-out",
                         }}
                         className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50"
                       >
-                        <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
-                        {(!activeRide ||
-                          rideState === "en_route_pickup" ||
-                          rideState === "waiting") && (
-                          <div className="absolute top-0 left-0 w-[36px] h-[36px] bg-[#FACC15] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
-                        )}
-                        <div 
-                          style={{
-                            transform: `rotate(${isAutoNavHeadUp ? (driverHeading !== null && driverHeading !== undefined ? driverHeading - mapHeading : 0) : (driverHeading || 0)}deg)`,
-                            transformOrigin: "center center",
-                            transition: "transform 0.5s ease-out",
-                          }}
-                          className="bg-[#FACC15] w-[36px] h-[36px] rounded-full border-2 border-black flex items-center justify-center relative shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20"
-                        >
-                          <Car
-                            className="w-[20px] h-[20px] text-black"
-                            fill="currentColor"
-                          />
-                        </div>
-                        {/* The leg kept vertical and upright */}
-                        <div className="absolute top-[36px] left-1/2 -translate-x-1/2 w-[3px] h-[16px] bg-black flex justify-center">
+                      <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
+                      {(!activeRide ||
+                        rideState === "en_route_pickup" ||
+                        rideState === "waiting") && (
+                        <div className="absolute top-0 left-0 w-[36px] h-[36px] bg-[#FACC15] rounded-full animate-[ping_2s_ease-in-out_infinite] opacity-30"></div>
+                      )}
+                      <div className="bg-[#FACC15] w-[36px] h-[36px] rounded-full border-2 border-black flex items-center justify-center relative shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20">
+                        <Car
+                          className="w-[20px] h-[20px] text-black"
+                          fill="currentColor"
+                        />
+                        {/* The leg */}
+                        <div className="absolute top-[100%] left-1/2 -translate-x-1/2 w-[3px] h-[16px] bg-black flex justify-center">
                           <div className="w-[1px] h-full bg-[#FACC15]"></div>
                         </div>
-                        {/* The base dot kept perfectly vertical under the pin */}
-                        <div className="absolute top-[50px] left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-[#FACC15] border-2 border-black rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]"></div>
+                        {/* The base dot */}
+                        <div className="absolute top-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-[#FACC15] border-2 border-black rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)]"></div>
                       </div>
-                    </OverlayViewF>
+                    </div>
+                  </OverlayViewF>
                 )}
 
                 {/* Show Pickup ONLY before they get in */}
@@ -3961,12 +3912,7 @@ export default function DriverTerminal() {
                         }}
                         mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                       >
-                        <div 
-                          style={{
-                            transform: "none",
-                          }}
-                          className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]"
-                        >
+                        <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
                           <div className="bg-[#BBF7D0] border border-[#22C55E] p-2.5 rounded-xl shadow-lg relative">
                             <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#065F46] mb-0.5">
                               Pickup
@@ -4010,12 +3956,7 @@ export default function DriverTerminal() {
                             }}
                             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                           >
-                            <div 
-                              style={{
-                                transform: "none",
-                              }}
-                              className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]"
-                            >
+                            <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
                               <div className="bg-[#FEF08A] border border-[#EAB308] p-2.5 rounded-xl shadow-lg relative">
                                 <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#713F12] mb-0.5">
                                   Stop {currentLegIndex + 1}
@@ -4049,12 +3990,7 @@ export default function DriverTerminal() {
                               }}
                               mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                             >
-                              <div 
-                                style={{
-                                  transform: "none",
-                                }}
-                                className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]"
-                              >
+                              <div className="absolute bottom-10 left-[0] -translate-x-1/2 pointer-events-none flex flex-col items-center z-10 w-max max-w-[220px]">
                                 <div className="bg-[#FECDD3] border border-[#E11D48] p-2.5 rounded-xl shadow-lg relative">
                                   <div className="font-extrabold text-[9px] uppercase tracking-widest text-[#881337] mb-0.5">
                                     Dropoff
@@ -4142,12 +4078,7 @@ export default function DriverTerminal() {
                         position={{ lat: hazard.lat, lng: hazard.lng }}
                         mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                       >
-                        <div 
-                          style={{
-                            transform: "none",
-                          }}
-                          className="absolute -translate-x-1/2 -translate-y-[100%] pointer-events-none flex flex-col justify-end items-center z-10 w-max pb-[22px]"
-                        >
+                        <div className="absolute -translate-x-1/2 -translate-y-[100%] pointer-events-none flex flex-col justify-end items-center z-10 w-max pb-[22px]">
                           <div
                             className={cn(
                               "bg-[#FFCC00] border px-3 py-1.5 rounded-xl shadow-md relative flex items-center justify-center mb-1",
@@ -4170,12 +4101,7 @@ export default function DriverTerminal() {
                             ></div>
                           </div>
                         </div>
-                        <div 
-                          style={{
-                            transform: "none",
-                          }}
-                          className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
-                        >
+                        <div className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
                           <div
                             className={cn(
                               "w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-[2px]",
@@ -4210,12 +4136,7 @@ export default function DriverTerminal() {
                         position={{ lat: zone.lat, lng: zone.lng }}
                         mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                       >
-                        <div 
-                          style={{
-                            transform: "none",
-                          }}
-                          className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
-                        >
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
                           <div className="bg-black/80 px-2 py-1 rounded-md text-[10px] font-black text-white whitespace-nowrap shadow border border-white/20 flex items-center gap-1">
                             <TrendingUp className="w-3 h-3 text-[#FF3B30]" />{" "}
                             {zone.label}
@@ -4241,6 +4162,7 @@ export default function DriverTerminal() {
                       <div
                         style={{
                           transform: "none",
+                          transformOrigin: "13px 38px",
                         }}
                         className="relative flex flex-col items-center justify-start -ml-[13px] -mt-[38px] z-50"
                       >

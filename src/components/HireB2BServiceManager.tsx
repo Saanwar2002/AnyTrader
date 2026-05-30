@@ -201,7 +201,6 @@ export function HireB2BServiceManager() {
                         <div className="flex justify-start pt-2">
                           <Link
                             to={`/job/${quote.jobId}`}
-                            state={{ fromB2B: true }}
                             className="bg-black text-white text-center py-3 px-8 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-800 transition-colors"
                           >
                             {quote.status === "accepted" ? "Track progress & manage project" : "Manage the quote"}

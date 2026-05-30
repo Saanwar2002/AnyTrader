@@ -105,8 +105,8 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  mapTypeId: "roadmap",
   mapId: "8d7f862551b8bb49989453ed",
+  mapTypeId: "roadmap",
   styles: [
     { elementType: "geometry", stylers: [{ color: "#ebe3cd" }] },
     { elementType: "labels.text.fill", stylers: [{ color: "#523735" }] },
@@ -154,67 +154,42 @@ const premiumMapOptions: google.maps.MapOptions = {
     {
       featureType: "road",
       elementType: "geometry",
-      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road",
-      elementType: "geometry.stroke",
-      stylers: [{ color: "#bcab8c" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road",
-      elementType: "labels.text.fill",
-      stylers: [{ color: "#523735" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road",
-      elementType: "labels.text.stroke",
-      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
+      stylers: [{ color: "#ffffff" }],
     },
     {
       featureType: "road.arterial",
       elementType: "geometry",
-      stylers: [{ color: "#f8c967" }, { visibility: "on" }],
+      stylers: [{ color: "#f8c967" }],
     },
     {
       featureType: "road.arterial",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#e9bc62" }, { visibility: "on" }],
+      stylers: [{ color: "#e9bc62" }],
     },
     {
       featureType: "road.highway",
       elementType: "geometry",
-      stylers: [{ color: "#f8c967" }, { visibility: "on" }],
+      stylers: [{ color: "#f8c967" }],
     },
     {
       featureType: "road.highway",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#e9bc62" }, { visibility: "on" }],
+      stylers: [{ color: "#e9bc62" }],
     },
     {
       featureType: "road.highway.controlled_access",
       elementType: "geometry",
-      stylers: [{ color: "#e98d58" }, { visibility: "on" }],
+      stylers: [{ color: "#e98d58" }],
     },
     {
       featureType: "road.highway.controlled_access",
       elementType: "geometry.stroke",
-      stylers: [{ color: "#db8555" }, { visibility: "on" }],
+      stylers: [{ color: "#db8555" }],
     },
     {
       featureType: "road.local",
       elementType: "labels.text.fill",
       stylers: [{ color: "#806b63" }],
-    },
-    {
-      featureType: "road.local",
-      elementType: "geometry",
-      stylers: [{ color: "#ffffff" }, { visibility: "on" }],
-    },
-    {
-      featureType: "road.local",
-      elementType: "geometry.stroke",
-      stylers: [{ color: "#bcab8c" }, { visibility: "on" }],
     },
     {
       featureType: "transit.line",
@@ -456,8 +431,7 @@ export default function PassengerBooking() {
     id: 'google-map-script',
     googleMapsApiKey: getGoogleMapsApiKey(),
     libraries,
-    version: "quarterly",
-    mapIds: ["8d7f862551b8bb49989453ed"]
+    version: "quarterly"
   });
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -609,10 +583,7 @@ export default function PassengerBooking() {
 
   // Map States
   const [mapCenter, setMapCenter] = useState(defaultCenter);
-  const [mapZoom, setMapZoom] = useState(() => {
-    const saved = localStorage.getItem("passenger_preferred_booking_zoom");
-    return saved ? parseInt(saved, 10) : 17;
-  });
+  const [mapZoom, setMapZoom] = useState(16);
   const [pickupCoords, setPickupCoords] = useState<{lat: number, lng: number} | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<{lat: number, lng: number} | null>(null);
   const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
@@ -621,10 +592,10 @@ export default function PassengerBooking() {
   // Adjust map zooming dynamically on ride status change
   useEffect(() => {
     if (assignedDriverInfo?.status === "arrived") {
-      setMapZoom(18); // Street view level
+      setMapZoom(17);
       if (pickupCoords) setMapCenter(pickupCoords);
     } else if (assignedDriverInfo?.status === "accepted") {
-      setMapZoom(17);
+      setMapZoom(14);
     }
   }, [assignedDriverInfo?.status, pickupCoords]);
 
@@ -726,7 +697,7 @@ export default function PassengerBooking() {
             routeReq.waypoints = validStops;
           }
 
-          const routeRes1 = directionsService.route(routeReq, (result, status) => {
+          directionsService.route(routeReq, (result, status) => {
             if (status === window.google.maps.DirectionsStatus.OK && result) {
               // Draw the line
               const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
@@ -768,10 +739,9 @@ export default function PassengerBooking() {
                 setFareEstimate(Math.max(calcFare, fareConfig.minFare));
               }
             }
+          }).catch(() => {
+            // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
           });
-          if (routeRes1 && typeof routeRes1.catch === 'function') {
-             routeRes1.catch(() => {});
-          }
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise
         }
@@ -790,8 +760,7 @@ export default function PassengerBooking() {
         const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMapCenter(c);
         setPickupCoords(c);
-        const preferredZoom = parseInt(localStorage.getItem("passenger_preferred_booking_zoom") || "17", 10);
-        setMapZoom(preferredZoom);
+        setMapZoom(16);
       });
     }
   }, [pickupCoords, searchParams]);
@@ -1448,8 +1417,7 @@ export default function PassengerBooking() {
       const c = { lat: latitude, lng: longitude };
       setMapCenter(c);
       setPickupCoords(c);
-      const preferredZoom = parseInt(localStorage.getItem("passenger_preferred_booking_zoom") || "17", 10);
-      setMapZoom(preferredZoom);
+      setMapZoom(16);
 
       if (!window.google || !window.google.maps) {
         setIsDetecting(false);
@@ -2210,44 +2178,10 @@ export default function PassengerBooking() {
              // If driver is in progress, they are heading to the dropoff
              if (currentRideStatusRef.current === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
 
-             // Calculate distance in meters between driver and pickup for street view boarding
-             let isNearPickup = false;
-             if (pickupCoords) {
-               const R = 6371000; // Radius of Earth in meters
-               const dLat = (newPos.lat - pickupCoords.lat) * Math.PI / 180;
-               const dLng = (newPos.lng - pickupCoords.lng) * Math.PI / 180;
-               const a = 
-                 Math.sin(dLat/2) * Math.sin(dLat/2) +
-                 Math.cos(pickupCoords.lat * Math.PI / 180) * Math.cos(newPos.lat * Math.PI / 180) * 
-                 Math.sin(dLng/2) * Math.sin(dLng/2);
-               const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-               const distanceMeters = R * c;
-               if (distanceMeters < 400) {
-                 isNearPickup = true;
-               }
-             }
-
-             if (currentRideStatusRef.current === "arrived" || isNearPickup) {
-               // Arrived or very close to pickup - show street view level so passenger can see where driver is parked!
-               map.panTo(newPos);
-               const streetZoom = currentRideStatusRef.current === "arrived" ? 19 : 18;
-               map.setZoom(streetZoom);
-               setMapZoom(streetZoom);
+             if (isMapFullScreenRef.current) {
+                 map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
              } else {
-               if (isMapFullScreenRef.current) {
-                   map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
-               } else {
-                   map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
-               }
-               
-               // Clamps automatic fitBounds zoom to avoid extreme zoom-in single bound issues
-               setTimeout(() => {
-                 const currentZoom = map.getZoom();
-                 if (currentZoom && currentZoom > 18) {
-                    map.setZoom(17);
-                    setMapZoom(17);
-                 }
-               }, 100);
+                 map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
              }
           }
         }
@@ -2450,7 +2384,7 @@ export default function PassengerBooking() {
 
         try {
           const directionsService = new window.google.maps.DirectionsService();
-          const routeRes2 = directionsService.route({
+          directionsService.route({
             origin: new window.google.maps.LatLng(currentDriverPos.lat, currentDriverPos.lng),
             destination: new window.google.maps.LatLng(destinationCoords.lat, destinationCoords.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
@@ -2471,10 +2405,9 @@ export default function PassengerBooking() {
               setLiveEtaMins(Math.ceil(totalSecs / 60));
               setLiveEtaSeconds(totalSecs);
             }
+          }).catch(() => {
+            // Silently catch the unhandled promise rejection that Maps API throws for UNKNOWN_ERROR
           });
-          if (routeRes2 && typeof routeRes2.catch === 'function') {
-             routeRes2.catch(() => {});
-          }
         } catch (e: any) {
           // completely silence routing errors to avoid unhandled rejection/console noise
         }
@@ -2622,12 +2555,7 @@ export default function PassengerBooking() {
             onZoomChanged={() => {
               if (map) {
                 const z = map.getZoom();
-                if (z !== undefined && z !== mapZoom) {
-                  setMapZoom(z);
-                  if (step === "details" && (!pickupCoords || !dropoffCoords)) {
-                    localStorage.setItem("passenger_preferred_booking_zoom", String(z));
-                  }
-                }
+                if (z !== undefined && z !== mapZoom) setMapZoom(z);
               }
             }}
             onDragEnd={() => {
