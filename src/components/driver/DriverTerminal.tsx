@@ -967,19 +967,7 @@ export default function DriverTerminal() {
     );
   };
 
-  useEffect(() => {
-    if (!isAutoNavHeadUp) {
-      const timer = setTimeout(() => {
-        setIsAutoNavHeadUp(true);
-        setIsAutoNavPaused(false);
-        setDriverLocation(d => {
-          setMapCenter(d);
-          return d;
-        });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAutoNavHeadUp]);
+
 
   const formatInstructionForDisplay = (htmlInstruction: string) => {
     let formatted = htmlInstruction;
@@ -3718,6 +3706,7 @@ export default function DriverTerminal() {
                 directions?.routes?.[0]?.legs?.[currentLegIndex]
                   ?.steps?.[0] && (
                   <motion.div
+                    key="heads-up-navigation"
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
