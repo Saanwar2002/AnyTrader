@@ -972,19 +972,7 @@ export default function DriverTerminal() {
     );
   };
 
-  useEffect(() => {
-    if (!isAutoNavHeadUp) {
-      const timer = setTimeout(() => {
-        setIsAutoNavHeadUp(true);
-        setIsAutoNavPaused(false);
-        setDriverLocation(d => {
-          setMapCenter(d);
-          return d;
-        });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAutoNavHeadUp]);
+
 
   const formatInstructionForDisplay = (htmlInstruction: string) => {
     let formatted = htmlInstruction;
@@ -2638,6 +2626,8 @@ export default function DriverTerminal() {
     }
 
     setRideState("en_route_pickup");
+    setIsAutoNavHeadUp(true);
+    setIsAutoNavPaused(false);
     if (navigator.vibrate) navigator.vibrate(50);
   };
 
@@ -2919,6 +2909,14 @@ export default function DriverTerminal() {
     number | null
   >(null);
 
+  const [hasAutoResetOverview, setHasAutoResetOverview] = useState(false);
+
+  useEffect(() => {
+    if (rideState !== "en_route_pickup") {
+      setHasAutoResetOverview(false);
+    }
+  }, [rideState]);
+
   // Stop wait & abandonment logic
   const [isWaitingAtStop, setIsWaitingAtStop] = useState(false);
   const [stopWaitStartTime, setStopWaitStartTime] = useState<number | null>(
@@ -2951,13 +2949,26 @@ export default function DriverTerminal() {
         if (!pickupProximityStartTime) {
           setPickupProximityStartTime(Date.now());
         }
+        
+        // Auto reset head-up navigation and zoom in to street-level (zoom 18) to find exact passenger location
+        if (!hasAutoResetOverview) {
+          setHasAutoResetOverview(true);
+          setIsAutoNavHeadUp(true);
+          setIsAutoNavPaused(false);
+          setMapZoom(18);
+          if (mapInstance) {
+            mapInstance.setZoom(18);
+            mapInstance.panTo({ lat: activeRide.pickupLat, lng: activeRide.pickupLng });
+          }
+          toast.success("Approaching pickup. Camera reset to street-level (zoom 18) to find passenger exact location.");
+        }
       } else {
         setPickupProximityStartTime(null);
       }
     } else {
       setPickupProximityStartTime(null);
     }
-  }, [mapCenter, rideState, activeRide?.pickupLat, activeRide?.pickupLng]);
+  }, [mapCenter, rideState, activeRide?.pickupLat, activeRide?.pickupLng, hasAutoResetOverview, mapInstance]);
 
   useEffect(() => {
     if (pickupProximityStartTime) {
@@ -3270,6 +3281,16 @@ export default function DriverTerminal() {
     setWaitStartTime(Date.now());
     setElapsedWaitSeconds(0);
     setAccumulatedPaidWaitSeconds(0);
+
+    // Reset green button (auto-nav head-up) and set to street level zoom (18) to find exact passenger location
+    setIsAutoNavHeadUp(true);
+    setIsAutoNavPaused(false);
+    setMapZoom(18);
+    if (mapInstance && rideToUpdate?.pickupLat && rideToUpdate?.pickupLng) {
+      mapInstance.setZoom(18);
+      mapInstance.panTo({ lat: rideToUpdate.pickupLat, lng: rideToUpdate.pickupLng });
+    }
+
     if (rideToUpdate?.id && rideToUpdate?.isReal) {
       await updateDoc(doc(db, "ride_requests", rideToUpdate.id), {
         status: "arrived",
@@ -3348,6 +3369,10 @@ export default function DriverTerminal() {
 
   const handleCompleteRideConfirmed = async () => {
     setShowCompleteConfirm(false);
+
+    // Reset the green button (head-up navigation overview) for any upcoming/future rides
+    setIsAutoNavHeadUp(true);
+    setIsAutoNavPaused(false);
 
     if (
       isEarlyCompletion &&
@@ -6300,6 +6325,8 @@ export default function DriverTerminal() {
 
                     <button
                       onClick={async () => {
+                        setIsAutoNavHeadUp(true);
+                        setIsAutoNavPaused(false);
                         if (acceptedStackedRideOffer) {
                           setActiveRide(acceptedStackedRideOffer);
                           setRideState("en_route_pickup");
