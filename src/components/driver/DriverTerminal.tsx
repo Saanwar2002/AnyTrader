@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePortal } from "../../lib/PortalContext";
@@ -101,6 +101,11 @@ type RideState =
   | "review";
 
 const libraries: any[] = ["places"];
+
+const MAP_CONTAINER_STYLE: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+};
 
 const mapOptions: google.maps.MapOptions = {
   disableDefaultUI: false,
@@ -967,7 +972,19 @@ export default function DriverTerminal() {
     );
   };
 
-
+  useEffect(() => {
+    if (!isAutoNavHeadUp) {
+      const timer = setTimeout(() => {
+        setIsAutoNavHeadUp(true);
+        setIsAutoNavPaused(false);
+        setDriverLocation(d => {
+          setMapCenter(d);
+          return d;
+        });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isAutoNavHeadUp]);
 
   const formatInstructionForDisplay = (htmlInstruction: string) => {
     let formatted = htmlInstruction;
@@ -1593,9 +1610,7 @@ export default function DriverTerminal() {
         overviewHeading = isDestNorth ? 0 : 180;
       }
       setMapHeading(overviewHeading);
-      mapInstance.setHeading(overviewHeading);
       setMapTilt(0);
-      mapInstance.setTilt(0);
       return;
     }
 
@@ -1647,23 +1662,12 @@ export default function DriverTerminal() {
       }
       setMapHeading(targetBearing);
       setMapTilt(0); 
-      mapInstance.setHeading(0);
-      mapInstance.setTilt(0);
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
         const desiredZoom = getDynamicZoomForDistance(remainingDistance);
         
-        const [panLat, panLng] = getDynamicOffsetLatLng(
-          mapCenter[0],
-          mapCenter[1],
-          targetBearing || 0,
-          desiredZoom
-        );
-        mapInstance.panTo({ lat: panLat, lng: panLng });
-        
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
-          mapInstance.setZoom(desiredZoom);
         }
       }
     } else if (
@@ -1730,63 +1734,30 @@ export default function DriverTerminal() {
 
       setMapHeading(targetBearing);
       setMapTilt(0);
-      mapInstance.setHeading(0);
-      mapInstance.setTilt(0);
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
         const desiredZoom = getDynamicZoomForDistance(remainingDistance);
         
-        const [panLat, panLng] = getDynamicOffsetLatLng(
-          mapCenter[0],
-          mapCenter[1],
-          targetBearing || 0,
-          desiredZoom
-        );
-        mapInstance.panTo({ lat: panLat, lng: panLng });
-        
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
-          mapInstance.setZoom(desiredZoom);
         }
       }
     } else {
       if (driverHeading !== null && driverHeading !== undefined) {
         setMapHeading(driverHeading);
         setMapTilt(0);
-        mapInstance.setHeading(0);
-        mapInstance.setTilt(0);
         
         const desiredZoom = rideState === "waiting" ? 17 : 15;
-        const [panLat, panLng] = getDynamicOffsetLatLng(
-          mapCenter[0],
-          mapCenter[1],
-          driverHeading || 0,
-          desiredZoom
-        );
-        mapInstance.panTo({ lat: panLat, lng: panLng });
-        
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
-          mapInstance.setZoom(desiredZoom);
         }
       } else {
         setMapHeading(0);
         setMapTilt(0);
-        mapInstance.setHeading(0);
-        mapInstance.setTilt(0);
         
         const desiredZoom = rideState === "waiting" ? 17 : 15;
-        const [panLat, panLng] = getDynamicOffsetLatLng(
-          mapCenter[0],
-          mapCenter[1],
-          0,
-          desiredZoom
-        );
-        mapInstance.panTo({ lat: panLat, lng: panLng });
-        
         if (mapZoom !== desiredZoom) {
           setMapZoom(desiredZoom);
-          mapInstance.setZoom(desiredZoom);
         }
       }
     }
@@ -1803,6 +1774,7 @@ export default function DriverTerminal() {
     mapCenter,
     directions,
     currentLegIndex,
+    mapZoom,
   ]);
 
   // Listen to Taxi Command Settings (platform_config/rides)
@@ -3651,12 +3623,59 @@ export default function DriverTerminal() {
   const overflowX = (mapSize - windowSize.width) / 2;
   const overflowY = (mapSize - windowSize.height) / 2;
 
-  const mapPadding = {
+  const mapPadding = useMemo(() => ({
     top: 100 + overflowY,
     bottom: 350 + overflowY,
     left: 20 + overflowX,
     right: 20 + overflowX,
-  };
+  }), [overflowY, overflowX]);
+
+  // Stabilize map props to completely eliminate flickering/redraw triggers
+  const stabilizedCenter = useMemo(() => {
+    let lat: number;
+    let lng: number;
+    if (!isAutoNavPaused) {
+      if (isAutoNavHeadUp) {
+        const [offsetLat, offsetLng] = getDynamicOffsetLatLng(
+          driverLocation[0],
+          driverLocation[1],
+          mapHeading || 0,
+          mapZoom
+        );
+        lat = offsetLat;
+        lng = offsetLng;
+      } else {
+        lat = driverLocation[0];
+        lng = driverLocation[1];
+      }
+    } else {
+      lat = mapCenter[0];
+      lng = mapCenter[1];
+    }
+    return { lat, lng };
+  }, [
+    isAutoNavPaused,
+    isAutoNavHeadUp,
+    driverLocation[0],
+    driverLocation[1],
+    mapHeading,
+    mapZoom,
+    mapCenter[0],
+    mapCenter[1],
+  ]);
+
+  const stabilizedMapOptions = useMemo(() => ({
+    ...premiumMapOptions,
+    heading: mapHeading || 0,
+    gestureHandling: "greedy" as google.maps.GestureHandling,
+    draggable: true,
+    padding: mapPadding,
+  }), [mapHeading, mapPadding]);
+
+  const stabilizedDriverPosition = useMemo(() => ({
+    lat: driverLocation[0],
+    lng: driverLocation[1]
+  }), [driverLocation[0], driverLocation[1]]);
 
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white overflow-hidden relative flex flex-col font-sans min-h-0">
@@ -3706,7 +3725,6 @@ export default function DriverTerminal() {
                 directions?.routes?.[0]?.legs?.[currentLegIndex]
                   ?.steps?.[0] && (
                   <motion.div
-                    key="heads-up-navigation"
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
@@ -3799,7 +3817,7 @@ export default function DriverTerminal() {
                 }}
               >
                 <GoogleMap
-                  mapContainerStyle={{ width: "100%", height: "100%" }}
+                  mapContainerStyle={MAP_CONTAINER_STYLE}
                   onDragStart={handleMapInteraction}
                   onDragEnd={() => {
                     if (mapInstance) {
@@ -3809,21 +3827,7 @@ export default function DriverTerminal() {
                       }
                     }
                   }}
-                  center={(() => {
-                    if (!isAutoNavPaused) {
-                      if (isAutoNavHeadUp) {
-                        const [lat, lng] = getDynamicOffsetLatLng(
-                          driverLocation[0],
-                          driverLocation[1],
-                          mapHeading || 0,
-                          mapZoom
-                        );
-                        return { lat, lng };
-                      }
-                      return { lat: driverLocation[0], lng: driverLocation[1] };
-                    }
-                    return { lat: mapCenter[0], lng: mapCenter[1] };
-                  })()}
+                  center={stabilizedCenter}
                   zoom={mapZoom}
                   onZoomChanged={() => {
                     if (mapInstance) {
@@ -3839,17 +3843,11 @@ export default function DriverTerminal() {
                     setMapInstance(map);
                     setIsMapTilesLoaded(true);
                   }}
-                  options={{
-                    ...premiumMapOptions,
-                    heading: mapHeading || 0,
-                    gestureHandling: "greedy",
-                    draggable: true,
-                    padding: mapPadding,
-                  }}
+                  options={stabilizedMapOptions}
                 >
                   {isOnline && (
                     <OverlayViewF
-                      position={{ lat: driverLocation[0], lng: driverLocation[1] }}
+                      position={stabilizedDriverPosition}
                       mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                     >
                       <div
