@@ -105,7 +105,6 @@ const mapOptions: google.maps.MapOptions = {
 
 const premiumMapOptions: google.maps.MapOptions = {
   ...mapOptions,
-  mapId: "8d7f862551b8bb49989453ed",
   mapTypeId: "roadmap",
   styles: [
     { elementType: "geometry", stylers: [{ color: "#ebe3cd" }] },
@@ -185,6 +184,11 @@ const premiumMapOptions: google.maps.MapOptions = {
       featureType: "road.highway.controlled_access",
       elementType: "geometry.stroke",
       stylers: [{ color: "#db8555" }],
+    },
+    {
+      featureType: "road.local",
+      elementType: "geometry",
+      stylers: [{ color: "#ffffff" }],
     },
     {
       featureType: "road.local",
@@ -592,7 +596,7 @@ export default function PassengerBooking() {
   // Adjust map zooming dynamically on ride status change
   useEffect(() => {
     if (assignedDriverInfo?.status === "arrived") {
-      setMapZoom(17);
+      setMapZoom(18);
       if (pickupCoords) setMapCenter(pickupCoords);
     } else if (assignedDriverInfo?.status === "accepted") {
       setMapZoom(14);
@@ -2621,6 +2625,18 @@ export default function PassengerBooking() {
                }
             }}
           >
+           {assignedDriverInfo && (
+              <div className="absolute z-[100] bottom-2 left-0 right-0 flex items-center justify-center pointer-events-none">
+                <div className="flex border-2 border-slate-900 rounded-[6px] overflow-hidden shadow-md h-7 w-fit scale-110">
+                   <div className="bg-blue-700 w-[16px] flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-[6px] text-white font-bold leading-none">UK</span>
+                   </div>
+                   <div className="bg-[#ffcc00] px-3 flex items-center justify-center">
+                      <p className="font-mono font-black text-slate-900 text-[12px] tracking-widest uppercase">{assignedDriverInfo.plate || "SIM 123"}</p>
+                   </div>
+                </div>
+              </div>
+           )}
             {pickupCoords && (
               <>
                 <MarkerF 
