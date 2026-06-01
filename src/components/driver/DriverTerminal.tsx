@@ -4133,42 +4133,20 @@ export default function DriverTerminal() {
                   demandZones.map((zone, idx) => {
                     const rawIntensity = (zone.intensity || zone.type || "low").toLowerCase();
                     const intensity = rawIntensity === "moderate" ? "medium" : rawIntensity;
-                    const isFixed = zone.isFixedModel !== undefined ? zone.isFixedModel : (zone.extraFee ? true : false);
-                    
-                    let surgeRateText = "";
-                    if (isFixed) {
-                      const fee = zone.extraFee || 2.0;
-                      surgeRateText = `+£${fee.toFixed(2)}`;
-                    } else {
-                      const mult = zone.surgeMultiplier || (zone.multiplier ? parseFloat(zone.multiplier) : 1.4);
-                      surgeRateText = `${mult.toFixed(1)}x`;
-                    }
 
                     // Define theme values based on intensity level
                     let circleColor = "#3B82F6"; // Default low (blue)
-                    let badgeBg = "bg-slate-950/90";
-                    let accentColor = "text-blue-400";
-                    let borderColor = "border-blue-500/30";
-                    let dotColor = "bg-blue-500";
-                    let titleText = "Low Surge";
-                    let conditionDesc = "> 5m Wait or >= 1:1 Demand";
+                    let glowBg = "bg-blue-500/40";
+                    let iconTheme = "bg-blue-950/90 border-blue-500/50 text-blue-400";
 
                     if (intensity === "high") {
                       circleColor = "#FF3B30"; // Red
-                      badgeBg = "bg-red-950/90";
-                      accentColor = "text-red-400 animate-pulse";
-                      borderColor = "border-red-500/40";
-                      dotColor = "bg-red-500";
-                      titleText = "High Surge";
-                      conditionDesc = "> 20m Wait or > 3:1 Demand";
+                      glowBg = "bg-red-500/40";
+                      iconTheme = "bg-red-950/90 border-red-500/50 text-red-500";
                     } else if (intensity === "medium" || intensity === "moderate") {
                       circleColor = "#FF9500"; // Orange/Amber
-                      badgeBg = "bg-amber-950/90";
-                      accentColor = "text-amber-400";
-                      borderColor = "border-amber-500/40";
-                      dotColor = "bg-amber-500";
-                      titleText = "Medium Surge";
-                      conditionDesc = "> 10m Wait or > 2:1 Demand";
+                      glowBg = "bg-amber-500/50";
+                      iconTheme = "bg-amber-950/90 border-amber-500/50 text-amber-500";
                     }
 
                     return (
@@ -4187,42 +4165,20 @@ export default function DriverTerminal() {
                           position={{ lat: zone.lat, lng: zone.lng }}
                           mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                         >
-                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center">
-                            {/* Glass-styled premium HUD Badge card conforming to square with rounded edges guidelines */}
-                            <div className={cn(
-                              "backdrop-blur-md px-3 py-2 rounded-xl text-white shadow-2xl border flex flex-col gap-1 min-w-[140px] max-w-[170px]",
-                              badgeBg, borderColor
-                            )}>
-                              {/* Top row: Pulse indicator + Area text */}
-                              <div className="flex items-center gap-1.5 justify-between">
-                                <span className={cn("text-[8px] font-black tracking-widest uppercase truncate flex items-center gap-1", accentColor)}>
-                                  <span className="relative flex h-1.5 w-1.5">
-                                    <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", dotColor)}></span>
-                                    <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", dotColor)}></span>
-                                  </span>
-                                  {titleText}
-                                </span>
-                                {zone.maxWaitTimeMins && (
-                                  <span className="text-[7.5px] text-slate-300 font-bold bg-white/10 px-1 py-0.5 rounded">
-                                    {zone.maxWaitTimeMins}m Wait
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Highlight row: Big rate indicator */}
-                              <div className="flex items-center justify-between gap-1 border-t border-white/10 pt-1 mt-0.5">
-                                <span className="text-[9px] font-extrabold text-slate-300 truncate max-w-[90px]" title={zone.label}>
-                                  {zone.label || "Zone Center"}
-                                </span>
-                                <div className="flex items-center gap-0.5 px-2 py-0.5 bg-white text-black rounded-lg text-xs font-black shadow-sm">
-                                  <Zap className="w-3 h-3 text-amber-500 fill-amber-500 animate-bounce" />
-                                  <span>{surgeRateText}</span>
-                                </div>
-                              </div>
-
-                              {/* Explanatory subtitle trigger info line */}
-                              <div className="text-[7.5px] text-slate-400 font-semibold leading-none border-t border-white/5 pt-1 mt-0.5 flex items-center justify-between">
-                                <span className="truncate">{conditionDesc}</span>
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                            {/* Simple Pulsing Color-Coded Flash Icon */}
+                            <div className="relative flex items-center justify-center">
+                              {/* Pulse ripple circle */}
+                              <span className={cn(
+                                "absolute inline-flex h-8 w-8 rounded-full opacity-75 animate-ping",
+                                glowBg
+                              )}></span>
+                              {/* Inner Premium Glass Container with Flash Icon */}
+                              <div className={cn(
+                                "relative flex items-center justify-center h-7 w-7 rounded-xl border shadow-lg backdrop-blur-md transition-all justify-center items-center",
+                                iconTheme
+                              )}>
+                                <Zap className="w-3.5 h-3.5 fill-current animate-pulse" />
                               </div>
                             </div>
                           </div>
