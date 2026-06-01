@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../firebase";
 import { 
   BarChart3, Map, Car, ClipboardList, DollarSign, Star, 
   Tag, Users, UserCircle, Settings, ShieldCheck, MapPin, 
@@ -77,6 +79,21 @@ const SIDEBAR_ITEMS = [
 
 export default function AnyRollerAdmin() {
   const [activeScreen, setActiveScreen] = useState("dashboard");
+  const [pendingVehicleCount, setPendingVehicleCount] = useState(0);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
+      const allUsers = snapshot.docs.map(doc => doc.data());
+      const drivers = allUsers.filter((u: any) => 
+        u.role === "driver" || 
+        (u.memberId && u.memberId.startsWith("D-")) || 
+        u.isDriver
+      );
+      const pendingApprovalDrivers = drivers.filter((d: any) => d.requestedVehicleCategories && d.requestedVehicleCategories.length > 0);
+      setPendingVehicleCount(pendingApprovalDrivers.length);
+    });
+    return () => unsub();
+  }, []);
 
   return (
     <div className="flex h-full bg-slate-50 overflow-hidden text-sm">
@@ -108,7 +125,12 @@ export default function AnyRollerAdmin() {
                     }`}
                   >
                     <item.icon className="w-4 h-4" />
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {item.id === "vehicles" && pendingVehicleCount > 0 && (
+                      <span className="bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full flex items-center justify-center min-w-[20px] h-5 animate-pulse">
+                        {pendingVehicleCount}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

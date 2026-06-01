@@ -3,17 +3,17 @@ import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { 
   Search, Car, Shield, AlertTriangle, CheckCircle, 
-  X, UserCheck, Star, Activity, Settings, Plus, Info, Edit
+  X, UserCheck, Star, Activity, Info, Dog
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const CATEGORIES = [
-  { id: 'standard', name: 'Standard Car', icon: Car, desc: 'Everyday rides (4 seats)' },
+  { id: 'standard', name: 'Standard', icon: Car, desc: 'Everyday rides (4 seats)' },
   { id: 'executive', name: 'Executive', icon: Shield, desc: 'Premium vehicles for business' },
   { id: 'luxury', name: 'Luxury', icon: Star, desc: 'High-end luxury vehicles' },
-  { id: '6seater', name: '6-Seater XL', icon: UserCheck, desc: 'Large capacity vehicles' },
-  { id: '8seater', name: '8-Seater Minibus', icon: UserCheck, desc: 'Extra large capacity vehicles' },
-  { id: 'wav', name: 'Wheelchair Access', icon: Activity, desc: 'Fully accessible vehicles' },
+  { id: '6seater', name: '6-Seater', icon: UserCheck, desc: 'Large capacity vehicles' },
+  { id: '8seater', name: '8-Seater', icon: UserCheck, desc: 'Extra large capacity vehicles' },
+  { id: 'wav', name: 'WAV', icon: Activity, desc: 'Fully accessible vehicles' },
 ];
 
 export default function VehicleManagement() {
@@ -21,6 +21,7 @@ export default function VehicleManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "pending">("all");
+  const [selectedCatFilter, setSelectedCatFilter] = useState<string>("all");
   
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,7 +42,12 @@ export default function VehicleManagement() {
     return () => unsubUsers();
   }, []);
 
-  const handleSaveCategories = async (driverId: string, updatedCategories: string[], clearRequested: string[]) => {
+  const changeFilterMode = (mode: "all" | "pending") => {
+    setFilterMode(mode);
+    setSelectedCatFilter("all");
+  };
+
+  const handleSaveCategories = async (driverId: string, updatedCategories: string[], clearRequested: string[], isPetFriendly: boolean) => {
     setIsSaving(true);
     try {
       const driver = users.find(u => u.id === driverId);
@@ -50,14 +56,36 @@ export default function VehicleManagement() {
 
       await updateDoc(doc(db, "users", driverId), {
         vehicleCategories: updatedCategories,
-        requestedVehicleCategories: newRequested
+        requestedVehicleCategories: newRequested,
+        isPetFriendly: isPetFriendly
       });
       setSelectedDriver(null);
     } catch (err) {
-      console.error("Failed to update vehicle categories", err);
+      console.error("Failed to update vehicle details", err);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const getCategoryCount = (catId: string) => {
+    const baseDrivers = users.filter(driver => {
+      if (filterMode === "pending") {
+        return driver.requestedVehicleCategories && driver.requestedVehicleCategories.length > 0;
+      }
+      return true;
+    });
+
+    if (catId === "all") return baseDrivers.length;
+    if (catId === "pet_friendly") return baseDrivers.filter(u => u.isPetFriendly).length;
+    return baseDrivers.filter(driver => {
+      if (filterMode === "pending") {
+        const requested = driver.requestedVehicleCategories || [];
+        return requested.includes(catId);
+      } else {
+        const driverCats = driver.vehicleCategories || [driver.vehicleCategory || "standard"];
+        return driverCats.includes(catId);
+      }
+    }).length;
   };
 
   const filteredDrivers = users.filter(driver => {
@@ -65,6 +93,20 @@ export default function VehicleManagement() {
     const hasPending = driver.requestedVehicleCategories && driver.requestedVehicleCategories.length > 0;
     
     if (filterMode === "pending" && !hasPending) return false;
+
+    if (selectedCatFilter !== "all") {
+      if (selectedCatFilter === "pet_friendly") {
+        if (!driver.isPetFriendly) return false;
+      } else {
+        if (filterMode === "pending") {
+          const requested = driver.requestedVehicleCategories || [];
+          if (!requested.includes(selectedCatFilter)) return false;
+        } else {
+          const driverCats = driver.vehicleCategories || [driver.vehicleCategory || "standard"];
+          if (!driverCats.includes(selectedCatFilter)) return false;
+        }
+      }
+    }
 
     return (
       driver.name?.toLowerCase().includes(searchLower) ||
@@ -92,7 +134,7 @@ export default function VehicleManagement() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex bg-slate-100 p-1 rounded-xl border border-black/5">
             <button
-              onClick={() => setFilterMode("all")}
+              onClick={() => changeFilterMode("all")}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 filterMode === "all" ? "bg-white text-slate-900 shadow-sm border border-black/10" : "text-slate-500 hover:text-slate-700"
               }`}
@@ -100,7 +142,7 @@ export default function VehicleManagement() {
               All Vehicles
             </button>
             <button
-              onClick={() => setFilterMode("pending")}
+              onClick={() => changeFilterMode("pending")}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                 filterMode === "pending" ? "bg-white text-amber-700 shadow-sm border border-black/10" : "text-slate-500 hover:text-slate-700"
               }`}
@@ -124,6 +166,52 @@ export default function VehicleManagement() {
         </div>
       </div>
 
+      {/* Category Pills Row with Total Numbers */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-1 pt-1">
+        <button
+          onClick={() => setSelectedCatFilter("all")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 font-black text-[10px] uppercase tracking-tight rounded-lg transition-all border shrink-0 ${
+            selectedCatFilter === "all"
+              ? "bg-black text-white border-black"
+              : "bg-white text-black border-black hover:bg-slate-50"
+          }`}
+        >
+          <Car className="w-3.5 h-3.5" />
+          ALL ({getCategoryCount("all")})
+        </button>
+
+        {CATEGORIES.map((cat) => {
+          const Icon = cat.icon;
+          const count = getCategoryCount(cat.id);
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCatFilter(cat.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 font-black text-[10px] uppercase tracking-tight rounded-lg transition-all border shrink-0 ${
+                selectedCatFilter === cat.id
+                  ? "bg-black text-white border-black"
+                  : "bg-white text-black border-black hover:bg-slate-50"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {cat.name} ({count})
+            </button>
+          );
+        })}
+
+        <button
+          onClick={() => setSelectedCatFilter("pet_friendly")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 font-black text-[10px] uppercase tracking-tight rounded-lg transition-all border shrink-0 ${
+            selectedCatFilter === "pet_friendly"
+              ? "bg-black text-white border-black"
+              : "bg-white text-black border-black hover:bg-slate-50"
+          }`}
+        >
+          <Dog className="w-3.5 h-3.5 text-emerald-600" />
+          Pet Friendly ({getCategoryCount("pet_friendly")})
+        </button>
+      </div>
+
       {loading ? (
         <div className="p-12 flex justify-center">
           <Activity className="w-8 h-8 text-black animate-spin" />
@@ -137,6 +225,7 @@ export default function VehicleManagement() {
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest">Driver</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest">Vehicle Details</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest">Approved Classes</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest">Pet Friendly</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-500 tracking-widest text-right">Action</th>
                 </tr>
               </thead>
@@ -197,6 +286,18 @@ export default function VehicleManagement() {
                           </div>
                         )}
                       </td>
+
+                      <td className="px-6 py-4">
+                        {driver.isPetFriendly ? (
+                          <span className="text-[10px] font-black px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md inline-flex items-center gap-1 uppercase">
+                            <Dog className="w-3.5 h-3.5 text-emerald-600 animate-pulse" /> Pet Friendly
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-1 bg-slate-50 text-slate-400 border border-slate-200 rounded-md inline-flex items-center gap-1 uppercase">
+                            No
+                          </span>
+                        )}
+                      </td>
                       
                       <td className="px-6 py-4 text-right">
                         <button
@@ -215,7 +316,7 @@ export default function VehicleManagement() {
                 
                 {filteredDrivers.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-12 text-center text-slate-400">
+                    <td colSpan={5} className="py-12 text-center text-slate-400">
                       <Car className="w-8 h-8 mx-auto mb-3 opacity-50" />
                       <p className="text-sm font-medium">No vehicles found matching criteria.</p>
                     </td>
@@ -242,11 +343,12 @@ export default function VehicleManagement() {
   );
 }
 
-function VehicleClassModal({ driver, onClose, onSave, isSaving }: { driver: any, onClose: () => void, onSave: (driverId: string, updatedCategories: string[], clearRequested: string[]) => void, isSaving: boolean }) {
+function VehicleClassModal({ driver, onClose, onSave, isSaving }: { driver: any, onClose: () => void, onSave: (driverId: string, updatedCategories: string[], clearRequested: string[], isPetFriendly: boolean) => void, isSaving: boolean }) {
   const currentCats = driver.vehicleCategories || [driver.vehicleCategory || "standard"];
   const pendingCats = driver.requestedVehicleCategories || [];
   
   const [localCategories, setLocalCategories] = useState<string[]>(currentCats);
+  const [localPetFriendly, setLocalPetFriendly] = useState<boolean>(!!driver.isPetFriendly);
 
   const toggleCategory = (catId: string) => {
     if (localCategories.includes(catId)) {
@@ -257,10 +359,7 @@ function VehicleClassModal({ driver, onClose, onSave, isSaving }: { driver: any,
   };
 
   const handleSave = () => {
-    // When saving, we clear all categories from the pending list that the admin has reviewed
-    // Even if rejected (toggled off), it's considered reviewed and removed from pending.
-    // So we'll clear ALL pending categories.
-    onSave(driver.id, localCategories, pendingCats);
+    onSave(driver.id, localCategories, pendingCats, localPetFriendly);
   };
 
   return (
@@ -281,8 +380,8 @@ function VehicleClassModal({ driver, onClose, onSave, isSaving }: { driver: any,
           </button>
         </div>
 
-        <div className="p-6">
-          <div className="flex bg-slate-50 rounded-2xl p-4 border border-black/5 items-center gap-4 mb-8">
+        <div className="p-6 max-h-[70vh] overflow-y-auto">
+          <div className="flex bg-slate-50 rounded-2xl p-4 border border-black/5 items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-white rounded-xl border border-black/10 flex items-center justify-center shadow-sm">
               <Car className="w-8 h-8 text-black/50" />
             </div>
@@ -292,6 +391,32 @@ function VehicleClassModal({ driver, onClose, onSave, isSaving }: { driver: any,
                 {driver.vehicleRegistration || driver.plate || 'NO PLATE'}
               </p>
               <p className="text-xs text-slate-400 mt-1">Driver: {driver.name}</p>
+            </div>
+          </div>
+
+          {/* Pet Friendly Selection Card */}
+          <div className="mb-6">
+            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1 mb-2">Pet Settings</h4>
+            <div 
+              onClick={() => setLocalPetFriendly(!localPetFriendly)}
+              className={`flex items-start gap-4 p-4 rounded-2xl border transition-all text-left relative overflow-hidden cursor-pointer ${
+                localPetFriendly 
+                  ? 'border-emerald-500 bg-emerald-50/30' 
+                  : 'border-black/10 bg-white hover:border-black/30'
+              }`}
+            >
+              <div className={`p-2 rounded-lg border flex-shrink-0 ${localPetFriendly ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-50 text-slate-400 border-black/10'}`}>
+                <Dog className="w-5 h-5" />
+              </div>
+              <div className="pr-12">
+                <p className={`font-bold ${localPetFriendly ? 'text-emerald-900' : 'text-slate-700'}`}>Allow Pet Friendly Jobs</p>
+                <p className="text-xs text-slate-500 mt-0.5">Allow this vehicle to accept passengers traveling with pets (+£3 fare bonus)</p>
+              </div>
+              <div className="absolute top-1/2 -translate-y-1/2 right-4">
+                <div className={`w-10 h-6 rounded-full transition-colors relative shadow-inner shrink-0 ${localPetFriendly ? 'bg-emerald-600' : 'bg-slate-200'}`}>
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${localPetFriendly ? 'translate-x-5' : 'translate-x-1'}`} />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -341,7 +466,7 @@ function VehicleClassModal({ driver, onClose, onSave, isSaving }: { driver: any,
             </div>
           </div>
 
-          <div className="mt-8 bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3 text-blue-800 text-xs font-medium">
+          <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3 text-blue-800 text-xs font-medium">
             <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <p>
               Executive and Luxury vehicles require higher standards of maintenance, interior quality, and year of manufacture. 
@@ -363,11 +488,10 @@ function VehicleClassModal({ driver, onClose, onSave, isSaving }: { driver: any,
             className="px-6 py-2.5 rounded-xl font-bold text-sm bg-black text-white hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSaving ? <Activity className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-            Save & Update Classes
+            Save & Update Details
           </button>
         </div>
       </motion.div>
     </div>
   );
 }
-
