@@ -3,7 +3,8 @@ import {
   BarChart3, Map, Car, ClipboardList, DollarSign, Star, 
   Tag, Users, UserCircle, Settings, ShieldCheck, MapPin, 
   Activity, Calendar, ShieldAlert, Ticket, StarHalf, 
-  Megaphone, Gift, Link, Database, Lock, Search, Bell, Award
+  Megaphone, Gift, Link, Database, Lock, Search, Bell, Award,
+  Building2
 } from "lucide-react";
 import RidesCommandCenter from "./RidesCommandCenter";
 import AnyRollerDashboard from "./anyroller/AnyRollerDashboard";
@@ -17,6 +18,7 @@ import DispatchEngine from "./anyroller/DispatchEngine";
 import ZonesGeofences from "./anyroller/ZonesGeofences";
 import LiveMap from "./anyroller/LiveMap";
 import SubscriptionManager from "./anyroller/SubscriptionManager";
+import CorporatePortal from "./anyroller/CorporatePortal";
 
 import DriversList from "./anyroller/DriversList";
 import RidersList from "./anyroller/RidersList";
@@ -45,7 +47,8 @@ const SIDEBAR_ITEMS = [
   { id: "payments", label: "Payments & Revenue", icon: DollarSign, category: "Financials" },
   { id: "priority", label: "Priority Settings", icon: Star, category: "Financials" },
   { id: "pricing", label: "Pricing & Fares", icon: Tag, category: "Financials" },
-  { id: "subscriptions", label: "Subscriptions & B2B", icon: StarHalf, category: "Financials" },
+  { id: "subscriptions", label: "Subscriptions", icon: StarHalf, category: "Financials" },
+  { id: "corporate", label: "Corporate (B2B)", icon: Building2, category: "Financials" },
   { id: "tiers", label: "Tiers, Perks & Privileges", icon: Star, category: "Financials" },
 
   { id: "drivers", label: "Drivers", icon: Users, category: "Users" },
@@ -155,6 +158,8 @@ export default function AnyRollerAdmin() {
              <PrioritySettings />
            ) : activeScreen === "subscriptions" ? (
              <SubscriptionManager />
+           ) : activeScreen === "corporate" ? (
+             <CorporatePortal />
            ) : activeScreen === "tiers" ? (
              <div className="p-8 h-full overflow-y-auto">
                <div className="mb-6 space-y-1">

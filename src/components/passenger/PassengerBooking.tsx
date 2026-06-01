@@ -502,7 +502,15 @@ export default function PassengerBooking() {
     commissionRate: 0.12,
     autoDispatchEnabled: true,
     dispatchRadiusMiles: 15,
-    dispatchTimeoutSeconds: 15
+    dispatchTimeoutSeconds: 15,
+    vehicleMultipliers: {
+      standard: 1.0,
+      executive: 1.5,
+      luxury: 2.2,
+      '6seater': 1.4,
+      '8seater': 2.0,
+      wav: 2.5
+    } as Record<string, number>
   });
 
   const [liveRouteLine, setLiveRouteLine] = useState<{lat: number, lng: number}[]>([]);
@@ -890,14 +898,16 @@ export default function PassengerBooking() {
     const unsub = onSnapshot(doc(db, "platform_config", "rides"), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        setFareConfig({
+        setFareConfig(prev => ({
+          ...prev,
           baseFare: Number(data.baseFare) || 3.5,
           distanceRate: Number(data.distanceRate) || 1.3,
           timeRate: Number(data.timeRate) || 0.15,
           waitRatePerMinute: Number(data.waitRatePerMinute) || 0.25,
           minFare: Number(data.minFare) || 5.0,
           commissionRate: Number(data.commissionRate) || 0.12,
-        });
+          vehicleMultipliers: data.vehicleMultipliers || prev.vehicleMultipliers
+        }));
       }
     }, (err) => console.error("onSnapshot ERROR platform_config/rides 2:", err));
     return () => unsub();
@@ -1462,8 +1472,10 @@ export default function PassengerBooking() {
   const [passengerPos, setPassengerPos] = useState<{lat: number, lng: number} | null>(null);
 
   const getComputedFare = (catId: string) => {
-    const category = CAR_CATEGORIES.find(c => c.id === catId);
-    const catMultiplier = category?.multiplier || 1.0;
+    const defaultMultipliers: Record<string, number> = {
+      standard: 1.0, executive: 1.5, luxury: 2.2, '6seater': 1.4, '8seater': 2.0, wav: 2.5
+    };
+    const catMultiplier = fareConfig.vehicleMultipliers?.[catId] || defaultMultipliers[catId] || 1.0;
     const base = fareEstimate || 5.0;
     let finalFare = Math.max(base * catMultiplier, fareConfig.minFare * catMultiplier);
     
@@ -3410,7 +3422,8 @@ export default function PassengerBooking() {
                         {/* Fare Summary */}
                         {(() => {
                            const base = Math.max(fareEstimate || 5.0, fareConfig.minFare);
-                           const catMultiplier = CAR_CATEGORIES.find(c => c.id === selectedCategory)?.multiplier || 1.0;
+                           const defaultMultipliers: Record<string, number> = { standard: 1.0, executive: 1.5, luxury: 2.2, '6seater': 1.4, '8seater': 2.0, wav: 2.5 };
+                           const catMultiplier = fareConfig.vehicleMultipliers?.[selectedCategory] || defaultMultipliers[selectedCategory] || 1.0;
                            const vehicleSubtotal = Math.max((fareEstimate || 5.0) * catMultiplier, fareConfig.minFare * catMultiplier);
                            const vehicleExtra = vehicleSubtotal - base;
                            const finalFare = getComputedFare(selectedCategory);
@@ -4391,7 +4404,8 @@ export default function PassengerBooking() {
                      
                      {(() => {
                         const base = Math.max(fareEstimate || 5.0, fareConfig.minFare);
-                        const catMultiplier = CAR_CATEGORIES.find(c => c.id === selectedCategory)?.multiplier || 1.0;
+                        const defaultMultipliers: Record<string, number> = { standard: 1.0, executive: 1.5, luxury: 2.2, '6seater': 1.4, '8seater': 2.0, wav: 2.5 };
+                        const catMultiplier = fareConfig.vehicleMultipliers?.[selectedCategory] || defaultMultipliers[selectedCategory] || 1.0;
                         const vehicleSubtotal = Math.max((fareEstimate || 5.0) * catMultiplier, fareConfig.minFare * catMultiplier);
                         const vehicleExtra = vehicleSubtotal - base;
                         const finalFare = getComputedFare(selectedCategory);
