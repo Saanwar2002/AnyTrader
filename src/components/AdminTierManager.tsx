@@ -6,13 +6,20 @@ import { cn } from "@/src/lib/utils";
 
 interface Tier {
   price: number;
-  maxQuotes: number;
-  maxAcceptedQuotes: number;
   commission: number;
-  leadFee: number;
   description: string;
   features: string[];
   color: string;
+  
+  // Trade specific
+  maxQuotes?: number;
+  maxAcceptedQuotes?: number;
+  leadFee?: number;
+
+  // Ride specific
+  destinationFilters?: number;
+  priorityDispatch?: number;
+  advanceBookingDays?: number;
 }
 
 interface EditingState {
@@ -76,14 +83,21 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
 
     const newTier: Tier = {
       price: 0,
-      maxQuotes: 10,
-      maxAcceptedQuotes: 2,
       commission: 0.1,
-      leadFee: 0,
       description: "New tier description",
       features: ["Feature 1"],
       color: "bg-white border-black"
     };
+
+    if (model === 'one_off_trades') {
+      newTier.maxQuotes = 10;
+      newTier.maxAcceptedQuotes = 2;
+      newTier.leadFee = 0;
+    } else if (model === 'on_demand_transport') {
+      newTier.destinationFilters = 2;
+      newTier.advanceBookingDays = 7;
+      newTier.priorityDispatch = 0;
+    }
 
     setConfig((prev: any) => ({
       ...prev,
@@ -148,7 +162,8 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                 },
                 on_demand_transport: {
                   tiers: {
-                    standard: { price: 0, maxQuotes: 9999, maxAcceptedQuotes: 9999, commission: 0.12, leadFee: 0, description: "Standard Taxi", features: ["Unlimited work"], color: "bg-green-50 border-green-200" }
+                    standard: { price: 0, commission: 0.12, description: "Standard Taxi", destinationFilters: 2, advanceBookingDays: 7, priorityDispatch: 0, features: ["Unlimited work", "Standard Dispatch"], color: "bg-green-50 border-green-200" },
+                    gold: { price: 49.99, commission: 0.10, description: "Priority Driver", destinationFilters: 4, advanceBookingDays: 14, priorityDispatch: 50, features: ["Priority Airport Queue", "Higher Earning Potential"], color: "bg-amber-50 border-amber-200" },
                   }
                 },
                 homeowners: {
@@ -231,18 +246,82 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                           />
                         </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-400">Max Quotes</label>
-                        <input 
-                          type="number" 
-                          value={editing.data.maxQuotes ?? 0} 
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            setEditing({...editing, data: {...editing.data, maxQuotes: isNaN(val) ? 0 : val}});
-                          }}
-                          className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
+                      
+                      {model === 'one_off_trades' && (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-slate-400">Max Quotes</label>
+                              <input 
+                                type="number" 
+                                value={editing.data.maxQuotes ?? 0} 
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  setEditing({...editing, data: {...editing.data, maxQuotes: isNaN(val) ? 0 : val}});
+                                }}
+                                className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-slate-400">Lead Fee (£)</label>
+                              <input 
+                                type="number" 
+                                step="0.1"
+                                value={editing.data.leadFee ?? 0} 
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  setEditing({...editing, data: {...editing.data, leadFee: isNaN(val) ? 0 : val}});
+                                }}
+                                className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {model === 'on_demand_transport' && (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-slate-400">Dest. Filters / Day</label>
+                              <input 
+                                type="number" 
+                                value={editing.data.destinationFilters ?? 0} 
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  setEditing({...editing, data: {...editing.data, destinationFilters: isNaN(val) ? 0 : val}});
+                                }}
+                                className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-slate-400">Adv. Booking (Days)</label>
+                              <input 
+                                type="number" 
+                                value={editing.data.advanceBookingDays ?? 0} 
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  setEditing({...editing, data: {...editing.data, advanceBookingDays: isNaN(val) ? 0 : val}});
+                                }}
+                                className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold uppercase text-slate-400">Priority Dispatch Level (0-100)</label>
+                            <input 
+                              type="number" 
+                              value={editing.data.priorityDispatch ?? 0} 
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setEditing({...editing, data: {...editing.data, priorityDispatch: isNaN(val) ? 0 : val}});
+                              }}
+                              className="w-full text-sm border-b border-black py-1 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                        </>
+                      )}
+
                       <div>
                         <label className="text-[10px] font-bold uppercase text-slate-400">Features (comma separated)</label>
                         <textarea 
@@ -294,15 +373,37 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
                       <span className="text-sm font-medium text-slate-500">Commission</span>
                       <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.commission * 100}%</span>
                     </div>
-                    <div className="flex justify-between items-center py-2.5 border-b border-black/50">
-                      <span className="text-sm font-medium text-slate-500">Job Quotes</span>
-                      <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.maxQuotes >= 9999 ? 'Unlimited' : tier.maxQuotes}</span>
-                    </div>
-                    {tier.leadFee !== undefined && tier.leadFee > 0 && (
-                      <div className="flex justify-between items-center py-2.5 border-b border-black/50">
-                        <span className="text-sm font-medium text-slate-500">Lead Fee</span>
-                        <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">£{tier.leadFee}</span>
-                      </div>
+
+                    {model === 'one_off_trades' && (
+                      <>
+                        <div className="flex justify-between items-center py-2.5 border-b border-black/50">
+                          <span className="text-sm font-medium text-slate-500">Job Quotes</span>
+                          <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{(tier.maxQuotes ?? 0) >= 9999 ? 'Unlimited' : tier.maxQuotes}</span>
+                        </div>
+                        {tier.leadFee !== undefined && tier.leadFee > 0 && (
+                          <div className="flex justify-between items-center py-2.5 border-b border-black/50">
+                            <span className="text-sm font-medium text-slate-500">Lead Fee</span>
+                            <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">£{tier.leadFee}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {model === 'on_demand_transport' && (
+                      <>
+                        <div className="flex justify-between items-center py-2.5 border-b border-black/50">
+                          <span className="text-sm font-medium text-slate-500">Dest. Filters</span>
+                          <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.destinationFilters ?? 0} / Day</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2.5 border-b border-black/50">
+                          <span className="text-sm font-medium text-slate-500">Adv. Booking</span>
+                          <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">{tier.advanceBookingDays ?? 0} Days</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2.5 border-b border-black/50">
+                          <span className="text-sm font-medium text-slate-500">Priority Dispatch</span>
+                          <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full">Lvl {tier.priorityDispatch ?? 0}</span>
+                        </div>
+                      </>
                     )}
                   </div>
 
