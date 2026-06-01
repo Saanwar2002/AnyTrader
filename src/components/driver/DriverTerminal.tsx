@@ -819,71 +819,6 @@ export default function DriverTerminal() {
     return [lat + latOffset, lng];
   };
 
-  const getOverviewMapConfig = (
-    driverLat: number,
-    driverLng: number,
-    destLat: number,
-    destLng: number
-  ): { center: [number, number]; zoom: number; heading: number } => {
-    const latDiff = Math.max(0.001, Math.abs(destLat - driverLat));
-    const lngDiff = Math.max(0.0012, Math.abs(destLng - driverLng));
-    
-    const latMeters = latDiff * 111111;
-    const lngMeters = lngDiff * 111111 * Math.cos((driverLat * Math.PI) / 180);
-    
-    const width = windowSize.width || window.innerWidth || 375;
-    const height = windowSize.height || window.innerHeight || 800;
-    
-    const pixelWidthLimit = Math.max(150, width - 120);
-    const pixelHeightLimit = Math.max(150, height - 280);
-    
-    const mppX = lngMeters / pixelWidthLimit;
-    const mppY = latMeters / pixelHeightLimit;
-    const requiredMpp = Math.max(mppX, mppY, 0.1);
-    
-    let zoom = Math.log2((156543.03392 * Math.cos((driverLat * Math.PI) / 180)) / requiredMpp);
-    zoom = Math.max(11, Math.min(18, zoom)) - 0.45;
-    
-    const isDestNorth = destLat > driverLat;
-    const heading = isDestNorth ? 0 : 180;
-    
-    const targetX = width / 2;
-    const targetY = height - 240;
-    
-    const centerX = width / 2;
-    const centerY = height / 2;
-    
-    const shiftX_pixels = centerX - targetX; 
-    const shiftY_pixels = centerY - targetY; 
-    
-    const metersPerPixel = (156543.03392 * Math.cos((driverLat * Math.PI) / 180)) / Math.pow(2, zoom);
-    
-    const shiftX_meters = shiftX_pixels * metersPerPixel;
-    const shiftY_meters = -shiftY_pixels * metersPerPixel;
-    
-    const rad = (heading * Math.PI) / 180;
-    const cosVal = Math.cos(rad);
-    const sinVal = Math.sin(rad);
-    
-    const rotX = shiftX_meters * cosVal - shiftY_meters * sinVal;
-    const rotY = shiftX_meters * sinVal + shiftY_meters * cosVal;
-    
-    const metersToLatitude = 1 / 111111;
-    const metersToLongitude = 1 / (111111 * Math.cos((driverLat * Math.PI) / 180));
-    
-    const latOffset = rotY * metersToLatitude;
-    const lngOffset = rotX * metersToLongitude;
-    
-    const targetCenterLat = driverLat + latOffset;
-    const targetCenterLng = driverLng + lngOffset;
-    
-    return {
-      center: [targetCenterLat, targetCenterLng],
-      zoom,
-      heading
-    };
-  };
-
   useEffect(() => {
     mapCenterRef.current = mapCenter;
   }, [mapCenter]);
@@ -1669,27 +1604,6 @@ export default function DriverTerminal() {
 
     if (isAutoNavPaused) {
       return; // Do nothing if paused, leave map at whatever user set
-    }
-
-    if (
-      (rideState === "en_route_pickup" || rideState === "in_progress") &&
-      activeRide &&
-      isAutoNavHeadUp
-    ) {
-      const destLat = rideState === "en_route_pickup" ? activeRide.pickupLat : activeRide.dropoffLat;
-      const destLng = rideState === "en_route_pickup" ? activeRide.pickupLng : activeRide.dropoffLng;
-      if (destLat && destLng) {
-        const config = getOverviewMapConfig(
-          driverLocationRef.current[0],
-          driverLocationRef.current[1],
-          destLat,
-          destLng
-        );
-        setMapHeading(config.heading);
-        setMapZoom(config.zoom);
-        setMapTilt(0);
-        return;
-      }
     }
 
     if (
@@ -3746,27 +3660,7 @@ export default function DriverTerminal() {
     let lat: number;
     let lng: number;
     if (!isAutoNavPaused) {
-      if (
-        (rideState === "en_route_pickup" || rideState === "in_progress") &&
-        activeRide &&
-        isAutoNavHeadUp
-      ) {
-        const destLat = rideState === "en_route_pickup" ? activeRide.pickupLat : activeRide.dropoffLat;
-        const destLng = rideState === "en_route_pickup" ? activeRide.pickupLng : activeRide.dropoffLng;
-        if (destLat && destLng) {
-          const config = getOverviewMapConfig(
-            driverLocation[0],
-            driverLocation[1],
-            destLat,
-            destLng
-          );
-          lat = config.center[0];
-          lng = config.center[1];
-        } else {
-          lat = driverLocation[0];
-          lng = driverLocation[1];
-        }
-      } else if (isAutoNavHeadUp) {
+      if (isAutoNavHeadUp) {
         const [offsetLat, offsetLng] = getDynamicOffsetLatLng(
           driverLocation[0],
           driverLocation[1],
@@ -3787,8 +3681,6 @@ export default function DriverTerminal() {
   }, [
     isAutoNavPaused,
     isAutoNavHeadUp,
-    rideState,
-    activeRide,
     driverLocation[0],
     driverLocation[1],
     mapHeading,
@@ -3800,7 +3692,7 @@ export default function DriverTerminal() {
   const stabilizedMapOptions = useMemo(() => ({
     ...premiumMapOptions,
     heading: mapHeading || 0,
-    gestureHandling: "greedy" as any,
+    gestureHandling: "greedy" as google.maps.GestureHandling,
     draggable: true,
     padding: mapPadding,
   }), [mapHeading, mapPadding]);
@@ -3816,30 +3708,6 @@ export default function DriverTerminal() {
       {/* Full bleed container */}
       {activeTab === "home" && (
         <>
-          {/* 1A. Floating Drop-off Address Card at the Top of Map (Navigation Overview Mode) */}
-          {rideState === "in_progress" && activeRide && isAutoNavHeadUp && (
-            <div className="absolute top-[calc(108px+env(safe-area-inset-top))] left-4 right-[58px] z-[120] pointer-events-auto max-w-sm">
-              <div className="bg-[#1A1A1E] border border-white/20 p-3 rounded-lg shadow-[0_10px_25px_rgba(0,0,0,0.5)] flex items-start gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#FF3B30]/15 flex items-center justify-center shrink-0 border border-[#FF3B30]/30 mt-0.5">
-                  <MapPin className="w-4 h-4 text-[#FF3B30] fill-[#FF3B30]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-black uppercase text-[#FF3B30] tracking-widest leading-none mb-1">
-                    {currentLegIndex < (activeRide?.stops?.length || 0) ? `Stop ${currentLegIndex + 1}` : "Drop-off Location"}
-                  </p>
-                  <p className="text-[13px] font-bold text-white leading-tight line-clamp-2">
-                    {currentLegIndex < (activeRide?.stops?.length || 0)
-                      ? activeRide.stops[currentLegIndex].address
-                      : activeRide?.dropoffAddress || "Bristol Temple Meads"}
-                  </p>
-                  <p className="text-[11px] font-semibold text-yellow-500 mt-1">
-                    {activeRide?.distanceMiles ? `${activeRide.distanceMiles.toFixed(1)} mi` : "5.0 mi"} • {activeRide?.durationMinutes || 12} min remaining
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Simulation Trigger (Dev Only) */}
           <div className="absolute top-[calc(48px+env(safe-area-inset-top))] left-4 z-[150] flex flex-col items-start gap-2 pointer-events-auto">
             <button
