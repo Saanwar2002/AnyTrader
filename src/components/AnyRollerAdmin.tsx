@@ -80,6 +80,7 @@ const SIDEBAR_ITEMS = [
 export default function AnyRollerAdmin() {
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [pendingVehicleCount, setPendingVehicleCount] = useState(0);
+  const [pendingDocCount, setPendingDocCount] = useState(0);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
@@ -91,6 +92,19 @@ export default function AnyRollerAdmin() {
       );
       const pendingApprovalDrivers = drivers.filter((d: any) => d.requestedVehicleCategories && d.requestedVehicleCategories.length > 0);
       setPendingVehicleCount(pendingApprovalDrivers.length);
+
+      // Document compliance count
+      let docCount = 0;
+      allUsers.forEach((u: any) => {
+        if (u.verificationDocs && Array.isArray(u.verificationDocs)) {
+          u.verificationDocs.forEach((d: any) => {
+            if (d.status === "pending") {
+              docCount++;
+            }
+          });
+        }
+      });
+      setPendingDocCount(docCount);
     });
     return () => unsub();
   }, []);
@@ -129,6 +143,11 @@ export default function AnyRollerAdmin() {
                     {item.id === "vehicles" && pendingVehicleCount > 0 && (
                       <span className="bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full flex items-center justify-center min-w-[20px] h-5 animate-pulse">
                         {pendingVehicleCount}
+                      </span>
+                    )}
+                    {item.id === "documents" && pendingDocCount > 0 && (
+                      <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-full flex items-center justify-center min-w-[20px] h-5 animate-pulse">
+                        {pendingDocCount}
                       </span>
                     )}
                   </button>

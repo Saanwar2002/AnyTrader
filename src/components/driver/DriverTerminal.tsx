@@ -4130,32 +4130,106 @@ export default function DriverTerminal() {
                 {/* AI Predictive Surge Heatmap */}
                 {showPredictiveSurge &&
                   !activeRide &&
-                  demandZones.map((zone, idx) => (
-                    <React.Fragment key={`surge-${idx}`}>
-                      <CircleF
-                        center={{ lat: zone.lat, lng: zone.lng }}
-                        radius={zone.radius}
-                        options={{
-                          strokeColor: "transparent",
-                          fillColor:
-                            zone.intensity === "high" ? "#FF3B30" : "#FF9500",
-                          fillOpacity: 0.15,
-                          clickable: false,
-                        }}
-                      />
-                      <OverlayViewF
-                        position={{ lat: zone.lat, lng: zone.lng }}
-                        mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                      >
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-                          <div className="bg-black/80 px-2 py-1 rounded-md text-[10px] font-black text-white whitespace-nowrap shadow border border-white/20 flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3 text-[#FF3B30]" />{" "}
-                            {zone.label}
+                  demandZones.map((zone, idx) => {
+                    const rawIntensity = (zone.intensity || zone.type || "low").toLowerCase();
+                    const intensity = rawIntensity === "moderate" ? "medium" : rawIntensity;
+                    const isFixed = zone.isFixedModel !== undefined ? zone.isFixedModel : (zone.extraFee ? true : false);
+                    
+                    let surgeRateText = "";
+                    if (isFixed) {
+                      const fee = zone.extraFee || 2.0;
+                      surgeRateText = `+£${fee.toFixed(2)}`;
+                    } else {
+                      const mult = zone.surgeMultiplier || (zone.multiplier ? parseFloat(zone.multiplier) : 1.4);
+                      surgeRateText = `${mult.toFixed(1)}x`;
+                    }
+
+                    // Define theme values based on intensity level
+                    let circleColor = "#3B82F6"; // Default low (blue)
+                    let badgeBg = "bg-slate-950/90";
+                    let accentColor = "text-blue-400";
+                    let borderColor = "border-blue-500/30";
+                    let dotColor = "bg-blue-500";
+                    let titleText = "Low Surge";
+                    let conditionDesc = "> 5m Wait or >= 1:1 Demand";
+
+                    if (intensity === "high") {
+                      circleColor = "#FF3B30"; // Red
+                      badgeBg = "bg-red-950/90";
+                      accentColor = "text-red-400 animate-pulse";
+                      borderColor = "border-red-500/40";
+                      dotColor = "bg-red-500";
+                      titleText = "High Surge";
+                      conditionDesc = "> 20m Wait or > 3:1 Demand";
+                    } else if (intensity === "medium" || intensity === "moderate") {
+                      circleColor = "#FF9500"; // Orange/Amber
+                      badgeBg = "bg-amber-950/90";
+                      accentColor = "text-amber-400";
+                      borderColor = "border-amber-500/40";
+                      dotColor = "bg-amber-500";
+                      titleText = "Medium Surge";
+                      conditionDesc = "> 10m Wait or > 2:1 Demand";
+                    }
+
+                    return (
+                      <React.Fragment key={`surge-${idx}`}>
+                        <CircleF
+                          center={{ lat: zone.lat, lng: zone.lng }}
+                          radius={zone.radius}
+                          options={{
+                            strokeColor: "transparent",
+                            fillColor: circleColor,
+                            fillOpacity: (isAutoNavHeadUp || directions) ? 0.01 : 0.04,
+                            clickable: false,
+                          }}
+                        />
+                        <OverlayViewF
+                          position={{ lat: zone.lat, lng: zone.lng }}
+                          mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                        >
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center">
+                            {/* Glass-styled premium HUD Badge card conforming to square with rounded edges guidelines */}
+                            <div className={cn(
+                              "backdrop-blur-md px-3 py-2 rounded-xl text-white shadow-2xl border flex flex-col gap-1 min-w-[140px] max-w-[170px]",
+                              badgeBg, borderColor
+                            )}>
+                              {/* Top row: Pulse indicator + Area text */}
+                              <div className="flex items-center gap-1.5 justify-between">
+                                <span className={cn("text-[8px] font-black tracking-widest uppercase truncate flex items-center gap-1", accentColor)}>
+                                  <span className="relative flex h-1.5 w-1.5">
+                                    <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", dotColor)}></span>
+                                    <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", dotColor)}></span>
+                                  </span>
+                                  {titleText}
+                                </span>
+                                {zone.maxWaitTimeMins && (
+                                  <span className="text-[7.5px] text-slate-300 font-bold bg-white/10 px-1 py-0.5 rounded">
+                                    {zone.maxWaitTimeMins}m Wait
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Highlight row: Big rate indicator */}
+                              <div className="flex items-center justify-between gap-1 border-t border-white/10 pt-1 mt-0.5">
+                                <span className="text-[9px] font-extrabold text-slate-300 truncate max-w-[90px]" title={zone.label}>
+                                  {zone.label || "Zone Center"}
+                                </span>
+                                <div className="flex items-center gap-0.5 px-2 py-0.5 bg-white text-black rounded-lg text-xs font-black shadow-sm">
+                                  <Zap className="w-3 h-3 text-amber-500 fill-amber-500 animate-bounce" />
+                                  <span>{surgeRateText}</span>
+                                </div>
+                              </div>
+
+                              {/* Explanatory subtitle trigger info line */}
+                              <div className="text-[7.5px] text-slate-400 font-semibold leading-none border-t border-white/5 pt-1 mt-0.5 flex items-center justify-between">
+                                <span className="truncate">{conditionDesc}</span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </OverlayViewF>
-                    </React.Fragment>
-                  ))}
+                        </OverlayViewF>
+                      </React.Fragment>
+                    );
+                  })}
 
                 {/* Passenger Live Location */}
                 {passengerPos &&
@@ -4353,6 +4427,27 @@ export default function DriverTerminal() {
                   showHazardModal ? "text-[#FF3B30]" : "text-[#E4E4E7]",
                 )}
               />
+            </button>
+
+            {/* AI Predictive Surge Heatmap Control */}
+            <button
+              onClick={() => {
+                setShowPredictiveSurge(!showPredictiveSurge);
+                toast.success(
+                  !showPredictiveSurge
+                    ? "AI Predictive Surge Heatmap active"
+                    : "AI Predictive Surge Heatmap hidden"
+                );
+              }}
+              className={cn(
+                "w-10 h-10 backdrop-blur-md border rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-all",
+                showPredictiveSurge
+                  ? "bg-[#D97706]/90 border-[#B45309] text-white shadow-amber-500/20"
+                  : "bg-[#1A1A1E]/90 border-[#2C2C30] text-[#E4E4E7] hover:border-white/30"
+              )}
+              title="Toggle AI Predictive Surge Heatmap"
+            >
+              <TrendingUp className="w-4 h-4" />
             </button>
 
             {/* Navigation Button */}

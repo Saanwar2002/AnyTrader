@@ -60,6 +60,8 @@ export default function RidesCommandCenter() {
   const [simVehicleType, setSimVehicleType] = useState("standard");
   const [simPeakMode, setSimPeakMode] = useState<"none" | "morning" | "evening" | "lateNight">("none");
   const [simSelectedSurcharges, setSimSelectedSurcharges] = useState<string[]>([]);
+  const [simSurgeLevel, setSimSurgeLevel] = useState<"none" | "low" | "medium" | "high" | "custom">("none");
+  const [simOverrideMode, setSimOverrideMode] = useState<"system" | "fixed" | "multiplier">("system");
   const [dispatchingRide, setDispatchingRide] = useState<any | null>(null);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
 
@@ -205,11 +207,49 @@ export default function RidesCommandCenter() {
     .filter((s: any) => simSelectedSurcharges.includes(s.id))
     .reduce((acc: number, s: any) => acc + s.amount, 0);
 
-  const finalPassengerTransitPrice = (rawFare * selectedVehicle.multiplier * parseFloat(simSurge || "1.0") * peakMultiplier);
-  const transitPriceWithGuardrail = Math.max(finalPassengerTransitPrice, config.minFare * selectedVehicle.multiplier);
-  
-  const displayedPrice = transitPriceWithGuardrail + simulationSurchargeTotal;
-  const platformFee = transitPriceWithGuardrail * (config.commission / 100);
+  // Active Surge Model in Simulation
+  const simulatedSurgeModel = simOverrideMode === "system" ? (config.surgeModel || "fixed") : simOverrideMode;
+
+  // Determine surge multipliers and fixed fees based on level
+  let calculatedSurgeMultiplier = 1.0;
+  let calculatedSurgeFixedFee = 0.0;
+
+  if (simSurgeLevel === "custom") {
+    if (simulatedSurgeModel === "multiplier") {
+      calculatedSurgeMultiplier = parseFloat(simSurge || "1.0");
+    } else {
+      // Map 1.0x-5.0x slider onto a simulated fee: (slider - 1.0) * £5.00
+      calculatedSurgeFixedFee = (parseFloat(simSurge || "1.0") - 1.0) * 5.0; 
+    }
+  } else if (simSurgeLevel === "low") {
+    calculatedSurgeMultiplier = config.surgeRules?.lowMultiplier || 1.1;
+    calculatedSurgeFixedFee = config.surgeRules?.lowFee || 1.0;
+  } else if (simSurgeLevel === "medium") {
+    calculatedSurgeMultiplier = config.surgeRules?.mediumMultiplier || 1.3;
+    calculatedSurgeFixedFee = config.surgeRules?.mediumFee || 2.0;
+  } else if (simSurgeLevel === "high") {
+    calculatedSurgeMultiplier = config.surgeRules?.highMultiplier || 1.6;
+    calculatedSurgeFixedFee = config.surgeRules?.highFee || 3.5;
+  }
+
+  // Calculate pricing based on the active simulated model
+  let transitPriceWithGuardrail = 0;
+  let displayedPrice = 0;
+  let platformFee = 0;
+
+  if (simulatedSurgeModel === "multiplier") {
+    const finalPassengerTransitPrice = (rawFare * selectedVehicle.multiplier * calculatedSurgeMultiplier * peakMultiplier);
+    transitPriceWithGuardrail = Math.max(finalPassengerTransitPrice, config.minFare * selectedVehicle.multiplier);
+    displayedPrice = transitPriceWithGuardrail + simulationSurchargeTotal;
+    platformFee = transitPriceWithGuardrail * (config.commission / 100);
+  } else {
+    // Fixed Fee Surcharge model
+    const fareBeforeSurge = (rawFare * selectedVehicle.multiplier * peakMultiplier);
+    transitPriceWithGuardrail = Math.max(fareBeforeSurge, config.minFare * selectedVehicle.multiplier);
+    displayedPrice = transitPriceWithGuardrail + calculatedSurgeFixedFee + simulationSurchargeTotal;
+    platformFee = (transitPriceWithGuardrail + calculatedSurgeFixedFee) * (config.commission / 100);
+  }
+
   const finalDriverPayout = displayedPrice - platformFee;
 
   // Filtered Job Lists
@@ -1030,21 +1070,107 @@ export default function RidesCommandCenter() {
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Surge Multiplier (x)</label>
-                        <div className="flex items-center gap-3">
-                          <input 
-                            type="range" 
-                            min="1" 
-                            max="5" 
-                            step="0.1" 
-                            value={simSurge} 
-                            onChange={e => setSimSurge(e.target.value)} 
-                            className="flex-1 accent-emerald-500" 
-                          />
-                          <span className="text-xl font-black text-emerald-400 w-12">{simSurge}x</span>
+                      {/* Simulated Surge Model Selection */}
+                      <div className="space-y-3 pt-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Simulated Surge Format</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: "system", label: `Auto (System: ${config.surgeModel || 'fixed'})`, desc: "Matches live ruleset" },
+                            { id: "fixed", label: "Fixed Surcharge", desc: "Flat fee addition" },
+                            { id: "multiplier", label: "Multiplier", desc: "Percentage product" }
+                          ].map((m) => {
+                            const isChosen = simOverrideMode === m.id;
+                            const isSystemActiveModel = (m.id === "system") || 
+                                                       (m.id === "fixed" && config.surgeModel === "fixed" && simOverrideMode === "system") ||
+                                                       (m.id === "multiplier" && config.surgeModel === "multiplier" && simOverrideMode === "system");
+                            return (
+                              <button
+                                type="button"
+                                key={m.id}
+                                onClick={() => setSimOverrideMode(m.id as any)}
+                                className={cn(
+                                  "p-3 rounded-xl border text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between min-h-[58px]",
+                                  isChosen 
+                                    ? "bg-slate-800 text-white border-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.15)]" 
+                                    : "opacity-45 bg-white/5 border-white/10 text-slate-400 hover:opacity-85"
+                                )}
+                              >
+                                {isSystemActiveModel && (
+                                  <span className="absolute top-1 right-1 px-1 py-[1.5px] bg-indigo-500 text-white text-[6.5px] font-extrabold uppercase rounded tracking-wider scale-90">
+                                    LIVE
+                                  </span>
+                                )}
+                                <span className="text-[9px] font-black uppercase tracking-tight block">{m.label}</span>
+                                <span className="text-[8px] text-slate-400 font-medium block mt-1 leading-tight">{m.desc}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
+
+                      {/* Simulated Surge Severity Levels */}
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Simulated Surge Level</label>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {[
+                            { id: "none", label: "None", val: "0.0" },
+                            { id: "low", label: "Low", val: simulatedSurgeModel === "multiplier" ? `${config.surgeRules?.lowMultiplier}x` : `+£${config.surgeRules?.lowFee?.toFixed(1)}` },
+                            { id: "medium", label: "Medium", val: simulatedSurgeModel === "multiplier" ? `${config.surgeRules?.mediumMultiplier}x` : `+£${config.surgeRules?.mediumFee?.toFixed(1)}` },
+                            { id: "high", label: "High", val: simulatedSurgeModel === "multiplier" ? `${config.surgeRules?.highMultiplier}x` : `+£${config.surgeRules?.highFee?.toFixed(1)}` },
+                            { id: "custom", label: "Custom", val: "Slider" }
+                          ].map((lvl) => (
+                            <button
+                              key={lvl.id}
+                              type="button"
+                              onClick={() => setSimSurgeLevel(lvl.id as any)}
+                              className={cn(
+                                "py-2 px-1 rounded-xl text-[9px] font-black uppercase text-center border transition-all flex flex-col items-center justify-between min-h-[48px]",
+                                simSurgeLevel === lvl.id 
+                                  ? "bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20" 
+                                  : "bg-white/5 border-white/5 text-slate-400 hover:bg-white/10"
+                              )}
+                            >
+                              <span className="block leading-none">{lvl.label}</span>
+                              <span className={cn(
+                                "text-[7.5px] font-bold block mt-1",
+                                simSurgeLevel === lvl.id ? "text-white" : "text-emerald-400"
+                              )}>{lvl.val}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Manual Slider, only shown for custom mode */}
+                      {simSurgeLevel === "custom" && (
+                        <div className="space-y-2 p-3 bg-white/5 border border-white/10 rounded-2xl">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block ml-1">
+                            {simulatedSurgeModel === "multiplier" ? "Custom Multiplier" : "Custom Multiplier Equivalent"}
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="range" 
+                              min="1" 
+                              max="5" 
+                              step="0.1" 
+                              value={simSurge} 
+                              onChange={e => setSimSurge(e.target.value)} 
+                              className="flex-1 accent-emerald-500" 
+                            />
+                            <span className="text-sm font-black text-emerald-400 w-16">
+                              {simulatedSurgeModel === "multiplier" 
+                                ? `${simSurge}x` 
+                                : `+£${((parseFloat(simSurge) - 1.0) * 5.0).toFixed(2)}`
+                              }
+                            </span>
+                          </div>
+                          <p className="text-[8px] text-slate-500 italic leading-snug">
+                            {simulatedSurgeModel === "multiplier" 
+                              ? "Multiplies distance, base, and time rates."
+                              : "Calculates an equivalent flat-rate surcharge increment directly added to total."
+                            }
+                          </p>
+                        </div>
+                      )}
 
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Peak Time Period</label>
@@ -1109,8 +1235,10 @@ export default function RidesCommandCenter() {
                             {displayedPrice === (config.minFare * selectedVehicle.multiplier) && (
                               <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-[9px] font-black rounded-lg border border-orange-500/30">MIN FARE APPLIED</span>
                             )}
-                            {parseFloat(simSurge) > 1 && (
-                              <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-black rounded-lg border border-red-500/30">SURGE ACTIVE</span>
+                            {(simSurgeLevel !== "none" || (simSurgeLevel === "custom" && parseFloat(simSurge) > 1.0)) && (
+                              <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-black rounded-lg border border-red-500/30 uppercase">
+                                SURGE ACTIVE ({simulatedSurgeModel})
+                              </span>
                             )}
                             {simPeakMode !== 'none' && (
                               <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[9px] font-black rounded-lg border border-blue-500/30">PEAK PRICING</span>

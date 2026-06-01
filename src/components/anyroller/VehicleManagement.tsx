@@ -270,10 +270,10 @@ export default function VehicleManagement() {
                       
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-2">
-                          {categories.map((c: string) => {
+                          {categories.map((c: string, idx: number) => {
                             const catInfo = CATEGORIES.find(cat => cat.id === c);
                             return (
-                              <span key={c} className="text-[10px] font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
+                              <span key={`${c}-${idx}`} className="text-[10px] font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
                                 {catInfo?.name || c}
                               </span>
                             );
