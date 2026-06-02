@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   BarChart3, Map, Car, ClipboardList, DollarSign, Star, 
   Tag, Users, UserCircle, Settings, ShieldCheck, MapPin, 
@@ -81,6 +82,45 @@ export default function AnyRollerAdmin() {
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [pendingVehicleCount, setPendingVehicleCount] = useState(0);
   const [pendingDocCount, setPendingDocCount] = useState(0);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const searchResults = React.useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    
+    // We can map additional keywords for specific tools to help users discover them
+    const keywordMap: Record<string, string[]> = {
+      "zones": ["surge", "serge", "heatmap", "pricing", "multiplier", "dynamic", "geofence", "map", "radius"],
+      "payments": ["stripe", "revenue", "commission", "fee", "payout", "balance", "money"],
+      "dispatch": ["queue", "timeout", "matching", "radius", "bidding", "bids", "algorithm"],
+      "priority": ["newcomer", "fairness", "penalty", "boost", "complain"],
+      "vehicles": ["approval", "car", "van", "truck", "fleet", "class"],
+      "documents": ["license", "insurance", "mot", "background check"],
+      "drivers": ["ban", "suspend", "block", "approve", "live", "status"],
+      "riders": ["passenger", "customer", "user", "ban"],
+      "scheduled": ["booking", "future", "later", "reserved"],
+      "sos": ["emergency", "police", "help", "alert", "danger", "crash"],
+      "anytrader": ["roles", "sync", "master"],
+      "dashboard": ["overview", "stats", "volume", "active"],
+      "promos": ["discount", "coupon", "code", "marketing"],
+      "settings": ["global", "maintenance", "offline", "general"]
+    };
+
+    const q = searchQuery.toLowerCase();
+    
+    return SIDEBAR_ITEMS.filter(item => {
+      // Check title match
+      if (item.label.toLowerCase().includes(q)) return true;
+      // Check category match
+      if (item.category.toLowerCase().includes(q)) return true;
+      // Check targeted keywords match
+      const kw = keywordMap[item.id];
+      if (kw && kw.some(word => word.includes(q))) return true;
+      
+      return false;
+    });
+  }, [searchQuery]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
@@ -166,17 +206,68 @@ export default function AnyRollerAdmin() {
             {SIDEBAR_ITEMS.find(i => i.id === activeScreen)?.label || "Dashboard"}
           </h2>
           <div className="flex items-center gap-4">
-            <div className="relative">
+            <div className="relative z-50">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Search..." 
-                className="pl-9 pr-4 py-1.5 bg-slate-100 border-none rounded-full text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                placeholder="Search settings (e.g. surge)..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                className="w-64 pl-9 pr-4 py-1.5 bg-slate-100 border border-transparent rounded-full text-sm outline-none focus:ring-2 focus:border-emerald-500 focus:bg-white transition-all shadow-sm"
               />
+              
+              <AnimatePresence>
+                {isSearchFocused && searchQuery.trim() && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full lg:right-0 right-auto left-auto lg:left-auto pt-2 w-80 transform lg:translate-x-0 -translate-x-1/2 mr-2"
+                  >
+                    <div className="bg-white border md:border-black border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-[350px] overflow-y-auto">
+                      {searchResults.length > 0 ? (
+                        <div className="py-2">
+                          <h3 className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50/50">
+                            Search Results ({searchResults.length})
+                          </h3>
+                          {searchResults.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                setActiveScreen(item.id);
+                                setSearchQuery("");
+                                setIsSearchFocused(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50/80 active:bg-emerald-100 transition-colors text-left border-b border-slate-50 last:border-0 group"
+                            >
+                              <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center text-slate-500 group-hover:text-emerald-600 transition-colors shrink-0">
+                                <item.icon className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-700">{item.label}</p>
+                                <p className="text-[11px] text-slate-500 truncate">{item.category}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-6 flex flex-col items-center justify-center text-center">
+                          <Search className="w-8 h-8 text-slate-200 mb-2" />
+                          <p className="text-sm font-bold text-slate-800">No results found</p>
+                          <p className="text-xs text-slate-500 mt-1">Try searching for "surge" or "drivers"</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-            <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors">
+            <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors border border-transparent rounded-full hover:bg-slate-100">
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-black"></span>
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
             </button>
           </div>
         </header>
