@@ -1,11 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { db } from "../../firebase";
+import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { 
   ShieldCheck, ArrowRight, UserPlus, Zap, ToggleRight, 
   Settings2, Activity, Save, AlertTriangle, ArrowUpCircle
 } from "lucide-react";
 
-// Mock configuration state
+// Fallback configuration state
 const initialConfig = {
   driverNewcomerBoost: true,
   driverNewcomerDurationDays: 14,
@@ -19,14 +22,62 @@ const initialConfig = {
 
 const PrioritySettings = () => {
   const [config, setConfig] = useState(initialConfig);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
+  // Synchronize configuration parameters in real-time
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, "platform_config", "rides"),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setConfig((prev) => ({
+            ...prev,
+            driverNewcomerBoost: data.driverNewcomerBoost ?? prev.driverNewcomerBoost,
+            driverNewcomerDurationDays: Number(data.driverNewcomerDurationDays ?? prev.driverNewcomerDurationDays),
+            passengerSerialCancellerProtection: data.passengerSerialCancellerProtection ?? prev.passengerSerialCancellerProtection,
+            passengerCancelThreshold: Number(data.passengerCancelThreshold ?? prev.passengerCancelThreshold),
+            driverFairDistribution: data.driverFairDistribution ?? prev.driverFairDistribution,
+            vipPriorityMatching: data.vipPriorityMatching ?? prev.vipPriorityMatching,
+            highRatingPriority: data.highRatingPriority ?? prev.highRatingPriority,
+            highRatingThreshold: Number(data.highRatingThreshold ?? prev.highRatingThreshold),
+          }));
+        }
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error("Error reading platform priority configurator:", error);
+        setIsLoading(false);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await setDoc(
+        doc(db, "platform_config", "rides"),
+        {
+          driverNewcomerBoost: !!config.driverNewcomerBoost,
+          driverNewcomerDurationDays: Number(config.driverNewcomerDurationDays),
+          passengerSerialCancellerProtection: !!config.passengerSerialCancellerProtection,
+          passengerCancelThreshold: Number(config.passengerCancelThreshold),
+          driverFairDistribution: !!config.driverFairDistribution,
+          vipPriorityMatching: !!config.vipPriorityMatching,
+          highRatingPriority: !!config.highRatingPriority,
+          highRatingThreshold: Number(config.highRatingThreshold),
+        },
+        { merge: true }
+      );
+      toast.success("Trust & Fairness Engine parameters unified successfully!");
+    } catch (err) {
+      console.error("Failure updating platform priorities:", err);
+      toast.error("Failure synchronizing priority settings parameters");
+    } finally {
       setIsSaving(false);
-    }, 1000);
+    }
   };
 
   const Toggle = ({ enabled, onClick }: { enabled: boolean, onClick: () => void }) => (

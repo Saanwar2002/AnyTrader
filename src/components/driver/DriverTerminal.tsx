@@ -416,10 +416,12 @@ export default function DriverTerminal() {
   const [declineConfirmStacked, setDeclineConfirmStacked] = useState(false);
   const [showFareBreakdown, setShowFareBreakdown] = useState(false);
   const [incomingTimer, setIncomingTimer] = useState(15);
+  const [totalOfferSeconds, setTotalOfferSeconds] = useState(15);
   const [stackedRideOffer, setStackedRideOffer] = useState<any>(null);
   const [acceptedStackedRideOffer, setAcceptedStackedRideOffer] =
     useState<any>(null);
   const [stackedIncomingTimer, setStackedIncomingTimer] = useState(0);
+  const [totalStackedOfferSeconds, setTotalStackedOfferSeconds] = useState(15);
 
   const [showStartJobReminder, setShowStartJobReminder] = useState(false);
   const [hasDismissedStartJobReminder, setHasDismissedStartJobReminder] =
@@ -1875,11 +1877,13 @@ export default function DriverTerminal() {
         if (rideState === "idle") {
           setActiveRide(rideData);
           setIncomingTimer(remaining);
+          setTotalOfferSeconds(remaining > 0 ? remaining : 15);
           setRideState("incoming");
         } else if (rideState === "in_progress") {
           if (!stackedRideOffer) {
             setStackedRideOffer(rideData);
             setStackedIncomingTimer(remaining);
+            setTotalStackedOfferSeconds(remaining > 0 ? remaining : 15);
           }
         }
         if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
@@ -4663,7 +4667,7 @@ export default function DriverTerminal() {
                             strokeLinecap="round"
                             initial={{ strokeDashoffset: 0 }}
                             animate={{
-                              strokeDashoffset: 88 - 88 * (incomingTimer / 15),
+                              strokeDashoffset: 88 - 88 * (incomingTimer / (totalOfferSeconds || 15)),
                             }}
                             transition={{ duration: 1, ease: "linear" }}
                           />
@@ -5028,7 +5032,7 @@ export default function DriverTerminal() {
                             initial={{ strokeDashoffset: 0 }}
                             animate={{
                               strokeDashoffset:
-                                88 - 88 * (stackedIncomingTimer / 15),
+                                88 - 88 * (stackedIncomingTimer / (totalStackedOfferSeconds || 15)),
                             }}
                             transition={{ duration: 1, ease: "linear" }}
                           />

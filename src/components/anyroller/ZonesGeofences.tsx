@@ -847,11 +847,18 @@ export default function ZonesGeofences() {
                       }`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        surgeConfig.surgeEnabled ? 'translate-x-6' : 'translate-x-1'
+                        surgeConfig.surgeEnabled ? 'translate-x-[1.5rem]' : 'translate-x-0.5'
                       }`} />
                     </button>
                   </div>
+                </div>
 
+                {/* Everything below Automated Surge toggle is wrapped in a dynamic fading highlight container */}
+                <div className={`transition-all duration-300 space-y-5 ${
+                  surgeConfig.surgeEnabled 
+                    ? "opacity-100 ring-1 ring-emerald-500/5 shadow-[0_0_12px_rgba(16,185,129,0.03)]" 
+                    : "opacity-40 select-none pointer-events-none filter grayscale-[40%] blur-[0.2px]"
+                }`}>
                   <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-black">Surge Model Format</p>
@@ -882,7 +889,6 @@ export default function ZonesGeofences() {
                       </button>
                     </div>
                   </div>
-                </div>
 
                 {/* Surcharges thresholds editing inputs */}
                 <div className="space-y-4 pt-4 border-t border-gray-100">
@@ -1200,6 +1206,8 @@ export default function ZonesGeofences() {
                     </div>
 
                   </div>
+                </div>
+
                 </div>
 
                 <button

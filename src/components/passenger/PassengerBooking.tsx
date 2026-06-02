@@ -816,11 +816,27 @@ export default function PassengerBooking() {
     setEstimatedWaitEta(null);
     const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
     const unsub = onSnapshot(q, (snapshot) => {
-      let countNow = 0;
-      let countSoon = 0;
-      let minEtaMins: number | null = null;
-      const cats = new Set<string>();
-      const locations: {lat: number, lng: number, id: string, dist?: number}[] = [];
+      const maxRadius = fareConfig?.dispatchRadiusMiles || 15;
+      const eligibleDrivers: {
+        id: string;
+        data: any;
+        distToPickup: number;
+        distFromCurrentToDropoff: number;
+        isStacked: boolean;
+        categories: string[];
+      }[] = [];
+
+      const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 3958.8; // Radius of Earth in miles
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = 
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c; 
+      };
 
       snapshot.docs.forEach(docSnap => {
         const data = docSnap.data();
@@ -829,50 +845,80 @@ export default function PassengerBooking() {
         if (isPetFriendly && data.isPetFriendly !== true) {
           return;
         }
+        if (data.isLastJob === true) {
+          return;
+        }
 
         let driverCategories = data.vehicleCategories || [data.vehicleCategory || 'standard'];
-        
-        const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-          const R = 3958.8; // Radius of Earth in miles
-          const dLat = (lat2 - lat1) * Math.PI / 180;
-          const dLon = (lon2 - lon1) * Math.PI / 180;
-          const a = 
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          return R * c; 
-        };
+        const isStacked = data.status === 'on_ride';
 
-        if (data.status === 'on_ride' && data.dropoffLat && data.dropoffLng) {
-          if (data.isStackingEnabled !== false && data.isLastJob !== true) {
-            const distFromCurrentToDropoff = (data.lat && data.lng) ? calculateDistance(data.lat, data.lng, data.dropoffLat, data.dropoffLng) : 0;
-            const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.dropoffLat, data.dropoffLng);
-            if (distToPickup <= 3) {
-               countSoon++;
-               driverCategories.forEach((cat: string) => cats.add(cat));
-               const driverEta = (distFromCurrentToDropoff * 4) + 3 + (distToPickup * 4);
-               if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
-            }
+        let distToPickup = Infinity;
+        let distFromCurrentToDropoff = 0;
+
+        if (isStacked) {
+          if (data.isStackingEnabled !== false && data.dropoffLat && data.dropoffLng) {
+            distFromCurrentToDropoff = (data.lat && data.lng) ? calculateDistance(data.lat, data.lng, data.dropoffLat, data.dropoffLng) : 0;
+            distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.dropoffLat, data.dropoffLng);
+          } else {
+            return; // Not stackable
           }
-        } else if (data.lat && data.lng && data.status !== 'on_ride') {
-          if (data.isLastJob !== true) {
-            const distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.lat, data.lng);
-            if (distToPickup <= 3) {
-               countNow++;
-               driverCategories.forEach((cat: string) => cats.add(cat));
-               locations.push({ lat: data.lat, lng: data.lng, id: docSnap.id, dist: distToPickup });
-               const driverEta = distToPickup * 4;
-               if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
-            }
+        } else if (data.lat && data.lng) {
+          distToPickup = calculateDistance(pickupCoords.lat, pickupCoords.lng, data.lat, data.lng);
+        } else {
+          return;
+        }
+
+        eligibleDrivers.push({
+          id: docSnap.id,
+          data,
+          distToPickup,
+          distFromCurrentToDropoff,
+          isStacked,
+          categories: driverCategories,
+        });
+      });
+
+      // Progressive Ring Boundaries Search (Ring 1: 3mi, Ring 2: 8mi, Ring 3: platform maxRadius)
+      let activeRadius = 3;
+      const scanRings = [3, 8, maxRadius].filter(r => r <= maxRadius);
+      for (const r of scanRings) {
+        const matchesInRing = eligibleDrivers.filter(d => d.distToPickup <= r);
+        if (matchesInRing.length > 0) {
+          activeRadius = r;
+          break;
+        }
+        if (r === maxRadius) {
+          activeRadius = maxRadius;
+        }
+      }
+
+      let countNow = 0;
+      let countSoon = 0;
+      let minEtaMins: number | null = null;
+      const cats = new Set<string>();
+      const locations: {lat: number, lng: number, id: string, dist?: number}[] = [];
+
+      eligibleDrivers.forEach(d => {
+        if (d.distToPickup <= activeRadius) {
+          d.categories.forEach((cat: string) => cats.add(cat));
+          if (d.isStacked) {
+            countSoon++;
+            const driverEta = (d.distFromCurrentToDropoff * 4) + 3 + (d.distToPickup * 4);
+            if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
+          } else {
+            countNow++;
+            locations.push({ lat: d.data.lat, lng: d.data.lng, id: d.id, dist: d.distToPickup });
+            const driverEta = d.distToPickup * 4;
+            if (minEtaMins === null || driverEta < minEtaMins) minEtaMins = driverEta;
           }
         }
       });
+
       setNearbyDriversCount(countNow);
       setDriversAvailableSoonCount(countSoon);
       setEstimatedWaitEta(minEtaMins);
       
-      // Take max 5 closest drivers (prioritize within 1 mile, fallback to within 3 miles)
+      // Take max 5 closest drivers (prioritize within 1 mile, fallback to within activeRadius)
       locations.sort((a, b) => (a as any).dist - (b as any).dist);
       const within1Mile = locations.filter((l: any) => l.dist <= 1);
       if (within1Mile.length > 0) {
@@ -883,7 +929,7 @@ export default function PassengerBooking() {
       setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
     }, (err) => console.error("onSnapshot ERROR live_tracking:", err));
     return () => unsub();
-  }, [pickupCoords, isPetFriendly]);
+  }, [pickupCoords, isPetFriendly, fareConfig?.dispatchRadiusMiles]);
 
   useEffect(() => {
     if (!availableCategories.has(selectedCategory)) {
