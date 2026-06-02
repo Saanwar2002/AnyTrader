@@ -182,7 +182,8 @@ export default function DispatchEngine() {
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: getGoogleMapsApiKey() || "",
-    libraries: mapLibraries
+    libraries: mapLibraries,
+    version: "quarterly"
   });
 
   // Calculate sorted nearest online drivers for the active booking match allocation list
@@ -322,7 +323,7 @@ export default function DispatchEngine() {
           <button 
             onClick={handleToggleAutoDispatch}
             className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 ${
-              config.autoDispatchEnabled ? "bg-black" : "bg-slate-200"
+              config.autoDispatchEnabled ? "bg-[#00D26A]" : "bg-slate-200"
             }`}
           >
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   BarChart3, Map, Car, ClipboardList, DollarSign, Star, 
@@ -83,6 +84,11 @@ export default function AnyRollerAdmin() {
   const [pendingVehicleCount, setPendingVehicleCount] = useState(0);
   const [pendingDocCount, setPendingDocCount] = useState(0);
   
+  const [globalAutoDispatch, setGlobalAutoDispatch] = useState(true);
+  const [globalAutoSurge, setGlobalAutoSurge] = useState(true);
+  const [confirmToggleType, setConfirmToggleType] = useState<"dispatch" | "surge" | null>(null);
+  const [confirmPendingValue, setConfirmPendingValue] = useState<boolean | null>(null);
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
@@ -145,6 +151,19 @@ export default function AnyRollerAdmin() {
         }
       });
       setPendingDocCount(docCount);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "platform_config", "rides"), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setGlobalAutoDispatch(data.autoDispatchEnabled !== false);
+        setGlobalAutoSurge(data.surgeEnabled !== false);
+      }
+    }, (error) => {
+      console.error("Error subscribing to global admin toggles config:", error);
     });
     return () => unsub();
   }, []);
@@ -271,6 +290,129 @@ export default function AnyRollerAdmin() {
             </button>
           </div>
         </header>
+
+        {/* Compact Toggles Bar – Under Top Header, only on Dashboard screen */}
+        {activeScreen === "dashboard" && (
+          <div className="bg-slate-50 border-b border-black flex flex-wrap items-center justify-between px-6 py-2 shrink-0 z-10 gap-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-500 uppercase tracking-widest">
+              <span className="relative flex h-2 w-2 mr-1">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00D26A]"></span>
+              </span>
+              Platform Core Controls
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* Auto Dispatch Toggle */}
+              <div className="flex items-center gap-2 bg-white border border-black px-2.5 py-1 rounded-[10px] shadow-sm hover:bg-slate-50 transition-all select-none">
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-black uppercase tracking-wider leading-none">Auto Dispatch</p>
+                  <p className="text-[8px] text-slate-500 font-bold uppercase mt-0.5">{globalAutoDispatch ? "Active" : "Disabled"}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setConfirmToggleType("dispatch");
+                    setConfirmPendingValue(!globalAutoDispatch);
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-all duration-300 ${
+                    globalAutoDispatch ? "bg-[#00D26A]" : "bg-slate-200"
+                  }`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                    globalAutoDispatch ? "translate-x-[1.1rem]" : "translate-x-0.5"
+                  }`} />
+                </button>
+              </div>
+
+              {/* Auto Surge Toggle */}
+              <div className="flex items-center gap-2 bg-white border border-black px-2.5 py-1 rounded-[10px] shadow-sm hover:bg-slate-50 transition-all select-none">
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-black uppercase tracking-wider leading-none">Auto Surge</p>
+                  <p className="text-[8px] text-slate-500 font-bold uppercase mt-0.5">{globalAutoSurge ? "Active" : "Disabled"}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setConfirmToggleType("surge");
+                    setConfirmPendingValue(!globalAutoSurge);
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-all duration-300 ${
+                    globalAutoSurge ? "bg-[#00D26A]" : "bg-slate-200"
+                  }`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                    globalAutoSurge ? "translate-x-[1.1rem]" : "translate-x-0.5"
+                  }`} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Double Confirmation Modal Dialog Container */}
+        <AnimatePresence>
+          {confirmToggleType && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                className="bg-white p-5 border border-black rounded-lg shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-w-sm w-full relative"
+              >
+                <h3 className="text-xs font-black text-black uppercase tracking-widest mb-2 border-b border-black pb-2">Double Confirmation</h3>
+                <p className="text-xs text-black font-medium leading-relaxed mb-4">
+                  Are you sure you want to turn {confirmPendingValue ? (
+                    <span className="bg-green-100 text-green-950 px-1.5 py-0.5 rounded border border-green-500/30 font-black uppercase text-[10px] inline-block mr-1">ON</span>
+                  ) : (
+                    <span className="bg-red-100 text-red-950 px-1.5 py-0.5 rounded border border-red-500/30 font-black uppercase text-[10px] inline-block mr-1">OFF</span>
+                  )}<strong>{confirmToggleType === "dispatch" ? "Automated Dispatch" : "Automated Surge"}</strong>?
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed mb-5 uppercase tracking-wide">
+                  This is a critical operation and affects live passenger booking requests, pricing tiers, and real-time operations.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button 
+                    onClick={() => {
+                      setConfirmToggleType(null);
+                      setConfirmPendingValue(null);
+                    }}
+                    className="px-3 py-1.5 border border-black rounded-[6px] text-xs font-bold text-black hover:bg-slate-100 transition-colors uppercase tracking-wider"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      const type = confirmToggleType;
+                      const val = confirmPendingValue;
+                      setConfirmToggleType(null);
+                      setConfirmPendingValue(null);
+                      try {
+                        if (type === "dispatch") {
+                          await setDoc(doc(db, "platform_config", "rides"), {
+                            autoDispatchEnabled: val
+                          }, { merge: true });
+                          toast.success(`Automated Dispatch turned ${val ? "ON" : "OFF"} successfully!`);
+                        } else {
+                          await setDoc(doc(db, "platform_config", "rides"), {
+                            surgeEnabled: val,
+                            // Ensure default values exist inside firestore so it doesn't break subcategories layout
+                            surgeModel: "multiplier"
+                          }, { merge: true });
+                          toast.success(`Automated Surge turned ${val ? "ON" : "OFF"} successfully!`);
+                        }
+                      } catch (err) {
+                        console.error("Error setting platform state:", err);
+                        toast.error("Failed to update platform settings");
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-black text-white hover:bg-slate-900 border border-black rounded-[6px] text-xs font-bold transition-all uppercase tracking-wider shadow-sm"
+                  >
+                    Yes, Confirm
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Dynamic Screen Content */}
         <div className="flex-1 overflow-y-auto p-6">

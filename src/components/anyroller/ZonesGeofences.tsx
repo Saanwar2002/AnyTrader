@@ -843,7 +843,7 @@ export default function ZonesGeofences() {
                       type="button"
                       onClick={() => setSurgeConfig({ ...surgeConfig, surgeEnabled: !surgeConfig.surgeEnabled })}
                       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                        surgeConfig.surgeEnabled ? 'bg-indigo-600' : 'bg-gray-200'
+                        surgeConfig.surgeEnabled ? 'bg-[#00D26A]' : 'bg-gray-200'
                       }`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
