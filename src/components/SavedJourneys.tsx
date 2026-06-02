@@ -10,7 +10,7 @@ import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 
-const libraries: any[] = ["places"];
+const libraries: any[] = ["places", "geometry"];
 
 export default function SavedJourneys() {
   const { user, profile } = useAuth();

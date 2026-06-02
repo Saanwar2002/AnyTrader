@@ -14,7 +14,7 @@ import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { getInstantMatchCopy } from "@/src/lib/boosts";
 import { toast } from "sonner";
 
-const libraries: any[] = ['places'];
+const libraries: any[] = ['places', 'geometry'];
 
 const compressImageFile = (file: File, maxDim = 1200, quality = 0.75): Promise<File> => {
   return new Promise((resolve) => {

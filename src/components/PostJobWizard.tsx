@@ -60,7 +60,7 @@ const iconMap: Record<string, any> = {
   Droplets, Zap, Thermometer, Home, Layout, Palette, Wrench, Maximize, Grid, Leaf, Box, Sparkles, Lock
 };
 
-const libraries: any[] = ['places'];
+const libraries: any[] = ['places', 'geometry'];
 
 const readFileAsDataURL = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {

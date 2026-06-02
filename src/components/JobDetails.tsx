@@ -165,7 +165,7 @@ export default function JobDetails() {
     };
   }, [job?.status, job?.startedAt]);
 
-const libraries: any[] = ['places'];
+const libraries: any[] = ['places', 'geometry'];
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',

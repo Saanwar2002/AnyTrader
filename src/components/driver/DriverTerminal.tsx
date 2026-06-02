@@ -100,7 +100,7 @@ type RideState =
   | "completed"
   | "review";
 
-const libraries: any[] = ["places"];
+const libraries: any[] = ["places", "geometry"];
 
 const MAP_CONTAINER_STYLE: React.CSSProperties = {
   width: "100%",
@@ -1855,7 +1855,7 @@ export default function DriverTerminal() {
           dropoffLat: data.dropoffLat,
           dropoffLng: data.dropoffLng,
           stops: data.stops || [],
-          fareEstimate: data.totalFare,
+          fareEstimate: data.totalFare || data.fareEstimate,
           distanceMiles: data.distanceMiles || 0,
           durationMinutes: data.durationMinutes || 0,
           comments: data.comments || data.instructions || "",
@@ -2195,8 +2195,53 @@ export default function DriverTerminal() {
     if (newStatus) {
       setOnlineStartTime(new Date());
       setOnlineDurationText("0 min");
+      // Immediate direct seed write to Firestore so driver is discoverable instantly upon going online
+      if (user) {
+        setDoc(
+          doc(db, "live_tracking", user.uid),
+          {
+            driverId: user.uid,
+            lat: driverLocation[0],
+            lng: driverLocation[1],
+            updatedAt: serverTimestamp(),
+            isOnline: true,
+            status: activeRide ? "on_ride" : "available",
+            dropoffLat: activeRide?.dropoffLat || null,
+            dropoffLng: activeRide?.dropoffLng || null,
+            isStackingEnabled: profile?.isStackingEnabled !== false,
+            isLastJob: profile?.isLastJob === true,
+            destinationModeActive: profile?.destinationModeActive === true,
+            homeLat: profile?.homeLat || null,
+            homeLng: profile?.homeLng || null,
+            zoneEnabled: profile?.zoneEnabled === true,
+            zoneMaxDistance: profile?.zoneMaxDistance || 0,
+            vehicleCategory: profile?.vehicleCategory || "standard",
+            vehicleCategories: profile?.vehicleCategories || [
+              profile?.vehicleCategory || "standard",
+            ],
+            isPetFriendly: profile?.isPetFriendly === true,
+          },
+          { merge: true }
+        ).catch(err => console.error("Error offline toggle seeding:", err));
+
+        setDoc(
+          doc(db, "driver_status", user.uid),
+          {
+            online: true,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ).catch(err => console.error("Error offline toggle status seeding:", err));
+
+        console.log(`[AnyRoller Driver] Instantly seeded live_tracking for driver:${user.uid} at location [${driverLocation[0]}, ${driverLocation[1]}]`);
+      }
     } else {
       setOnlineStartTime(null);
+      if (user) {
+        updateDoc(doc(db, "driver_status", user.uid), { online: false }).catch(console.error);
+        updateDoc(doc(db, "live_tracking", user.uid), { isOnline: false }).catch(console.error);
+        console.log(`[AnyRoller Driver] Switched offline in Firestore for driver:${user.uid}`);
+      }
     }
 
     if (navigator.vibrate) navigator.vibrate(100);
@@ -2372,7 +2417,14 @@ export default function DriverTerminal() {
           }
         }
       },
-      (err) => console.warn("GPS tracking error:", err),
+      (err) => {
+        console.warn("GPS tracking error:", err);
+        toast.warning("GPS Tracking Offline", {
+          description: "Using system default (Huddersfield) location. To receive test offers, book your passenger ride nearby Huddersfield of the map!",
+          id: "gps-tracking-offline",
+          duration: 12000
+        });
+      },
       { enableHighAccuracy: true, maximumAge: 10000 },
     );
 

@@ -58,14 +58,14 @@ const defaultSimulatedBookings = [
 ];
 
 const defaultSimulatedDrivers = [
-  { id: "D-sim-101", name: "David Chen", vehicle: "Toyota Prius (Silver)", isOnline: true, lat: 53.6440, lng: -1.7890, status: "Available", rating: 4.9, phone: "+447700900101" },
-  { id: "D-sim-102", name: "Sam Wilson", vehicle: "Mercedes E-Class (Black)", isOnline: true, lat: 53.6520, lng: -1.7780, status: "Available", rating: 4.8, phone: "+447700900102" },
-  { id: "D-sim-103", name: "Linda Lee", vehicle: "Kia Niro EV (Blue)", isOnline: true, lat: 53.6390, lng: -1.8020, status: "Available", rating: 4.7, phone: "+447700900103" },
+  { id: "D-sim-101", name: "David Chen", vehicle: "Toyota Prius (Silver)", isOnline: true, lat: 53.6440, lng: -1.7890, status: "Available", rating: 4.9, phone: "+447700900101", isBusy: true },
+  { id: "D-sim-102", name: "Sam Wilson", vehicle: "Mercedes E-Class (Black)", isOnline: true, lat: 53.6520, lng: -1.7780, status: "Available", rating: 4.8, phone: "+447700900102", isBusy: true },
+  { id: "D-sim-103", name: "Linda Lee", vehicle: "Kia Niro EV (Blue)", isOnline: true, lat: 53.6390, lng: -1.8020, status: "Available", rating: 4.7, phone: "+447700900103", isBusy: false },
 ];
 
 const defaultSimulatedRides = [
-  { id: "R-sim-992", passengerName: "Alex Turner", pickup: "O2 Arena, Greenwich", pickupLat: 53.6610, pickupLng: -1.7650, dropoff: "Victoria Station", dropoffLat: 53.6300, dropoffLng: -1.7950, status: "in_progress", fareEstimate: 24.50, driverName: "John Thompson", carCategory: "standard" },
-  { id: "R-sim-993", passengerName: "Tom Hardy", pickup: "Hyde Park Central Gate", pickupLat: 53.6450, pickupLng: -1.8100, dropoff: "Oxford Street East", dropoffLat: 53.6490, dropoffLng: -1.7900, status: "accepted", fareEstimate: 14.00, driverName: "Maria Garcia", carCategory: "executive" },
+  { id: "R-sim-992", passengerName: "Alex Turner", pickup: "O2 Arena, Greenwich", pickupLat: 53.6610, pickupLng: -1.7650, dropoff: "Victoria Station", dropoffLat: 53.6300, dropoffLng: -1.7950, status: "in_progress", fareEstimate: 24.50, driverName: "David Chen", carCategory: "standard" },
+  { id: "R-sim-993", passengerName: "Tom Hardy", pickup: "Hyde Park Central Gate", pickupLat: 53.6450, pickupLng: -1.8100, dropoff: "Oxford Street East", dropoffLat: 53.6490, dropoffLng: -1.7900, status: "accepted", fareEstimate: 14.00, driverName: "Sam Wilson", carCategory: "executive" },
 ];
 
 // Haversine formula to compute distances accurately
@@ -394,6 +394,30 @@ export default function DispatchEngine() {
                 {/* Active Drivers Pins */}
                 {activeDriversOnline.map((driver) => {
                   const isDriverFocused = selectedPin?.type === "driver" && selectedPin?.id === driver.id;
+
+                  // Find if there is an active ride matching this driver.
+                  const activeRide = activeLiveRides.find(r => 
+                    r.assignedDriverId === driver.id || 
+                    r.driverId === driver.id ||
+                    (driver.name && r.driverName === driver.name)
+                  );
+
+                  let driverState: "free" | "accepted" | "onboard" = "free";
+                  if (activeRide) {
+                    if (activeRide.status === "in_progress") {
+                      driverState = "onboard";
+                    } else {
+                      driverState = "accepted";
+                    }
+                  } else if (driver.isBusy) {
+                    driverState = "onboard"; // fallback for busy flags
+                  }
+
+                  // Establish color: green (free), yellow (accepted), red (onboard)
+                  let fillColor = "#10B981"; // Free/Awaiting Trip
+                  if (driverState === "accepted") fillColor = "#F59E0B"; // Ride Accepted/Passenger not on board
+                  if (driverState === "onboard") fillColor = "#EF4444"; // Passenger OnBoard
+
                   return (
                     <React.Fragment key={`dr-${driver.id}`}>
                       <MarkerF
@@ -401,7 +425,7 @@ export default function DispatchEngine() {
                         onClick={() => setSelectedPin({ type: "driver", id: driver.id, data: driver })}
                         icon={{
                           path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
-                          fillColor: driver.isBusy ? "#2563EB" : "#10B981",
+                          fillColor: fillColor,
                           fillOpacity: 0.9,
                           strokeColor: "#ffffff",
                           strokeWeight: 1.5,
@@ -419,10 +443,10 @@ export default function DispatchEngine() {
                             <p className="text-slate-500 font-semibold mt-1">{driver.vehicle}</p>
                             <div className="flex items-center gap-2 mt-2 pt-1 border-t border-slate-100">
                               <span className="font-bold flex items-center text-yellow-600">⭐ {driver.rating}</span>
-                              <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold text-white", 
-                                driver.isBusy ? "bg-blue-600" : "bg-emerald-600"
+                              <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold text-white uppercase tracking-wider", 
+                                driverState === "free" ? "bg-emerald-600" : driverState === "accepted" ? "bg-amber-500" : "bg-red-500"
                               )}>
-                                {driver.isBusy ? "On Trip" : "Idle Stay"}
+                                {driverState === "free" ? "Free" : driverState === "accepted" ? "Accepted" : "OnBoard"}
                               </span>
                             </div>
                           </div>
@@ -505,19 +529,19 @@ export default function DispatchEngine() {
             )}
 
             {/* Map Custom Floating HUD Controls */}
-            <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm border border-black rounded-lg p-2.5 shadow-sm space-y-1 z-10 pointer-events-none select-none">
-              <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Map Legend</p>
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                <span className="text-[10px] font-bold text-black">Idle Driver</span>
+            <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm border border-black rounded-lg p-2.5 shadow-sm space-y-1.5 z-10 pointer-events-none select-none max-w-[260px] md:max-w-xs">
+              <p className="text-[9px] font-extrabold uppercase text-slate-400 tracking-wider">Map Legend</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shrink-0"></span>
+                <span className="text-[10px] font-bold text-black">Green - Free/Awaiting Trip</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
-                <span className="text-[10px] font-bold text-black">Active Driver</span>
+              <div className="flex items-start gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shrink-0 mt-0.5"></span>
+                <span className="text-[10px] font-bold text-black leading-tight">Yellow - Ride Accepted/ Passenger not on board yet</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                <span className="text-[10px] font-bold text-black">Awaiting Trip</span>
+              <div className="flex items-start gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shrink-0 mt-0.5"></span>
+                <span className="text-[10px] font-bold text-black leading-tight">Red - Passenger OnBoard heading to destination</span>
               </div>
             </div>
           </div>
@@ -669,33 +693,55 @@ export default function DispatchEngine() {
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Nearest Top</span>
             </h2>
             <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
-              {activeDriversOnline.map((driver) => (
-                <div 
-                  key={driver.id} 
-                  onClick={() => {
-                    if (driver.lat) {
-                      setMapCenter({ lat: driver.lat, lng: driver.lng });
-                      setMapZoom(14);
-                    }
-                  }}
-                  className="flex justify-between items-center p-3 border border-slate-200 rounded-lg hover:border-black cursor-pointer transition-colors bg-slate-50/30"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className={cn("w-2 h-2 rounded-full",
-                      driver.isBusy ? "bg-blue-600" : "bg-emerald-500 animate-ping"
-                    )}></div>
-                    <div className="text-left">
-                      <p className="text-xs font-bold text-black">{driver.name}</p>
-                      <p className="text-[10px] text-slate-500 font-semibold">{driver.vehicle || "Toyota Camry"} • ⭐ {driver.rating || 4.8}</p>
+              {activeDriversOnline.map((driver) => {
+                // Determine same state for consistency
+                const activeRide = activeLiveRides.find(r => 
+                  r.assignedDriverId === driver.id || 
+                  r.driverId === driver.id ||
+                  (driver.name && r.driverName === driver.name)
+                );
+                
+                let driverState: "free" | "accepted" | "onboard" = "free";
+                if (activeRide) {
+                  if (activeRide.status === "in_progress") {
+                    driverState = "onboard";
+                  } else {
+                    driverState = "accepted";
+                  }
+                } else if (driver.isBusy) {
+                  driverState = "onboard";
+                }
+
+                return (
+                  <div 
+                    key={driver.id} 
+                    onClick={() => {
+                      if (driver.lat) {
+                        setMapCenter({ lat: driver.lat, lng: driver.lng });
+                        setMapZoom(14);
+                      }
+                    }}
+                    className="flex justify-between items-center p-3 border border-slate-200 rounded-lg hover:border-black cursor-pointer transition-colors bg-slate-50/30"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={cn("w-2 h-2 rounded-full",
+                        driverState === "free" ? "bg-emerald-500 animate-ping" : driverState === "accepted" ? "bg-amber-500" : "bg-red-500"
+                      )}></div>
+                      <div className="text-left">
+                        <p className="text-xs font-bold text-black">{driver.name}</p>
+                        <p className="text-[10px] text-slate-500 font-semibold">{driver.vehicle || "Toyota Camry"} • ⭐ {driver.rating || 4.8}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={cn("text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded border",
+                        driverState === "free" ? "text-emerald-700 bg-emerald-50 border-emerald-100" : driverState === "accepted" ? "text-amber-700 bg-amber-50 border-amber-100" : "text-red-700 bg-red-50 border-red-100"
+                      )}>
+                        {driverState === "free" ? "Free" : driverState === "accepted" ? "Accepted" : "OnBoard"}
+                      </span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      {driver.isBusy ? "In Transit" : "Idle Stay"}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

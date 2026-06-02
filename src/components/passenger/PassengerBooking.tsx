@@ -243,7 +243,7 @@ const darkMapOptions: google.maps.MapOptions = {
   ]
 };
 
-const libraries: any[] = ['places'];
+const libraries: any[] = ['places', 'geometry'];
 
 type BookingStep = "details" | "searching" | "confirmed" | "receipt";
 
@@ -2018,9 +2018,10 @@ export default function PassengerBooking() {
        }
 
        // Ride is "pending". Let's find the best driver logically.
-       const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
-       const snapshot = await getDocs(q);
-       const declinedBy = rideInfo.declinedBy || [];
+        const q = query(collection(db, "live_tracking"), where("isOnline", "==", true));
+        const snapshot = await getDocs(q);
+        const declinedBy = rideInfo.declinedBy || [];
+        console.log(`[AnyRoller Dispatch] Checking dispatch for ride:${currentRideId}. Found ${snapshot.size} online driver(s) in live_tracking database.`);
 
        let bestDriver: any = null;
        let bestDistance = Infinity;
@@ -2111,7 +2112,8 @@ export default function PassengerBooking() {
               if (snap.id !== currentRideId) {
                  const otherData = snap.data();
                  if (otherData.createdAt?.toMillis && rideInfo.createdAt?.toMillis) {
-                    if (otherData.createdAt.toMillis() < rideInfo.createdAt.toMillis()) {
+                    const otherAgeMs = Date.now() - otherData.createdAt.toMillis();
+                    if (otherAgeMs < 15 * 60 * 1000 && otherData.createdAt.toMillis() < rideInfo.createdAt.toMillis()) {
                        // There is an older job. Let's see if it's close enough that the driver could take it instead.
                        const oldPickupLat = otherData.pickupLat;
                        const oldPickupLng = otherData.pickupLng;
