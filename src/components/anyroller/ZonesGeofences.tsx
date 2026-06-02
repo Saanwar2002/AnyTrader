@@ -6,9 +6,11 @@ import {
   Target, ShieldCheck, HelpCircle, Edit2, CheckCircle, Search
 } from "lucide-react";
 import { db, collection, doc, onSnapshot, getDoc, setDoc, updateDoc } from "@/src/firebase";
-import { GoogleMap, useJsApiLoader, MarkerF, CircleF, InfoWindowF } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, MarkerF, CircleF, InfoWindowF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { toast } from "sonner";
+import { cn } from "@/src/lib/utils";
+import { fetchLiveDemandZones } from "@/src/services/surgeHeatmapService";
 
 // Premium Anti-Glare Golden Map Options (exactly as requested)
 const premiumMapOptions = {
@@ -108,7 +110,11 @@ export default function ZonesGeofences() {
       highFee: 3.50,
       lowMultiplier: 1.1,
       mediumMultiplier: 1.3,
-      highMultiplier: 1.6
+      highMultiplier: 1.6,
+      lowColor: "green",
+      mediumColor: "amber",
+      highColor: "red",
+      surgeOpacity: 40
     }
   });
 
@@ -116,6 +122,24 @@ export default function ZonesGeofences() {
   const [mapCenter, setMapCenter] = useState({ lat: 53.6458, lng: -1.7850 });
   const [mapZoom, setMapZoom] = useState(11);
   const [selectedPin, setSelectedPin] = useState<any | null>(null);
+  const [demandZones, setDemandZones] = useState<any[]>([]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (surgeConfig.surgeEnabled) {
+      const loadSurge = async () => {
+        const zones = await fetchLiveDemandZones();
+        setDemandZones(zones);
+      };
+      loadSurge();
+      interval = setInterval(loadSurge, 30000); // 30 sec refresh
+    } else {
+      setDemandZones([]);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [surgeConfig.surgeEnabled]);
 
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
@@ -1096,6 +1120,85 @@ export default function ZonesGeofences() {
                       </div>
                     </div>
 
+                    {/* Box 3: Surge Map UI Colors Card */}
+                    <div className="col-span-2 p-3 bg-white border border-black rounded-xl">
+                      <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-dashed border-gray-100">
+                        <span className="text-[9px] font-black text-black uppercase tracking-wider block">
+                          Surge Map UI Colors
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black text-slate-500 block uppercase">Low Intensity</span>
+                          <select
+                            value={surgeConfig.surgeRules.lowColor || "green"}
+                            onChange={(e) => setSurgeConfig({
+                              ...surgeConfig,
+                              surgeRules: { ...surgeConfig.surgeRules, lowColor: e.target.value }
+                            })}
+                            className="w-full bg-slate-50 border border-black rounded p-1 font-bold text-xs text-black focus:outline-none"
+                          >
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="amber">Orange/Yellow</option>
+                            <option value="red">Red</option>
+                            <option value="purple">Purple</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black text-slate-500 block uppercase">Med Intensity</span>
+                          <select
+                            value={surgeConfig.surgeRules.mediumColor || "amber"}
+                            onChange={(e) => setSurgeConfig({
+                              ...surgeConfig,
+                              surgeRules: { ...surgeConfig.surgeRules, mediumColor: e.target.value }
+                            })}
+                            className="w-full bg-slate-50 border border-black rounded p-1 font-bold text-xs text-black focus:outline-none"
+                          >
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="amber">Orange/Yellow</option>
+                            <option value="red">Red</option>
+                            <option value="purple">Purple</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black text-slate-500 block uppercase">High Intensity</span>
+                          <select
+                            value={surgeConfig.surgeRules.highColor || "red"}
+                            onChange={(e) => setSurgeConfig({
+                              ...surgeConfig,
+                              surgeRules: { ...surgeConfig.surgeRules, highColor: e.target.value }
+                            })}
+                            className="w-full bg-slate-50 border border-black rounded p-1 font-bold text-xs text-black focus:outline-none"
+                          >
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="amber">Orange/Yellow</option>
+                            <option value="red">Red</option>
+                            <option value="purple">Purple</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-dashed border-gray-100 flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <label className="text-[8px] font-black text-slate-500 block uppercase">Overlay Opacity: {surgeConfig.surgeRules.surgeOpacity || 40}%</label>
+                          <input
+                            type="range"
+                            min="5"
+                            max="80"
+                            step="5"
+                            value={surgeConfig.surgeRules.surgeOpacity || 40}
+                            onChange={(e) => setSurgeConfig({
+                              ...surgeConfig,
+                              surgeRules: { ...surgeConfig.surgeRules, surgeOpacity: parseInt(e.target.value) }
+                            })}
+                            className="w-full accent-black h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer mt-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
@@ -1226,6 +1329,86 @@ export default function ZonesGeofences() {
                       </div>
                     </InfoWindowF>
                   )}
+
+                  {/* AI Predictive Surge Heatmap */}
+                  {demandZones.map((zone, idx) => {
+                    const rawIntensity = (zone.intensity || zone.type || "low").toLowerCase();
+                    const intensity = rawIntensity === "moderate" ? "medium" : rawIntensity;
+
+                    let uiColor = (zone as any).uiColor;
+                    if (!uiColor) {
+                      if (intensity === "high") uiColor = "red";
+                      else if (intensity === "medium" || intensity === "moderate") uiColor = "amber";
+                      else uiColor = "green";
+                    }
+                    
+                    let rawOpacity = (zone as any).uiOpacity;
+                    let parsedOpacity = typeof rawOpacity === 'number' ? rawOpacity 
+                      : (typeof rawOpacity === 'string' ? parseFloat(rawOpacity) : 40);
+                    let uiOpacity = (!isNaN(parsedOpacity) ? parsedOpacity : 40) / 100;
+
+                    // Define theme values based on selected uiColor
+                    let circleColor = "#34C759"; // Default green
+                    let strokeColor = "#16A34A"; // Darker green
+                    let glowBg = "bg-emerald-500";
+                    
+                    if (uiColor === "red") {
+                      circleColor = "#FF3B30";
+                      strokeColor = "#DC2626";
+                      glowBg = "bg-red-500";
+                    } else if (uiColor === "amber") {
+                      circleColor = "#FF9500";
+                      strokeColor = "#D97706";
+                      glowBg = "bg-amber-500";
+                    } else if (uiColor === "blue") {
+                      circleColor = "#3B82F6";
+                      strokeColor = "#2563EB";
+                      glowBg = "bg-blue-500";
+                    } else if (uiColor === "purple") {
+                      circleColor = "#AF52DE";
+                      strokeColor = "#9333EA";
+                      glowBg = "bg-purple-500";
+                    }
+
+                    return (
+                      <React.Fragment key={`surge-${idx}-${uiOpacity}`}>
+                        <CircleF
+                          key={`circle-${idx}-${uiOpacity}`}
+                          center={{ lat: zone.lat, lng: zone.lng }}
+                          radius={zone.radius}
+                          options={{
+                            strokeColor: strokeColor,
+                            strokeOpacity: 0.8,
+                            strokeWeight: 1,
+                            fillColor: circleColor,
+                            fillOpacity: uiOpacity,
+                            clickable: false,
+                          }}
+                        />
+                        <OverlayViewF
+                          position={{ lat: zone.lat, lng: zone.lng }}
+                          mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                        >
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                            {/* Simple Pulsing Color-Coded Flash Icon */}
+                            <div className="relative flex flex-col items-center justify-center">
+                              {/* Pulse ripple circle */}
+                              <span className={cn(
+                                "absolute top-0 inline-flex h-8 w-8 rounded-full animate-ping",
+                                glowBg
+                              )} style={{ marginTop: "-2px", opacity: uiOpacity }}></span>
+                              {/* Bare Zap Icon */}
+                              <Zap className="w-6 h-6 fill-current animate-pulse relative z-10 drop-shadow-md" style={{ color: strokeColor }} />
+                              {/* Price Label */}
+                              <span className="text-[14px] font-black mt-0.5 tracking-widest relative z-10 text-center drop-shadow-md bg-white/40 px-1.5 py-0.5 rounded backdrop-blur-sm shadow-sm" style={{ color: strokeColor }}>
+                                {zone.label ? zone.label.replace(" Surge", "") : ""}
+                              </span>
+                            </div>
+                          </div>
+                        </OverlayViewF>
+                      </React.Fragment>
+                    );
+                  })}
                 </GoogleMap>
               ) : (
                 <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center p-6 text-center">

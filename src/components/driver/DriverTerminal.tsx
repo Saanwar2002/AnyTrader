@@ -4134,30 +4134,53 @@ export default function DriverTerminal() {
                     const rawIntensity = (zone.intensity || zone.type || "low").toLowerCase();
                     const intensity = rawIntensity === "moderate" ? "medium" : rawIntensity;
 
-                    // Define theme values based on intensity level
-                    let circleColor = "#3B82F6"; // Default low (blue)
-                    let glowBg = "bg-blue-500/40";
-                    let iconTheme = "bg-blue-950/90 border-blue-500/50 text-blue-400";
+                    let uiColor = (zone as any).uiColor;
+                    if (!uiColor) {
+                      if (intensity === "high") uiColor = "red";
+                      else if (intensity === "medium" || intensity === "moderate") uiColor = "amber";
+                      else uiColor = "green";
+                    }
+                    
+                    let rawOpacity = (zone as any).uiOpacity;
+                    let parsedOpacity = typeof rawOpacity === 'number' ? rawOpacity 
+                      : (typeof rawOpacity === 'string' ? parseFloat(rawOpacity) : 40);
+                    let uiOpacity = (!isNaN(parsedOpacity) ? parsedOpacity : 40) / 100;
 
-                    if (intensity === "high") {
-                      circleColor = "#FF3B30"; // Red
-                      glowBg = "bg-red-500/40";
-                      iconTheme = "bg-red-950/90 border-red-500/50 text-red-500";
-                    } else if (intensity === "medium" || intensity === "moderate") {
-                      circleColor = "#FF9500"; // Orange/Amber
-                      glowBg = "bg-amber-500/50";
-                      iconTheme = "bg-amber-950/90 border-amber-500/50 text-amber-500";
+                    // Define theme values based on selected uiColor
+                    let circleColor = "#34C759"; // Default green
+                    let strokeColor = "#16A34A"; // Darker green
+                    let glowBg = "bg-emerald-500";
+                    
+                    if (uiColor === "red") {
+                      circleColor = "#FF3B30";
+                      strokeColor = "#DC2626";
+                      glowBg = "bg-red-500";
+                    } else if (uiColor === "amber") {
+                      circleColor = "#FF9500";
+                      strokeColor = "#D97706";
+                      glowBg = "bg-amber-500";
+                    } else if (uiColor === "blue") {
+                      circleColor = "#3B82F6";
+                      strokeColor = "#2563EB";
+                      glowBg = "bg-blue-500";
+                    } else if (uiColor === "purple") {
+                      circleColor = "#AF52DE";
+                      strokeColor = "#9333EA";
+                      glowBg = "bg-purple-500";
                     }
 
                     return (
-                      <React.Fragment key={`surge-${idx}`}>
+                      <React.Fragment key={`surge-${idx}-${uiOpacity}`}>
                         <CircleF
+                          key={`circle-${idx}-${uiOpacity}`}
                           center={{ lat: zone.lat, lng: zone.lng }}
                           radius={zone.radius}
                           options={{
-                            strokeColor: "transparent",
+                            strokeColor: strokeColor,
+                            strokeOpacity: 0.8,
+                            strokeWeight: 1,
                             fillColor: circleColor,
-                            fillOpacity: (isAutoNavHeadUp || directions) ? 0.01 : 0.04,
+                            fillOpacity: uiOpacity,
                             clickable: false,
                           }}
                         />
@@ -4167,19 +4190,18 @@ export default function DriverTerminal() {
                         >
                           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
                             {/* Simple Pulsing Color-Coded Flash Icon */}
-                            <div className="relative flex items-center justify-center">
+                            <div className="relative flex flex-col items-center justify-center">
                               {/* Pulse ripple circle */}
                               <span className={cn(
-                                "absolute inline-flex h-8 w-8 rounded-full opacity-75 animate-ping",
+                                "absolute top-0 inline-flex h-8 w-8 rounded-full animate-ping",
                                 glowBg
-                              )}></span>
-                              {/* Inner Premium Glass Container with Flash Icon */}
-                              <div className={cn(
-                                "relative flex items-center justify-center h-7 w-7 rounded-xl border shadow-lg backdrop-blur-md transition-all justify-center items-center",
-                                iconTheme
-                              )}>
-                                <Zap className="w-3.5 h-3.5 fill-current animate-pulse" />
-                              </div>
+                              )} style={{ marginTop: "-2px", opacity: uiOpacity }}></span>
+                              {/* Bare Zap Icon */}
+                              <Zap className="w-6 h-6 fill-current animate-pulse relative z-10 drop-shadow-md" style={{ color: strokeColor }} />
+                              {/* Price Label */}
+                              <span className="text-[14px] font-black mt-0.5 tracking-widest relative z-10 text-center drop-shadow-md bg-white/40 px-1.5 py-0.5 rounded backdrop-blur-sm shadow-sm" style={{ color: strokeColor }}>
+                                {zone.label ? zone.label.replace(" Surge", "") : ""}
+                              </span>
                             </div>
                           </div>
                         </OverlayViewF>

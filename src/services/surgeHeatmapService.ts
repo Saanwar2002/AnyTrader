@@ -11,6 +11,8 @@ export interface SurgeZone {
   waitWarning?: boolean;
   extraFee?: number;
   isFixedModel?: boolean;
+  uiColor?: string;
+  uiOpacity?: number;
 }
 
 // Distance helper
@@ -29,10 +31,12 @@ function getDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number
 export async function fetchLiveDemandZones(): Promise<SurgeZone[]> {
   try {
     const configSnap = await getDoc(doc(db, "platform_config", "rides"));
-    let rules = {
+    let rules: any = {
        lowWaitMins: 5, mediumWaitMins: 10, highWaitMins: 20,
        lowFee: 1.0, mediumFee: 2.0, highFee: 3.5,
-       lowMultiplier: 1.1, mediumMultiplier: 1.3, highMultiplier: 1.6
+       lowMultiplier: 1.1, mediumMultiplier: 1.3, highMultiplier: 1.6,
+       lowColor: "green", mediumColor: "amber", highColor: "red",
+       surgeOpacity: 40
     };
     let isFixedModel = true;
     let autoSurgeEnabled = true;
@@ -137,15 +141,17 @@ export async function fetchLiveDemandZones(): Promise<SurgeZone[]> {
           maxWaitTimeMins: maxWaitTimeMins,
           waitWarning: maxWaitTimeMins >= rules.highWaitMins,
           extraFee,
-          isFixedModel
+          isFixedModel,
+          uiColor: intensity === "high" ? (rules.highColor || "red") : intensity === "medium" ? (rules.mediumColor || "amber") : (rules.lowColor || "green"),
+          uiOpacity: rules.surgeOpacity
         });
       }
     });
 
     if (zones.length === 0) {
       // Provide simulated default zones if empty to give drivers an idea
-      zones.push({ lat: 53.6458, lng: -1.7850, radius: 800, intensity: "high", label: isFixedModel ? `£${rules.highFee.toFixed(2)} Surge` : `${rules.highMultiplier}x Surge`, surgeMultiplier: rules.highMultiplier, extraFee: rules.highFee, isFixedModel });
-      zones.push({ lat: 53.6558, lng: -1.7750, radius: 600, intensity: "medium", label: isFixedModel ? `£${rules.mediumFee.toFixed(2)} Surge` : `${rules.mediumMultiplier}x Surge`, surgeMultiplier: rules.mediumMultiplier, extraFee: rules.mediumFee, isFixedModel });
+      zones.push({ lat: 53.6458, lng: -1.7850, radius: 800, intensity: "high", label: isFixedModel ? `£${rules.highFee.toFixed(2)} Surge` : `${rules.highMultiplier}x Surge`, surgeMultiplier: rules.highMultiplier, extraFee: rules.highFee, isFixedModel, uiColor: rules.highColor || "red", uiOpacity: rules.surgeOpacity });
+      zones.push({ lat: 53.6558, lng: -1.7750, radius: 600, intensity: "medium", label: isFixedModel ? `£${rules.mediumFee.toFixed(2)} Surge` : `${rules.mediumMultiplier}x Surge`, surgeMultiplier: rules.mediumMultiplier, extraFee: rules.mediumFee, isFixedModel, uiColor: rules.mediumColor || "amber", uiOpacity: rules.surgeOpacity });
     }
 
     return zones.sort((a,b) => b.surgeMultiplier - a.surgeMultiplier);
