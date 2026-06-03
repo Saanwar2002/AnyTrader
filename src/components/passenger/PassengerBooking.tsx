@@ -1026,84 +1026,199 @@ export default function PassengerBooking() {
 
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     triggerHaptic(ImpactStyle.Light);
     
     if (isListening) {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      // Let the onend handler process the current transcript when it fires.
-      recognitionRef.current?.stop(); 
-      // Do not processVoiceCommand here, otherwise it may process twice because onend is called when stop() occurs.
+      
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+          await SpeechRecognition.stop();
+        } catch (e: any) {
+          console.error("Native stop error:", e);
+        }
+        setIsListening(false);
+        if (transcriptRef.current.trim().length > 0) {
+          processVoiceCommand(transcriptRef.current);
+          transcriptRef.current = "";
+        }
+      } else {
+        // Let the onend handler process the current transcript when it fires.
+        recognitionRef.current?.stop(); 
+      }
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error("Speech recognition not supported.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognitionRef.current = recognition;
-    recognition.lang = "en-GB";
-    recognition.continuous = true;
-    recognition.interimResults = true;
     transcriptRef.current = "";
 
-    const resetSilenceTimer = () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) recognitionRef.current.stop();
-      }, 3000); // Wait 3 seconds of silence before automatically stopping
-    };
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      resetSilenceTimer();
-    };
-    
-    recognition.onend = () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      setIsListening(false);
-      if (transcriptRef.current.trim().length > 0) {
-        processVoiceCommand(transcriptRef.current);
-        transcriptRef.current = "";
-      }
-    };
-    
-    recognition.onerror = (e: any) => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (e.error === 'no-speech') {
-        // Stop on no speech if it's too long
-        setIsListening(false);
-        return;
-      }
-      if (e.error === 'aborted') {
-        return;
-      }
-      setIsListening(false);
-    };
-    
-    recognition.onresult = (event: any) => {
-      resetSilenceTimer();
-      let currentTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          currentTranscript += event.results[i][0].transcript + ' ';
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+        
+        // 1. Check if available
+        const { available } = await SpeechRecognition.available();
+        if (!available) {
+          toast.error("Speech recognition is not available or supported on this device.");
+          return;
         }
+
+        // 2. Check & Request permissions
+        const check = await SpeechRecognition.checkPermissions();
+        if (check.speechRecognition !== 'granted') {
+          const req = await SpeechRecognition.requestPermissions();
+          if (req.speechRecognition !== 'granted') {
+            toast.error("Microphone and Speech Recognition permissions are required to book by voice.");
+            return;
+          }
+        }
+
+        // 3. Setup partial results listener
+        if ((window as any)._speechListener) {
+          try {
+            await (window as any)._speechListener.remove();
+          } catch (_) {}
+        }
+        
+        const listener = await SpeechRecognition.addListener('partialResults', (data: { matches: string[] }) => {
+          if (data.matches && data.matches.length > 0) {
+            transcriptRef.current = data.matches[0];
+            resetSilenceTimer();
+          }
+        });
+        (window as any)._speechListener = listener;
+
+        const resetSilenceTimer = () => {
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(async () => {
+            try {
+              await SpeechRecognition.stop();
+            } catch (err) {}
+          }, 4000); // Wait 4 seconds of silence before automatically stopping
+        };
+
+        // Listen for when it stops
+        if ((window as any)._speechStateListener) {
+          try {
+            await (window as any)._speechStateListener.remove();
+          } catch (_) {}
+        }
+        const stateListener = await SpeechRecognition.addListener('listeningState', (data: { status: 'started' | 'stopped' }) => {
+          if (data.status === 'stopped') {
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            setIsListening(false);
+            
+            // Clean up listeners
+            if ((window as any)._speechListener) {
+              (window as any)._speechListener.remove().catch(() => {});
+              (window as any)._speechListener = null;
+            }
+            if ((window as any)._speechStateListener) {
+              (window as any)._speechStateListener.remove().catch(() => {});
+              (window as any)._speechStateListener = null;
+            }
+
+            if (transcriptRef.current.trim().length > 0) {
+              processVoiceCommand(transcriptRef.current);
+              transcriptRef.current = "";
+            }
+          }
+        });
+        (window as any)._speechStateListener = stateListener;
+
+        setIsListening(true);
+        resetSilenceTimer();
+
+        // 4. Start native recorder
+        await SpeechRecognition.start({
+          language: 'en-GB',
+          maxResults: 1,
+          partialResults: true,
+          popup: false,
+        });
+
+      } catch (err: any) {
+        console.error("Capacitor Speech Recognition failed:", err);
+        toast.error("Capacitor Voice Error: " + (err.message || String(err)));
+        setIsListening(false);
       }
-      if (currentTranscript) {
-        transcriptRef.current += currentTranscript;
+    } else {
+      // Browser Web Speech API fallback
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        toast.error("Speech recognition not supported in this browser. Please use Google Chrome or Safari.");
+        return;
       }
-    };
-    
-    try {
-      recognition.start();
-    } catch(e: any) {
-      if (e && e.name !== 'InvalidStateError' && !e.message?.includes('already started')) {
-        console.error("Speech recognition start error:", e);
+
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = "en-GB";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      const resetSilenceTimer = () => {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = setTimeout(() => {
+          if (recognitionRef.current) recognitionRef.current.stop();
+        }, 3000); // Wait 3 seconds of silence before automatically stopping
+      };
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        resetSilenceTimer();
+      };
+      
+      recognition.onend = () => {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        setIsListening(false);
+        if (transcriptRef.current.trim().length > 0) {
+          processVoiceCommand(transcriptRef.current);
+          transcriptRef.current = "";
+        }
+      };
+      
+      recognition.onerror = (e: any) => {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        const errDetail = e.error || String(e);
+        console.error("Browser speech recognition error:", e);
+        if (errDetail === 'no-speech') {
+          setIsListening(false);
+          return;
+        }
+        if (errDetail === 'aborted') {
+          return;
+        }
+        if (errDetail === 'not-allowed') {
+          toast.error("Microphone access denied. Please enable microphone permission in your browser or device settings.");
+        } else {
+          toast.error(`Voice Error: ${errDetail}`);
+        }
+        setIsListening(false);
+      };
+      
+      recognition.onresult = (event: any) => {
+        resetSilenceTimer();
+        let currentTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            currentTranscript += event.results[i][0].transcript + ' ';
+          }
+        }
+        if (currentTranscript) {
+          transcriptRef.current += currentTranscript;
+        }
+      };
+      
+      try {
+        recognition.start();
+      } catch(e: any) {
+        if (e && e.name !== 'InvalidStateError' && !e.message?.includes('already started')) {
+          console.error("Speech recognition start error:", e);
+          toast.error("Failed to start speech listener.");
+        }
+        setIsListening(false);
       }
-      setIsListening(false);
     }
   };
 
