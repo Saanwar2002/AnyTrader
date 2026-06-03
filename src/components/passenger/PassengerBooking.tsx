@@ -2730,25 +2730,27 @@ export default function PassengerBooking() {
                   onDragStart={handlePinMouseUpOrLeave}
                   icon={createPinIcon("#10b981")} 
                 />
-                <OverlayViewF
-                  position={pickupCoords}
-                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                  getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 68 })}
-                >
-                  <div className="bg-emerald-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-emerald-200 min-w-[120px] max-w-[200px] pointer-events-auto flex flex-col">
-                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.1em] mb-1">Pickup</p>
-                    <div className="text-[10px] font-bold text-emerald-950 leading-tight space-y-0.5">
-                      {formatAddressLines(pickup)}
-                    </div>
-                    {draggablePin !== "pickup" && step === "details" && detailsView === "address" && (
-                      <div className="mt-1.5 pt-1 border-t border-emerald-200/50 flex items-center justify-center gap-1 opacity-70">
-                        <MapPin className="w-2.5 h-2.5 text-emerald-700" />
-                        <span className="text-[8px] font-bold text-emerald-800 tracking-tight">Hold pin to move</span>
+                {assignedDriverInfo?.status !== "in_progress" && (
+                  <OverlayViewF
+                    position={pickupCoords}
+                    mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                    getPixelPositionOffset={(width, height) => ({ x: -(width / 2), y: -height - 68 })}
+                  >
+                    <div className="bg-emerald-50 px-2.5 py-2.5 rounded-xl shadow-xl border border-emerald-200 min-w-[120px] max-w-[200px] pointer-events-auto flex flex-col">
+                      <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.1em] mb-1">Pickup</p>
+                      <div className="text-[10px] font-bold text-emerald-950 leading-tight space-y-0.5">
+                        {formatAddressLines(pickup)}
                       </div>
-                    )}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-50 border-r border-b border-emerald-200 rotate-45 -mt-1" />
-                  </div>
-                </OverlayViewF>
+                      {draggablePin !== "pickup" && step === "details" && detailsView === "address" && (
+                        <div className="mt-1.5 pt-1 border-t border-emerald-200/50 flex items-center justify-center gap-1 opacity-70">
+                          <MapPin className="w-2.5 h-2.5 text-emerald-700" />
+                          <span className="text-[8px] font-bold text-emerald-800 tracking-tight">Hold pin to move</span>
+                        </div>
+                      )}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-50 border-r border-b border-emerald-200 rotate-45 -mt-1" />
+                    </div>
+                  </OverlayViewF>
+                )}
               </>
             )}
             {dropoffCoords && (
