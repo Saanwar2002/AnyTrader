@@ -293,26 +293,20 @@ export default function SavedJourneys() {
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
-                    <div className="flex w-full gap-2 hidden group-hover:flex">
+                    <div className="flex-1 flex gap-2">
                       <button
                         onClick={() => handleBookJourney(journey, false)}
-                        className="flex-1 flex items-center justify-center gap-1 py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-xs hover:bg-emerald-100 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-black text-sm hover:bg-emerald-100 active:scale-95 transition-all"
                       >
                         Go
                       </button>
                       <button
                         onClick={() => handleBookJourney(journey, true)}
-                        className="flex-1 flex items-center justify-center gap-1 py-3 bg-orange-50 text-orange-700 rounded-xl font-bold text-xs hover:bg-orange-100 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl font-black text-sm hover:bg-orange-100 active:scale-95 transition-all"
                       >
                         Return
                       </button>
                     </div>
-                    <button
-                      onClick={() => handleBookJourney(journey, false)}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl font-black text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 group-hover:hidden"
-                    >
-                      Book This Journey <ArrowRight className="w-4 h-4 opacity-70" />
-                    </button>
                   </div>
                 </motion.div>
               ))

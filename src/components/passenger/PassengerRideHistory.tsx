@@ -38,6 +38,16 @@ export default function PassengerRideHistory() {
 
   const handleSaveJourney = async (ride: any) => {
     if (!user) return;
+    
+    // Explicitly check for duplicate journeys in local profile snapshot first
+    const isAlreadySaved = profile?.regularJourneys?.some(
+      (j: any) => j.from === ride.pickup && j.to === ride.dropoff
+    );
+    if (isAlreadySaved) {
+      toast.warning("Journey is already saved to your regulars!");
+      return;
+    }
+
     try {
       await updateDoc(doc(db, "users", user.uid), {
         regularJourneys: arrayUnion({
@@ -393,6 +403,22 @@ export default function PassengerRideHistory() {
                          <FileText className="w-4 h-4" />
                          Show job detail
                        </button>
+                    )}
+                    {ride.status === "cancelled" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const params = new URLSearchParams();
+                          if (ride.pickup) params.set("pickup", ride.pickup);
+                          if (ride.dropoff) params.set("dropoff", ride.dropoff);
+                          if (ride.comments) params.set("comments", ride.comments);
+                          navigate(`/book-ride?${params.toString()}`);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-colors bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200"
+                      >
+                        <Car className="w-4 h-4" />
+                        Rebook Ride
+                      </button>
                     )}
                   </div>
                   

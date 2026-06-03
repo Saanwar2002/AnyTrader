@@ -76,6 +76,7 @@ import {
   getDoc,
   addDoc,
   orderBy,
+  arrayUnion,
 } from "@/src/firebase";
 import { playSound } from "@/src/lib/sound";
 import DriverEarnings from "./DriverEarnings";
@@ -416,6 +417,7 @@ export default function DriverTerminal() {
   const [declineConfirmStacked, setDeclineConfirmStacked] = useState(false);
   const [showFareBreakdown, setShowFareBreakdown] = useState(false);
   const [incomingTimer, setIncomingTimer] = useState(15);
+  const [consecutiveMissedOffers, setConsecutiveMissedOffers] = useState(0);
   const [totalOfferSeconds, setTotalOfferSeconds] = useState(15);
   const [stackedRideOffer, setStackedRideOffer] = useState<any>(null);
   const [acceptedStackedRideOffer, setAcceptedStackedRideOffer] =
@@ -426,6 +428,13 @@ export default function DriverTerminal() {
   const [showStartJobReminder, setShowStartJobReminder] = useState(false);
   const [hasDismissedStartJobReminder, setHasDismissedStartJobReminder] =
     useState(false);
+
+  const [isAcceptingRide, setIsAcceptingRide] = useState(false);
+  const isAcceptingRideRef = useRef(false);
+
+  useEffect(() => {
+    isAcceptingRideRef.current = isAcceptingRide;
+  }, [isAcceptingRide]);
 
   useEffect(() => {
     if (
@@ -1830,7 +1839,7 @@ export default function DriverTerminal() {
   // Listen for REAL incoming live ride requests (offered to this driver)
   useEffect(() => {
     if (!isOnline || !user) return;
-    if (rideState !== "idle" && rideState !== "in_progress") return;
+    if (rideState !== "idle" && rideState !== "incoming" && rideState !== "in_progress") return;
 
     const q = query(
       collection(db, "ride_requests"),
@@ -1865,6 +1874,11 @@ export default function DriverTerminal() {
           hasCardOnFile: data.hasCardOnFile || false,
           tipAmount: data.tipAmount || 0,
           paymentMethod: data.paymentMethod,
+          isSimulated: false,
+          surgeMultiplier: data.surgeMultiplier || 1.0,
+          surgeModel: data.surgeModel || 'multiplier',
+          surgeFixedAmount: data.surgeFixedAmount || 0,
+          surgeFixed: data.surgeFixedAmount || 0,
         };
 
         // Calculate remaining time for the offer
@@ -1888,7 +1902,13 @@ export default function DriverTerminal() {
         }
         if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
       } else {
-        if (
+        if (rideState === "incoming") {
+          if (!isAcceptingRideRef.current) {
+            setActiveRide(null);
+            setRideState("idle");
+            toast.info("Ride request was cancelled or reassigned.");
+          }
+        } else if (
           rideState === "in_progress" &&
           stackedRideOffer &&
           stackedRideOffer.isReal !== false
@@ -1979,6 +1999,7 @@ export default function DriverTerminal() {
                 fareEstimate: data.fareEstimate || prev.fareEstimate,
                 distanceMiles: data.distanceMiles || prev.distanceMiles,
                 durationMinutes: data.durationMinutes || prev.durationMinutes,
+                tipAmount: data.tipAmount !== undefined ? data.tipAmount : prev.tipAmount,
               };
             });
           }
@@ -2081,6 +2102,7 @@ export default function DriverTerminal() {
                     fareEstimate: data.fareEstimate || prev.fareEstimate,
                     distanceMiles: data.distanceMiles || prev.distanceMiles,
                     stops: data.stops || prev.stops,
+                    tipAmount: data.tipAmount !== undefined ? data.tipAmount : prev.tipAmount,
                   }
                 : null,
             );
@@ -2186,6 +2208,7 @@ export default function DriverTerminal() {
 
     const newStatus = !isOnline;
     setIsOnline(newStatus);
+    setConsecutiveMissedOffers(0);
     setIsSyncingMap(true);
     setTimeout(() => {
       setIsSyncingMap(false);
@@ -2636,6 +2659,9 @@ export default function DriverTerminal() {
   };
 
   const handleAcceptRide = async () => {
+    setConsecutiveMissedOffers(0);
+    if (isAcceptingRide) return;
+    setIsAcceptingRide(true);
     // If it's a real ride from Firestore, claim it!
     if (activeRide?.isReal && activeRide?.id && user) {
       try {
@@ -2677,6 +2703,7 @@ export default function DriverTerminal() {
           err.message || "Failed to accept ride. It might have expired.",
         );
         setRideState("idle");
+        setIsAcceptingRide(false);
         return;
       }
     }
@@ -2685,9 +2712,27 @@ export default function DriverTerminal() {
     setIsAutoNavHeadUp(true);
     setIsAutoNavPaused(false);
     if (navigator.vibrate) navigator.vibrate(50);
+    setIsAcceptingRide(false);
   };
 
-  const handleDeclineRide = async () => {
+  const handleForceOffline = async () => {
+    setOnlineStartTime(null);
+    setIsOnline(false);
+    if (user) {
+      try {
+        await updateDoc(doc(db, "driver_status", user.uid), { online: false });
+        await updateDoc(doc(db, "live_tracking", user.uid), { isOnline: false });
+        console.log(`[AnyRoller Driver] Switched offline due to missing 3 consecutive ride offers.`);
+        toast.error("Auto-Offline Mode Activated", {
+          description: "You have been set offline for missing 3 ride offers in a row.",
+        });
+      } catch (err) {
+        console.error("Error setting driver offline:", err);
+      }
+    }
+  };
+
+  const handleDeclineRide = async (userInitiated: boolean = false) => {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
         // Penalty logic: consecutive declines
@@ -2700,11 +2745,39 @@ export default function DriverTerminal() {
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "pending",
           assignedDriverId: deleteField(),
+          driverId: deleteField(),
+          driverName: deleteField(),
+          driverPhone: deleteField(),
+          vehicleInfo: deleteField(),
+          vehiclePlate: deleteField(),
+          driverRequirePasscode: deleteField(),
+          acceptedAt: deleteField(),
           offerExpiresAt: deleteField(),
+          declinedBy: arrayUnion(user.uid)
         } as any);
       } catch (err) {
         console.error("Error declining ride:", err);
       }
+    }
+
+    if (userInitiated) {
+      setConsecutiveMissedOffers(0);
+    } else {
+      // It was an automatic timeout (not responded to)
+      setConsecutiveMissedOffers((prev) => {
+        const nextVal = prev + 1;
+        if (nextVal >= 3) {
+          setTimeout(() => {
+            handleForceOffline();
+          }, 100);
+          return 0; // reset
+        } else {
+          toast.warning(`Ride Offer Missed!`, {
+            description: `You missed a ride offer. If you miss ${3 - nextVal} more in a row, you will be set offline automatically.`,
+          });
+          return nextVal;
+        }
+      });
     }
 
     setActiveRide(null);
@@ -2722,7 +2795,15 @@ export default function DriverTerminal() {
         await updateDoc(doc(db, "ride_requests", stackedRideOffer.id), {
           status: "pending",
           assignedDriverId: deleteField(),
+          driverId: deleteField(),
+          driverName: deleteField(),
+          driverPhone: deleteField(),
+          vehicleInfo: deleteField(),
+          vehiclePlate: deleteField(),
+          driverRequirePasscode: deleteField(),
+          acceptedAt: deleteField(),
           offerExpiresAt: deleteField(),
+          declinedBy: arrayUnion(user.uid)
         } as any);
       } catch (err) {
         console.error("Error declining stacked ride:", err);
@@ -2732,6 +2813,8 @@ export default function DriverTerminal() {
   };
 
   const handleAcceptStackedRide = async () => {
+    if (isAcceptingRide) return;
+    setIsAcceptingRide(true);
     let success = false;
     if (stackedRideOffer?.isReal && stackedRideOffer?.id && user) {
       try {
@@ -2789,6 +2872,7 @@ export default function DriverTerminal() {
     }
     // We do not replace activeRide. The stacked ride logic is done.
     setStackedRideOffer(null);
+    setIsAcceptingRide(false);
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -3748,7 +3832,7 @@ export default function DriverTerminal() {
   const stabilizedMapOptions = useMemo(() => ({
     ...premiumMapOptions,
     heading: mapHeading || 0,
-    gestureHandling: "greedy" as google.maps.GestureHandling,
+    gestureHandling: "greedy" as any,
     draggable: true,
     padding: mapPadding,
   }), [mapHeading, mapPadding]);
@@ -4301,7 +4385,7 @@ export default function DriverTerminal() {
                           {/* The base dot */}
                           <div className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 w-[11px] h-[11px] bg-[#761eb9] border-2 border-white rounded-full shadow-[0_0_8px_rgba(118,30,185,0.8)]"></div>
                         </div>
-                        <div className="absolute -top-[24px] bg-black/80 px-2 py-0.5 rounded text-[10px] font-bold text-[#761eb9] whitespace-nowrap shadow border border-[#761eb9]/50 z-30">
+                        <div className="absolute -top-[24px] bg-[#761eb9] px-2 py-0.5 rounded text-[10px] font-bold text-white whitespace-nowrap shadow border border-white z-30">
                           PASSENGER
                         </div>
                       </div>
@@ -4789,13 +4873,12 @@ export default function DriverTerminal() {
                                   Priority
                                 </div>
                               )}
-                              {fareConfig.surgeEnabled && (
+                              {((activeRide?.isSimulated && fareConfig.surgeEnabled) || (!activeRide?.isSimulated && ((activeRide?.surgeModel === "fixed" && (activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0) > 0) || (activeRide?.surgeModel !== "fixed" && (activeRide?.surgeMultiplier || 1) > 1.0)))) && (
                                 <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
                                   <span className="text-[10px]">🔥</span>{" "}
-                                  {activeRide?.surgeModel === "fixed"
-                                    ? "+£" + (activeRide?.surgeFixed || "2.00")
-                                    : (activeRide?.surgeMultiplier || "1.4") +
-                                      "x"}
+                                  {activeRide?.isSimulated 
+                                    ? (fareConfig.surgeModel === "fixed" ? "+£" + (fareConfig.surgeFixedAmount || 2.0).toFixed(2) : (fareConfig.surgeMultiplierValue || 1.4) + "x")
+                                    : (activeRide?.surgeModel === "fixed" ? "+£" + (activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0).toFixed(2) : (activeRide?.surgeMultiplier || 1.0) + "x")}
                                 </span>
                               )}
                             </div>
@@ -5008,7 +5091,7 @@ export default function DriverTerminal() {
                   <div className="flex gap-2 mt-0 shrink-0 relative z-20">
                     {declineConfirmActive ? (
                       <button
-                        onClick={() => { setDeclineConfirmActive(false); handleDeclineRide(); }}
+                        onClick={() => { setDeclineConfirmActive(false); handleDeclineRide(true); }}
                         className="w-[100px] h-10 bg-[#FF3B30] text-white rounded-[10px] font-black text-[12px] flex items-center justify-center active:scale-[0.98] shadow-sm transition-transform shrink-0"
                       >
                         CONFIRM
@@ -5022,8 +5105,9 @@ export default function DriverTerminal() {
                       </button>
                     )}
                     <button
+                      disabled={isAcceptingRide}
                       onClick={() => { setDeclineConfirmActive(false); handleAcceptRide(); }}
-                      className="flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                      className={cn("flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform", isAcceptingRide && "opacity-50 pointer-events-none")}
                     >
                       <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
                     </button>
@@ -5158,14 +5242,12 @@ export default function DriverTerminal() {
                                   Priority
                                 </div>
                               )}
-                              {fareConfig.surgeEnabled && (
+                              {((stackedRideOffer?.isSimulated && fareConfig.surgeEnabled) || (!stackedRideOffer?.isSimulated && ((stackedRideOffer?.surgeModel === "fixed" && (stackedRideOffer?.surgeFixedAmount || stackedRideOffer?.surgeFixed || 0) > 0) || (stackedRideOffer?.surgeModel !== "fixed" && (stackedRideOffer?.surgeMultiplier || 1) > 1.0)))) && (
                                 <span className="bg-white text-black border border-white px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center gap-1">
                                   <span className="text-[10px]">🔥</span>{" "}
-                                  {stackedRideOffer?.surgeModel === "fixed"
-                                    ? "+£" +
-                                      (stackedRideOffer?.surgeFixed || "2.00")
-                                    : (stackedRideOffer?.surgeMultiplier ||
-                                        "1.4") + "x"}
+                                  {stackedRideOffer?.isSimulated 
+                                    ? (fareConfig.surgeModel === "fixed" ? "+£" + (fareConfig.surgeFixedAmount || 2.0).toFixed(2) : (fareConfig.surgeMultiplierValue || 1.4) + "x")
+                                    : (stackedRideOffer?.surgeModel === "fixed" ? "+£" + (stackedRideOffer?.surgeFixedAmount || stackedRideOffer?.surgeFixed || 0).toFixed(2) : (stackedRideOffer?.surgeMultiplier || 1.0) + "x")}
                                 </span>
                               )}
                             </div>
@@ -5399,8 +5481,9 @@ export default function DriverTerminal() {
                       </button>
                     )}
                     <button
+                      disabled={isAcceptingRide}
                       onClick={() => { setDeclineConfirmStacked(false); handleAcceptStackedRide(); }}
-                      className="flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform"
+                      className={cn("flex-1 h-10 bg-[#00D26A] text-[#0D0D0F] rounded-[10px] font-black text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_4px_20px_rgba(0,210,106,0.2)] transition-transform", isAcceptingRide && "opacity-50 pointer-events-none")}
                     >
                       <Check className="w-5 h-5 stroke-[3]" /> ACCEPT
                     </button>
@@ -6149,7 +6232,7 @@ export default function DriverTerminal() {
                           <button
                             onClick={() => {
                               setShowCancelConfirm(false);
-                              handleDeclineRide();
+                              handleDeclineRide(true);
                             }}
                             className="w-full h-12 flex-shrink-0 bg-[#FF3B30] text-white rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,59,48,0.3)] active:scale-95 transition-transform mb-3"
                           >
@@ -6333,26 +6416,30 @@ export default function DriverTerminal() {
                             <span className="font-bold">+£5.00</span>
                           </div>
                         )}
-                        {fareConfig.surgeEnabled && (
+                        {((activeRide?.isSimulated && fareConfig.surgeEnabled) || (!activeRide?.isSimulated && ((activeRide?.surgeModel === "fixed" && (activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0) > 0) || (activeRide?.surgeModel !== "fixed" && (activeRide?.surgeMultiplier || 1) > 1.0)))) && (
                           <div className="flex justify-between text-xs text-[#FF9500]">
                             <span>
                               Surge (
-                              {activeRide?.surgeModel === "fixed"
-                                ? "Fixed"
-                                : (activeRide?.surgeMultiplier || "1.4") + "x"}
+                              {activeRide?.isSimulated 
+                                ? (fareConfig.surgeModel === "fixed" ? "Fixed" : (fareConfig.surgeMultiplierValue || 1.4) + "x")
+                                : (activeRide?.surgeModel === "fixed" ? "Fixed" : (activeRide?.surgeMultiplier || 1.0) + "x")}
                               ):
                             </span>
                             <span className="font-bold">
                               +£
-                              {activeRide?.surgeModel === "fixed"
-                                ? (activeRide?.surgeFixed || 2.0).toFixed(2)
+                              {activeRide?.isSimulated
+                                ? (fareConfig.surgeModel === "fixed" 
+                                    ? (fareConfig.surgeFixedAmount || 2.0).toFixed(2)
+                                    : ((activeRide?.fareEstimate || 38.5) - (activeRide?.baseCalc || (Math.max(fareConfig.minFare, fareConfig.baseFare + (activeRide?.distanceMiles || 0) * fareConfig.distanceRate)))).toFixed(2))
+                                : (activeRide?.surgeModel === "fixed"
+                                ? (activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0).toFixed(2)
                                 : (
                                     (activeRide?.fareEstimate || 38.5) -
-                                    (activeRide?.baseCalc || 30) -
+                                    (activeRide?.baseCalc || (Math.max(fareConfig.minFare, fareConfig.baseFare + (activeRide?.distanceMiles || 0) * fareConfig.distanceRate))) -
                                     (activeRide?.isPriority
                                       ? fareConfig.priorityFee
                                       : 0)
-                                  ).toFixed(2)}
+                                  ).toFixed(2))}
                             </span>
                           </div>
                         )}

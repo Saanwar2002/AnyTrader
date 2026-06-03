@@ -604,10 +604,12 @@ export default function PassengerBooking() {
   // Adjust map zooming dynamically on ride status change
   useEffect(() => {
     if (assignedDriverInfo?.status === "arrived") {
-      setMapZoom(18);
+      setMapZoom(17);
       if (pickupCoords) setMapCenter(pickupCoords);
     } else if (assignedDriverInfo?.status === "accepted") {
       setMapZoom(14);
+    } else if (assignedDriverInfo?.status === "in_progress") {
+      setMapZoom(15);
     }
   }, [assignedDriverInfo?.status, pickupCoords]);
 
@@ -778,7 +780,7 @@ export default function PassengerBooking() {
   }, [pickupCoords, searchParams]);
 
   useEffect(() => {
-    if (!pickupCoords) {
+    if (!user || !pickupCoords) {
       setNearbyDriversCount(0);
       setDriversAvailableSoonCount(0);
       return;
@@ -929,7 +931,7 @@ export default function PassengerBooking() {
       setAvailableCategories(cats.size > 0 ? cats : new Set(['standard'])); // always show at least standard as fallback
     }, (err) => console.error("onSnapshot ERROR live_tracking:", err));
     return () => unsub();
-  }, [pickupCoords, isPetFriendly, fareConfig?.dispatchRadiusMiles]);
+  }, [pickupCoords, isPetFriendly, fareConfig?.dispatchRadiusMiles, user]);
 
   useEffect(() => {
     if (!availableCategories.has(selectedCategory)) {
@@ -2030,6 +2032,8 @@ export default function PassengerBooking() {
           const driver = docSnap.data();
           if (docSnap.id === user?.uid) return; // Passenger can't be own driver
           if (declinedBy.includes(docSnap.id)) return; // Already declined or timed out
+
+
           
           // Category check logic
           const cats = driver.vehicleCategories || [driver.vehicleCategory || 'standard'];
@@ -2102,6 +2106,12 @@ export default function PassengerBooking() {
           }
        });
 
+       if (!bestDriver && declinedBy.length > 0) {
+           console.log(`[AnyRoller Dispatch] No eligible driver found but some have declined. Resetting declinedBy logic to re-ping available drivers.`);
+           await updateDoc(rideRef, { declinedBy: deleteField() });
+           return;
+       }
+
        // QUEUE PRIORITY SYSTEM:
        // Check if there are other pending jobs older than ours
        if (bestDriver) {
@@ -2113,7 +2123,7 @@ export default function PassengerBooking() {
                  const otherData = snap.data();
                  if (otherData.createdAt?.toMillis && rideInfo.createdAt?.toMillis) {
                     const otherAgeMs = Date.now() - otherData.createdAt.toMillis();
-                    if (otherAgeMs < 15 * 60 * 1000 && otherData.createdAt.toMillis() < rideInfo.createdAt.toMillis()) {
+                    if (otherAgeMs < 1 * 60 * 1000 && otherData.createdAt.toMillis() < rideInfo.createdAt.toMillis()) {
                        // There is an older job. Let's see if it's close enough that the driver could take it instead.
                        const oldPickupLat = otherData.pickupLat;
                        const oldPickupLng = otherData.pickupLng;
@@ -2136,7 +2146,7 @@ export default function PassengerBooking() {
            
            if (shouldYield) {
                // We randomly wait or skip this tick so the older job gets first dibs
-               if (Math.random() < 0.7) {
+               if (Math.random() < 0.0) {
                    return; // Yield to older job 70% of the time
                }
            }
@@ -2161,11 +2171,20 @@ export default function PassengerBooking() {
   }, [step, currentRideId, pickupCoords, selectedCategory, user, fareConfig]);
 
   useEffect(() => {
-    if (!currentRideId) return;
+    if (!user || !currentRideId) return;
     const unsubRide = onSnapshot(doc(db, "ride_requests", currentRideId), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         currentRideStatusRef.current = data.status || null;
+        if (data.status === 'pending' || data.status === 'offered') {
+          if (step !== "searching") {
+            setStep("searching");
+            setAssignedDriverInfo(null);
+            lastSoundStatusRef.current = null;
+            searchingStartTimeRef.current = Date.now();
+            toast.info("Finding a new driver", { description: "Your previous driver is no longer available." });
+          }
+        }
         if (data.status === 'accepted' && data.driverId) {
           if (lastSoundStatusRef.current !== 'accepted') {
              playSound('success');
@@ -2242,17 +2261,24 @@ export default function PassengerBooking() {
              // If driver is in progress, they are heading to the dropoff
              if (currentRideStatusRef.current === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
 
-             if (isMapFullScreenRef.current) {
-                 map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
+             if (currentRideStatusRef.current === "arrived") {
+                 map.setCenter(newPos);
+                 map.setZoom(17);
+                 setMapCenter(newPos);
+                 setMapZoom(17);
              } else {
-                 map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
+                 if (isMapFullScreenRef.current) {
+                     map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
+                 } else {
+                     map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
+                 }
              }
           }
         }
       }
     });
     return () => { unsubRide(); unsubTrack(); };
-  }, [currentRideId, assignedDriverInfo?.uid]);
+  }, [currentRideId, assignedDriverInfo?.uid, user]);
 
   // Passenger Live GPS tracking for driver to see
   useEffect(() => {
@@ -2420,10 +2446,17 @@ export default function PassengerBooking() {
        if (currentRideStatusRef.current === "accepted" && pickupCoords) bounds.extend(pickupCoords);
        if (currentRideStatusRef.current === "in_progress" && dropoffCoords) bounds.extend(dropoffCoords);
 
-       if (isMapFullScreen) {
-           map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
+       if (currentRideStatusRef.current === "arrived") {
+           map.setCenter(driverPos);
+           map.setZoom(17);
+           setMapCenter(driverPos);
+           setMapZoom(17);
        } else {
-           map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
+           if (isMapFullScreen) {
+               map.fitBounds(bounds, { top: 100, bottom: 120, left: 40, right: 40 });
+           } else {
+               map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
+           }
        }
     }
   }, [isMapFullScreen]);

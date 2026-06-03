@@ -75,23 +75,18 @@ service cloud.firestore {
     }
 
     match /ride_requests/{rideId} {
-      allow get: if isSignedIn() && (
-        resource == null || 
-        resource.data.riderId == request.auth.uid || 
-        resource.data.driverId == request.auth.uid || 
-        resource.data.assignedDriverId == request.auth.uid || 
-        isAdmin()
-      );
-      allow create: if isSignedIn() && (request.resource.data.riderId == request.auth.uid || request.resource.data.driverId == request.auth.uid);
-      allow update: if isSignedIn() && (
-        resource == null ||
-        resource.data.riderId == request.auth.uid || 
-        resource.data.driverId == request.auth.uid || 
-        request.resource.data.driverId == request.auth.uid || 
-        request.resource.data.assignedDriverId == request.auth.uid || 
-        isAdmin()
-      );
-      allow delete: if isSignedIn() && (resource == null || resource.data.riderId == request.auth.uid || isAdmin());
+      function isPartyToRide(rideData) {
+        return isSignedIn() && rideData != null && (
+          ('riderId' in rideData && rideData.riderId == request.auth.uid) ||
+          ('driverId' in rideData && rideData.driverId == request.auth.uid) ||
+          ('assignedDriverId' in rideData && rideData.assignedDriverId == request.auth.uid)
+        );
+      }
+
+      allow get: if isAdmin() || isPartyToRide(resource.data);
+      allow create: if isAdmin() || isPartyToRide(request.resource.data);
+      allow update: if isAdmin() || isPartyToRide(resource.data) || isPartyToRide(request.resource.data);
+      allow delete: if isAdmin() || isPartyToRide(resource.data);
       allow list: if isSignedIn();
 
       match /chat/{messageId} {
