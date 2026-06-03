@@ -16,6 +16,7 @@ const PricingFares = () => {
     waitRatePerMinute: 0.25,
     minFare: 5.00,
     commissionRate: 12.0,
+    fixedTripFee: 0.20,
     vehicleMultipliers: {
       standard: 1.0,
       '6seater': 1.4,
@@ -48,6 +49,7 @@ const PricingFares = () => {
               waitRatePerMinute: data.waitRatePerMinute || prev.waitRatePerMinute,
               minFare: data.minFare || prev.minFare,
               commissionRate: (data.commissionRate !== undefined ? data.commissionRate * 100 : prev.commissionRate),
+              fixedTripFee: data.fixedTripFee !== undefined ? data.fixedTripFee : prev.fixedTripFee,
               vehicleMultipliers: data.vehicleMultipliers || prev.vehicleMultipliers
             };
             setOriginalConfig(newConfig);
@@ -73,6 +75,7 @@ const PricingFares = () => {
         waitRatePerMinute: globalConfig.waitRatePerMinute,
         minFare: globalConfig.minFare,
         commissionRate: globalConfig.commissionRate / 100,
+        fixedTripFee: globalConfig.fixedTripFee,
         vehicleMultipliers: globalConfig.vehicleMultipliers
       }, { merge: true });
       setOriginalConfig(globalConfig);
@@ -202,13 +205,25 @@ const PricingFares = () => {
             </div>
             <p className="text-sm text-slate-400 mb-6">Percentage deducted from gross fare prior to Stripe Connect driver payout routing globally.</p>
             
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-5 flex justify-between items-center">
-              <div>
-                <span className="text-sm font-bold text-slate-300 block mb-1">Standard Take Rate</span>
-                <span className="text-xs text-slate-500 font-mono">platform_config.commissionRate</span>
+            <div className="space-y-4">
+              <div className="bg-slate-950 border border-slate-800 rounded-lg p-5 flex justify-between items-center">
+                <div>
+                  <span className="text-sm font-bold text-slate-300 block mb-1">Standard Take Rate</span>
+                  <span className="text-xs text-slate-500 font-mono">platform_config.commissionRate</span>
+                </div>
+                <div className="flex items-center text-2xl font-black text-emerald-400">
+                  <input type="number" step="0.1" value={globalConfig.commissionRate} onChange={(e) => setGlobalConfig({...globalConfig, commissionRate: parseFloat(e.target.value) || 0})} className="w-20 px-2 py-1 bg-transparent border-b-2 border-emerald-400 outline-none text-right mr-1" /> %
+                </div>
               </div>
-              <div className="flex items-center text-2xl font-black text-emerald-400">
-                <input type="number" step="0.1" value={globalConfig.commissionRate} onChange={(e) => setGlobalConfig({...globalConfig, commissionRate: parseFloat(e.target.value) || 0})} className="w-20 px-2 py-1 bg-transparent border-b-2 border-emerald-400 outline-none text-right mr-1" /> %
+
+              <div className="bg-slate-950 border border-slate-800 rounded-lg p-5 flex justify-between items-center">
+                <div>
+                  <span className="text-sm font-bold text-slate-300 block mb-1">Fixed Trip Fee</span>
+                  <span className="text-xs text-slate-500 font-mono">platform_config.fixedTripFee</span>
+                </div>
+                <div className="flex items-center text-2xl font-black text-emerald-400">
+                  £ <input type="number" step="0.05" value={globalConfig.fixedTripFee} onChange={(e) => setGlobalConfig({...globalConfig, fixedTripFee: parseFloat(e.target.value) || 0})} className="w-20 px-2 py-1 bg-transparent border-b-2 border-emerald-400 outline-none text-right mr-1 mr-1" />
+                </div>
               </div>
             </div>
           </div>

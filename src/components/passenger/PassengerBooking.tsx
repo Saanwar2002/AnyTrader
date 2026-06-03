@@ -1034,7 +1034,7 @@ export default function PassengerBooking() {
       
       if (Capacitor.isNativePlatform()) {
         try {
-          const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+          const { SpeechRecognition } = await import(/* @vite-ignore */ '@capacitor-community/speech-recognition');
           await SpeechRecognition.stop();
         } catch (e: any) {
           console.error("Native stop error:", e);
@@ -1055,7 +1055,7 @@ export default function PassengerBooking() {
 
     if (Capacitor.isNativePlatform()) {
       try {
-        const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+        const { SpeechRecognition } = await import(/* @vite-ignore */ '@capacitor-community/speech-recognition');
         
         // 1. Check if available
         const { available } = await SpeechRecognition.available();
@@ -2291,6 +2291,16 @@ export default function PassengerBooking() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         currentRideStatusRef.current = data.status || null;
+        
+        // Synchronize active ETA timers directly from the Firestore document (updated in real-time by driver terminal)
+        if (data.liveEtaSeconds !== undefined && data.liveEtaSeconds !== null) {
+          setLiveEtaSeconds(data.liveEtaSeconds);
+          setLiveEtaMins(data.durationMinutes || Math.ceil(data.liveEtaSeconds / 60));
+        } else if (data.durationMinutes !== undefined && data.durationMinutes !== null && liveEtaSeconds === null) {
+          setLiveEtaSeconds(data.durationMinutes * 60);
+          setLiveEtaMins(data.durationMinutes);
+        }
+
         if (data.status === 'pending' || data.status === 'offered') {
           if (step !== "searching") {
             setStep("searching");

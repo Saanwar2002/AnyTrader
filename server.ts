@@ -1144,8 +1144,25 @@ async function startServer() {
         return res.status(400).json({ error: "Driver has not completed Stripe onboarding." });
       }
 
-      // 2. Create Destination Charge with Platform Fee (12% Commission on baseFare ONLY)
-      const feeAmount = Math.round(baseFare * 0.12 * 100); // 12% in pence of base fare, tip is untouched
+      // 2. Create Destination Charge with Platform Fee (Drawn from dynamic Firestore platform_config/rides)
+      let commissionRate = 0.12;
+      let fixedTripFee = 0;
+      try {
+        const configDoc = await db.collection("platform_config").doc("rides").get();
+        if (configDoc.exists) {
+          const configData = configDoc.data();
+          if (configData.commissionRate !== undefined) {
+            commissionRate = Number(configData.commissionRate);
+          }
+          if (configData.fixedTripFee !== undefined) {
+            fixedTripFee = Number(configData.fixedTripFee);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch dynamic fare config for checkout:", err);
+      }
+      
+      const feeAmount = Math.round((baseFare * commissionRate + fixedTripFee) * 100); // commission on base fare + fixed fee in pence, tip is untouched
       
       let session;
       try {

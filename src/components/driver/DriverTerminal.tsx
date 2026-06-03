@@ -574,6 +574,22 @@ export default function DriverTerminal() {
     maxDailyDriverHours: 12,
   });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
+  const [liveEtaMins, setLiveEtaMins] = useState<number | null>(null);
+  const [liveEtaSeconds, setLiveEtaSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveEtaSeconds((prev) => (prev && prev > 0 ? prev - 1 : prev));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!activeRide?.id) {
+      setLiveEtaSeconds(null);
+      setLiveEtaMins(null);
+    }
+  }, [activeRide?.id]);
   const externalNavWindowRef = useRef<Window | null>(null);
   const [passengerPos, setPassengerPos] = useState<{
     lat: number;
@@ -1345,6 +1361,9 @@ export default function DriverTerminal() {
     let isInitialFitBounds = true;
     let intervalId: NodeJS.Timeout;
 
+    // Reset fetch throttle ref to force immediate redraw of route on dependency or stops changes
+    lastDirectionsFetchRef.current = null;
+
     // Fetch route directions using Google Maps API
     const fetchDirections = async (destLat: number, destLng: number) => {
       if (!window.google || !window.google.maps) return;
@@ -1499,6 +1518,27 @@ export default function DriverTerminal() {
         (result, status) => {
           if (status === window.google.maps.DirectionsStatus.OK && result) {
             setDirections(result);
+            
+            // Calculate total legs duration in seconds and update states
+            let totalSecs = 0;
+            if (result.routes && result.routes[0] && result.routes[0].legs) {
+              result.routes[0].legs.forEach((leg: any) => {
+                if (leg.duration?.value) totalSecs += leg.duration.value;
+              });
+            }
+            if (totalSecs > 0) {
+              setLiveEtaMins(Math.ceil(totalSecs / 60));
+              setLiveEtaSeconds(totalSecs);
+              
+              const activeId = activeRide?.id;
+              if (activeId && !activeRide?.isSimulated) {
+                updateDoc(doc(db, "ride_requests", activeId), {
+                  durationMinutes: Math.ceil(totalSecs / 60),
+                  liveEtaSeconds: totalSecs
+                }).catch(err => console.warn("Failed to synchronize live ETA to ride request:", err));
+              }
+            }
+
             if (isInitialFitBounds && mapInstance && result?.routes?.[0]?.bounds) {
               const maxDim = Math.max(window.innerWidth, window.innerHeight);
               const mapSize = maxDim * 1.45;
@@ -1592,6 +1632,7 @@ export default function DriverTerminal() {
     isLoaded,
     mapInstance,
     currentLegIndex,
+    JSON.stringify(activeRide?.stops),
   ]);
 
   // Handle Map Orientation (Head Up North / Direction of Travel)
@@ -1972,6 +2013,10 @@ export default function DriverTerminal() {
             setDirections(null);
             if (navigator.vibrate) navigator.vibrate([300, 200, 300]);
           } else {
+            if (data.liveEtaSeconds !== undefined && data.liveEtaSeconds !== null) {
+              setLiveEtaSeconds(data.liveEtaSeconds);
+              setLiveEtaMins(data.durationMinutes || Math.ceil(data.liveEtaSeconds / 60));
+            }
             setActiveRide((prev) => {
               if (!prev) return prev;
               const isModified =
@@ -4884,42 +4929,12 @@ export default function DriverTerminal() {
                             </div>
                           </div>
                           {(() => {
-                            let finalPayout =
+                            const finalPayout =
                               (activeRide?.fareEstimate || 38.5) *
                               (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !activeRide?.isSimulated
-                            ) {
-                              // Note: simulated already bundles it in fareEstimate
-                              // Absorb surge cost for driver payout if the passenger fare didn't include it explicitly
-                              // If baseCalc exists and it roughly matches fareEstimate, it means surge wasn't applied on the passenger side
-                              // We dynamically inject it into the driver payout here.
-                              const hasNoSurgeApplied = activeRide?.baseCalc
-                                ? Math.abs(
-                                    activeRide.fareEstimate -
-                                      activeRide.baseCalc,
-                                  ) < 2.0
-                                : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                activeRide?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  // Multiplier style
-                                  finalPayout +=
-                                    (activeRide?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
                             return (
                               <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
+                                You earn: £{Math.max(0, finalPayout).toFixed(2)}
                               </p>
                             );
                           })()}
@@ -5253,43 +5268,12 @@ export default function DriverTerminal() {
                             </div>
                           </div>
                           {(() => {
-                            let finalPayout =
+                            const finalPayout =
                               (stackedRideOffer?.fareEstimate || 38.5) *
                               (1 - fareConfig.commissionRate) - (fareConfig.fixedTripFee || 0);
-                            if (
-                              fareConfig.surgeEnabled &&
-                              !stackedRideOffer?.isSimulated
-                            ) {
-                              // Note: simulated already bundles it in fareEstimate
-                              // Absorb surge cost for driver payout if the passenger fare didn't include it explicitly
-                              // If baseCalc exists and it roughly matches fareEstimate, it means surge wasn't applied on the passenger side
-                              // We dynamically inject it into the driver payout here.
-                              const hasNoSurgeApplied =
-                                stackedRideOffer?.baseCalc
-                                  ? Math.abs(
-                                      stackedRideOffer.fareEstimate -
-                                        stackedRideOffer.baseCalc,
-                                    ) < 2.0
-                                  : true;
-                              if (
-                                hasNoSurgeApplied ||
-                                stackedRideOffer?.surgeMultiplier === 1.0
-                              ) {
-                                if (fareConfig.surgeModel === "fixed") {
-                                  finalPayout +=
-                                    fareConfig.surgeFixedAmount || 2.0;
-                                } else {
-                                  // Multiplier style
-                                  finalPayout +=
-                                    (stackedRideOffer?.fareEstimate || 38.5) *
-                                    ((fareConfig.surgeMultiplierValue || 1.4) -
-                                      1.0);
-                                }
-                              }
-                            }
                             return (
                               <p className="text-[#00D26A] text-[13px] font-bold mt-0.5">
-                                You earn: £{finalPayout.toFixed(2)}
+                                You earn: £{Math.max(0, finalPayout).toFixed(2)}
                               </p>
                             );
                           })()}
@@ -6014,7 +5998,14 @@ export default function DriverTerminal() {
                             "font-black text-white leading-none mt-0.5",
                             isCardCollapsed ? "text-[18px]" : "text-[16px]"
                           )}>
-                            {activeRide?.durationMinutes || 38} min left{" "}
+                             {(liveEtaSeconds !== null && liveEtaSeconds > 0) ? (
+                              <>
+                                {Math.floor(liveEtaSeconds / 60) > 0 ? `${Math.floor(liveEtaSeconds / 60)}m ` : ''}
+                                {liveEtaSeconds % 60}s left
+                              </>
+                            ) : (
+                              `${activeRide?.durationMinutes || 38} min left`
+                            )}{" "}
                             <span className={cn(
                               "text-white font-bold",
                               isCardCollapsed ? "text-[16px]" : "text-[14px]"
