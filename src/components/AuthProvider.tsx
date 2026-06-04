@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (firebaseUser) {
         if (Capacitor.isNativePlatform()) {
-          import(/* @vite-ignore */ '@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
+          import('@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
              FirebaseCrashlytics.setUserId({ userId: firebaseUser.uid });
           }).catch(e => console.error("Crashlytics plugin load error:", e));
         }
