@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePortal } from "../../lib/PortalContext";
 import { useAuth } from "../AuthProvider";
+import { useRemoteConfig } from "../RemoteConfigProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { QRCodeSVG } from 'qrcode.react';
@@ -361,7 +362,12 @@ const formatNavigateDistance = (meters: number | undefined): string => {
 
 export default function DriverTerminal() {
   const { user, profile } = useAuth();
+  const { values: remoteConfig } = useRemoteConfig();
   const { switchPortal, setPreventPortalSwitch } = usePortal();
+  
+  const limitMins = remoteConfig?.driverWaitTimeLimitMins ?? 5;
+  const maxWaitSeconds = limitMins * 60;
+  const freeWaitSeconds = Math.max(60, maxWaitSeconds - 120);
   const navigate = useNavigate();
   const [isOnline, setIsOnline] = useState(false);
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
@@ -1837,9 +1843,11 @@ export default function DriverTerminal() {
             minFare: Number(data.minFare) || 5.0,
             priorityFee: Number(data.priorityFee) || 3.0,
             commissionRate:
-              data.commissionRate !== undefined
-                ? Number(data.commissionRate)
-                : 0.12,
+              remoteConfig?.platformCommissionRate !== undefined
+                ? remoteConfig.platformCommissionRate
+                : (data.commissionRate !== undefined
+                  ? Number(data.commissionRate)
+                  : 0.12),
             fixedTripFee: data.fixedTripFee !== undefined ? Number(data.fixedTripFee) : 0,
             allowRiderAbandonment: data.allowRiderAbandonment || false,
             surgeEnabled:
@@ -1861,7 +1869,17 @@ export default function DriverTerminal() {
       },
     );
     return () => unsub();
-  }, []);
+  }, [remoteConfig?.platformCommissionRate]);
+
+  // Sync state configuration dynamically on Remote Config update
+  useEffect(() => {
+    if (remoteConfig) {
+      setFareConfig((prev) => ({
+        ...prev,
+        commissionRate: remoteConfig.platformCommissionRate,
+      }));
+    }
+  }, [remoteConfig]);
 
   // Listen to Driver Metrics for today's earnings
   useEffect(() => {
@@ -3621,7 +3639,7 @@ export default function DriverTerminal() {
     setHasReachedCurrentStop(false);
     setShowLeaveStopReminder(false);
     setIsWaitingAtStop(false); // just in case
-    const pickupPaidWait = Math.max(0, elapsedWaitSeconds - 180);
+    const pickupPaidWait = Math.max(0, elapsedWaitSeconds - freeWaitSeconds);
     setAccumulatedPaidWaitSeconds(pickupPaidWait);
 
     if (activeRide?.id && activeRide?.isReal) {
@@ -4511,9 +4529,7 @@ export default function DriverTerminal() {
                 {/* Passenger Live Location */}
                 {passengerPos &&
                   (rideState === "en_route_pickup" ||
-                    rideState === "waiting" ||
-                    rideState === "in_progress" ||
-                    rideState === "en_route_dropoff") && (
+                    rideState === "waiting") && (
                     <OverlayViewF
                       position={{
                         lat: passengerPos.lat,
@@ -4687,7 +4703,7 @@ export default function DriverTerminal() {
                 otherPartyPhone={activeRide?.passengerPhone || undefined}
                 passengerId={activeRide?.passengerId}
                 canSendSMS={
-                  rideState === "waiting" && elapsedWaitSeconds >= 180
+                  rideState === "waiting" && elapsedWaitSeconds >= freeWaitSeconds
                 }
               />
             )}
@@ -5893,19 +5909,19 @@ export default function DriverTerminal() {
                           "font-bold mt-0",
                           isCardCollapsed ? "text-[13px]" : "text-[11px]"
                         )}>
-                          {elapsedWaitSeconds < 180 ? (
+                          {elapsedWaitSeconds < freeWaitSeconds ? (
                             <span className="text-[#00D26A]">
                               Free wait:{" "}
-                              {Math.floor((180 - elapsedWaitSeconds) / 60)}:
-                              {((180 - elapsedWaitSeconds) % 60)
+                              {Math.floor((freeWaitSeconds - elapsedWaitSeconds) / 60)}:
+                              {((freeWaitSeconds - elapsedWaitSeconds) % 60)
                                 .toString()
                                 .padStart(2, "0")}
                             </span>
-                          ) : elapsedWaitSeconds < 300 ? (
+                          ) : elapsedWaitSeconds < maxWaitSeconds ? (
                             <span className="text-[#FF9500]">
                               Paid wait:{" "}
-                              {Math.floor((elapsedWaitSeconds - 180) / 60)}:
-                              {((elapsedWaitSeconds - 180) % 60)
+                              {Math.floor((elapsedWaitSeconds - freeWaitSeconds) / 60)}:
+                              {((elapsedWaitSeconds - freeWaitSeconds) % 60)
                                 .toString()
                                 .padStart(2, "0")}
                             </span>
@@ -6306,8 +6322,8 @@ export default function DriverTerminal() {
                             className="w-full mt-2 py-2 text-xs font-bold text-[#E4E4E7] uppercase tracking-wide hover:text-[#FF3B30] transition-colors"
                           >
                             {rideState === "waiting"
-                              ? 300 - elapsedWaitSeconds > 0
-                                ? `Cancel (No Fee in ${Math.floor((300 - elapsedWaitSeconds) / 60)}:${((300 - elapsedWaitSeconds) % 60).toString().padStart(2, "0")})`
+                              ? maxWaitSeconds - elapsedWaitSeconds > 0
+                                ? `Cancel (No Fee in ${Math.floor((maxWaitSeconds - elapsedWaitSeconds) / 60)}:${((maxWaitSeconds - elapsedWaitSeconds) % 60).toString().padStart(2, "0")})`
                                 : "Cancel (Charge Fee)"
                               : "Cancel Ride"}
                           </button>

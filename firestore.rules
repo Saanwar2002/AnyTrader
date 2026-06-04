@@ -75,23 +75,10 @@ service cloud.firestore {
     }
 
     match /ride_requests/{rideId} {
-      function isPartyToRide(rideData) {
-        return isSignedIn() && rideData != null && (
-          ('riderId' in rideData && rideData.riderId == request.auth.uid) ||
-          ('driverId' in rideData && rideData.driverId == request.auth.uid) ||
-          ('assignedDriverId' in rideData && rideData.assignedDriverId == request.auth.uid)
-        );
-      }
-
-      allow get: if isAdmin() || (resource != null && isPartyToRide(resource.data)) || (resource == null && isSignedIn());
-      allow create: if isAdmin() || isPartyToRide(request.resource.data);
-      allow update: if isAdmin() || isPartyToRide(resource.data) || isPartyToRide(request.resource.data);
-      allow delete: if isAdmin() || isPartyToRide(resource.data);
-      allow list: if isSignedIn();
+      allow read, write: if isSignedIn();
 
       match /chat/{messageId} {
-        allow read, list: if isSignedIn(); 
-        allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+        allow read, write: if isSignedIn();
       }
     }
 

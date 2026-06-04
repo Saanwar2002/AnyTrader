@@ -12,6 +12,7 @@ import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, ar
 import { playSound } from "@/src/lib/sound";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
+import { useRemoteConfig } from "../RemoteConfigProvider";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { processTaxiVoiceCommand } from "@/src/services/gemini";
@@ -258,7 +259,12 @@ const CAR_CATEGORIES = [
 ];
 
 function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
+  const { values: remoteConfig } = useRemoteConfig();
   const [elapsed, setElapsed] = useState(0);
+
+  const limitMins = remoteConfig?.driverWaitTimeLimitMins ?? 5;
+  const maxWaitSeconds = limitMins * 60;
+  const freeWaitSeconds = Math.max(60, maxWaitSeconds - 120);
 
   useEffect(() => {
     setElapsed(Math.floor((Date.now() - arrivedAt) / 1000));
@@ -274,10 +280,10 @@ function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
   return (
     <div className="text-right">
       <p className="text-2xl font-black text-purple-900 leading-none mb-1">{mins}:{secs}</p>
-      {elapsed < 180 ? (
-        <p className="text-[10px] font-bold text-purple-700/80 uppercase tracking-widest leading-none">Free wait: {Math.floor((180 - elapsed) / 60)}:{((180 - elapsed) % 60).toString().padStart(2, '0')}</p>
-      ) : elapsed < 300 ? (
-        <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF9500] leading-none">Paid wait: {Math.floor((elapsed - 180) / 60)}:{((elapsed - 180) % 60).toString().padStart(2, '0')}</p>
+      {elapsed < freeWaitSeconds ? (
+        <p className="text-[10px] font-bold text-purple-700/80 uppercase tracking-widest leading-none">Free wait: {Math.floor((freeWaitSeconds - elapsed) / 60)}:{((freeWaitSeconds - elapsed) % 60).toString().padStart(2, '0')}</p>
+      ) : elapsed < maxWaitSeconds ? (
+        <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF9500] leading-none">Paid wait: {Math.floor((elapsed - freeWaitSeconds) / 60)}:{((elapsed - freeWaitSeconds) % 60).toString().padStart(2, '0')}</p>
       ) : (
         <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF3B30] leading-none">Cancel fee applies</p>
       )}
@@ -340,7 +346,12 @@ function CancelRideButton_ConfirmedPhase({ acceptedAt, onCancel }: { acceptedAt:
 
 export default function PassengerBooking() {
   const { user, profile } = useAuth();
+  const { values: remoteConfig } = useRemoteConfig();
   const { theme, switchPortal } = usePortal();
+
+  const limitMins = remoteConfig?.driverWaitTimeLimitMins ?? 5;
+  const maxWaitSeconds = limitMins * 60;
+  const freeWaitSeconds = Math.max(60, maxWaitSeconds - 120);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [currentRideId, setCurrentRideId] = useState<string | null>(null);
@@ -571,12 +582,12 @@ export default function PassengerBooking() {
       setIncomingPopupMessage(null);
 
       // Trigger remote FCM push notification to driver
-      if (rideState?.driverId) {
+      if (assignedDriverInfo?.driverId) {
         fetch("/api/chat-push", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            recipientId: rideState.driverId,
+            recipientId: assignedDriverInfo.driverId,
             title: "New Message from Passenger",
             body: replyText,
             rideId: currentRideId
@@ -839,11 +850,11 @@ export default function PassengerBooking() {
     const checkZone = async () => {
       if (currentRideId && !isEditingJourney) return;
       const zones = await fetchLiveDemandZones();
-      let isBusy = false;
+      let isBusy = remoteConfig?.emergencySurgePricingEnabled ? true : false;
       let maxWait = 0;
-      let highestMult = 1.0;
+      let highestMult = remoteConfig?.emergencySurgePricingEnabled ? 1.5 : 1.0;
       let highestFee = 0.0;
-      let isFixedMode = true;
+      let isFixedMode = remoteConfig?.emergencySurgePricingEnabled ? false : true;
       zones.forEach(z => {
          const dist = window.google?.maps?.geometry?.spherical?.computeDistanceBetween(
             new window.google.maps.LatLng(pickupCoords.lat, pickupCoords.lng),
@@ -1960,8 +1971,8 @@ export default function PassengerBooking() {
          if (rideData && rideData.arrivedAt) {
             const arrivedTime = rideData.arrivedAt.seconds ? rideData.arrivedAt.seconds * 1000 : (typeof rideData.arrivedAt.toMillis === 'function' ? rideData.arrivedAt.toMillis() : rideData.arrivedAt);
             const elapsed = Math.floor((Date.now() - arrivedTime) / 1000);
-            if (elapsed > 180) {
-               waitSeconds = elapsed - 180;
+            if (elapsed > freeWaitSeconds) {
+               waitSeconds = elapsed - freeWaitSeconds;
             }
          }
          updateData.paidWaitSeconds = (rideData?.paidWaitSeconds || 0) + waitSeconds;
@@ -1983,8 +1994,8 @@ export default function PassengerBooking() {
                // Fast forward simulation without in_progress
                const arrivedTime = rideData.arrivedAt.seconds ? rideData.arrivedAt.seconds * 1000 : (typeof rideData.arrivedAt.toMillis === 'function' ? rideData.arrivedAt.toMillis() : rideData.arrivedAt);
                const elapsed = Math.floor((Date.now() - arrivedTime) / 1000);
-               if (elapsed > 180) {
-                  waitSeconds = elapsed - 180;
+               if (elapsed > freeWaitSeconds) {
+                  waitSeconds = elapsed - freeWaitSeconds;
                }
             }
             const finalWaitSeconds = (rideData.paidWaitSeconds || updateData.paidWaitSeconds || 0) + waitSeconds;
@@ -2164,12 +2175,12 @@ export default function PassengerBooking() {
       }, 120000);
 
       // Trigger remote FCM push notification to driver
-      if (rideState?.driverId) {
+      if (assignedDriverInfo?.driverId) {
         fetch("/api/chat-push", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            recipientId: rideState.driverId,
+            recipientId: assignedDriverInfo.driverId,
             title: "New Message from Passenger",
             body: text,
             rideId: currentRideId

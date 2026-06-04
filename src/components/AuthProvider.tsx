@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, addDoc, collection, serverTimestamp } from "@/src/firebase";
 import { Loader2, ShieldAlert, LogOut } from "lucide-react";
 
@@ -55,6 +56,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(firebaseUser);
       setIsAnonymous(firebaseUser?.isAnonymous || false);
+      
+      if (firebaseUser) {
+        if (Capacitor.isNativePlatform()) {
+          import('@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
+             FirebaseCrashlytics.setUserId({ userId: firebaseUser.uid });
+          }).catch(e => console.error("Crashlytics plugin load error:", e));
+        }
+      }
       
       if (profileUnsubscribe) {
         profileUnsubscribe();

@@ -1,15 +1,145 @@
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
-import { initializeFirestore, getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot as originalOnSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { enableMultiTabIndexedDbPersistence, initializeFirestore, getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot as originalOnSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { getPerformance, trace } from "firebase/performance";
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString } from "firebase/storage";
+import { Capacitor } from "@capacitor/core";
 import firebaseConfig from "../firebase-applet-config.json";
 
 // Initialize Firebase SDK
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
+
+// Initialize Firebase App Check symmetrically across Iframes, Web browsers, and Capacitor Native containers
+(async () => {
+  try {
+    if (typeof window !== "undefined") {
+      const isInsideIframe = window.self !== window.top;
+
+      if (isInsideIframe) {
+        console.log("Firebase App Check bypassed: Running inside the AI Studio preview iframe. This prevents reCAPTCHA v3 from timing out due to top-level domain mismatch (ai.studio vs your registered domain). To use App Check, test the app in a new tab.");
+        return;
+      }
+
+      if (Capacitor.isNativePlatform()) {
+        try {
+          console.log("Capacitor native platform detected. Initializing App Check with Native App Attest / Play Integrity...");
+          const packageName = "@capacitor-firebase/app-check";
+          const { FirebaseAppCheck } = await import(/* @vite-ignore */ packageName) as any;
+          
+          // First, run native initialization of App Check
+          await FirebaseAppCheck.initialize();
+
+          // Create standard Web CustomProvider to pull tokens from native SDK
+          const provider = new CustomProvider({
+            getToken: async () => {
+              const { token } = await FirebaseAppCheck.getToken();
+              return {
+                token,
+                expireTimeMillis: Date.now() + 30 * 60 * 1000 // default 30 mins
+              };
+            }
+          });
+
+          initializeAppCheck(app, {
+            provider,
+            isTokenAutoRefreshEnabled: true
+          });
+          console.log("Firebase App Check successfully initialized for Capacitor Native Client.");
+        } catch (nativeErr) {
+          console.error("Failed to initialize App Check on Capacitor Native Platform. Make sure '@capacitor-firebase/app-check' is compiled into the build package:", nativeErr);
+        }
+      } else {
+        // Standard Web browser
+        const siteKey = (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY;
+        if (siteKey && siteKey !== "your_recaptcha_v3_site_key" && siteKey !== "YOUR_RECAPTCHA_V3_SITE_KEY") {
+          initializeAppCheck(app, {
+            provider: new ReCaptchaV3Provider(siteKey),
+            isTokenAutoRefreshEnabled: true
+          });
+          console.log("Firebase App Check initialized successfully with reCAPTCHA v3 site key.");
+        } else {
+          console.log("Firebase App Check skipped: No valid VITE_RECAPTCHA_SITE_KEY detected. Disabling App Check for development/preview to prevent connection blocking.");
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to initialize Firebase App Check:", e);
+  }
+})();
+
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
   useFetchStreams: false
 } as any, firebaseConfig.firestoreDatabaseId);
+
+export let performance: any = null;
+
+if (typeof window !== "undefined") {
+  enableMultiTabIndexedDbPersistence(db)
+    .then(() => {
+      console.log("Firestore Multi-Tab Offline Persistence enabled successfully.");
+    })
+    .catch((err) => {
+      if (err.code === "failed-precondition") {
+        console.warn("Firestore offline persistence failed precondition (multiple tabs open). Client falling back to multiple active database sync states in memory.");
+      } else if (err.code === "unimplemented") {
+        console.warn("The current browser container environment does not support multi-tab disk cache storage.");
+      } else {
+        console.warn("Failed to activate Firestore multi-tab disk cache persistence:", err);
+      }
+    });
+
+  // Passive Firebase Performance Monitoring initialized dynamically
+  try {
+    performance = getPerformance(app);
+    console.log("Firebase Performance Monitoring initialized dynamically.");
+
+    // Preemptively monkey-patch PerformanceTrace prototype to neutralize invalid attribute value crashes
+    // which can be triggered by automated browser analytics/tracking scripts inside preview frames.
+    try {
+      const dummyTrace = trace(performance, "safeguard_init");
+      const traceProto = Object.getPrototypeOf(dummyTrace);
+      if (traceProto && typeof traceProto.putAttribute === "function") {
+        const originalPutAttribute = traceProto.putAttribute;
+        traceProto.putAttribute = function(this: any, attribute: string, value: string) {
+          try {
+            let safeAttr = attribute;
+            let safeValue = value;
+            
+            if (typeof attribute === "string") {
+              // Firebase Performance attributes constraints:
+              // - Start with a letter (a-z, A-Z)
+              // - Max 40 characters
+              // - Restricted to alphanumeric, underscores, hyphens, periods
+              safeAttr = attribute.substring(0, 40).replace(/[^a-zA-Z0-9_\-\.]/g, "_");
+              if (safeAttr && !/^[a-zA-Z]/.test(safeAttr)) {
+                safeAttr = "a_" + safeAttr.substring(1);
+              }
+            }
+            
+            if (typeof value === "string") {
+              // Firebase Performance values constraints:
+              // - Max 100 characters
+              // - Avoid raw special characters that violate standard event-tracking limits
+              safeValue = value.substring(0, 99).replace(/[^a-zA-Z0-9_\-\.\s]/g, "_");
+            }
+            
+            return originalPutAttribute.call(this, safeAttr || attribute, safeValue || value);
+          } catch (attrErr) {
+            console.warn(`[Firebase Performance Safeguard] Suppressed invalid custom attribute: name="${attribute}" value="${value}"`, attrErr);
+          }
+        };
+        console.log("Successfully patched Firebase PerformanceTrace.prototype.putAttribute.");
+      }
+    } catch (patchErr) {
+      console.warn("Could not patch Firebase PerformanceTrace prototype:", patchErr);
+    }
+  } catch (err) {
+    console.warn("Firebase Performance Monitoring is not supported in this frame or dev sandbox:", err);
+  }
+}
+
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();

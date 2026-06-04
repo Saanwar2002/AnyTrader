@@ -1,5 +1,6 @@
 import React, { ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 
 interface Props {
   children: ReactNode;
@@ -22,6 +23,15 @@ export class ErrorBoundary extends (React.Component as any) {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error", error, errorInfo);
+    
+    if (Capacitor.isNativePlatform()) {
+      import('@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
+        FirebaseCrashlytics.recordException({
+          message: error.message || 'React ErrorBoundary caught error',
+          stacktrace: errorInfo.componentStack || error.stack || ''
+        }).catch(err => console.error("Failed to log to Crashlytics:", err));
+      }).catch(err => console.error("Crashlytics plugin missing:", err));
+    }
   }
 
   render() {
