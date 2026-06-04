@@ -25,7 +25,7 @@ export class ErrorBoundary extends (React.Component as any) {
     console.error("ErrorBoundary caught an error", error, errorInfo);
     
     if (Capacitor.isNativePlatform()) {
-      import('@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
+      import(/* @vite-ignore */ '@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
         FirebaseCrashlytics.recordException({
           message: error.message || 'React ErrorBoundary caught error',
           stacktrace: errorInfo.componentStack || error.stack || ''
