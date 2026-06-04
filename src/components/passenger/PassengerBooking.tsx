@@ -569,6 +569,20 @@ export default function PassengerBooking() {
         createdAt: serverTimestamp()
       });
       setIncomingPopupMessage(null);
+
+      // Trigger remote FCM push notification to driver
+      if (rideState?.driverId) {
+        fetch("/api/chat-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: rideState.driverId,
+            title: "New Message from Passenger",
+            body: replyText,
+            rideId: currentRideId
+          })
+        }).catch(err => console.error("FCM API error:", err));
+      }
     } catch (err) {
       console.error("Failed to send quick reply", err);
     }
@@ -2148,6 +2162,20 @@ export default function PassengerBooking() {
       setTimeout(() => {
         setDisabledQuickMessages(prev => prev.filter(m => m !== text));
       }, 120000);
+
+      // Trigger remote FCM push notification to driver
+      if (rideState?.driverId) {
+        fetch("/api/chat-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: rideState.driverId,
+            title: "New Message from Passenger",
+            body: text,
+            rideId: currentRideId
+          })
+        }).catch(err => console.error("FCM API error:", err));
+      }
     } catch (err) {
       console.error(err);
       toast.error("Failed to send");
@@ -2347,6 +2375,20 @@ export default function PassengerBooking() {
              assignedDriverId: bestDriver,
              offerExpiresAt: Date.now() + timeoutMs
           });
+          
+          // Trigger remote FCM push notification to driver for new ride offer
+          fetch("/api/chat-push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipientId: bestDriver,
+              title: "New Ride Offer",
+              body: "You have a new incoming ride request",
+              rideId: currentRideId,
+              type: "ride_offer",
+              channelId: "ride_offers"
+            })
+          }).catch(err => console.error("FCM API error:", err));
        }
     };
 

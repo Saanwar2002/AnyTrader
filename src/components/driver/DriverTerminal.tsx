@@ -2742,6 +2742,21 @@ export default function DriverTerminal() {
           });
         });
 
+        if (activeRide?.userId) {
+          fetch("/api/chat-push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipientId: activeRide.userId,
+              title: "Driver Assigned",
+              body: "Your driver is on the way to pick you up",
+              rideId: activeRide.id,
+              type: "ride_update",
+              channelId: "ride_updates"
+            })
+          }).catch(err => console.error("FCM API error:", err));
+        }
+
         // Instant availability switch so other passengers don't receive confusing ETAs
         await updateDoc(doc(db, "live_tracking", user.uid), {
           status: "on_ride",
@@ -2895,6 +2910,21 @@ export default function DriverTerminal() {
           });
         });
 
+        if (stackedRideOffer?.userId) {
+          fetch("/api/chat-push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipientId: stackedRideOffer.userId,
+              title: "Driver Assigned",
+              body: "A driver has been assigned and will head to you after their current dropoff",
+              rideId: stackedRideOffer.id,
+              type: "ride_update",
+              channelId: "ride_updates"
+            })
+          }).catch(err => console.error("FCM API error:", err));
+        }
+
         // Instant availability switch for the stacked ride (forces them invisible until current is done)
         await updateDoc(doc(db, "live_tracking", user.uid), {
           dropoffLat: stackedRideOffer?.dropoffLat || null,
@@ -3000,6 +3030,19 @@ export default function DriverTerminal() {
         createdAt: serverTimestamp(),
       });
       setIncomingPopupMessage(null);
+      // Trigger remote FCM push notification to passenger
+      if (activeRide.userId) {
+        fetch("/api/chat-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: activeRide.userId,
+            title: "New Message from Driver",
+            body: replyText,
+            rideId: activeRide.id
+          })
+        }).catch(err => console.error("FCM API error:", err));
+      }
     } catch (err) {
       console.error("Failed to send quick reply", err);
     }
@@ -3524,6 +3567,21 @@ export default function DriverTerminal() {
         status: "arrived",
         arrivedAt: serverTimestamp(),
       });
+      
+      if (rideToUpdate.userId) {
+        fetch("/api/chat-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: rideToUpdate.userId,
+            title: "Driver Arrived",
+            body: "Your driver is outside the pickup location",
+            rideId: rideToUpdate.id,
+            type: "ride_update",
+            channelId: "ride_updates"
+          })
+        }).catch(err => console.error("FCM API error:", err));
+      }
     }
     if (navigator.vibrate) navigator.vibrate(100);
   };
@@ -3538,6 +3596,19 @@ export default function DriverTerminal() {
       });
       setQuickMessageCooldown(120);
       toast.success("Sent");
+
+      if (activeRide.userId) {
+        fetch("/api/chat-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: activeRide.userId,
+            title: "New Message from Driver",
+            body: text,
+            rideId: activeRide.id
+          })
+        }).catch(err => console.error("FCM API error:", err));
+      }
     } catch (err) {
       console.error(err);
       toast.error("Failed to send");

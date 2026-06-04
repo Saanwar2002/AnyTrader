@@ -282,6 +282,20 @@ export default function DispatchEngine() {
         automatedMatchingSkipped: true
       });
 
+      // Trigger remote FCM push notification to driver for new ride offer from admin
+      fetch("/api/chat-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: driver.id,
+          title: "New Ride Offer",
+          body: "You have a new incoming ride request from Dispatch",
+          rideId: currentFocusedRide.id,
+          type: "ride_offer",
+          channelId: "ride_offers"
+        })
+      }).catch(err => console.error("FCM API error:", err));
+
       // Update driver status busy indicator to prevent overlapping automatic offers
       await updateDoc(doc(db, "live_tracking", driver.id), {
         isBusy: true,

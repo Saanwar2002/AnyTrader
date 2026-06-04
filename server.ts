@@ -850,6 +850,46 @@ async function startServer() {
     res.json({ status: "ok", message: "TradeQuote UK API is running" });
   });
 
+  // Push Notification Dispatcher
+  app.post("/api/chat-push", async (req, res) => {
+    try {
+      const { recipientId, title, body, rideId, type, channelId } = req.body;
+      if (!recipientId || !db) return res.status(400).json({ error: "Missing parameters or DB offline" });
+      
+      const userDoc = await db.collection("users").doc(recipientId).get();
+      if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+      
+      const fcmToken = userDoc.data()?.fcmToken;
+      if (!fcmToken) return res.status(400).json({ error: "User has no FCM token registered" });
+      
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: {
+          title: title || "New Message",
+          body: body || "You have a new message",
+        },
+        data: {
+          rideId: rideId || "",
+          type: type || "chat_message"
+        },
+        android: {
+          priority: "high",
+          notification: { sound: "default", channelId: channelId || "chat_messages" }
+        },
+        apns: {
+          payload: {
+            aps: { sound: "default", contentAvailable: true }
+          }
+        }
+      });
+      
+      res.json({ success: true, message: "Push sent successfully" });
+    } catch (error: any) {
+      console.error("FCM Push Error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Stripe Checkout Session
   app.post("/api/create-checkout-session", async (req, res) => {
     try {

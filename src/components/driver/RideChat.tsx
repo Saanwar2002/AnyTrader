@@ -70,6 +70,18 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
         senderId: user.uid,
         createdAt: serverTimestamp()
       });
+      if (passengerId) {
+        fetch("/api/chat-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: passengerId,
+            title: "New Message",
+            body: messageText,
+            rideId: rideId
+          })
+        }).catch(err => console.error("FCM API error:", err));
+      }
     } catch (error) {
       console.error("Error sending message:", error);
     }
@@ -83,6 +95,18 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
         senderId: user.uid,
         createdAt: serverTimestamp()
       });
+      if (passengerId) {
+        fetch("/api/chat-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: passengerId,
+            title: "New Message",
+            body: text,
+            rideId: rideId
+          })
+        }).catch(err => console.error("FCM API error:", err));
+      }
     } catch (error) {
       console.error("Error sending quick reply:", error);
     }

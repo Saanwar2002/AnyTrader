@@ -50,6 +50,7 @@ import PassengerBooking from "./components/passenger/PassengerBooking";
 import DriverEarnings from "./components/driver/DriverEarnings";
 import DriverInbox from "./components/driver/DriverInbox";
 import PassengerRideHistory from "./components/passenger/PassengerRideHistory";
+import { registerForPushNotifications } from "./lib/pushNotifications";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
 import CorporatePortal from "./components/anyroller/CorporatePortal";
@@ -100,8 +101,14 @@ export default function App() {
     }, (error) => {
       console.error("Firestore Platform Config Error:", error);
     });
+    
+    // Register Push Notification on Auth
+    if (user && Capacitor.isNativePlatform()) {
+      registerForPushNotifications(user.uid);
+    }
+
     return () => unsub();
-  }, [isAuthReady]);
+  }, [isAuthReady, user]);
 
   // Global auto-scroll for inputs to keep them in view, especially on mobile
   useEffect(() => {
