@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "426882121063",
+    "project_id": "anytradercombined",
+    "storage_bucket": "anytradercombined.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:426882121063:android:6f66345e69bf00f403c2ab",
+        "android_client_info": {
+          "package_name": "com.anytrader.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsn4wIoSSEPsmPVcMFK88L9sBUh8MFdYM"
+        }
+      ],
+      "services": {
+        "appdetect_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
