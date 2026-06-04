@@ -612,6 +612,9 @@ export default function DriverTerminal() {
           }
         }
       },
+      (error) => {
+        console.error("Error in passenger live tracking listener:", error);
+      }
     );
     return () => unsub();
   }, [activeRide?.userId]);
@@ -1873,6 +1876,9 @@ export default function DriverTerminal() {
           }
         }
       },
+      (error) => {
+        console.error("Error in driver metrics listener:", error);
+      }
     );
     return () => unsub();
   }, [user]);
@@ -1957,6 +1963,8 @@ export default function DriverTerminal() {
           setStackedRideOffer(null);
         }
       }
+    }, (error) => {
+      console.error("Error in live ride offers listener:", error);
     });
 
     return () => unsub();
@@ -2158,6 +2166,9 @@ export default function DriverTerminal() {
           }
         }
       },
+      (error) => {
+        console.error("Error in active ride listener:", error);
+      }
     );
 
     return () => unsub();
@@ -3084,6 +3095,8 @@ export default function DriverTerminal() {
           }
         }
       }
+    }, (error) => {
+      console.error("Error in driver chat listener:", error);
     });
     return () => unsub();
   }, [activeRide?.id, rideState, user, isChatOpen]);
@@ -5638,7 +5651,14 @@ export default function DriverTerminal() {
                           "font-black text-white leading-none mt-0.5",
                           isCardCollapsed ? "text-[18px]" : "text-[16px]"
                         )}>
-                          3 min{" "}
+                          {(liveEtaSeconds !== null && liveEtaSeconds > 0) ? (
+                            <>
+                              {Math.floor(liveEtaSeconds / 60) > 0 ? `${Math.floor(liveEtaSeconds / 60)}m ` : ''}
+                              {liveEtaSeconds % 60}s
+                            </>
+                          ) : (
+                            `${activeRide?.durationToPickupMinutes || 3} min`
+                          )}{" "}
                           <span className={cn(
                             "text-white font-bold",
                             isCardCollapsed ? "text-[16px]" : "text-[14px]"

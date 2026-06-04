@@ -17,6 +17,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { processTaxiVoiceCommand } from "@/src/services/gemini";
 import { triggerHaptic, ImpactStyle, hideNativeKeyboard, getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 // Google Maps Imports
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF, OverlayViewF, OverlayView } from "@react-google-maps/api";
@@ -538,6 +539,40 @@ export default function PassengerBooking() {
   const lastSeenChatCountRef = useRef(0);
   const lastLocationSyncRef = useRef(0);
   const lastSyncCoordsRef = useRef<{lat: number, lng: number} | null>(null);
+
+  const [incomingPopupMessage, setIncomingPopupMessage] = useState<{ id: string, text: string } | null>(null);
+  const lastPopupMessageIdRef = useRef<string | null>(null);
+  const [quickMessageCooldown, setQuickMessageCooldown] = useState(0);
+
+  useEffect(() => {
+    if (incomingPopupMessage) {
+      const timer = setTimeout(() => {
+        setIncomingPopupMessage(null);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [incomingPopupMessage]);
+
+  useEffect(() => {
+    if (quickMessageCooldown > 0) {
+      const timer = setTimeout(() => setQuickMessageCooldown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [quickMessageCooldown]);
+
+  const handleQuickReply = async (replyText: string) => {
+    if (!currentRideId || !user) return;
+    try {
+      await addDoc(collection(db, "ride_requests", currentRideId, "chat"), {
+        text: replyText,
+        senderId: user.uid,
+        createdAt: serverTimestamp()
+      });
+      setIncomingPopupMessage(null);
+    } catch (err) {
+      console.error("Failed to send quick reply", err);
+    }
+  };
 
   const [hasModifiedRouteByUser, setHasModifiedRouteByUser] = useState(false);
   const [showRegularJourneys, setShowRegularJourneys] = useState(false);
@@ -1667,16 +1702,23 @@ export default function PassengerBooking() {
     );
     
     const unsub = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map(doc => doc.data());
+      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       const remoteMessages = messages.filter(m => m.senderId !== user.uid);
       
       if (isChatOpen) {
         lastSeenChatCountRef.current = remoteMessages.length;
         setUnreadChatCount(0);
+        setIncomingPopupMessage(null);
       } else {
         const unread = remoteMessages.length - lastSeenChatCountRef.current;
         if (unread > 0) {
           setUnreadChatCount(unread);
+          const latestMsg = remoteMessages[remoteMessages.length - 1];
+          if (latestMsg && latestMsg.id !== lastPopupMessageIdRef.current) {
+            lastPopupMessageIdRef.current = latestMsg.id;
+            setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          }
         }
       }
     }, (err) => console.error("onSnapshot ERROR chat:", err));
@@ -2316,6 +2358,29 @@ export default function PassengerBooking() {
              lastSoundStatusRef.current = 'accepted';
              // Only show the overlay if we just transitioned to accepted
              setShowDriverFoundOverlay(true);
+
+             if (Capacitor.isNativePlatform()) {
+               try {
+                 LocalNotifications.requestPermissions().then((perm) => {
+                   if (perm.display === 'granted') {
+                     LocalNotifications.schedule({
+                       notifications: [
+                         {
+                           title: "Driver Assigned",
+                           body: `${data.driverName || "A driver"} is on their way to pick you up.`,
+                           id: 1002,
+                           schedule: { at: new Date(Date.now() + 100) },
+                           actionTypeId: "",
+                           extra: null
+                         }
+                       ]
+                     });
+                   }
+                 }).catch(e => console.warn("LocalNotifications error:", e));
+               } catch (e) {
+                 console.warn("LocalNotifications error:", e);
+               }
+             }
           }
           setAssignedDriverInfo(prev => ({ 
              uid: data.driverId, 
@@ -2339,6 +2404,51 @@ export default function PassengerBooking() {
              playSound('notification');
              if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]); // Distinct arrival vibration pattern
              lastSoundStatusRef.current = 'arrived';
+             
+             if (Capacitor.isNativePlatform()) {
+               try {
+                 LocalNotifications.requestPermissions().then((perm) => {
+                   if (perm.display === 'granted') {
+                     LocalNotifications.schedule({
+                       notifications: [
+                         {
+                           title: "Driver Arrived",
+                           body: "Your driver is outside the pickup location.",
+                           id: 1001,
+                           schedule: { at: new Date(Date.now() + 100) },
+                           actionTypeId: "",
+                           extra: null
+                         }
+                       ]
+                     });
+                   }
+                 }).catch(e => console.warn("LocalNotifications error:", e));
+               } catch (e) {
+                 console.warn("LocalNotifications error:", e);
+               }
+             }
+
+             // Attempt Text-to-Speech
+             try {
+               const textToSpeak = "Your driver has arrived outside.";
+               if (Capacitor.isNativePlatform()) {
+                 import(/* @vite-ignore */ '@capacitor-community/text-to-speech').then(({ TextToSpeech }) => {
+                   TextToSpeech.speak({
+                     text: textToSpeak,
+                     rate: 1.0,
+                     pitch: 1.0,
+                     volume: 1.0,
+                     lang: 'en-US'
+                   }).catch(e => console.warn("Capacitor TTS error:", e));
+                 }).catch(e => console.warn("Capacitor TTS import error:", e));
+               } else if ('speechSynthesis' in window) {
+                  const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                  utterance.rate = 1.0;
+                  window.speechSynthesis.speak(utterance);
+               }
+             } catch (e) {
+               console.warn("TTS error:", e);
+             }
           }
           setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
@@ -2401,7 +2511,7 @@ export default function PassengerBooking() {
           }
         }
       }
-    });
+    }, (err) => { console.error("onSnapshot ERROR live_tracking 2:", err); });
     return () => { unsubRide(); unsubTrack(); };
   }, [currentRideId, assignedDriverInfo?.uid, user]);
 
@@ -3026,6 +3136,58 @@ export default function PassengerBooking() {
              </div>
           )}
        </div>
+
+          {/* Incoming Message Quick Reply Popup */}
+          <AnimatePresence>
+            {incomingPopupMessage && !isChatOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                className="absolute left-4 right-4 z-[60] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.2)] border border-slate-200 dark:border-white/10"
+                style={{ top: "35%" }}
+              >
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/10 dark:bg-blue-400/20 flex items-center justify-center shrink-0">
+                    <MessageCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-slate-900 dark:text-white font-bold text-[14px] truncate mb-1">
+                      {assignedDriverInfo?.name || "Driver"}
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-300 text-[13px] leading-snug line-clamp-2 break-words">
+                      "{incomingPopupMessage.text}"
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIncomingPopupMessage(null)}
+                    className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                  >
+                    <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  </button>
+                </div>
+
+                <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 w-full">
+                  {[
+                    "OK, got it!",
+                    "I'll be right there",
+                    "Ok I will find you",
+                    "I'll be outside shortly",
+                    "I'm at location but can not find you."
+                  ].map((msg, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleQuickReply(msg)}
+                      className="whitespace-nowrap px-4 py-2 bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white text-[13px] font-bold rounded-[10px] active:scale-95 transition-transform shrink-0 shadow-sm"
+                    >
+                      {msg}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
        {/* Chat Component */}
        {step === "confirmed" && currentRideId && (

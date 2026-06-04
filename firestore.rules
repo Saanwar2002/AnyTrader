@@ -83,7 +83,7 @@ service cloud.firestore {
         );
       }
 
-      allow get: if isAdmin() || isPartyToRide(resource.data);
+      allow get: if isAdmin() || (resource != null && isPartyToRide(resource.data)) || (resource == null && isSignedIn());
       allow create: if isAdmin() || isPartyToRide(request.resource.data);
       allow update: if isAdmin() || isPartyToRide(resource.data) || isPartyToRide(request.resource.data);
       allow delete: if isAdmin() || isPartyToRide(resource.data);
