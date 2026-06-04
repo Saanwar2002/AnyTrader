@@ -1704,6 +1704,42 @@ export default function PassengerBooking() {
     const unsub = onSnapshot(q, (snapshot) => {
       const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       const remoteMessages = messages.filter(m => m.senderId !== user.uid);
+      const latestMsg = remoteMessages[remoteMessages.length - 1];
+
+      if (latestMsg && latestMsg.id !== lastPopupMessageIdRef.current) {
+        lastPopupMessageIdRef.current = latestMsg.id;
+        playSound('notification');
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        
+        if (Capacitor.isNativePlatform()) {
+          try {
+            LocalNotifications.requestPermissions().then((perm) => {
+              if (perm.display === 'granted') {
+                LocalNotifications.schedule({
+                  notifications: [
+                    {
+                      title: "New Message from Driver",
+                      body: latestMsg.text,
+                      id: new Date().getTime(),
+                      schedule: { at: new Date(Date.now() + 100) },
+                      sound: undefined,
+                      attachments: undefined,
+                      actionTypeId: "",
+                      extra: null
+                    }
+                  ]
+                }).catch(e => console.warn("LocalNotifications error:", e));
+              }
+            }).catch(e => console.warn("LocalNotifications error:", e));
+          } catch (e) {
+             console.warn("LocalNotifications error:", e);
+          }
+        }
+        
+        if (!isChatOpen) {
+          setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
+        }
+      }
       
       if (isChatOpen) {
         lastSeenChatCountRef.current = remoteMessages.length;
@@ -1713,12 +1749,6 @@ export default function PassengerBooking() {
         const unread = remoteMessages.length - lastSeenChatCountRef.current;
         if (unread > 0) {
           setUnreadChatCount(unread);
-          const latestMsg = remoteMessages[remoteMessages.length - 1];
-          if (latestMsg && latestMsg.id !== lastPopupMessageIdRef.current) {
-            lastPopupMessageIdRef.current = latestMsg.id;
-            setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-          }
         }
       }
     }, (err) => console.error("onSnapshot ERROR chat:", err));

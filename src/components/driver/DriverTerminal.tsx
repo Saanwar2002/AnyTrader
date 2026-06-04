@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { QRCodeSVG } from 'qrcode.react';
 import { triggerHaptic, ImpactStyle, getGoogleMapsApiKey, isCapacitor, speakText } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import {
   Navigation,
   Info,
@@ -3077,6 +3078,42 @@ export default function DriverTerminal() {
         ...(doc.data() as any),
       }));
       const remoteMessages = messages.filter((m) => m.senderId !== user.uid);
+      const latestMsg = remoteMessages[remoteMessages.length - 1];
+
+      if (latestMsg && latestMsg.id !== lastPopupMessageIdRef.current) {
+        lastPopupMessageIdRef.current = latestMsg.id;
+        playSound("notification");
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        
+        if (Capacitor.isNativePlatform()) {
+          try {
+            LocalNotifications.requestPermissions().then((perm) => {
+              if (perm.display === 'granted') {
+                LocalNotifications.schedule({
+                  notifications: [
+                    {
+                      title: "New Message from Passenger",
+                      body: latestMsg.text,
+                      id: new Date().getTime(),
+                      schedule: { at: new Date(Date.now() + 100) },
+                      sound: undefined,
+                      attachments: undefined,
+                      actionTypeId: "",
+                      extra: null
+                    }
+                  ]
+                }).catch(e => console.warn("LocalNotifications error:", e));
+              }
+            }).catch(e => console.warn("LocalNotifications error:", e));
+          } catch (e) {
+             console.warn("LocalNotifications error:", e);
+          }
+        }
+        
+        if (!isChatOpen) {
+          setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
+        }
+      }
 
       if (isChatOpen) {
         lastSeenChatCountRef.current = remoteMessages.length;
@@ -3086,13 +3123,6 @@ export default function DriverTerminal() {
         const unread = remoteMessages.length - lastSeenChatCountRef.current;
         if (unread > 0) {
           setUnreadChatCount(unread);
-
-          const latestMsg = remoteMessages[remoteMessages.length - 1];
-          if (latestMsg && latestMsg.id !== lastPopupMessageIdRef.current) {
-            lastPopupMessageIdRef.current = latestMsg.id;
-            setIncomingPopupMessage({ id: latestMsg.id, text: latestMsg.text });
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-          }
         }
       }
     }, (error) => {
