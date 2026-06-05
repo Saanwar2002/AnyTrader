@@ -30,7 +30,7 @@ for (let i = 0; i < 24; i++) {
 
 export default function DriverAvailability({ onClose }: { onClose: () => void }) {
   const { user, profile } = useAuth();
-  const [maxDailyHours, setMaxDailyHours] = useState(12);
+  const [maxDailyHours, setMaxDailyHours] = useState(24);
   const [onlineSecondsToday, setOnlineSecondsToday] = useState(0);
   const [schedule, setSchedule] = useState<Record<string, DaySchedule>>(DEFAULT_SCHEDULE);
   

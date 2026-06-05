@@ -580,7 +580,7 @@ export default function DriverTerminal() {
     minFare: 5,
     priorityFee: 2.5,
     commissionRate: 0.12,
-    maxDailyDriverHours: 12,
+    maxDailyDriverHours: 24,
   });
   const [activeRide, setActiveRide] = useState<any>(null); // Stores live or simulated ride data
   const [liveEtaMins, setLiveEtaMins] = useState<number | null>(null);
@@ -2279,7 +2279,7 @@ export default function DriverTerminal() {
       const mDoc = await getDoc(doc(db, "driver_metrics", user.uid));
       if (mDoc.exists()) {
         const secs = mDoc.data().onlineSecondsToday || 0;
-        const max = fareConfig.maxDailyDriverHours || 12;
+        const max = fareConfig.maxDailyDriverHours || 24;
         if (secs / 3600 >= max) {
           toast.error("Safety Limit Reached", {
             description: `You cannot go online. You have reached your daily maximum of ${max} hours.`,
@@ -2382,9 +2382,9 @@ export default function DriverTerminal() {
               getDoc(doc(db, "driver_metrics", user.uid)).then((metricsDoc) => {
                 if (metricsDoc.exists()) {
                   const secs = metricsDoc.data().onlineSecondsToday || 0;
-                  if (secs / 3600 >= (fareConfig.maxDailyDriverHours || 12)) {
+                  if (secs / 3600 >= (fareConfig.maxDailyDriverHours || 24)) {
                     toast.error("Safety Limit Reached", {
-                      description: `You have reached the maximum allowed driving time of ${fareConfig.maxDailyDriverHours || 12} hours.`,
+                      description: `You have reached the maximum allowed driving time of ${fareConfig.maxDailyDriverHours || 24} hours.`,
                     });
                     setIsOnline(false);
                     updateDoc(doc(db, "live_tracking", user.uid), {
@@ -3020,7 +3020,7 @@ export default function DriverTerminal() {
   const [isAwaitingCashConfirm, setIsAwaitingCashConfirm] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [cashCollectedInput, setCashCollectedInput] = useState<string>("");
-  const [cashConfirmTimer, setCashConfirmTimer] = useState<number>(120);
+  const [cashConfirmTimer, setCashConfirmTimer] = useState<number>(45);
   const [forceCompleteReason, setForceCompleteReason] = useState<string>("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showEarlyArrivalConfirm, setShowEarlyArrivalConfirm] = useState(false);
@@ -3934,7 +3934,7 @@ export default function DriverTerminal() {
             });
             setShowCashConfirm(false);
             setIsAwaitingCashConfirm(true);
-            setCashConfirmTimer(120); // start 2 mins passenger wait
+            setCashConfirmTimer(45); // start 45 seconds passenger wait
             toast.info("Awaiting Passenger...", {
                description: "Waiting for passenger to confirm unpaid balance on their device.",
                duration: 8000,
@@ -6090,8 +6090,8 @@ export default function DriverTerminal() {
                                 .padStart(2, "0")}
                             </span>
                           ) : elapsedWaitSeconds < maxWaitSeconds ? (
-                            <span className="text-[#FF9500]">
-                              Paid wait:{" "}
+                            <span className="text-[#FF3B30]">
+                              Charging wait time:{" "}
                               {Math.floor((elapsedWaitSeconds - freeWaitSeconds) / 60)}:
                               {((elapsedWaitSeconds - freeWaitSeconds) % 60)
                                 .toString()
@@ -6287,10 +6287,10 @@ export default function DriverTerminal() {
                         </p>
                         {isWaitingAtStop ? (
                           <p className={cn(
-                            "font-black text-[#FF9500] leading-none mt-0.5",
+                            "font-black text-[#FF3B30] leading-none mt-0.5",
                             isCardCollapsed ? "text-[18px]" : "text-[16px]"
                           )}>
-                            Paid wait: {Math.floor(totalPaidWaitSeconds / 60)}:
+                            Charging wait time: {Math.floor(totalPaidWaitSeconds / 60)}:
                             {(totalPaidWaitSeconds % 60)
                               .toString()
                               .padStart(2, "0")}

@@ -4,7 +4,8 @@ import {
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Zap, History, Loader2, 
   Mic, MicOff, Star, Users, User, Repeat, Shield, Plus, Heart, Bookmark,
-  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete, Dumbbell
+  Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete, Dumbbell,
+  AlertTriangle, CreditCard
 } from "lucide-react";
 import RideChat from "../driver/RideChat";
 import { cn } from "@/src/lib/utils";
@@ -258,7 +259,17 @@ const CAR_CATEGORIES = [
   { id: 'wav', name: 'Wheelchair', multiplier: 2.5, wait: '10-20', capacity: 4, icon: Accessibility }
 ];
 
-function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
+const getTimestampMs = (val: any): number => {
+  if (!val) return Date.now();
+  if (typeof val === 'number') return val;
+  if (typeof val.toMillis === 'function') return val.toMillis();
+  if (val.seconds !== undefined) return val.seconds * 1000 + (val.nanoseconds || 0) / 1000000;
+  if (typeof val === 'string') return new Date(val).getTime();
+  if (val instanceof Date) return val.getTime();
+  return Date.now();
+};
+
+function PassengerTimer({ arrivedAt }: { arrivedAt: any }) {
   const { values: remoteConfig } = useRemoteConfig();
   const [elapsed, setElapsed] = useState(0);
 
@@ -267,9 +278,10 @@ function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
   const freeWaitSeconds = Math.max(60, maxWaitSeconds - 120);
 
   useEffect(() => {
-    setElapsed(Math.floor((Date.now() - arrivedAt) / 1000));
+    const ms = getTimestampMs(arrivedAt);
+    setElapsed(Math.floor((Date.now() - ms) / 1000));
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - arrivedAt) / 1000));
+      setElapsed(Math.floor((Date.now() - ms) / 1000));
     }, 1000);
     return () => clearInterval(interval);
   }, [arrivedAt]);
@@ -281,9 +293,9 @@ function PassengerTimer({ arrivedAt }: { arrivedAt: number }) {
     <div className="text-right">
       <p className="text-2xl font-black text-purple-900 leading-none mb-1">{mins}:{secs}</p>
       {elapsed < freeWaitSeconds ? (
-        <p className="text-[10px] font-bold text-purple-700/80 uppercase tracking-widest leading-none">Free wait: {Math.floor((freeWaitSeconds - elapsed) / 60)}:{((freeWaitSeconds - elapsed) % 60).toString().padStart(2, '0')}</p>
+        <p className="text-[10px] font-bold text-[#00D26A] uppercase tracking-widest leading-none">Free wait: {Math.floor((freeWaitSeconds - elapsed) / 60)}:{((freeWaitSeconds - elapsed) % 60).toString().padStart(2, '0')}</p>
       ) : elapsed < maxWaitSeconds ? (
-        <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF9500] leading-none">Paid wait: {Math.floor((elapsed - freeWaitSeconds) / 60)}:{((elapsed - freeWaitSeconds) % 60).toString().padStart(2, '0')}</p>
+        <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF3B30] leading-none">charging wait time: {Math.floor((elapsed - freeWaitSeconds) / 60)}:{((elapsed - freeWaitSeconds) % 60).toString().padStart(2, '0')}</p>
       ) : (
         <p className="text-[10px] font-bold mt-0.5 uppercase tracking-widest text-[#FF3B30] leading-none">Cancel fee applies</p>
       )}
@@ -313,27 +325,53 @@ function SearchingTimer() {
   );
 }
 
-function CancelRideButton_ConfirmedPhase({ acceptedAt, onCancel }: { acceptedAt: number, onCancel: () => void }) {
+function CancelRideButton_ConfirmedPhase({ 
+  acceptedAt, 
+  arrivedAt, 
+  status, 
+  onCancel 
+}: { 
+  acceptedAt: any; 
+  arrivedAt?: any; 
+  status?: string; 
+  onCancel: () => void; 
+}) {
+  const { values: remoteConfig } = useRemoteConfig();
   const [elapsed, setElapsed] = useState(0);
 
+  const limitMins = remoteConfig?.driverWaitTimeLimitMins ?? 5;
+  const maxWaitSeconds = limitMins * 60;
+  const freeWaitSeconds = Math.max(60, maxWaitSeconds - 120);
+
   useEffect(() => {
-    setElapsed(Math.floor((Date.now() - acceptedAt) / 1000));
+    const getElapsed = () => {
+      if (status === "arrived" && arrivedAt) {
+        return Math.floor((Date.now() - getTimestampMs(arrivedAt)) / 1000);
+      }
+      return Math.floor((Date.now() - getTimestampMs(acceptedAt)) / 1000);
+    };
+
+    setElapsed(getElapsed());
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - acceptedAt) / 1000));
+      setElapsed(getElapsed());
     }, 1000);
     return () => clearInterval(interval);
-  }, [acceptedAt]);
+  }, [acceptedAt, arrivedAt, status]);
 
-  const timeLimit = 120; // 2 minutes
-  const isFree = elapsed < timeLimit;
-  const remaining = isFree ? timeLimit - elapsed : 0;
-  const mins = Math.floor(remaining / 60);
-  const secs = (remaining % 60).toString().padStart(2, '0');
+  const isArrivedStatus = status === "arrived";
+  const isFree = isArrivedStatus
+    ? (arrivedAt ? elapsed < freeWaitSeconds : true)
+    : elapsed < 120;
+
+  const remaining = isFree
+    ? (isArrivedStatus ? (arrivedAt ? freeWaitSeconds - elapsed : freeWaitSeconds) : 120 - elapsed)
+    : 0;
+
+  const mins = Math.max(0, Math.floor(remaining / 60));
+  const secs = Math.max(0, Math.floor(remaining % 60)).toString().padStart(2, '0');
 
   return (
-    <button onClick={onCancel} className={cn("w-full py-2.5 rounded-[16px] border border-black flex flex-col items-center justify-center transition-transform active:scale-[0.98] shadow-lg", 
-      isFree ? "bg-[#d32f2f] text-white shadow-red-900/10" : "bg-[#d32f2f] text-white shadow-red-900/10"
-    )}>
+    <button onClick={onCancel} className={cn("w-full py-2.5 rounded-[16px] border border-black flex flex-col items-center justify-center transition-transform active:scale-[0.98] shadow-lg bg-[#d32f2f] text-white shadow-red-900/10")}>
       <span className="font-bold text-[15px] leading-tight text-white mb-0.5">Cancel Ride</span>
       {isFree ? (
         <span className="text-white/80 text-[13px] font-medium leading-none">{mins}:{secs}</span>
@@ -359,11 +397,11 @@ export default function PassengerBooking() {
   const [isMapFullScreen, setIsMapFullScreen] = useState(false);
   const [completedRideData, setCompletedRideData] = useState<any>(null);
   const [houseNumber, setHouseNumber] = useState("");
-  const [pickup, setPickup] = useState(searchParams.get("pickup") || "");
-  const [dropoff, setDropoff] = useState(searchParams.get("dropoff") || "");
+  const [pickup, setPickup] = useState(searchParams.get("pickup") || localStorage.getItem("passenger_temp_pickup") || "");
+  const [dropoff, setDropoff] = useState(searchParams.get("dropoff") || localStorage.getItem("passenger_temp_dropoff") || "");
   const pickupInputRef = useRef<HTMLInputElement>(null);
   const dropoffInputRef = useRef<HTMLInputElement>(null);
-  const [comments, setComments] = useState(searchParams.get("comments") || "");
+  const [comments, setComments] = useState(searchParams.get("comments") || localStorage.getItem("passenger_temp_comments") || "");
   const [waitTolerance, setWaitTolerance] = useState<10 | 20 | 30>(20);
   const [selectedCategory, setSelectedCategory] = useState("standard");
   const [isPetFriendly, setIsPetFriendly] = useState(false);
@@ -383,6 +421,7 @@ export default function PassengerBooking() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
   const [rideContext, setRideContext] = useState<"personal" | "business">("personal");
+  const [isClearingBalance, setIsClearingBalance] = useState(false);
 
   // Check for an existing active ride to auto-resume
   useEffect(() => {
@@ -656,10 +695,53 @@ export default function PassengerBooking() {
   // Map States
   const [mapCenter, setMapCenter] = useState(defaultCenter);
   const [mapZoom, setMapZoom] = useState(16);
-  const [pickupCoords, setPickupCoords] = useState<{lat: number, lng: number} | null>(null);
-  const [dropoffCoords, setDropoffCoords] = useState<{lat: number, lng: number} | null>(null);
-  const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>([]);
+  const [pickupCoords, setPickupCoords] = useState<{lat: number, lng: number} | null>(() => {
+    try {
+      const saved = localStorage.getItem("passenger_temp_pickup_coords");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [dropoffCoords, setDropoffCoords] = useState<{lat: number, lng: number} | null>(() => {
+    try {
+      const saved = localStorage.getItem("passenger_temp_dropoff_coords");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [stops, setStops] = useState<{address: string, coords: {lat: number, lng: number} | null}[]>(() => {
+    try {
+      const saved = localStorage.getItem("passenger_temp_stops");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [routeLine, setRouteLine] = useState<{lat: number, lng: number}[]>([]);
+
+  const clearBookingInputsAndState = () => {
+    setPickup("");
+    setDropoff("");
+    setComments("");
+    setPickupCoords(null);
+    setDropoffCoords(null);
+    setStops([]);
+    setCurrentRideId(null);
+    setAssignedDriverInfo(null);
+    setDriverPos(null);
+    setLiveEtaSeconds(null);
+    setLiveEtaMins(null);
+    setStep("input");
+
+    localStorage.removeItem("passenger_temp_pickup");
+    localStorage.removeItem("passenger_temp_dropoff");
+    localStorage.removeItem("passenger_temp_comments");
+    localStorage.removeItem("passenger_temp_pickup_coords");
+    localStorage.removeItem("passenger_temp_dropoff_coords");
+    localStorage.removeItem("passenger_temp_stops");
+  };
 
   // Adjust map zooming dynamically on ride status change
   useEffect(() => {
@@ -672,6 +754,55 @@ export default function PassengerBooking() {
       setMapZoom(15);
     }
   }, [assignedDriverInfo?.status, pickupCoords]);
+
+  // Synchronize passenger input states to localStorage to preserve state across tab switches
+  useEffect(() => {
+    if (pickup) {
+      localStorage.setItem("passenger_temp_pickup", pickup);
+    } else {
+      localStorage.removeItem("passenger_temp_pickup");
+    }
+  }, [pickup]);
+
+  useEffect(() => {
+    if (dropoff) {
+      localStorage.setItem("passenger_temp_dropoff", dropoff);
+    } else {
+      localStorage.removeItem("passenger_temp_dropoff");
+    }
+  }, [dropoff]);
+
+  useEffect(() => {
+    if (comments) {
+      localStorage.setItem("passenger_temp_comments", comments);
+    } else {
+      localStorage.removeItem("passenger_temp_comments");
+    }
+  }, [comments]);
+
+  useEffect(() => {
+    if (pickupCoords) {
+      localStorage.setItem("passenger_temp_pickup_coords", JSON.stringify(pickupCoords));
+    } else {
+      localStorage.removeItem("passenger_temp_pickup_coords");
+    }
+  }, [pickupCoords]);
+
+  useEffect(() => {
+    if (dropoffCoords) {
+      localStorage.setItem("passenger_temp_dropoff_coords", JSON.stringify(dropoffCoords));
+    } else {
+      localStorage.removeItem("passenger_temp_dropoff_coords");
+    }
+  }, [dropoffCoords]);
+
+  useEffect(() => {
+    if (stops && stops.length > 0) {
+      localStorage.setItem("passenger_temp_stops", JSON.stringify(stops));
+    } else {
+      localStorage.removeItem("passenger_temp_stops");
+    }
+  }, [stops]);
 
   // Long press to drag markers
   const [draggablePin, setDraggablePin] = useState<string | null>(null);
@@ -1794,8 +1925,9 @@ export default function PassengerBooking() {
       return;
     }
     
-    if (pendingCharges > 0 && cancellationCount === 1) {
-      toast.warning(`Notice: £${pendingCharges.toFixed(2)} unpaid cancellation fee will be added to this trip's fare.`);
+    if (pendingCharges > 0) {
+      const reason = profile?.pendingChargesReason || "unpaid balance / fees";
+      toast.warning(`Notice: £${pendingCharges.toFixed(2)} outstanding charges (${reason}) will be added to this trip's fare.`);
     }
 
     const isUpdatingActiveRide = assignedDriverInfo && (assignedDriverInfo.status === 'accepted' || assignedDriverInfo.status === 'arrived' || assignedDriverInfo.status === 'in_progress');
@@ -1822,7 +1954,7 @@ export default function PassengerBooking() {
         stops: stops.filter(s => s.coords !== null),
         distanceMiles: Number(distanceMiles.toFixed(1)),
         durationMinutes: Number(durationMinutes.toFixed(0)),
-        fareEstimate: getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0),
+        fareEstimate: getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + pendingCharges,
         baseCalc: fareEstimate || 5.0,
         surgeMultiplier: activeSurge.multiplier, 
         surgeModel: activeSurge.isFixed ? 'fixed' : 'multiplier',
@@ -1832,7 +1964,7 @@ export default function PassengerBooking() {
         isPriority,
         waitTolerance,
         comments,
-        unpaidCancellationFeesOwed: pendingCharges > 0 && cancellationCount === 1 ? pendingCharges : 0,
+        unpaidCancellationFeesOwed: pendingCharges,
         status: isUpdatingActiveRide ? assignedDriverInfo.status : "pending",
         hasCardOnFile: !!profile?.stripeCustomerId,
         currency: "GBP",
@@ -2049,6 +2181,7 @@ export default function PassengerBooking() {
         cancelledAt: serverTimestamp() 
       });
 
+      clearBookingInputsAndState();
       toast.success("Ride cancelled.");
       navigate("/my-rides");
     } catch (err) {
@@ -2122,7 +2255,16 @@ export default function PassengerBooking() {
     if (!currentRideId) return;
 
     let fee = 0;
-    if (assignedDriverInfo?.acceptedAt) {
+    const limitMins = remoteConfig?.driverWaitTimeLimitMins ?? 5;
+    const maxWaitSeconds = limitMins * 60;
+    const freeWaitSeconds = Math.max(60, maxWaitSeconds - 120);
+
+    if (assignedDriverInfo?.status === "arrived" && assignedDriverInfo?.arrivedAt) {
+      const elapsedArrived = Math.floor((Date.now() - assignedDriverInfo.arrivedAt) / 1000);
+      if (elapsedArrived >= freeWaitSeconds) {
+        fee = fareConfig.baseFare;
+      }
+    } else if (assignedDriverInfo?.acceptedAt) {
       const diffMs = Date.now() - assignedDriverInfo.acceptedAt;
       if (diffMs > 120000) { // 2 minutes
         fee = fareConfig.baseFare; 
@@ -2150,6 +2292,7 @@ export default function PassengerBooking() {
         });
       }
 
+      clearBookingInputsAndState();
       setShowCancelPrompt(false);
       toast.success("Ride cancelled.");
       navigate("/my-rides");
@@ -2430,9 +2573,17 @@ export default function PassengerBooking() {
           if (step !== "searching") {
             setStep("searching");
             setAssignedDriverInfo(null);
+            setDriverPos(null);
+            setLiveEtaSeconds(null);
+            setLiveEtaMins(null);
             lastSoundStatusRef.current = null;
             searchingStartTimeRef.current = Date.now();
             toast.info("Finding a new driver", { description: "Your previous driver is no longer available." });
+          } else {
+            setAssignedDriverInfo(null);
+            setDriverPos(null);
+            setLiveEtaSeconds(null);
+            setLiveEtaMins(null);
           }
         }
         if (data.status === 'accepted' && data.driverId) {
@@ -2533,7 +2684,29 @@ export default function PassengerBooking() {
                console.warn("TTS error:", e);
              }
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount, currentStopIndex: data.currentStopIndex || 0, stops: data.stops || [], fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
+          setAssignedDriverInfo(prev => {
+            const base = prev || {
+              uid: data.driverId,
+              name: data.driverName || "Driver",
+              vehicle: data.vehicleInfo || "Taxi",
+              plate: data.vehiclePlate || "UNKNOWN",
+              code: data.handshakeCode || "---",
+              requirePasscode: data.driverRequirePasscode === true || profile?.requirePasscode === true,
+              phone: data.driverPhone || "",
+              fareEstimate: data.fareEstimate || 0,
+              rating: data.driverRating || "4.8",
+              acceptedAt: data.acceptedAt?.toMillis ? data.acceptedAt.toMillis() : (data.acceptedAt || Date.now()),
+            };
+            return {
+              ...base,
+              status: "arrived",
+              arrivedAt: data.arrivedAt?.toMillis ? data.arrivedAt.toMillis() : (data.arrivedAt || Date.now()),
+              tipAmount: data.tipAmount,
+              currentStopIndex: data.currentStopIndex || 0,
+              stops: data.stops || [],
+              fareEstimate: data.fareEstimate || base.fareEstimate
+            };
+          });
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
           toast.success("Your driver has arrived!", { duration: 8000, position: "top-center" });
         }
@@ -2542,7 +2715,29 @@ export default function PassengerBooking() {
              playSound('notification');
              lastSoundStatusRef.current = 'in_progress';
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis(), currentStopIndex: data.currentStopIndex || 0, stops: data.stops || [], tipAmount: data.tipAmount, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
+          setAssignedDriverInfo(prev => {
+            const base = prev || {
+              uid: data.driverId,
+              name: data.driverName || "Driver",
+              vehicle: data.vehicleInfo || "Taxi",
+              plate: data.vehiclePlate || "UNKNOWN",
+              code: data.handshakeCode || "---",
+              requirePasscode: data.driverRequirePasscode === true || profile?.requirePasscode === true,
+              phone: data.driverPhone || "",
+              fareEstimate: data.fareEstimate || 0,
+              rating: data.driverRating || "4.8",
+              acceptedAt: data.acceptedAt?.toMillis ? data.acceptedAt.toMillis() : (data.acceptedAt || Date.now()),
+            };
+            return {
+              ...base,
+              status: "in_progress",
+              startedAt: data.startedAt?.toMillis ? data.startedAt.toMillis() : (data.startedAt || Date.now()),
+              currentStopIndex: data.currentStopIndex || 0,
+              stops: data.stops || [],
+              tipAmount: data.tipAmount,
+              fareEstimate: data.fareEstimate || base.fareEstimate
+            };
+          });
           setStep("confirmed");
           
           // Let's remove the automatic tip modal per user instructions.
@@ -2551,16 +2746,49 @@ export default function PassengerBooking() {
           }
         }
         if (data.status === 'awaiting_payment') {
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "awaiting_payment", paymentUrl: data.paymentUrl, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
+          setAssignedDriverInfo(prev => {
+            const base = prev || {
+              uid: data.driverId,
+              name: data.driverName || "Driver",
+              vehicle: data.vehicleInfo || "Taxi",
+              plate: data.vehiclePlate || "UNKNOWN",
+              code: data.handshakeCode || "---",
+              requirePasscode: data.driverRequirePasscode === true || profile?.requirePasscode === true,
+              phone: data.driverPhone || "",
+              fareEstimate: data.fareEstimate || 0,
+              rating: data.driverRating || "4.8",
+              acceptedAt: data.acceptedAt?.toMillis ? data.acceptedAt.toMillis() : (data.acceptedAt || Date.now()),
+            };
+            return {
+              ...base,
+              status: "awaiting_payment",
+              paymentUrl: data.paymentUrl,
+              fareEstimate: data.fareEstimate || base.fareEstimate
+            };
+          });
         }
         if (data.status === 'awaiting_cash_confirm') {
-          setAssignedDriverInfo(prev => prev ? { 
-             ...prev, 
-             status: "awaiting_cash_confirm", 
-             reportedCashCollected: data.reportedCashCollected,
-             reportedCashDiscrepancy: data.reportedCashDiscrepancy,
-             fareEstimate: data.fareEstimate || prev.fareEstimate
-          } : null);
+          setAssignedDriverInfo(prev => {
+            const base = prev || {
+              uid: data.driverId,
+              name: data.driverName || "Driver",
+              vehicle: data.vehicleInfo || "Taxi",
+              plate: data.vehiclePlate || "UNKNOWN",
+              code: data.handshakeCode || "---",
+              requirePasscode: data.driverRequirePasscode === true || profile?.requirePasscode === true,
+              phone: data.driverPhone || "",
+              fareEstimate: data.fareEstimate || 0,
+              rating: data.driverRating || "4.8",
+              acceptedAt: data.acceptedAt?.toMillis ? data.acceptedAt.toMillis() : (data.acceptedAt || Date.now()),
+            };
+            return {
+              ...base,
+              status: "awaiting_cash_confirm",
+              reportedCashCollected: data.reportedCashCollected,
+              reportedCashDiscrepancy: data.reportedCashDiscrepancy,
+              fareEstimate: data.fareEstimate || base.fareEstimate
+            };
+          });
         }
         if (data.status === 'completed') { 
           setCompletedRideData({ ...data, id: currentRideId });
@@ -2570,6 +2798,18 @@ export default function PassengerBooking() {
           lastSoundStatusRef.current = null; 
           hasTriggeredTipModalRef.current = false;
           setShowTipModal(false);
+          // Clear cached search variables
+          localStorage.removeItem("passenger_temp_pickup");
+          localStorage.removeItem("passenger_temp_dropoff");
+          localStorage.removeItem("passenger_temp_comments");
+          localStorage.removeItem("passenger_temp_pickup_coords");
+          localStorage.removeItem("passenger_temp_dropoff_coords");
+          localStorage.removeItem("passenger_temp_stops");
+        }
+        if (data.status === 'cancelled') {
+          clearBookingInputsAndState();
+          toast.info("This ride was cancelled.");
+          navigate("/my-rides");
         }
       }
     }, (err) => console.error("onSnapshot ERROR ride config step:", err));
@@ -3185,7 +3425,7 @@ export default function PassengerBooking() {
               </OverlayViewF>
             ))}
 
-            {driverPos && (
+            {driverPos && assignedDriverInfo && (
               <OverlayViewF position={driverPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                 <div className="relative flex flex-col items-center justify-start -ml-[18px] -mt-[56px] z-50">
                   <div className="absolute top-[54px] w-6 h-2 bg-black/30 rounded-full blur-[1px]"></div>
@@ -3332,6 +3572,67 @@ export default function PassengerBooking() {
                 )}
                 
                 <div ref={bottomSheetRef} className={cn("overflow-x-hidden overflow-y-auto no-scrollbar flex-1 min-h-0", detailsView === "address" ? "p-4 pt-2 space-y-4 relative" : "p-3 pt-3 flex flex-col gap-2 relative")}>
+                  {/* Outstanding Balance Reminder Banner */}
+                  {profile && (profile.pendingCharges || 0) > 0 && (
+                    <div className="mx-2 mb-3 mt-1 p-3.5 bg-red-50 border border-black rounded-[16px] shadow-sm flex flex-col gap-3 relative overflow-hidden shrink-0 pointer-events-auto">
+                      <div className="absolute right-0 top-0 translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-red-200/50 rounded-full blur-lg pointer-events-none" />
+                      <div className="flex items-start gap-3 relative z-10 text-left">
+                        <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center shrink-0 border border-red-200">
+                          <AlertTriangle className="w-5 h-5 text-red-600 animate-pulse" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-[13px] font-black text-[#0f172a] leading-tight mb-0.5 uppercase tracking-wide">Outstanding Balance</h3>
+                          <p className="text-[11px] font-medium text-slate-700 leading-normal">
+                            You have an unpaid balance of <span className="font-extrabold text-red-600">£{(profile.pendingCharges || 0).toFixed(2)}</span> ({profile.pendingChargesReason || "unpaid trip discrepancy"}).
+                          </p>
+                          <p className="text-[10px] font-semibold text-slate-500 mt-1">
+                            {profile.cancellationCount >= 2 
+                              ? "Your booking privileges are temporarily suspended. Please settle this balance to unlock booking access." 
+                              : "This balance will automatically be added to your next ride fare, or you can clear it below."}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 relative z-10">
+                        <button 
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (isClearingBalance) return;
+                            setIsClearingBalance(true);
+                            await new Promise(r => setTimeout(r, 1500));
+                            try {
+                              await updateDoc(doc(db, "users", user.uid), {
+                                pendingCharges: 0,
+                                pendingChargesReason: deleteField(),
+                                cancellationCount: 0,
+                                abandonmentStrikes: 0
+                              });
+                              toast.success(`Success! Outstanding balance of £${(profile.pendingCharges || 0).toFixed(2)} has been cleared. Thank you.`);
+                            } catch (err) {
+                              console.error("Failed to clear balance:", err);
+                              toast.error("Failed to clear outstanding balance.");
+                            } finally {
+                              setIsClearingBalance(false);
+                            }
+                          }}
+                          disabled={isClearingBalance}
+                          className="w-full py-2 px-3 bg-[#0f172a] hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wider rounded-xl border border-black shadow active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                        >
+                          {isClearingBalance ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              Processing Secure Payment...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="w-3.5 h-3.5" />
+                              Pay £{(profile.pendingCharges || 0).toFixed(2)} with card
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {detailsView === "address" ? (
                     <>
                       <div className="bg-surface rounded-3xl p-2 pb-3 border border-border-main shadow-sm mb-4 shrink-0">
@@ -3900,12 +4201,12 @@ export default function PassengerBooking() {
                                  {isPriority && <div className="flex justify-between text-[#2563EB] font-bold"><span>Priority:</span><span>+£3.00</span></div>}
                                  {isPetFriendly && <div className="flex justify-between text-[#2563EB] font-bold"><span>Pet:</span><span>+£3.00</span></div>}
                                  {((assignedDriverInfo?.tipAmount || 0) > 0) && <div className="flex justify-between text-emerald-600 font-bold"><span>Driver Tip:</span><span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span></div>}
-                                 {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && <div className="flex justify-between text-red-600 font-bold"><span>Unpaid Cancellation Fee:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
+                                 {((profile?.pendingCharges || 0) > 0) && <div className="flex justify-between text-red-600 font-bold"><span>Outstanding Balance / Fees:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
                                </div>
                                <div className="border-t border-black pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
                                  <div className="flex items-center justify-between">
                                    <span>Total estimate:</span>
-                                   <span className="text-[20px]">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                                   <span className="text-[20px]">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                                  </div>
                                  <div className="flex items-center justify-between mt-2">
                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Payment Method</span>
@@ -4078,7 +4379,7 @@ export default function PassengerBooking() {
 
                 <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[16px] py-1.5 px-4 border border-black flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-2 mt-1">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0">Total Fare Estimate</p>
-                  <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
+                  <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
                   
                   {!!profile?.stripeCustomerId ? (
                     <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm mb-1.5">
@@ -4418,11 +4719,16 @@ export default function PassengerBooking() {
                   <button onClick={() => setIsMapFullScreen(true)} className="flex-[2] py-3 bg-[#0a1930] border border-white/20 text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-transform">Track Live Driver</button>
                 </div>
                 
-                {assignedDriverInfo?.status !== "in_progress" && assignedDriverInfo?.status !== "awaiting_payment" && (
+                {assignedDriverInfo?.status !== "in_progress" && assignedDriverInfo?.status !== "awaiting_payment" && assignedDriverInfo?.status !== "awaiting_cash_confirm" && (
                   <div className="flex gap-3 mt-4">
                     <button onClick={() => { setIsEditingJourney(true); }} className="flex-[1.1] py-[18px] border border-black bg-[#4fa764] text-white rounded-[16px] font-bold text-[15px] shadow-lg shadow-green-900/10 active:scale-[0.98] transition-transform">Edit Ride Options</button>
                     <div className="flex-1">
-                      <CancelRideButton_ConfirmedPhase acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} onCancel={handleCancelConfirmed} />
+                      <CancelRideButton_ConfirmedPhase 
+                        acceptedAt={assignedDriverInfo?.acceptedAt || Date.now()} 
+                        arrivedAt={assignedDriverInfo?.arrivedAt}
+                        status={assignedDriverInfo?.status}
+                        onCancel={handleCancelConfirmed} 
+                      />
                     </div>
                   </div>
                 )}
@@ -4960,9 +5266,9 @@ export default function PassengerBooking() {
                                    <span>+£3.00</span>
                                 </div>
                               )}
-                              {((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) && (
+                              {((profile?.pendingCharges || 0) > 0) && (
                                 <div className="flex justify-between items-center text-[15px] mb-2 text-red-600 font-bold">
-                                   <span>Unpaid Cancellation Fee</span>
+                                   <span>Outstanding Balance / Fees</span>
                                    <span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span>
                                 </div>
                               )}
@@ -4974,7 +5280,7 @@ export default function PassengerBooking() {
                               )}
                               <div className="flex justify-between items-center pt-3 border-t border-black mt-2">
                                  <span className="font-extrabold text-[#0a1930] text-[18px]">Total Estimate</span>
-                                 <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1) ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                                 <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                               </div>
                            </div>
                         )
@@ -5219,7 +5525,7 @@ export default function PassengerBooking() {
                        <span className="text-emerald-700 font-bold text-[12px] uppercase tracking-widest mb-1 relative z-10">Total Estimated Fare</span>
                        <div className="flex items-start tracking-tight relative z-10">
                            <span className="text-emerald-900 font-black text-2xl mt-1">£</span>
-                           <span className="text-emerald-900 font-black text-5xl">{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + ((profile?.pendingCharges || 0) > 0 && (profile?.cancellationCount || 0) === 1 ? (profile?.pendingCharges || 0) : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                           <span className="text-emerald-900 font-black text-5xl">{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                        </div>
                        
                        <div className="mt-4 w-full flex items-center justify-center gap-2 border-t border-emerald-200/50 pt-3 relative z-10">

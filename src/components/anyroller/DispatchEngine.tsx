@@ -91,6 +91,7 @@ export default function DispatchEngine() {
     dispatchTimeoutSeconds: 15,
     staggeredPriorityMatching: true,
     biddingFallbackEnabled: true,
+    maxDailyDriverHours: 24,
   });
 
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
@@ -130,6 +131,7 @@ export default function DispatchEngine() {
           dispatchTimeoutSeconds: data.dispatchTimeoutSeconds ?? data.offerTimeoutSeconds ?? prev.dispatchTimeoutSeconds ?? 15,
           staggeredPriorityMatching: data.staggeredPriorityMatching ?? prev.staggeredPriorityMatching ?? true,
           biddingFallbackEnabled: data.biddingFallbackEnabled ?? prev.biddingFallbackEnabled ?? true,
+          maxDailyDriverHours: data.maxDailyDriverHours ?? prev.maxDailyDriverHours ?? 24,
         }));
       }
     });
@@ -230,7 +232,8 @@ export default function DispatchEngine() {
         dispatchTimeoutSeconds: Number(config.dispatchTimeoutSeconds),
         offerTimeoutSeconds: Number(config.dispatchTimeoutSeconds),
         staggeredPriorityMatching: !!config.staggeredPriorityMatching,
-        biddingFallbackEnabled: !!config.biddingFallbackEnabled
+        biddingFallbackEnabled: !!config.biddingFallbackEnabled,
+        maxDailyDriverHours: Number(config.maxDailyDriverHours ?? 12)
       }, { merge: true });
       toast.success("Dispatch algorithms and bidding policies synchronized successfully");
     } catch (e) {
@@ -923,6 +926,29 @@ export default function DispatchEngine() {
               />
               <span className="font-black text-xs text-black border border-black rounded px-2 py-0.5 bg-slate-50 w-12 text-center">
                 {config.dispatchTimeoutSeconds}s
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-black text-black uppercase tracking-wider">
+              Driver Shift Fatigue Limit (Hours)
+            </label>
+            <p className="text-[10px] text-slate-400 font-semibold mt-0.5 leading-snug">
+              Maximum allowed daily driving hours before restricting the driver to go offline automatically.
+            </p>
+            <div className="flex items-center gap-3 pt-2">
+              <input 
+                type="range" 
+                min="4" 
+                max="24" 
+                step="1"
+                value={config.maxDailyDriverHours || 12}
+                onChange={(e) => setConfig(prev => ({ ...prev, maxDailyDriverHours: Number(e.target.value) }))}
+                className="flex-1 accent-black h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="font-black text-xs text-black border border-black rounded px-2 py-0.5 bg-slate-50 w-12 text-center whitespace-nowrap">
+                {config.maxDailyDriverHours || 12} hrs
               </span>
             </div>
           </div>
