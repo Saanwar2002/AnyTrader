@@ -197,21 +197,23 @@ export default function SavedJourneys() {
           </div>
         </div>
 
-        <div className="flex bg-surface p-1 rounded-2xl border border-border-main">
+        <div className="flex gap-2.5 bg-surface p-1 rounded-2xl">
           <button
             onClick={() => setActiveTab("regular")}
+            id="tab-regular-journeys"
             className={cn(
-              "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-              activeTab === "regular" ? "bg-sky-100 text-sky-900 shadow-sm border border-sky-200" : "text-text-muted hover:text-text-main hover:bg-card/50"
+              "flex-1 py-2.5 text-xs sm:text-sm font-black tracking-wide uppercase rounded-xl transition-all border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
+              activeTab === "regular" ? "bg-sky-200 text-slate-900" : "bg-white text-slate-500 border-black/40 shadow-none hover:bg-slate-50"
             )}
           >
             Regular Journeys
           </button>
           <button
             onClick={() => setActiveTab("favorites")}
+            id="tab-favorite-addresses"
             className={cn(
-              "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-              activeTab === "favorites" ? "bg-sky-100 text-sky-900 shadow-sm border border-sky-200" : "text-text-muted hover:text-text-main hover:bg-card/50"
+              "flex-1 py-2.5 text-xs sm:text-sm font-black tracking-wide uppercase rounded-xl transition-all border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
+              activeTab === "favorites" ? "bg-sky-200 text-slate-900" : "bg-white text-slate-500 border-black/40 shadow-none hover:bg-slate-50"
             )}
           >
             Favorite Addresses
@@ -411,9 +413,9 @@ export default function SavedJourneys() {
                           </button>
                           <button 
                             onClick={() => { if (favName.trim().toLowerCase() === "home" || favName.trim().toLowerCase() === "work") setFavName(""); }} 
-                            className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border", (favName.trim().toLowerCase() !== "home" && favName.trim().toLowerCase() !== "work") ? "bg-rose-600 text-white border-rose-600 shadow-sm" : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100")}
+                            className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border", (favName.trim().toLowerCase() !== "home" && favName.trim().toLowerCase() !== "work") ? "bg-amber-500 text-slate-900 border-amber-600 shadow-sm" : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100")}
                           >
-                            <span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5" /> Save as Favorite</span>
+                            <span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5 text-amber-700 fill-amber-400" /> Save as Favorite</span>
                           </button>
                         </div>
                       </div>

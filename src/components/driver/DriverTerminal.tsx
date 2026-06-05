@@ -3680,7 +3680,7 @@ export default function DriverTerminal() {
     setShowCompleteConfirm(true);
   };
 
-  const handleGoToNextLeg = () => {
+  const handleGoToNextLeg = async () => {
     if (isWaitingAtStop) {
       // Safety: turn off waiting if they forgot
       setIsWaitingAtStop(false);
@@ -3693,6 +3693,17 @@ export default function DriverTerminal() {
     setCurrentLegIndex((prev) => prev + 1);
     setHasReachedCurrentStop(false);
     setShowLeaveStopReminder(false);
+    
+    if (activeRide?.id && activeRide?.isReal) {
+      try {
+        await updateDoc(doc(db, "ride_requests", activeRide.id), {
+          currentStopIndex: currentLegIndex + 1
+        });
+      } catch (err) {
+        console.error("Failed to sync leg index", err);
+      }
+    }
+    
     toast.success("Navigating to next location", { duration: 3000 });
   };
 
@@ -5905,12 +5916,12 @@ export default function DriverTerminal() {
                   <>
                     <div className="flex justify-between items-start mb-2 relative">
                       <div className="flex-1 mr-2 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
                           <span className={cn(
-                            "bg-[#00D26A] text-[#1A1A1E] px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(0,210,106,0.3)] whitespace-nowrap shrink-0",
-                            isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                            "bg-emerald-500 border border-emerald-600 px-4 py-1 flex items-center justify-center rounded-full font-black text-white tracking-widest uppercase shadow-md drop-shadow-sm whitespace-nowrap shrink-0",
+                            isCardCollapsed ? "text-[14px]" : "text-[12px]"
                           )}>
-                            Pick Up
+                            Going to Pickup
                           </span>
                           <p className={cn(
                             "font-black uppercase text-[#E4E4E7] tracking-widest truncate",
@@ -6231,28 +6242,21 @@ export default function DriverTerminal() {
                   <>
                     <div className="flex justify-between items-start mb-2 relative">
                       <div className="flex-1 mr-2 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
                           {currentLegIndex <
                           (activeRide?.stops?.length || 0) ? (
                             <span className={cn(
-                              "bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0",
-                              isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                              "bg-[#eab308] border border-[#ca8a04] px-4 py-1 flex items-center justify-center rounded-full font-black text-white tracking-widest uppercase shadow-md drop-shadow-sm whitespace-nowrap shrink-0",
+                              isCardCollapsed ? "text-[14px]" : "text-[12px]"
                             )}>
-                              Stop {currentLegIndex + 1}
-                            </span>
-                          ) : activeRide?.stops?.length > 0 ? (
-                            <span className={cn(
-                              "bg-[#FF9500] text-white px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,149,0,0.3)] whitespace-nowrap shrink-0",
-                              isCardCollapsed ? "text-[11px]" : "text-[9px]"
-                            )}>
-                              Drop Off
+                              Going to Stop {currentLegIndex + 1}
                             </span>
                           ) : (
                             <span className={cn(
-                              "bg-[#FF3B30] text-white px-1.5 py-0.5 rounded-[4px] font-black uppercase tracking-wider shadow-[0_0_8px_rgba(255,59,48,0.3)] whitespace-nowrap shrink-0",
-                              isCardCollapsed ? "text-[11px]" : "text-[9px]"
+                              "bg-red-500 border border-red-600 px-4 py-1 flex items-center justify-center rounded-full font-black text-white tracking-widest uppercase shadow-md drop-shadow-sm whitespace-nowrap shrink-0",
+                              isCardCollapsed ? "text-[14px]" : "text-[12px]"
                             )}>
-                              Drop Off
+                              Going to Drop-off
                             </span>
                           )}
                           <p

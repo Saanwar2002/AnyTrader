@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   MapPin, Navigation, Car, Clock, X, Check, Target, 
   MessageSquare, ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Zap, History, Loader2, 
-  Mic, MicOff, Star, Users, User, Repeat, Shield, Plus, Heart,
+  Mic, MicOff, Star, Users, User, Repeat, Shield, Plus, Heart, Bookmark,
   Home, Briefcase, Dog, Accessibility, MessageCircle, Phone, AlertCircle, Hammer, ArrowDownToLine, Delete, Dumbbell
 } from "lucide-react";
 import RideChat from "../driver/RideChat";
@@ -1038,16 +1038,16 @@ export default function PassengerBooking() {
         await updateDoc(doc(db, "users", user.uid), {
           favoriteAddresses: arrayRemove(existing)
         });
-        toast.success("Removed from favorites");
+        toast.success("Removed from saved addresses");
       } else {
         const newFav = { id: Math.random().toString(36).substr(2, 9), name, address };
         await updateDoc(doc(db, "users", user.uid), {
           favoriteAddresses: arrayUnion(newFav)
         });
-        toast.success("Added to favorites");
+        toast.success("Saved address");
       }
     } catch (err) {
-      toast.error("Failed to update favorites");
+      toast.error("Failed to update saved addresses");
     }
   };
 
@@ -1080,7 +1080,7 @@ export default function PassengerBooking() {
          setShowFavoriteSuccess(null);
       }, 3000);
     } catch (err) {
-      toast.error("Failed to save favorite");
+      toast.error("Failed to save address");
     }
   };
 
@@ -2533,7 +2533,7 @@ export default function PassengerBooking() {
                console.warn("TTS error:", e);
              }
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "arrived", arrivedAt: data.arrivedAt?.toMillis(), tipAmount: data.tipAmount, currentStopIndex: data.currentStopIndex || 0, stops: data.stops || [], fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
           setStep("confirmed"); triggerHaptic(ImpactStyle.Heavy);
           toast.success("Your driver has arrived!", { duration: 8000, position: "top-center" });
         }
@@ -2542,7 +2542,7 @@ export default function PassengerBooking() {
              playSound('notification');
              lastSoundStatusRef.current = 'in_progress';
           }
-          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis(), tipAmount: data.tipAmount, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
+          setAssignedDriverInfo(prev => prev ? { ...prev, status: "in_progress", startedAt: data.startedAt?.toMillis(), currentStopIndex: data.currentStopIndex || 0, stops: data.stops || [], tipAmount: data.tipAmount, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
           setStep("confirmed");
           
           // Let's remove the automatic tip modal per user instructions.
@@ -2935,7 +2935,7 @@ export default function PassengerBooking() {
     <div className="relative flex-1 w-full overflow-hidden bg-[#e8eaed] dark:bg-slate-900 flex flex-col min-h-0">
        <div className={cn(
          "transition-all duration-300",
-         isMapFullScreen ? "fixed inset-0 z-[200] h-[100dvh] w-[100dvw]" : (step === "details" ? "relative z-0 shrink-0 h-[60dvh] w-full" : "relative z-0 shrink-0 h-[50dvh] w-full")
+         isMapFullScreen ? "fixed inset-0 z-[200] h-[100dvh] w-[100dvw]" : (step === "details" ? "relative z-0 shrink-0 h-[60dvh] w-full" : (assignedDriverInfo?.status === "arrived" ? "relative z-0 shrink-0 h-[65dvh] w-full" : "relative z-0 shrink-0 h-[50dvh] w-full"))
        )}>
           {isMapFullScreen && (
             <button 
@@ -3593,7 +3593,7 @@ export default function PassengerBooking() {
                           }} 
                           className={cn("flex-1 justify-center px-2 py-1.5 border rounded-full flex items-center gap-1 text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm whitespace-nowrap", showFavorites ? "bg-amber-100 border-amber-300 text-amber-800" : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300")}
                         >
-                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" /> Favorite
+                          <Bookmark className="w-3 h-3 text-amber-500 fill-amber-500" /> Saved
                         </button>
                       </div>
                     </div>
@@ -3620,7 +3620,7 @@ export default function PassengerBooking() {
                         <div className="flex justify-between items-center p-4 border-b border-black bg-slate-50 rounded-t-[32px] shrink-0">
                           <span className="font-black text-sm tracking-widest uppercase text-slate-700">
                              {showRegularJourneys && "Regular Journeys"}
-                             {showFavorites && "Favorite Addresses"}
+                             {showFavorites && "Saved Addresses"}
                              {showHomeBlank && "Home Address"}
                              {showWorkBlank && "Work Address"}
                           </span>
@@ -3663,7 +3663,7 @@ export default function PassengerBooking() {
                                     className="w-full text-left bg-white border border-black rounded-xl p-4 shadow-sm hover:border-amber-400 hover:bg-amber-50 transition-colors flex items-center gap-4"
                                   >
                                     <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex flex-shrink-0 items-center justify-center">
-                                      <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                                      <Bookmark className="w-5 h-5 text-amber-500 fill-amber-500" />
                                     </div>
                                     <div className="flex-1 min-w-0 pr-2">
                                       <div className="flex items-center justify-between mb-1">
@@ -3675,8 +3675,8 @@ export default function PassengerBooking() {
                                 ))
                               ) : (
                                 <div className="text-center py-6 text-slate-500">
-                                  <p className="font-bold text-[15px] mb-2 text-slate-800">No favorite addresses saved.</p>
-                                  <p className="text-sm">Add them in the Favorite tab.</p>
+                                  <p className="font-bold text-[15px] mb-2 text-slate-800">No saved addresses found.</p>
+                                  <p className="text-sm">Add them to your saved places.</p>
                                 </div>
                               )}
                             </>
@@ -4175,8 +4175,13 @@ export default function PassengerBooking() {
                   </div>
                 )}
                 
-                <div className="flex justify-center mb-4">
-                   <button onClick={() => setShowRideInfo(true)} className="bg-blue-600 rounded-xl px-4 py-1 flex items-center justify-center font-bold text-[13px] text-white tracking-wider border border-blue-500 shadow-sm shadow-blue-500/20 active:scale-95 transition-transform uppercase">
+                <div className="flex justify-center mb-4 gap-2">
+                   {assignedDriverInfo?.status === "in_progress" && (
+                     <div className={cn("rounded-full px-5 py-1.5 flex items-center justify-center font-black text-[13px] text-white tracking-widest shadow-md uppercase shrink-0 drop-shadow-sm", (assignedDriverInfo?.currentStopIndex || 0) < (assignedDriverInfo?.stops?.length || 0) ? "bg-[#eab308] border border-[#ca8a04]" : "bg-red-500 border border-red-600")}>
+                       {(assignedDriverInfo?.currentStopIndex || 0) < (assignedDriverInfo?.stops?.length || 0) ? `Going to Stop ${(assignedDriverInfo.currentStopIndex || 0) + 1}` : "Going to Drop-off"}
+                     </div>
+                   )}
+                   <button onClick={() => setShowRideInfo(true)} className="bg-blue-600 rounded-full px-5 py-1.5 flex items-center justify-center font-black text-[13px] text-white tracking-widest border border-blue-500 shadow-md shadow-blue-500/20 active:scale-95 transition-transform uppercase shrink-0 drop-shadow-sm">
                       Ride Info
                    </button>
                 </div>
@@ -4885,7 +4890,7 @@ export default function PassengerBooking() {
                               <p className="text-[#0a1930] font-medium text-[15px] leading-snug truncate">{pickup || "Current address"}</p>
                            </div>
                            <button onClick={() => handleStarClick(pickup)} className="p-1.5 active:scale-90 transition-transform shrink-0 cursor-pointer">
-                              <Star className={cn("w-6 h-6", isFavorite(pickup) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
+                              <Bookmark className={cn("w-6 h-6", isFavorite(pickup) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
                            </button>
                         </div>
                      </div>
@@ -4898,7 +4903,7 @@ export default function PassengerBooking() {
                                  <p className="text-[#0a1930] font-medium text-[15px] leading-snug truncate">{stop.address}</p>
                               </div>
                               <button onClick={() => handleStarClick(stop.address)} className="p-1.5 active:scale-90 transition-transform shrink-0 cursor-pointer">
-                                 <Star className={cn("w-6 h-6", isFavorite(stop.address) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
+                                 <Bookmark className={cn("w-6 h-6", isFavorite(stop.address) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
                               </button>
                            </div>
                         </div>
@@ -4911,7 +4916,7 @@ export default function PassengerBooking() {
                               <p className="text-[#0a1930] font-medium text-[15px] leading-snug truncate">{dropoff || "Destination address"}</p>
                            </div>
                            <button onClick={() => handleStarClick(dropoff)} className="p-1.5 active:scale-90 transition-transform shrink-0 cursor-pointer">
-                              <Star className={cn("w-6 h-6", isFavorite(dropoff) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
+                              <Bookmark className={cn("w-6 h-6", isFavorite(dropoff) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
                            </button>
                         </div>
                      </div>
@@ -4992,7 +4997,7 @@ export default function PassengerBooking() {
           {savingFavorite && (
              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/40 pointer-events-auto">
                  <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-white rounded-[24px] p-6 w-full max-w-[340px] shadow-2xl flex flex-col pointer-events-auto">
-                     <h3 className="text-xl font-black text-[#0a1930] text-center mb-6 tracking-tight">Save to Favorites</h3>
+                     <h3 className="text-xl font-black text-[#0a1930] text-center mb-6 tracking-tight">Save Address</h3>
                      <input 
                         value={favoriteNameInput}
                         onChange={(e) => setFavoriteNameInput(e.target.value)}
@@ -5005,14 +5010,14 @@ export default function PassengerBooking() {
                                 {tag === "Home" && <Home className="w-4 h-4" />}
                                 {tag === "Work" && <Briefcase className="w-4 h-4" />}
                                 {tag === "Gym" && <Dumbbell className="w-4 h-4" />}
-                                {tag === "Other" && <Star className="w-4 h-4" />}
+                                {tag === "Other" && <Bookmark className="w-4 h-4" />}
                                 {tag}
                             </button>
                         ))}
                      </div>
                      <div className="flex gap-3 mt-auto">
                         <button onClick={() => setSavingFavorite(null)} className="flex-1 py-3.5 bg-white border border-[#0a1930] rounded-[12px] font-bold text-[#0a1930] text-[15px] active:scale-95 transition-transform">Cancel</button>
-                        <button disabled={!favoriteNameInput.trim()} onClick={handleSaveFavorite} className="flex-1 py-3.5 bg-[#0a1930] border border-[#0a1930] rounded-[12px] font-bold text-white text-[15px] disabled:opacity-50 active:scale-95 transition-transform">Save Favorite</button>
+                        <button disabled={!favoriteNameInput.trim()} onClick={handleSaveFavorite} className="flex-1 py-3.5 bg-[#0a1930] border border-[#0a1930] rounded-[12px] font-bold text-white text-[15px] disabled:opacity-50 active:scale-95 transition-transform">Save</button>
                      </div>
                  </motion.div>
              </motion.div>
@@ -5025,7 +5030,7 @@ export default function PassengerBooking() {
                  <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-gradient-to-b from-[#f0f7ff] to-white rounded-[32px] p-8 w-full max-w-[340px] shadow-2xl flex flex-col items-center text-center relative overflow-hidden pointer-events-auto">
                      <div className="relative mb-6 mt-4 w-32 h-32 flex items-center justify-center">
                         <div className="absolute inset-0 bg-yellow-400/20 blur-2xl rounded-full" />
-                        <Star className="w-24 h-24 text-yellow-400 fill-yellow-400 relative z-10" />
+                        <Bookmark className="w-24 h-24 text-amber-400 fill-amber-400 relative z-10" />
                         <div className="absolute -top-2 -left-2 w-2 h-2 bg-blue-400 rounded-full" />
                         <div className="absolute top-2.5 right-1 w-3 h-3 bg-green-400 rounded-full" />
                         <div className="absolute bottom-4 -right-2 w-2.5 h-2.5 bg-rose-400 rounded-full" />
@@ -5034,7 +5039,7 @@ export default function PassengerBooking() {
                      
                      <h3 className="text-[26px] font-black text-[#0a1930] mb-3 tracking-tight">Location Saved!</h3>
                      <p className="text-[16px] text-slate-600 font-medium mb-10 leading-snug px-2">
-                         Your favorite "{showFavoriteSuccess.name}" is now available on your home screen.
+                         Your saved address "{showFavoriteSuccess.name}" is now available on your home screen.
                      </p>
                      
                      <button onClick={() => setShowFavoriteSuccess(null)} className="w-full py-4 bg-[#0a1930] rounded-[16px] font-bold text-white text-[16px] active:scale-95 transition-transform shadow-[0_4px_14px_rgba(10,25,48,0.3)]">
