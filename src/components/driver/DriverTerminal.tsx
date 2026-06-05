@@ -50,6 +50,7 @@ import {
   Volume2,
   Volume1,
   VolumeX,
+  ChevronLeft,
 } from "lucide-react";
 import {
   GoogleMap,
@@ -93,6 +94,7 @@ import { MapZoomControls } from "../shared/MapZoomControls";
 import { SwipeButton } from "../shared/SwipeButton";
 import RideChat from "./RideChat";
 import { MessageCircle } from "lucide-react";
+import { BatteryStatus } from "./BatteryStatus";
 
 type RideState =
   | "idle"
@@ -2012,7 +2014,7 @@ export default function DriverTerminal() {
 
             if (data.cancellationFee > 0 && user) {
               toast.success("Cancellation Fee Applied", {
-                description: `You have been credited £${data.cancellationFee.toFixed(2)} for the cancellation.`,
+                description: `You have been credited £${data.cancellationFee.toFixed(1)} for the cancellation.`,
               });
               // Credit the driver metric
               const today = new Date().toISOString().split("T")[0];
@@ -2038,7 +2040,25 @@ export default function DriverTerminal() {
             setActiveRide(null);
             setPassengerPos(null);
             setDirections(null);
+            setCashCollectedInput("");
+            setForceCompleteReason("");
+            setIsAwaitingCashConfirm(false);
             if (navigator.vibrate) navigator.vibrate([300, 200, 300]);
+          } else if (data.status === "cash_confirmed" && rideState === "completed") {
+            toast.success("Passenger Confirmed Unpaid Balance!", {
+              description: "Finalizing trip metrics...",
+            });
+            // We finalize the payment and metric states
+            handleCashPayment(true);
+          } else if (
+            data.status === "completed" &&
+            rideState === "completed"
+          ) {
+            toast.success("Trip Finalized", {
+              description: "The trip payment has been confirmed.",
+            });
+            setPaymentUrl(null);
+            setRideState("review");
           } else {
             if (data.liveEtaSeconds !== undefined && data.liveEtaSeconds !== null) {
               setLiveEtaSeconds(data.liveEtaSeconds);
@@ -2074,18 +2094,6 @@ export default function DriverTerminal() {
                 tipAmount: data.tipAmount !== undefined ? data.tipAmount : prev.tipAmount,
               };
             });
-          }
-
-          if (
-            data.status === "completed" &&
-            rideState === "completed" &&
-            paymentUrl
-          ) {
-            toast.success("Payment Received", {
-              description: "Passenger has completed the payment.",
-            });
-            setPaymentUrl(null);
-            setRideState("review");
           }
 
           if (data.isModifiedByPassenger) {
@@ -3009,7 +3017,11 @@ export default function DriverTerminal() {
   };
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
+  const [isAwaitingCashConfirm, setIsAwaitingCashConfirm] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
+  const [cashCollectedInput, setCashCollectedInput] = useState<string>("");
+  const [cashConfirmTimer, setCashConfirmTimer] = useState<number>(120);
+  const [forceCompleteReason, setForceCompleteReason] = useState<string>("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showEarlyArrivalConfirm, setShowEarlyArrivalConfirm] = useState(false);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
@@ -3879,14 +3891,61 @@ export default function DriverTerminal() {
     setPaymentUrl(null);
   };
 
-  const handleCashPayment = async () => {
+  const handleCashPayment = async (forceComplete: boolean = false) => {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
-        const waitFare =
-          (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
-        const baseFare = (activeRide.fareEstimate || 0) + waitFare;
+        const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+        const distMiles = activeRide?.distanceMiles || 22;
+        const durationMins = activeRide?.durationMinutes || 0;
+        const vehicleSubtotal = Math.max(
+           fareConfig.minFare, 
+           fareConfig.baseFare + (distMiles * fareConfig.distanceRate) + (durationMins * fareConfig.timeRate)
+        );
+        const baseFare = (activeRide.fareEstimate || vehicleSubtotal) + waitFare;
         const totalFare = baseFare + (activeRide.tipAmount || 0);
         const platformFee = (baseFare * fareConfig.commissionRate) + (fareConfig.fixedTripFee || 0);
+        
+        let enteredAmount = totalFare;
+        if (cashCollectedInput.trim() !== "") {
+           enteredAmount = parseFloat(cashCollectedInput);
+        }
+        
+        if (isNaN(enteredAmount) || enteredAmount < 0) {
+           toast.error("Please enter a valid cash amount");
+           return;
+        }
+
+        if (enteredAmount < totalFare && !forceComplete) {
+            await updateDoc(doc(db, "ride_requests", activeRide.id), {
+               status: "awaiting_cash_confirm",
+               reportedCashCollected: enteredAmount,
+               reportedCashDiscrepancy: totalFare - enteredAmount,
+            });
+            setShowCashConfirm(false);
+            setIsAwaitingCashConfirm(true);
+            setCashConfirmTimer(120); // start 2 mins passenger wait
+            toast.info("Awaiting Passenger...", {
+               description: "Waiting for passenger to confirm unpaid balance on their device.",
+               duration: 8000,
+            });
+            
+            // Start a local timer just for the UI
+            const timerInterval = setInterval(() => {
+              setCashConfirmTimer((prev) => {
+                if (prev <= 1) {
+                  clearInterval(timerInterval);
+                  return 0;
+                }
+                return prev - 1;
+              });
+            }, 1000);
+            
+            // Save interval to the scope or just let state handle it safely.
+            // When passenger confirms, it triggers the onSnapshot completed logic above.
+            return;
+        }
+
+        const discrepancyAmount = Math.max(0, totalFare - enteredAmount);
 
         await updateDoc(doc(db, "ride_requests", activeRide.id), {
           status: "completed",
@@ -3894,6 +3953,8 @@ export default function DriverTerminal() {
           finalFare: totalFare,
           paidWaitSeconds: totalPaidWaitSeconds,
           platformFeeOwed: platformFee,
+          reportedCashCollected: enteredAmount,
+          forceCompleteReason: forceCompleteReason || null,
           completedAt: serverTimestamp(),
         });
 
@@ -3902,12 +3963,19 @@ export default function DriverTerminal() {
           typeof activeRide.riderId === "string" &&
           activeRide.riderId.length > 0
         ) {
-          await updateDoc(doc(db, "users", activeRide.riderId), {
-            pendingCharges: 0,
-            cancellationCount: 0,
-          } as any).catch((err) =>
-            console.error("Failed to clear passenger fees:", err),
-          );
+          if (discrepancyAmount > 0) {
+             await updateDoc(doc(db, "users", activeRide.riderId), {
+                pendingCharges: increment(discrepancyAmount),
+                pendingChargesReason: forceCompleteReason || "Unpaid trip balance",
+             }).catch((err) => console.error("Failed to update partial payment on rider", err));
+          } else {
+             await updateDoc(doc(db, "users", activeRide.riderId), {
+               pendingCharges: 0,
+               cancellationCount: 0,
+             } as any).catch((err) =>
+               console.error("Failed to clear passenger fees:", err),
+             );
+          }
         }
 
         await updateDoc(doc(db, "users", user.uid), {
@@ -4781,10 +4849,14 @@ export default function DriverTerminal() {
               </div>
             )}
 
-          {/* 2. Top UI: Menu button */}
+          {/* 2. Top UI: Header controls */}
           <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
             {/* Status Header (Sticky) */}
-            <div className="absolute top-[calc(3rem+env(safe-area-inset-top))] left-4 right-4 z-40 flex items-center justify-end pointer-events-none">
+            <div className="absolute top-[calc(3rem+env(safe-area-inset-top))] left-4 right-4 z-40 flex items-center justify-between pointer-events-none">
+              {/* Battery Status Indicator */}
+              <BatteryStatus />
+
+              {/* Menu Button */}
               <button
                 onClick={() => setActiveTab("menu")}
                 className="w-10 h-10 bg-[#1A1A1E]/95 backdrop-blur-md rounded-full border border-[#2C2C30] text-white flex items-center justify-center shadow-lg pointer-events-auto active:scale-95 transition-transform"
@@ -4879,12 +4951,81 @@ export default function DriverTerminal() {
                     </button>
 
                     <AnimatePresence>
-                      {showCashConfirm && (
+                      {isAwaitingCashConfirm && (
                         <motion.div
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.95 }}
-                          className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-center items-center p-4 pb-28 text-center rounded-t-3xl border-t border-[#2C2C30]"
+                          className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-start p-4 text-center rounded-t-3xl border-t border-[#2C2C30] overflow-y-auto"
+                        >
+                           <button
+                             onClick={async () => {
+                                setIsAwaitingCashConfirm(false);
+                                setShowCashConfirm(true);
+                                if (activeRide?.id && activeRide?.isReal) {
+                                  await updateDoc(doc(db, "ride_requests", activeRide.id), {
+                                     status: "in_progress",
+                                     reportedCashCollected: deleteField(),
+                                     reportedCashDiscrepancy: deleteField()
+                                  });
+                                }
+                             }}
+                             className="absolute top-4 left-4 flex items-center justify-center p-2.5 bg-[#2C2C30] hover:bg-white/10 rounded-full transition-colors z-50 text-white"
+                           >
+                             <ChevronLeft className="w-5 h-5" />
+                           </button>
+                           
+                           <div className="pt-8">
+                             <div className="w-12 h-12 rounded-full border-2 border-dashed border-[#FF9500] animate-[spin_4s_linear_infinite] flex items-center justify-center mx-auto mb-4">
+                               <span className="text-xl animate-none">⏳</span>
+                             </div>
+                             <h3 className="text-white text-lg font-black tracking-wide mb-2 uppercase">
+                               Awaiting Passenger Confirmation
+                             </h3>
+                             <p className="text-[#E4E4E7] text-sm mb-6 leading-relaxed font-medium px-4">
+                               The passenger must confirm the unpaid balance on their screen.
+                             </p>
+                             
+                             <div className="text-3xl font-mono text-[#FF9500] font-black mb-8">
+                               {Math.floor(cashConfirmTimer / 60)}:{(cashConfirmTimer % 60).toString().padStart(2, '0')}
+                             </div>
+
+                             {cashConfirmTimer === 0 && (
+                               <div className="bg-[#2C2C30]/50 rounded-2xl p-4 text-left border border-white/5 space-y-4 mb-8">
+                                  <label className="text-[11px] font-black uppercase text-[#A1A1AA] tracking-widest pl-1">
+                                    Reason for no confirmation
+                                  </label>
+                                  <select 
+                                    className="w-full bg-[#1A1A1E] text-white border border-[#333338] rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-emerald-500 font-medium text-sm"
+                                    value={forceCompleteReason}
+                                    onChange={(e) => setForceCompleteReason(e.target.value)}
+                                  >
+                                    <option value="" disabled>Select a reason...</option>
+                                    <option value="Passenger walked off">Passenger walked off</option>
+                                    <option value="No means of payment">No means of payment</option>
+                                    <option value="Card declined">Card declined / Tech issue</option>
+                                    <option value="Disputing the fare">Disputing the fare</option>
+                                  </select>
+                                  
+                                  <button
+                                     disabled={!forceCompleteReason}
+                                     onClick={() => handleCashPayment(true)}
+                                     className="w-full h-12 bg-[#FF3B30] disabled:bg-[#FF3B30]/30 disabled:text-white/30 text-white rounded-xl font-black text-sm active:scale-95 transition-all mt-4"
+                                  >
+                                     FORCE COMPLETE RIDE
+                                  </button>
+                               </div>
+                             )}
+                           </div>
+                        </motion.div>
+                      )}
+                      
+                      {showCashConfirm && !isAwaitingCashConfirm && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="absolute inset-0 z-50 bg-[#1A1A1E]/95 backdrop-blur-md flex flex-col justify-start p-4 pb-28 text-center rounded-t-3xl border-t border-[#2C2C30] overflow-y-auto"
                         >
                           <button
                             onClick={() => setShowCashConfirm(false)}
@@ -4892,33 +5033,53 @@ export default function DriverTerminal() {
                           >
                             <X className="w-4 h-4 md:w-5 md:h-5 text-white" />
                           </button>
-                          <div className="w-12 h-12 rounded-full bg-[#FF9500]/20 flex flex-shrink-0 items-center justify-center mb-3">
-                            <span className="text-2xl">💵</span>
-                          </div>
-                          <h3 className="text-white text-lg font-black tracking-wide mb-1 uppercase">
-                            Confirm Cash
-                          </h3>
-                          <p className="text-[#E4E4E7] text-xs mb-4 leading-relaxed font-medium px-2">
-                            Did you receive cash for this trip? The commission
-                            will be added to your pending balance and deducted
-                            from future card earnings.
-                          </p>
+                          
+                          <div className="pt-4">
+                            <div className="w-12 h-12 rounded-full bg-[#FF9500]/20 flex flex-shrink-0 items-center justify-center mx-auto mb-3">
+                              <span className="text-2xl">💵</span>
+                            </div>
+                            <h3 className="text-white text-lg font-black tracking-wide mb-1 uppercase">
+                              Confirm Cash
+                            </h3>
+                            <p className="text-[#E4E4E7] text-xs mb-6 leading-relaxed font-medium px-2">
+                              Did you receive cash for this trip? The commission will be added to your pending balance and deducted from future card earnings.
+                            </p>
 
-                          <button
-                            onClick={() => {
-                              setShowCashConfirm(false);
-                              handleCashPayment();
-                            }}
-                            className="w-full h-12 flex-shrink-0 bg-[#FF9500] text-[#0D0D0F] rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,149,0,0.3)] active:scale-95 transition-transform mb-3"
-                          >
-                            CONFIRM CASH RECEIVED
-                          </button>
-                          <button
-                            onClick={() => setShowCashConfirm(false)}
-                            className="w-full h-12 flex-shrink-0 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform"
-                          >
-                            CANCEL
-                          </button>
+                            <div className="bg-[#2C2C30]/40 rounded-2xl p-4 text-left border border-white/5 space-y-4 mb-6">
+                              <label className="text-[11px] font-black uppercase text-[#A1A1AA] tracking-widest pl-1 block">
+                                Amount Collected (£)
+                              </label>
+                              <div className="relative flex items-center">
+                                <span className="absolute left-4 text-white font-black text-lg pb-1">£</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder={String(((activeRide?.fareEstimate || 38.5) + (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute + (activeRide?.tipAmount || 0)).toFixed(2))}
+                                  value={cashCollectedInput}
+                                  onChange={(e) => setCashCollectedInput(e.target.value)}
+                                  className="w-full bg-[#1A1A1E] text-white border-2 border-[#333338] focus:border-[#FF9500] rounded-xl px-4 py-4 pl-9 font-mono font-black text-2xl transition-colors focus:outline-none"
+                                />
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-bold px-1 leading-snug">
+                                Leave blank or match the Total Fare if full amount is collected. If partial/no cash was collected, enter the exact amount received (e.g., 0).
+                              </p>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                handleCashPayment();
+                              }}
+                              className="w-full h-12 flex-shrink-0 bg-[#FF9500] text-[#0D0D0F] rounded-2xl font-black text-sm shadow-[0_4px_25px_rgba(255,149,0,0.3)] active:scale-95 transition-transform mb-3"
+                            >
+                              CONFIRM AMOUNT
+                            </button>
+                            <button
+                              onClick={() => setShowCashConfirm(false)}
+                              className="w-full h-12 flex-shrink-0 bg-[#2C2C30] text-white rounded-2xl font-black text-sm active:scale-95 transition-transform"
+                            >
+                              CANCEL
+                            </button>
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -6489,89 +6650,96 @@ export default function DriverTerminal() {
                       <p className="text-[10px] font-black uppercase text-[#E4E4E7] tracking-widest mb-3 border-b border-[#333338] pb-2">
                         Fare Breakdown
                       </p>
-                      <div className="space-y-1.5 mb-3">
-                        <div className="flex justify-between text-xs text-[#E4E4E7]">
-                          <span>Base fare:</span>
-                          <span className="text-white">
-                            £{fareConfig.baseFare.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs text-[#E4E4E7]">
-                          <span>
-                            Distance (
-                            {activeRide?.distanceMiles?.toFixed(1) || "22"}mi):
-                          </span>
-                          <span className="text-white">
-                            £
-                            {(
-                              (activeRide?.distanceMiles || 22) *
-                              fareConfig.distanceRate
-                            ).toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs text-[#E4E4E7]">
-                          <span>
-                            Time (~{activeRide?.durationMinutes || 45}min):
-                          </span>
-                          <span className="text-white">£---</span>
-                        </div>
-                        {totalPaidWaitSeconds > 0 && (
-                          <div className="flex justify-between text-xs text-[#FF9500]">
-                            <span>
-                              Paid Wait ({Math.floor(totalPaidWaitSeconds / 60)}
-                              m):
-                            </span>
-                            <span className="font-bold">
-                              +£
-                              {(
-                                (totalPaidWaitSeconds / 60) *
-                                fareConfig.waitRatePerMinute
-                              ).toFixed(2)}
-                            </span>
+                      {(() => {
+                        const distMiles = activeRide?.distanceMiles || 22;
+                        const distFare = distMiles * fareConfig.distanceRate;
+                        const durationMins = activeRide?.durationMinutes || 0;
+                        const timeFare = durationMins * fareConfig.timeRate;
+                        const baseSubtotal = Math.max(fareConfig.minFare, fareConfig.baseFare + distFare + timeFare);
+                        
+                        const defaultMultipliers: Record<string, number> = { standard: 1.0, executive: 1.5, luxury: 2.2, '6seater': 1.4, '8seater': 2.0, wav: 2.5 };
+                        const catMultiplier = activeRide?.carCategory ? (fareConfig.vehicleMultipliers?.[activeRide.carCategory] || defaultMultipliers[activeRide.carCategory] || 1.0) : 1.0;
+                        const vehicleSubtotal = Math.max(baseSubtotal * catMultiplier, fareConfig.minFare * catMultiplier);
+                        const vehicleExtra = vehicleSubtotal - baseSubtotal;
+
+                        let surgeAmount = 0;
+                        let surgeText = "";
+                        if (activeRide?.isSimulated && fareConfig.surgeEnabled) {
+                           if (fareConfig.surgeModel === "fixed") {
+                              surgeAmount = fareConfig.surgeFixedAmount || 2.0;
+                              surgeText = "Fixed";
+                           } else {
+                              const mult = fareConfig.surgeMultiplierValue || 1.4;
+                              surgeAmount = (vehicleSubtotal * mult) - vehicleSubtotal;
+                              surgeText = mult + "x";
+                           }
+                        } else if (!activeRide?.isSimulated && ((activeRide?.surgeModel === "fixed" && (activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0) > 0) || (activeRide?.surgeModel !== "fixed" && (activeRide?.surgeMultiplier || 1) > 1.0))) {
+                             if (activeRide?.surgeModel === "fixed") {
+                                 surgeAmount = activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0;
+                                 surgeText = "Fixed";
+                             } else {
+                                 const mult = activeRide?.surgeMultiplier || 1.0;
+                                 const expectedSurge = (vehicleSubtotal * mult) - vehicleSubtotal;
+                                 const calculatedSurgeFallback = (activeRide?.fareEstimate || 38.5) - vehicleSubtotal - (activeRide?.isPriority ? fareConfig.priorityFee : 0);
+                                 surgeAmount = expectedSurge > 0 ? expectedSurge : calculatedSurgeFallback;
+                                 surgeText = mult + "x";
+                             }
+                        }
+
+                        const waitAmount = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
+
+                        return (
+                          <div className="space-y-1.5 mb-3">
+                            <div className="flex justify-between text-xs text-[#E4E4E7]">
+                              <span>Base fare:</span>
+                              <span className="text-white">£{fareConfig.baseFare.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-[#E4E4E7]">
+                              <span>Distance ({distMiles.toFixed(1)}mi):</span>
+                              <span className="text-white">£{distFare.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-[#E4E4E7]">
+                              <span>Time (~{durationMins}min):</span>
+                              <span className="text-white">£{timeFare.toFixed(2)}</span>
+                            </div>
+                            
+                            {vehicleExtra > 0 && (
+                               <div className="flex justify-between text-xs text-[#E4E4E7]">
+                                 <span>Vehicle Upgrade:</span>
+                                 <span className="text-white">+£{vehicleExtra.toFixed(2)}</span>
+                               </div>
+                            )}
+
+                            {waitAmount > 0 && (
+                              <div className="flex justify-between text-xs text-[#FF9500]">
+                                <span>Paid Wait ({Math.floor(totalPaidWaitSeconds / 60)}m):</span>
+                                <span className="font-bold">+£{waitAmount.toFixed(2)}</span>
+                              </div>
+                            )}
+                            
+                            {activeRide?.isPriority && (
+                              <div className="flex justify-between text-xs text-[#00E5FF]">
+                                <span>Priority Booking:</span>
+                                <span className="font-bold">+£{fareConfig.priorityFee.toFixed(2)}</span>
+                              </div>
+                            )}
+                            
+                            {activeRide?.status === "rider_abandoned" && (
+                              <div className="flex justify-between text-xs text-[#FF3B30]">
+                                <span>Abandonment Fee:</span>
+                                <span className="font-bold">+£5.00</span>
+                              </div>
+                            )}
+                            
+                            {surgeAmount > 0 && (
+                              <div className="flex justify-between text-xs text-[#FF9500]">
+                                <span>Surge ({surgeText}):</span>
+                                <span className="font-bold">+£{surgeAmount.toFixed(2)}</span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {activeRide?.isPriority && (
-                          <div className="flex justify-between text-xs text-[#00E5FF]">
-                            <span>Priority Booking:</span>
-                            <span className="font-bold">
-                              +£{fareConfig.priorityFee.toFixed(2)}
-                            </span>
-                          </div>
-                        )}
-                        {activeRide?.status === "rider_abandoned" && (
-                          <div className="flex justify-between text-xs text-[#FF3B30]">
-                            <span>Abandonment Fee:</span>
-                            <span className="font-bold">+£5.00</span>
-                          </div>
-                        )}
-                        {((activeRide?.isSimulated && fareConfig.surgeEnabled) || (!activeRide?.isSimulated && ((activeRide?.surgeModel === "fixed" && (activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0) > 0) || (activeRide?.surgeModel !== "fixed" && (activeRide?.surgeMultiplier || 1) > 1.0)))) && (
-                          <div className="flex justify-between text-xs text-[#FF9500]">
-                            <span>
-                              Surge (
-                              {activeRide?.isSimulated 
-                                ? (fareConfig.surgeModel === "fixed" ? "Fixed" : (fareConfig.surgeMultiplierValue || 1.4) + "x")
-                                : (activeRide?.surgeModel === "fixed" ? "Fixed" : (activeRide?.surgeMultiplier || 1.0) + "x")}
-                              ):
-                            </span>
-                            <span className="font-bold">
-                              +£
-                              {activeRide?.isSimulated
-                                ? (fareConfig.surgeModel === "fixed" 
-                                    ? (fareConfig.surgeFixedAmount || 2.0).toFixed(2)
-                                    : ((activeRide?.fareEstimate || 38.5) - (activeRide?.baseCalc || (Math.max(fareConfig.minFare, fareConfig.baseFare + (activeRide?.distanceMiles || 0) * fareConfig.distanceRate)))).toFixed(2))
-                                : (activeRide?.surgeModel === "fixed"
-                                ? (activeRide?.surgeFixedAmount || activeRide?.surgeFixed || 0).toFixed(2)
-                                : (
-                                    (activeRide?.fareEstimate || 38.5) -
-                                    (activeRide?.baseCalc || (Math.max(fareConfig.minFare, fareConfig.baseFare + (activeRide?.distanceMiles || 0) * fareConfig.distanceRate))) -
-                                    (activeRide?.isPriority
-                                      ? fareConfig.priorityFee
-                                      : 0)
-                                  ).toFixed(2))}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                        );
+                      })()}
 
                       {(() => {
                         const baseJobFare = activeRide?.finalFare
@@ -6677,6 +6845,9 @@ export default function DriverTerminal() {
                           setAcceptedStackedRideOffer(null);
                           setPassengerRating(5);
                           setRatingComment("");
+                          setCashCollectedInput("");
+                          setForceCompleteReason("");
+                          setIsAwaitingCashConfirm(false);
                           return;
                         }
 
@@ -6732,6 +6903,9 @@ export default function DriverTerminal() {
 
                         setPassengerRating(5);
                         setRatingComment("");
+                        setCashCollectedInput("");
+                        setForceCompleteReason("");
+                        setIsAwaitingCashConfirm(false);
                         setActiveRide(null);
                       }}
                       disabled={

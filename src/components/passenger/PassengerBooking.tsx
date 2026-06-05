@@ -2553,6 +2553,15 @@ export default function PassengerBooking() {
         if (data.status === 'awaiting_payment') {
           setAssignedDriverInfo(prev => prev ? { ...prev, status: "awaiting_payment", paymentUrl: data.paymentUrl, fareEstimate: data.fareEstimate || prev.fareEstimate } : null);
         }
+        if (data.status === 'awaiting_cash_confirm') {
+          setAssignedDriverInfo(prev => prev ? { 
+             ...prev, 
+             status: "awaiting_cash_confirm", 
+             reportedCashCollected: data.reportedCashCollected,
+             reportedCashDiscrepancy: data.reportedCashDiscrepancy,
+             fareEstimate: data.fareEstimate || prev.fareEstimate
+          } : null);
+        }
         if (data.status === 'completed') { 
           setCompletedRideData({ ...data, id: currentRideId });
           setStep("receipt"); 
@@ -4424,6 +4433,58 @@ export default function PassengerBooking() {
                 </div>
                 
                 <AnimatePresence>
+                  {assignedDriverInfo?.status === "awaiting_cash_confirm" && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+                      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white relative rounded-[2rem] p-6 w-full max-w-[340px] shadow-2xl flex flex-col items-center border border-black">
+                         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-orange-400 to-orange-500 rounded-t-full"></div>
+                         
+                         <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-5 border-4 border-white shadow-sm -mt-10">
+                            <span className="text-3xl">💵</span>
+                         </div>
+                         
+                         <div className="text-center mb-6 w-full">
+                           <h3 className="text-[20px] font-black text-slate-900 leading-tight mb-2 tracking-tight">Confirm Cash Payment</h3>
+                           <p className="text-[13.5px] text-slate-600 font-medium leading-snug">
+                             Your driver indicated that they received £{(assignedDriverInfo?.reportedCashCollected || 0).toFixed(2)} in cash.
+                           </p>
+                         </div>
+                         
+                         <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6">
+                            <div className="flex justify-between items-center mb-3">
+                               <span className="text-[13px] font-bold text-slate-500">Total Fare</span>
+                               <span className="text-[14.5px] font-black text-slate-800">£{(assignedDriverInfo?.fareEstimate || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between items-center mb-3">
+                               <span className="text-[13px] font-bold text-slate-500">Cash Checked</span>
+                               <span className="text-[14.5px] font-black text-orange-600">-£{(assignedDriverInfo?.reportedCashCollected || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="h-px bg-slate-200 w-full mb-3" />
+                            <div className="flex justify-between items-center">
+                               <span className="text-[13px] font-bold text-slate-700">Remainder</span>
+                               <span className="text-[16px] font-black text-slate-900">£{(assignedDriverInfo?.reportedCashDiscrepancy || 0).toFixed(2)}</span>
+                            </div>
+                         </div>
+                         
+                         <div className="bg-orange-50 text-orange-800 text-[11px] font-bold p-3 rounded-xl w-full text-center border border-orange-200 mb-6">
+                            The remainder will be added to your pending account balance for the next trip.
+                         </div>
+
+                         <button 
+                            onClick={async () => {
+                               if (currentRideId) {
+                                  await updateDoc(doc(db, "ride_requests", currentRideId), {
+                                     status: "cash_confirmed"
+                                  });
+                               }
+                            }}
+                            className="w-full bg-[#1e293b] text-white rounded-[16px] font-black text-[15px] h-[52px] shadow-lg hover:bg-black transition-all border border-black mb-2"
+                         >
+                            CONFIRM ENTRY
+                         </button>
+                      </motion.div>
+                    </div>
+                  )}
+
                   {showCancelPrompt && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-[2px]">
                       <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white w-full max-w-sm rounded-[24px] p-6 shadow-2xl border border-black">
