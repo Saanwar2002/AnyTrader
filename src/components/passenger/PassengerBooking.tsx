@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import RideChat from "../driver/RideChat";
 import { cn } from "@/src/lib/utils";
-import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where, getDocs, orderBy, limit, deleteField, getDoc } from "@/src/firebase";
+import { db, addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, setDoc, increment, query, where, getDocs, orderBy, limit, deleteField, getDoc, runTransaction } from "@/src/firebase";
 import { playSound } from "@/src/lib/sound";
 import { useAuth } from "../AuthProvider";
 import { usePortal } from "../../lib/PortalContext";
@@ -2079,7 +2079,9 @@ export default function PassengerBooking() {
     else if (currentStatus === "in_progress") {
        nextStatus = profile?.stripeCustomerId ? "completed" : "awaiting_payment";
     }
-    else if (currentStatus === "awaiting_payment") nextStatus = "completed";
+    else if (currentStatus === "awaiting_payment" || currentStatus === "awaiting_cash_confirm") {
+      nextStatus = "completed";
+    }
 
     try {
       const rideDoc = await getDoc(doc(db, "ride_requests", currentRideId));
@@ -2377,11 +2379,16 @@ export default function PassengerBooking() {
           if (rideInfo.status === "offered" && rideInfo.offerExpiresAt) {
              if (Date.now() > rideInfo.offerExpiresAt) {
                 // Timeout! Update it back to pending and decline this driver
-                await updateDoc(rideRef, {
-                  status: "pending",
-                  assignedDriverId: deleteField(),
-                  offerExpiresAt: deleteField(),
-                  declinedBy: arrayUnion(rideInfo.assignedDriverId)
+                await runTransaction(db, async (t) => {
+                  const latestDoc = await t.get(rideRef);
+                  if (latestDoc.exists() && latestDoc.data().status === "offered") {
+                    t.update(rideRef, {
+                      status: "pending",
+                      assignedDriverId: deleteField(),
+                      offerExpiresAt: deleteField(),
+                      declinedBy: arrayUnion(rideInfo.assignedDriverId)
+                    });
+                  }
                 });
              }
           }
@@ -4791,6 +4798,34 @@ export default function PassengerBooking() {
                             className="w-full bg-[#1e293b] text-white rounded-[16px] font-black text-[15px] h-[52px] shadow-lg hover:bg-black transition-all border border-black mb-2"
                          >
                             CONFIRM ENTRY
+                         </button>
+
+                         <button 
+                            onClick={async () => {
+                               if (currentRideId && confirm("Stuck on cash verification? Clicking this will immediately complete the ride and clear it. Proceed?")) {
+                                  const finalAmountHandled = assignedDriverInfo?.reportedCashDiscrepancy || 0;
+                                  
+                                  await updateDoc(doc(db, "ride_requests", currentRideId), {
+                                     status: "completed",
+                                     paymentMethod: "cash",
+                                     completedAt: serverTimestamp(),
+                                     finalFare: assignedDriverInfo?.fareEstimate || 0,
+                                     reportedCashCollected: assignedDriverInfo?.reportedCashCollected || 0
+                                  });
+                                  
+                                  if (profile?.uid && finalAmountHandled > 0) {
+                                     await updateDoc(doc(db, "users", profile.uid), {
+                                        pendingCharges: increment(finalAmountHandled),
+                                        pendingChargesReason: "Unpaid cash trip remainder"
+                                     });
+                                  }
+                                  
+                                  toast.success("Ride force-completed and cleared successfully!");
+                               }
+                            }}
+                            className="w-full text-rose-600 hover:text-rose-800 font-extrabold text-[12px] py-2 text-center transition-all bg-rose-50 hover:bg-rose-100 rounded-xl mt-1.5 border border-rose-200/60"
+                         >
+                            🚨 Stuck? Force Complete & Clear Ride
                          </button>
                       </motion.div>
                     </div>

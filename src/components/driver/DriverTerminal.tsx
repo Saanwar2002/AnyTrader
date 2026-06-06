@@ -2833,28 +2833,37 @@ export default function DriverTerminal() {
   const handleDeclineRide = async (userInitiated: boolean = false) => {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
-        // Penalty logic: consecutive declines
-        await updateDoc(doc(db, "driver_status", user.uid), {
+        await setDoc(doc(db, "driver_status", user.uid), {
           pendingRideId: deleteField(),
           consecutiveDeclines: increment(1),
-        } as any);
-
-        // Put ride back into search pool
-        await updateDoc(doc(db, "ride_requests", activeRide.id), {
-          status: "pending",
-          assignedDriverId: deleteField(),
-          driverId: deleteField(),
-          driverName: deleteField(),
-          driverPhone: deleteField(),
-          vehicleInfo: deleteField(),
-          vehiclePlate: deleteField(),
-          driverRequirePasscode: deleteField(),
-          acceptedAt: deleteField(),
-          offerExpiresAt: deleteField(),
-          declinedBy: arrayUnion(user.uid)
-        } as any);
+        } as any, { merge: true });
       } catch (err) {
-        console.error("Error declining ride:", err);
+        console.error("Error declining ride - driver_status update:", err);
+      }
+
+      try {
+        // Put ride back into search pool only if it's still offered
+        await runTransaction(db, async (t) => {
+          const rideRef = doc(db, "ride_requests", activeRide.id);
+          const docSnap = await t.get(rideRef);
+          if (docSnap.exists() && docSnap.data().status === "offered") {
+            t.update(rideRef, {
+              status: "pending",
+              assignedDriverId: deleteField(),
+              driverId: deleteField(),
+              driverName: deleteField(),
+              driverPhone: deleteField(),
+              vehicleInfo: deleteField(),
+              vehiclePlate: deleteField(),
+              driverRequirePasscode: deleteField(),
+              acceptedAt: deleteField(),
+              offerExpiresAt: deleteField(),
+              declinedBy: arrayUnion(user.uid)
+            });
+          }
+        });
+      } catch (err) {
+        console.error("Error declining ride - ride_requests transaction:", err);
       }
     }
 
@@ -2885,26 +2894,36 @@ export default function DriverTerminal() {
   const handleDeclineStackedRide = async () => {
     if (stackedRideOffer?.id && stackedRideOffer?.isReal && user) {
       try {
-        await updateDoc(doc(db, "driver_status", user.uid), {
+        await setDoc(doc(db, "driver_status", user.uid), {
           pendingRideId: deleteField(),
           consecutiveDeclines: increment(1),
-        } as any);
-
-        await updateDoc(doc(db, "ride_requests", stackedRideOffer.id), {
-          status: "pending",
-          assignedDriverId: deleteField(),
-          driverId: deleteField(),
-          driverName: deleteField(),
-          driverPhone: deleteField(),
-          vehicleInfo: deleteField(),
-          vehiclePlate: deleteField(),
-          driverRequirePasscode: deleteField(),
-          acceptedAt: deleteField(),
-          offerExpiresAt: deleteField(),
-          declinedBy: arrayUnion(user.uid)
-        } as any);
+        } as any, { merge: true });
       } catch (err) {
-        console.error("Error declining stacked ride:", err);
+        console.error("Error declining stacked ride - driver_status update:", err);
+      }
+
+      try {
+        await runTransaction(db, async (t) => {
+          const rideRef = doc(db, "ride_requests", stackedRideOffer.id);
+          const docSnap = await t.get(rideRef);
+          if (docSnap.exists() && docSnap.data().status === "offered") {
+            t.update(rideRef, {
+              status: "pending",
+              assignedDriverId: deleteField(),
+              driverId: deleteField(),
+              driverName: deleteField(),
+              driverPhone: deleteField(),
+              vehicleInfo: deleteField(),
+              vehiclePlate: deleteField(),
+              driverRequirePasscode: deleteField(),
+              acceptedAt: deleteField(),
+              offerExpiresAt: deleteField(),
+              declinedBy: arrayUnion(user.uid)
+            });
+          }
+        });
+      } catch (err) {
+        console.error("Error declining stacked ride - ride_requests transaction:", err);
       }
     }
     setStackedRideOffer(null);

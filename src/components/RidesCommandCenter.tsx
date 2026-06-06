@@ -255,7 +255,7 @@ export default function RidesCommandCenter() {
   // Filtered Job Lists
   const filters = {
     pending: rideRequests.filter(r => r.status === "pending" && !r.scheduledAt),
-    live: rideRequests.filter(r => ["accepted", "in_transit"].includes(r.status)),
+    live: rideRequests.filter(r => ["accepted", "in_transit", "awaiting_payment", "awaiting_cash_confirm"].includes(r.status)),
     scheduled: rideRequests.filter(r => r.status === "pending" && r.scheduledAt),
     completed: rideRequests.filter(r => r.status === "completed").slice(0, 5),
     cancelled: rideRequests.filter(r => r.status === "cancelled").slice(0, 5)
@@ -495,7 +495,7 @@ export default function RidesCommandCenter() {
                                     <QrCode className="w-3.5 h-3.5" />
                                   </button>
                                 )}
-                                {['pending', 'accepted'].includes(ride.status) && (
+                                {['pending', 'accepted', 'in_transit', 'awaiting_payment', 'awaiting_cash_confirm'].includes(ride.status) && (
                                   <button 
                                     onClick={() => handleCancelClick(ride.id, ride.driverId)}
                                     className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
