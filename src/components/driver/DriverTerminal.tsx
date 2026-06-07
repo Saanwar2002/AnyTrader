@@ -1923,6 +1923,7 @@ export default function DriverTerminal() {
         const rideData = {
           id: rideDoc.id,
           userId: data.riderId,
+          riderId: data.riderId,
           name: data.passengerName || "Live Passenger",
           passengerPhone: data.passengerPhone || undefined,
           pickupAddress: data.pickup,

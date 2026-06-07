@@ -57,7 +57,7 @@ service cloud.firestore {
         isSignedIn() && (
           (isOwner(userId) && (resource == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified']))) || 
           isAdmin() ||
-          (resource != null && ['pendingCharges', 'cancellationCount', 'abandonmentStrikes', 'totalJobsDone', 'phantomFeesSaved', 'completedJobsRevenue', 'boostedEmergencyJobsDone', 'rating', 'totalReviews', 'totalRecommendations', 'homeownerRating', 'totalHomeownerReviews'].hasAll(request.resource.data.diff(resource.data).affectedKeys()))
+          (resource != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCharges', 'pendingChargesReason', 'cancellationCount', 'abandonmentStrikes', 'totalJobsDone', 'phantomFeesSaved', 'completedJobsRevenue', 'boostedEmergencyJobsDone', 'rating', 'totalReviews', 'totalRecommendations', 'homeownerRating', 'totalHomeownerReviews']))
         )
       ) || userId.matches('^mock-trader-.*$');
     }
