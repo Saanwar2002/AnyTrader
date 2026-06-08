@@ -268,7 +268,7 @@ export async function getJobEstimate(
 
     const text = response.text;
     if (!text) throw new Error("Empty response from Gemini");
-    return JSON.parse(text);
+    return JSON.parse(text.replace(/^```json/gi, '').replace(/```$/g, '').trim());
   } catch (error) {
     console.error("Gemini Estimate Error:", error);
     // Fallback estimate
@@ -765,7 +765,7 @@ export async function parseNaturalLanguageSearch(query: string): Promise<{
 
     const text = response.text;
     if (!text) return { categories: [], urgency: null, keywords: [] };
-    return JSON.parse(text);
+    return JSON.parse(text.replace(/^```json/gi, '').replace(/```$/g, '').trim());
   } catch (error) {
     console.error("Gemini Search Parse Error:", error);
     return { categories: [], urgency: null, keywords: [] };
@@ -1691,7 +1691,7 @@ export async function processTaxiVoiceCommand(text: string, locationContext: str
 
     const textResponse = response.text || "";
     if (!textResponse) throw new Error("Empty response from Gemini");
-    return JSON.parse(textResponse);
+    return JSON.parse(textResponse.replace(/^```json/gi, '').replace(/```$/g, '').trim());
   } catch (error: any) {
     const errorMsg = error?.message || String(error);
     if (!(errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("rate limit"))) {

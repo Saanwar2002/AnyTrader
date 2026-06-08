@@ -3040,8 +3040,14 @@ export default function DriverTerminal() {
   const [isAwaitingCashConfirm, setIsAwaitingCashConfirm] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [cashCollectedInput, setCashCollectedInput] = useState<string>("");
+  const cashCollectedInputRef = useRef<string>("");
+  useEffect(() => { cashCollectedInputRef.current = cashCollectedInput; }, [cashCollectedInput]);
+  
   const [cashConfirmTimer, setCashConfirmTimer] = useState<number>(45);
+  
   const [forceCompleteReason, setForceCompleteReason] = useState<string>("");
+  const forceCompleteReasonRef = useRef<string>("");
+  useEffect(() => { forceCompleteReasonRef.current = forceCompleteReason; }, [forceCompleteReason]);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showEarlyArrivalConfirm, setShowEarlyArrivalConfirm] = useState(false);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
@@ -3937,8 +3943,9 @@ export default function DriverTerminal() {
         const platformFee = (baseFare * fareConfig.commissionRate) + (fareConfig.fixedTripFee || 0);
         
         let enteredAmount = totalFare;
-        if (cashCollectedInput.trim() !== "") {
-           enteredAmount = parseFloat(cashCollectedInput);
+        const currentCashInput = cashCollectedInputRef.current || cashCollectedInput;
+        if (currentCashInput.trim() !== "") {
+           enteredAmount = parseFloat(currentCashInput);
         }
         
         if (isNaN(enteredAmount) || enteredAmount < 0) {
@@ -3985,7 +3992,7 @@ export default function DriverTerminal() {
           paidWaitSeconds: totalPaidWaitSeconds,
           platformFeeOwed: platformFee,
           reportedCashCollected: enteredAmount,
-          forceCompleteReason: forceCompleteReason || null,
+          forceCompleteReason: forceCompleteReasonRef.current || forceCompleteReason || null,
           completedAt: serverTimestamp(),
         });
 
@@ -3996,8 +4003,8 @@ export default function DriverTerminal() {
         ) {
           if (discrepancyAmount > 0) {
              await updateDoc(doc(db, "users", activeRide.riderId), {
-                pendingCharges: increment(discrepancyAmount),
-                pendingChargesReason: forceCompleteReason || "Unpaid trip balance",
+                pendingCharges: discrepancyAmount,
+                pendingChargesReason: forceCompleteReasonRef.current || forceCompleteReason || "Unpaid trip balance",
              }).catch((err) => console.error("Failed to update partial payment on rider", err));
           } else {
              await updateDoc(doc(db, "users", activeRide.riderId), {

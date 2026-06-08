@@ -4815,7 +4815,7 @@ export default function PassengerBooking() {
                                   
                                   if (profile?.uid && finalAmountHandled > 0) {
                                      await updateDoc(doc(db, "users", profile.uid), {
-                                        pendingCharges: increment(finalAmountHandled),
+                                        pendingCharges: finalAmountHandled,
                                         pendingChargesReason: "Unpaid cash trip remainder"
                                      });
                                   }
@@ -4856,8 +4856,8 @@ export default function PassengerBooking() {
 
                 <AnimatePresence>
                   {showCustomTipKeypad && (
-                    <motion.div initial={{ opacity: 0, y: "100%" }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: "100%" }} className="fixed inset-0 z-[200] bg-[#f8fafc] flex flex-col pt-[env(safe-area-inset-top,20px)] pointer-events-auto">
-                      <div className="flex items-center justify-between p-4 pb-2">
+                    <motion.div initial={{ opacity: 0, y: "100%" }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: "100%" }} className="fixed inset-0 z-[200] bg-[#f8fafc] flex flex-col pointer-events-auto h-full overflow-hidden">
+                      <div className="flex items-center justify-between p-4 pb-2 pt-[env(safe-area-inset-top,20px)] shrink-0">
                          <div className="w-10"></div>
                          <h2 className="text-xl font-bold text-[#0a1930] mb-0">Custom Tip</h2>
                          <button onClick={() => setShowCustomTipKeypad(false)} className="w-10 h-10 bg-slate-200/60 rounded-full flex items-center justify-center active:scale-95 transition-transform">
@@ -4865,12 +4865,12 @@ export default function PassengerBooking() {
                          </button>
                       </div>
                       
-                      <div className="flex-1 flex flex-col px-6 pt-6 relative overflow-hidden">
-                        <div className="bg-white border text-center border-black rounded-[20px] py-10 shadow-sm mb-12">
+                      <div className="flex-1 overflow-y-auto w-full px-6 pt-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] flex flex-col">
+                        <div className="bg-white border text-center border-black rounded-[20px] py-10 shadow-sm mb-6 shrink-0">
                            <span className="text-6xl font-black tracking-tight text-[#0a1930]">£{customTip || "0.00"}</span>
                         </div>
                         
-                        <div className="grid grid-cols-3 gap-y-6 gap-x-4 max-w-[280px] mx-auto w-full mb-10">
+                        <div className="grid grid-cols-3 gap-y-4 gap-x-4 max-w-[280px] mx-auto w-full mb-6 shrink-0">
                           {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0, 'del'].map((key) => (
                              <button key={key} onClick={() => {
                                 if (key === 'del') {
@@ -4894,7 +4894,7 @@ export default function PassengerBooking() {
                           ))}
                         </div>
                         
-                        <div className="mt-auto px-6 pb-8">
+                        <div className="mt-auto px-6 pb-2 shrink-0">
                            <p className="text-center text-slate-700 font-medium text-[15px] mb-4">Your driver receives 100% of the tip.</p>
                            <button onClick={() => {
                               const amount = parseFloat(customTip);
