@@ -4453,7 +4453,7 @@ export default function PassengerBooking() {
                   <button onClick={handleCancelSearching} className="flex-1 text-slate-800 font-bold text-[15px] py-4 rounded-[16px] border border-black bg-white hover:bg-slate-50 transition-colors active:scale-[0.98]">Edit</button>
                   <button onClick={() => setShowAbandonPrompt(true)} className="flex-1 font-bold text-[15px] py-4 rounded-[16px] border border-black bg-[#dcfce7] text-[#15803d] hover:bg-[#bbf7d0] transition-colors active:scale-[0.98]">Cancel</button>
                 </div>
-                {!assignedDriverInfo && <button onClick={simulateDriverAccepts} className="w-full max-w-[320px] font-black text-[15px] py-4 rounded-[16px] border border-black bg-[#e0e7ff] text-[#4338ca] hover:bg-[#c7d2fe] active:scale-[0.98] transition-transform">Simulate Match</button>}
+
                 <div className="shrink-0 h-[calc(6rem+env(safe-area-inset-bottom,0px))] w-full mt-auto" />
               </motion.div>
             )}
@@ -4746,9 +4746,7 @@ export default function PassengerBooking() {
                   </div>
                 )}
                 
-                <div className="text-center">
-                  <button onClick={simulateNextState} className="w-full mt-3 font-bold py-3 rounded-[16px] border border-black bg-[#e0e7ff] text-[#4338ca] active:scale-[0.98] transition-transform text-[15px]">Simulate Next: {assignedDriverInfo?.status === "accepted" ? "Arrived" : assignedDriverInfo?.status === "arrived" ? "In Progress" : assignedDriverInfo?.status === "awaiting_payment" ? "Payment Confirmed" : "Complete"}</button>
-                </div>
+
                 
                 <AnimatePresence>
                   {assignedDriverInfo?.status === "awaiting_cash_confirm" && (

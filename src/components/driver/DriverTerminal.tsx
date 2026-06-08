@@ -4131,38 +4131,7 @@ export default function DriverTerminal() {
       {/* Full bleed container */}
       {activeTab === "home" && (
         <>
-          {/* Simulation Trigger (Dev Only) */}
-          <div className="absolute top-[calc(48px+env(safe-area-inset-top))] left-4 z-[150] flex flex-col items-start gap-2 pointer-events-auto">
-            <button
-              onClick={simulateIncomingRide}
-              className="bg-[#FFD60A] text-[#1A1A1E] text-xs px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(255,214,10,0.3)] hover:scale-105 active:scale-95 transition-all"
-            >
-              Simulate Job{" "}
-              {activeRide
-                ? activeRide.hasCardOnFile
-                  ? "(Card)"
-                  : "(No Card)"
-                : ""}
-            </button>
-            {rideState === "in_progress" && (
-              <>
-                <button
-                  onClick={simulatePassenger90sWarning}
-                  className="bg-[#FF3B30] text-white text-[10px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all outline outline-2 outline-white/20"
-                >
-                  Trigger 90s Warning
-                </button>
-                {!stackedRideOffer && (
-                  <button
-                    onClick={simulateStackedIncomingRide}
-                    className="bg-indigo-500 text-white text-[10px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all outline outline-2 outline-white/20"
-                  >
-                    Simulate Stacked Job
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+
 
           {/* 1. Map Layer (Background) */}
           <div
