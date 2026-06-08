@@ -85,22 +85,22 @@ export function BatteryStatus() {
 
   const getBatteryIcon = () => {
     if (isCharging) {
-      return <BatteryCharging className={`w-5 h-5 ${getBatteryColor()}`} />;
+      return <BatteryCharging className={`w-4 h-4 ${getBatteryColor()}`} />;
     }
     if (level <= 20) {
-      return <BatteryLow className={`w-5 h-5 ${getBatteryColor()}`} />;
+      return <BatteryLow className={`w-4 h-4 ${getBatteryColor()}`} />;
     }
     if (level <= 60) {
-      return <BatteryMedium className={`w-5 h-5 ${getBatteryColor()}`} />;
+      return <BatteryMedium className={`w-4 h-4 ${getBatteryColor()}`} />;
     }
-    return <Battery className={`w-5 h-5 ${getBatteryColor()}`} />;
+    return <Battery className={`w-4 h-4 ${getBatteryColor()}`} />;
   };
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="flex items-center gap-2.5 bg-[#1A1A1E]/95 backdrop-blur-md px-3.5 h-10 rounded-xl border border-white/20 text-white pointer-events-auto select-none shadow-lg tracking-wider"
+      className="flex flex-col items-center justify-center w-10 h-10 bg-[#1A1A1E]/95 backdrop-blur-md rounded-full border border-white/20 text-white pointer-events-auto select-none shadow-md"
     >
       <div className="relative flex items-center justify-center">
         {getBatteryIcon()}
@@ -110,19 +110,13 @@ export function BatteryStatus() {
             transition={{ repeat: Infinity, duration: 2 }}
             className="absolute -right-1 -top-1 bg-[#1A1A1E] rounded-full p-0.5 border border-white/10"
           >
-            <Zap className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400 animate-pulse" />
+            <Zap className="w-1.5 h-1.5 text-yellow-400 fill-yellow-400" />
           </motion.div>
         )}
       </div>
-      <div className="flex flex-col justify-center">
-        <div className="flex items-baseline gap-0.5">
-          <span className="text-[13px] font-black leading-tight text-white">{level}</span>
-          <span className="text-[9px] font-bold text-slate-400 leading-tight">%</span>
-        </div>
-        <span className="text-[7.5px] font-black text-[#A1A1AA] uppercase tracking-widest leading-none">
-          {isCharging ? "Charging" : level <= 20 ? "Low Bat" : "Battery"}
-        </span>
-      </div>
+      <span className="text-[9px] font-black leading-none mt-0.5 text-white/90">
+        {level}%
+      </span>
     </motion.div>
   );
 }

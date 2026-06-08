@@ -50,6 +50,7 @@ import PassengerBooking from "./components/passenger/PassengerBooking";
 import DriverEarnings from "./components/driver/DriverEarnings";
 import DriverInbox from "./components/driver/DriverInbox";
 import PassengerRideHistory from "./components/passenger/PassengerRideHistory";
+import PlatformFeeSuccess from "./components/driver/PlatformFeeSuccess";
 import { registerForPushNotifications } from "./lib/pushNotifications";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
@@ -262,6 +263,7 @@ export default function App() {
                 <Route path="book-ride" element={<PassengerBooking />} />
                 <Route path="my-rides" element={<PassengerRideHistory />} />
                 <Route path="saved-journeys" element={<SavedJourneys />} />
+                <Route path="platform-fee-success" element={<PlatformFeeSuccess />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

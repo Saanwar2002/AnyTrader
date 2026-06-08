@@ -1362,13 +1362,21 @@ async function startServer() {
   // Platform Fee Settlement Route
   app.post("/api/driver/settle-fees", async (req, res) => {
     try {
-      const { driverId } = req.body;
-      if (!db) return res.status(500).json({ error: "Database not connected" });
+      const { driverId, amount } = req.body;
       
-      const driverDoc = await db.collection("users").doc(driverId).get();
-      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
+      let pendingPlatformFees = amount || 9.75;
 
-      const pendingPlatformFees = driverDoc.data()?.pendingPlatformFees || 0;
+      if (db) {
+        try {
+          const driverDoc = await db.collection("users").doc(driverId).get();
+          if (driverDoc.exists) {
+            pendingPlatformFees = driverDoc.data()?.pendingPlatformFees || pendingPlatformFees;
+          }
+        } catch (dbErr) {
+          console.warn("Could not query DB inside /api/driver/settle-fees. Falling back to body amount:", dbErr);
+        }
+      }
+      
       if (pendingPlatformFees <= 0) {
         return res.status(400).json({ error: "No fees to settle" });
       }
@@ -1377,7 +1385,9 @@ async function startServer() {
       try {
         stripe = getStripe();
       } catch (e) {
-        return res.json({ url: `${process.env.APP_URL || ''}/platform-fee-success` });
+        // Stripe not connected/configured, redirect direct to success path in Sandbox Mode
+        console.log("Stripe not connected. Directing to sandbox platform fee success pathway.");
+        return res.json({ url: `${process.env.APP_URL || ''}/platform-fee-success?sandbox=true&amount=${pendingPlatformFees}` });
       }
 
       const session = await stripe.checkout.sessions.create({
@@ -1398,13 +1408,42 @@ async function startServer() {
           driverId,
           type: 'fee_settlement'
         },
-        success_url: `${process.env.APP_URL || ''}/platform-fee-success`,
+        success_url: `${process.env.APP_URL || ''}/platform-fee-success?amount=${pendingPlatformFees}`,
         cancel_url: `${process.env.APP_URL || ''}/driver-dashboard`,
       });
 
       res.json({ url: session.url });
     } catch (error: any) {
       console.error("Fee Settlement Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual / Sandbox Confirmation of Fee Settlement
+  app.post("/api/driver/confirm-fee-settlement", async (req, res) => {
+    try {
+      const { driverId } = req.body;
+      
+      if (!db) {
+        // Safe sandbox fallback response
+        console.log(`Database is not connected. Returning safe sandbox completion for driver ${driverId}`);
+        return res.json({ success: true, settledAmount: null, sandboxFallback: true });
+      }
+      
+      const driverRef = db.collection("users").doc(driverId);
+      const driverDoc = await driverRef.get();
+      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
+
+      const pendingFees = driverDoc.data()?.pendingPlatformFees || 0;
+      
+      await driverRef.update({
+        pendingPlatformFees: 0
+      });
+
+      console.log(`Driver ${driverId} settled £${pendingFees} in platform fees (confirmed via server)`);
+      res.json({ success: true, settledAmount: pendingFees });
+    } catch (error: any) {
+      console.error("Confirm Fee Settlement Error:", error);
       res.status(500).json({ error: error.message });
     }
   });

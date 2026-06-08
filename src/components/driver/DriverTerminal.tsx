@@ -388,7 +388,7 @@ export default function DriverTerminal() {
   const [isMapTilesLoaded, setIsMapTilesLoaded] = useState(false);
   const [isSyncingMap, setIsSyncingMap] = useState(false);
   const [demandZones, setDemandZones] = useState<any[]>([]);
-  const [showPredictiveSurge, setShowPredictiveSurge] = useState(false);
+  const [showPredictiveSurge, setShowPredictiveSurge] = useState(true);
 
   // Storage for directions
   const [directions, setDirectionsState] =
@@ -3931,6 +3931,23 @@ export default function DriverTerminal() {
   const handleCashPayment = async (forceComplete: boolean = false) => {
     if (activeRide?.id && activeRide?.isReal && user) {
       try {
+        let parsedReportedCash: number | null = null;
+        let isAlreadyApplied = false;
+        try {
+          const docSnap = await getDoc(doc(db, "ride_requests", activeRide.id));
+          if (docSnap.exists()) {
+            const rData = docSnap.data();
+            if (rData.reportedCashCollected !== undefined && rData.reportedCashCollected !== null) {
+              parsedReportedCash = Number(rData.reportedCashCollected);
+            }
+            if (rData.pendingChargesApplied === true) {
+              isAlreadyApplied = true;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch ride request for cash verification", e);
+        }
+
         const waitFare = (totalPaidWaitSeconds / 60) * fareConfig.waitRatePerMinute;
         const distMiles = activeRide?.distanceMiles || 22;
         const durationMins = activeRide?.durationMinutes || 0;
@@ -3944,7 +3961,9 @@ export default function DriverTerminal() {
         
         let enteredAmount = totalFare;
         const currentCashInput = cashCollectedInputRef.current || cashCollectedInput;
-        if (currentCashInput.trim() !== "") {
+        if (parsedReportedCash !== null) {
+           enteredAmount = parsedReportedCash;
+        } else if (currentCashInput.trim() !== "") {
            enteredAmount = parseFloat(currentCashInput);
         }
         
@@ -3992,6 +4011,8 @@ export default function DriverTerminal() {
           paidWaitSeconds: totalPaidWaitSeconds,
           platformFeeOwed: platformFee,
           reportedCashCollected: enteredAmount,
+          reportedCashDiscrepancy: discrepancyAmount,
+          pendingChargesApplied: true,
           forceCompleteReason: forceCompleteReasonRef.current || forceCompleteReason || null,
           completedAt: serverTimestamp(),
         });
@@ -4001,7 +4022,7 @@ export default function DriverTerminal() {
           typeof activeRide.riderId === "string" &&
           activeRide.riderId.length > 0
         ) {
-          if (discrepancyAmount > 0) {
+          if (discrepancyAmount > 0 && !isAlreadyApplied) {
              await updateDoc(doc(db, "users", activeRide.riderId), {
                 pendingCharges: increment(discrepancyAmount),
                 pendingChargesReason: forceCompleteReasonRef.current || forceCompleteReason || "Unpaid trip balance",
@@ -4784,7 +4805,7 @@ export default function DriverTerminal() {
             )}
 
           {/* Floating Map Controls & SOS */}
-          <div className="absolute top-[calc(100px+env(safe-area-inset-top))] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
+          <div className="absolute top-[calc(135px+env(safe-area-inset-top))] right-4 z-50 flex flex-col items-end gap-3 pointer-events-auto">
             <button
               onClick={() => setShowHazardModal(true)}
               className="w-10 h-10 bg-[#1A1A1E]/90 backdrop-blur-md border border-[#2C2C30] rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -4795,27 +4816,6 @@ export default function DriverTerminal() {
                   showHazardModal ? "text-[#FF3B30]" : "text-[#E4E4E7]",
                 )}
               />
-            </button>
-
-            {/* AI Predictive Surge Heatmap Control */}
-            <button
-              onClick={() => {
-                setShowPredictiveSurge(!showPredictiveSurge);
-                toast.success(
-                  !showPredictiveSurge
-                    ? "AI Predictive Surge Heatmap active"
-                    : "AI Predictive Surge Heatmap hidden"
-                );
-              }}
-              className={cn(
-                "w-10 h-10 backdrop-blur-md border rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-all",
-                showPredictiveSurge
-                  ? "bg-[#D97706]/90 border-[#B45309] text-white shadow-amber-500/20"
-                  : "bg-[#1A1A1E]/90 border-[#2C2C30] text-[#E4E4E7] hover:border-white/30"
-              )}
-              title="Toggle AI Predictive Surge Heatmap"
-            >
-              <TrendingUp className="w-4 h-4" />
             </button>
 
             {/* Navigation Button */}
@@ -4857,20 +4857,17 @@ export default function DriverTerminal() {
             )}
 
           {/* 2. Top UI: Header controls */}
-          <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
-            {/* Status Header (Sticky) */}
-            <div className="absolute top-[calc(3rem+env(safe-area-inset-top))] left-4 right-4 z-40 flex items-center justify-between pointer-events-none">
-              {/* Battery Status Indicator */}
-              <BatteryStatus />
+          <div className="absolute top-[calc(1.5rem+env(safe-area-inset-top))] right-4 z-40 flex flex-col items-center gap-2 pointer-events-none">
+            {/* Battery Status Indicator */}
+            <BatteryStatus />
 
-              {/* Menu Button */}
-              <button
-                onClick={() => setActiveTab("menu")}
-                className="w-10 h-10 bg-[#1A1A1E]/95 backdrop-blur-md rounded-full border border-[#2C2C30] text-white flex items-center justify-center shadow-lg pointer-events-auto active:scale-95 transition-transform"
-              >
-                <MenuIcon className="w-5 h-5" />
-              </button>
-            </div>
+            {/* Menu Button */}
+            <button
+              onClick={() => setActiveTab("menu")}
+              className="w-10 h-10 bg-[#1A1A1E]/95 backdrop-blur-md rounded-full border border-[#2C2C30] text-white flex items-center justify-center shadow-lg pointer-events-auto active:scale-95 transition-transform"
+            >
+              <MenuIcon className="w-5 h-5" />
+            </button>
           </div>
 
           <div className="flex-1 pointer-events-none"></div>

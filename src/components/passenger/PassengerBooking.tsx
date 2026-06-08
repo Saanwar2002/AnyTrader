@@ -733,7 +733,7 @@ export default function PassengerBooking() {
     setDriverPos(null);
     setLiveEtaSeconds(null);
     setLiveEtaMins(null);
-    setStep("input");
+    setStep("details");
 
     localStorage.removeItem("passenger_temp_pickup");
     localStorage.removeItem("passenger_temp_dropoff");
@@ -4787,6 +4787,45 @@ export default function PassengerBooking() {
                                if (currentRideId) {
                                   await updateDoc(doc(db, "ride_requests", currentRideId), {
                                      status: "cash_confirmed"
+                                   });
+                                   
+                                   const finalAmountHandled = assignedDriverInfo?.reportedCashDiscrepancy || 0;
+                                   if (profile?.uid && finalAmountHandled > 0) {
+                                      try {
+                                         const freshSnap = await getDoc(doc(db, "ride_requests", currentRideId));
+                                         if (freshSnap.exists() && !freshSnap.data().pendingChargesApplied) {
+                                            await updateDoc(doc(db, "users", profile.uid), {
+                                               pendingCharges: increment(finalAmountHandled),
+                                               pendingChargesReason: "Unpaid cash trip remainder"
+                                            });
+                                            await updateDoc(doc(db, "ride_requests", currentRideId), {
+                                               status: "completed",
+                                               paymentMethod: "cash",
+                                               completedAt: serverTimestamp(),
+                                               finalFare: assignedDriverInfo?.fareEstimate || 0,
+                                               reportedCashCollected: assignedDriverInfo?.reportedCashCollected || 0,
+                                               reportedCashDiscrepancy: finalAmountHandled,
+                                               pendingChargesApplied: true
+                                            });
+                                            toast.success("Cash balance remainder recorded successfully!");
+                                         }
+                                      } catch (e) {
+                                         console.error("Failed to apply cash balance to rider profile:", e);
+                                      }
+                                   } else {
+                                      await updateDoc(doc(db, "ride_requests", currentRideId), {
+                                         status: "completed",
+                                         paymentMethod: "cash",
+                                         completedAt: serverTimestamp(),
+                                         finalFare: assignedDriverInfo?.fareEstimate || 0,
+                                         reportedCashCollected: assignedDriverInfo?.reportedCashCollected || 0,
+                                         reportedCashDiscrepancy: 0,
+                                         pendingChargesApplied: true
+                                      });
+                                   }
+                                   
+                                   await updateDoc(doc(db, "ride_requests", currentRideId), {
+                                      dummyCheckForCloseBracketHack: true
                                   });
                                }
                             }}

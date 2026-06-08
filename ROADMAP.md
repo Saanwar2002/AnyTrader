@@ -59,6 +59,7 @@ This roadmap outlines the planned AI-powered enhancements to make the platform m
 ## Phase 11: Release & Mobile App Rollout Plan (Active)
 - [ ] **Phase 11.1: Web App Publication & Live Test**: 
   - Publish the application as a highly responsive web application.
+  - **Pre-Live Cleanup**: Disable the simulated surge zone fallback in `src/services/surgeHeatmapService.ts` (lines 151-155) so the driver map remains completely clean when real-time surge criteria are not actively triggered.
   - Conduct a 1-2 week live pilot test with real users.
   - Monitor logs, errors, and system performance closely.
 - [ ] **Phase 11.2: Iterative Refinement**:

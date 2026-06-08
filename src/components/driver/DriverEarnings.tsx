@@ -768,20 +768,25 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
           {profile?.pendingPlatformFees > 0 && (
             <button
               onClick={async () => {
-                toast.loading("Preparing settlement...");
+                const toastId = toast.loading("Preparing settlement...");
                 try {
                   const res = await fetch("/api/driver/settle-fees", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ driverId: user?.uid }),
+                    body: JSON.stringify({ 
+                      driverId: user?.uid,
+                      amount: profile?.pendingPlatformFees || 0
+                    }),
                   });
                   const data = await res.json();
+                  toast.dismiss(toastId);
                   if (data.url) {
                     window.location.href = data.url;
                   } else {
                     toast.error(data.error || "Failed to initiate settlement");
                   }
                 } catch (e) {
+                  toast.dismiss(toastId);
                   toast.error("An error occurred");
                 }
               }}
