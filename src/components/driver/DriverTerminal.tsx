@@ -4003,7 +4003,7 @@ export default function DriverTerminal() {
         ) {
           if (discrepancyAmount > 0) {
              await updateDoc(doc(db, "users", activeRide.riderId), {
-                pendingCharges: discrepancyAmount,
+                pendingCharges: increment(discrepancyAmount),
                 pendingChargesReason: forceCompleteReasonRef.current || forceCompleteReason || "Unpaid trip balance",
              }).catch((err) => console.error("Failed to update partial payment on rider", err));
           } else {

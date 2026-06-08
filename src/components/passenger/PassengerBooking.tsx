@@ -1927,7 +1927,8 @@ export default function PassengerBooking() {
     
     if (pendingCharges > 0) {
       const reason = profile?.pendingChargesReason || "unpaid balance / fees";
-      toast.warning(`Notice: £${pendingCharges.toFixed(2)} outstanding charges (${reason}) will be added to this trip's fare.`);
+      toast.error(`Please pay your outstanding balance of £${pendingCharges.toFixed(2)} to book a new ride.`);
+      return;
     }
 
     const isUpdatingActiveRide = assignedDriverInfo && (assignedDriverInfo.status === 'accepted' || assignedDriverInfo.status === 'arrived' || assignedDriverInfo.status === 'in_progress');
@@ -1954,7 +1955,7 @@ export default function PassengerBooking() {
         stops: stops.filter(s => s.coords !== null),
         distanceMiles: Number(distanceMiles.toFixed(1)),
         durationMinutes: Number(durationMinutes.toFixed(0)),
-        fareEstimate: getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + pendingCharges,
+        fareEstimate: getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0),
         baseCalc: fareEstimate || 5.0,
         surgeMultiplier: activeSurge.multiplier, 
         surgeModel: activeSurge.isFixed ? 'fixed' : 'multiplier',
@@ -1964,7 +1965,6 @@ export default function PassengerBooking() {
         isPriority,
         waitTolerance,
         comments,
-        unpaidCancellationFeesOwed: pendingCharges,
         status: isUpdatingActiveRide ? assignedDriverInfo.status : "pending",
         hasCardOnFile: !!profile?.stripeCustomerId,
         currency: "GBP",
@@ -3593,9 +3593,7 @@ export default function PassengerBooking() {
                             You have an unpaid balance of <span className="font-extrabold text-red-600">£{(profile.pendingCharges || 0).toFixed(2)}</span> ({profile.pendingChargesReason || "unpaid trip discrepancy"}).
                           </p>
                           <p className="text-[10px] font-semibold text-slate-500 mt-1">
-                            {profile.cancellationCount >= 2 
-                              ? "Your booking privileges are temporarily suspended. Please settle this balance to unlock booking access." 
-                              : "This balance will automatically be added to your next ride fare, or you can clear it below."}
+                            Your booking privileges are suspended. Please settle this balance to unlock booking access.
                           </p>
                         </div>
                       </div>
@@ -4208,12 +4206,11 @@ export default function PassengerBooking() {
                                  {isPriority && <div className="flex justify-between text-[#2563EB] font-bold"><span>Priority:</span><span>+£3.00</span></div>}
                                  {isPetFriendly && <div className="flex justify-between text-[#2563EB] font-bold"><span>Pet:</span><span>+£3.00</span></div>}
                                  {((assignedDriverInfo?.tipAmount || 0) > 0) && <div className="flex justify-between text-emerald-600 font-bold"><span>Driver Tip:</span><span>+£{(assignedDriverInfo?.tipAmount || 0).toFixed(2)}</span></div>}
-                                 {((profile?.pendingCharges || 0) > 0) && <div className="flex justify-between text-red-600 font-bold"><span>Outstanding Balance / Fees:</span><span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span></div>}
                                </div>
                                <div className="border-t border-black pt-2 flex flex-col font-black text-[17px] text-slate-900 border-b pb-2 mb-1">
                                  <div className="flex items-center justify-between">
                                    <span>Total estimate:</span>
-                                   <span className="text-[20px]">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                                   <span className="text-[20px]">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                                  </div>
                                  <div className="flex items-center justify-between mt-2">
                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Payment Method</span>
@@ -4386,7 +4383,7 @@ export default function PassengerBooking() {
 
                 <div className="w-full max-w-[320px] bg-[#f0f9ff] rounded-[16px] py-1.5 px-4 border border-black flex flex-col items-center justify-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] mb-2 mt-1">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0">Total Fare Estimate</p>
-                  <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
+                  <p className="text-2xl font-black text-[#0f172a] leading-tight mb-1">£{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</p>
                   
                   {!!profile?.stripeCustomerId ? (
                     <div className="inline-block bg-white border-2 border-emerald-600 px-2 py-0.5 rounded-md shadow-sm mb-1.5">
@@ -4813,7 +4810,7 @@ export default function PassengerBooking() {
                                   
                                   if (profile?.uid && finalAmountHandled > 0) {
                                      await updateDoc(doc(db, "users", profile.uid), {
-                                        pendingCharges: finalAmountHandled,
+                                        pendingCharges: increment(finalAmountHandled),
                                         pendingChargesReason: "Unpaid cash trip remainder"
                                      });
                                   }
@@ -5299,12 +5296,6 @@ export default function PassengerBooking() {
                                    <span>+£3.00</span>
                                 </div>
                               )}
-                              {((profile?.pendingCharges || 0) > 0) && (
-                                <div className="flex justify-between items-center text-[15px] mb-2 text-red-600 font-bold">
-                                   <span>Outstanding Balance / Fees</span>
-                                   <span>+£{(profile?.pendingCharges || 0).toFixed(2)}</span>
-                                </div>
-                              )}
                               {((assignedDriverInfo?.tipAmount || 0) > 0) && (
                                 <div className="flex justify-between items-center text-[15px] mb-2 text-emerald-600 font-bold">
                                    <span>Driver Tip</span>
@@ -5313,7 +5304,7 @@ export default function PassengerBooking() {
                               )}
                               <div className="flex justify-between items-center pt-3 border-t border-black mt-2">
                                  <span className="font-extrabold text-[#0a1930] text-[18px]">Total Estimate</span>
-                                 <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                                 <span className="font-black text-[#0a1930] text-[22px] tracking-tight">£{(finalFare + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                               </div>
                            </div>
                         )
@@ -5558,7 +5549,7 @@ export default function PassengerBooking() {
                        <span className="text-emerald-700 font-bold text-[12px] uppercase tracking-widest mb-1 relative z-10">Total Estimated Fare</span>
                        <div className="flex items-start tracking-tight relative z-10">
                            <span className="text-emerald-900 font-black text-2xl mt-1">£</span>
-                           <span className="text-emerald-900 font-black text-5xl">{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (profile?.pendingCharges || 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
+                           <span className="text-emerald-900 font-black text-5xl">{(getComputedFare(selectedCategory) + (isPriority ? 3 : 0) + (isPetFriendly ? 3 : 0) + (assignedDriverInfo?.tipAmount || 0)).toFixed(2)}</span>
                        </div>
                        
                        <div className="mt-4 w-full flex items-center justify-center gap-2 border-t border-emerald-200/50 pt-3 relative z-10">
