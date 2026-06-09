@@ -19,6 +19,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { processTaxiVoiceCommand } from "@/src/services/gemini";
 import { triggerHaptic, ImpactStyle, hideNativeKeyboard, getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
 // Google Maps Imports
@@ -33,8 +34,8 @@ const containerStyle = {
 };
 
 const defaultCenter = {
-  lat: 51.5225,
-  lng: -0.1554
+  lat: 53.6458,
+  lng: -1.785
 };
 
 const createPinIcon = (color: string) => {
@@ -1225,7 +1226,6 @@ export default function PassengerBooking() {
       
       if (Capacitor.isNativePlatform()) {
         try {
-          const { SpeechRecognition } = await import(/* @vite-ignore */ '@capacitor-community/speech-recognition');
           await SpeechRecognition.stop();
         } catch (e: any) {
           console.error("Native stop error:", e);
@@ -1246,8 +1246,6 @@ export default function PassengerBooking() {
 
     if (Capacitor.isNativePlatform()) {
       try {
-        const { SpeechRecognition } = await import(/* @vite-ignore */ '@capacitor-community/speech-recognition');
-        
         // 1. Check if available
         const { available } = await SpeechRecognition.available();
         if (!available) {
