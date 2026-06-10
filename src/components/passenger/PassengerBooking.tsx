@@ -523,6 +523,7 @@ export default function PassengerBooking() {
 
   const [isDetecting, setIsDetecting] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef<string>("");
@@ -1258,7 +1259,7 @@ export default function PassengerBooking() {
         if (check.speechRecognition !== 'granted') {
           const req = await SpeechRecognition.requestPermissions();
           if (req.speechRecognition !== 'granted') {
-            toast.error("Microphone and Speech Recognition permissions are required to book by voice.");
+            setShowPermissionModal(true);
             return;
           }
         }
@@ -1379,7 +1380,7 @@ export default function PassengerBooking() {
           return;
         }
         if (errDetail === 'not-allowed') {
-          toast.error("Microphone access denied. Please enable microphone permission in your browser or device settings.");
+          setShowPermissionModal(true);
         } else {
           toast.error(`Voice Error: ${errDetail}`);
         }
@@ -5624,6 +5625,61 @@ export default function PassengerBooking() {
                 </div>
             </motion.div>
           )}
+
+          {/* Permission Modal */}
+          {showPermissionModal && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm pointer-events-auto">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-[32px] p-6 w-full max-w-sm border border-black shadow-2xl space-y-6"
+              >
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto border border-red-100">
+                  <Mic className="w-8 h-8 text-red-600" />
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Microphone Access Denied</h3>
+                  <p className="text-[13px] font-bold text-slate-500 leading-relaxed text-left">
+                    We need microphone access to book your ride by voice. You can easily enable this in your device settings.
+                  </p>
+                  <div className="bg-slate-50 border border-black/10 rounded-xl p-3 text-left mt-4 text-[11px] font-bold text-slate-700">
+                    <span className="text-black uppercase tracking-wider text-[10px]">Android:</span> Settings &rarr; Apps &rarr; AnyTrader &rarr; Permissions<br />
+                    <span className="text-black uppercase tracking-wider text-[10px] mt-1 inline-block">iOS:</span> Settings &rarr; AnyTrader &rarr; Microphone<br />
+                    <span className="text-black uppercase tracking-wider text-[10px] mt-1 inline-block">Web:</span> Click the lock icon next to the URL bar
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {Capacitor.isNativePlatform() && (
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const { App: CapacitorApp } = await import('@capacitor/app');
+                          if (CapacitorApp && CapacitorApp.openAppSettings) {
+                             await CapacitorApp.openAppSettings();
+                          }
+                        } catch (e) {
+                           console.error("Failed to open app settings", e);
+                        }
+                      }}
+                      className="w-full py-3.5 rounded-2xl bg-indigo-600 text-white font-bold text-[15px] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2"
+                    >
+                      Open Settings
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setShowPermissionModal(false)}
+                    className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-700 font-bold text-[15px] active:scale-95 transition-all border border-black/5 hover:bg-slate-200"
+                  >
+                    Continue without microphone
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
         </AnimatePresence>
      </div>
   );

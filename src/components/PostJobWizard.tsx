@@ -50,6 +50,7 @@ import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { getGoogleMapsApiKey, isCapacitor } from "@/src/lib/capacitor";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 import { toast } from "sonner";
@@ -507,6 +508,7 @@ export default function PostJobWizard() {
   const [voiceText, setVoiceText] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
   const [userAssets, setUserAssets] = useState<any[]>([]);
@@ -576,12 +578,86 @@ export default function PostJobWizard() {
   const voiceAccumulatorRef = useRef("");
   const currentSessionTextRef = useRef("");
 
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleToggleListening = async () => {
     if (isListening) {
-      if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
-        audioRecorderRef.current.stop();
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await SpeechRecognition.stop();
+        } catch (e) {
+          console.error("Native stop error:", e);
+        }
+        setIsListening(false);
+      } else {
+        if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+          audioRecorderRef.current.stop();
+        }
+        setIsListening(false);
       }
-      setIsListening(false);
+      return;
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      // Capacitor Native Voice Recognition
+      setVoiceText("");
+      setVoiceError(null);
+      
+      try {
+        const { available } = await SpeechRecognition.available();
+        if (!available) throw new Error("Speech recognition not available");
+
+        const check = await SpeechRecognition.checkPermissions();
+        if (check.speechRecognition !== 'granted') {
+          const req = await SpeechRecognition.requestPermissions();
+          if (req.speechRecognition !== 'granted') {
+            setShowPermissionModal(true);
+            return;
+          }
+        }
+
+        if ((window as any)._postJobSpeechListener) await (window as any)._postJobSpeechListener.remove().catch(() => {});
+        const listener = await SpeechRecognition.addListener('partialResults', (data: { matches: string[] }) => {
+          if (data.matches && data.matches.length > 0) {
+            setVoiceText(data.matches[0]);
+            resetSilenceTimer();
+          }
+        });
+        (window as any)._postJobSpeechListener = listener;
+
+        const resetSilenceTimer = () => {
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(async () => {
+            try { await SpeechRecognition.stop(); } catch (err) {}
+          }, 4000);
+        };
+
+        if ((window as any)._postJobStateListener) await (window as any)._postJobStateListener.remove().catch(() => {});
+        const stateListener = await SpeechRecognition.addListener('listeningState', (data: { status: 'started' | 'stopped' }) => {
+          if (data.status === 'stopped') {
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            setIsListening(false);
+            if ((window as any)._postJobSpeechListener) (window as any)._postJobSpeechListener.remove().catch(() => {});
+            if ((window as any)._postJobStateListener) (window as any)._postJobStateListener.remove().catch(() => {});
+          }
+        });
+        (window as any)._postJobStateListener = stateListener;
+
+        setIsListening(true);
+        setVoiceText("Listening...");
+        resetSilenceTimer();
+
+        await SpeechRecognition.start({
+          language: 'en-GB',
+          maxResults: 1,
+          partialResults: true,
+          popup: false,
+        });
+      } catch (err: any) {
+        console.error("Native speech failed:", err);
+        setVoiceError("Microphone issue detected (Permission denied or blocked). Please continue typing manually.");
+        setIsListening(false);
+      }
     } else {
       setVoiceText("");
       setVoiceError(null);
@@ -647,16 +723,20 @@ export default function PostJobWizard() {
         mediaRecorder.start(200); // 200ms chunks
         setIsListening(true);
         setVoiceText("Listening...");
-      } catch (err) {
+      } catch (err: any) {
         console.error("Microphone permission denied or error:", err);
-        setVoiceError(`Microphone issue detected (Permission denied or blocked by Android WebView). You can continue typing manually, enable Microphone under AnyTrader's Android Settings, or use the Phone Recorder bypass below.`);
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setShowPermissionModal(true);
+        } else {
+          setVoiceError(`Microphone issue detected. You can continue typing manually or use the Phone Recorder bypass below.`);
+          if (audioInputRef.current) {
+            setTimeout(() => {
+              audioInputRef.current?.click();
+            }, 300);
+          }
+        }
         setIsListening(false);
         setVoiceText("");
-        if (audioInputRef.current) {
-          setTimeout(() => {
-            audioInputRef.current?.click();
-          }, 300);
-        }
       }
     }
   };
@@ -1854,6 +1934,62 @@ export default function PostJobWizard() {
         </div>
       )}
 
+      {/* Permission Modal */}
+      <AnimatePresence>
+        {showPermissionModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 w-full max-w-sm border border-black shadow-2xl space-y-6"
+            >
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto border border-red-100">
+                <Mic className="w-8 h-8 text-red-600" />
+              </div>
+              
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-bold text-slate-900">Microphone Access Denied</h3>
+                <p className="text-sm text-slate-500 leading-relaxed text-left">
+                  AnyTrader needs microphone access so you can post jobs by speaking. You can enable this in your device settings.
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-left mt-4 text-xs font-medium text-slate-700">
+                  <span className="font-bold">Android:</span> Settings &rarr; Apps &rarr; AnyTrader &rarr; Permissions<br />
+                  <span className="font-bold">iOS:</span> Settings &rarr; AnyTrader &rarr; Microphone<br />
+                  <span className="font-bold">Web:</span> Click the lock icon next to the URL bar
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {Capacitor.isNativePlatform() && (
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const { App: CapacitorApp } = await import('@capacitor/app');
+                        if (CapacitorApp && CapacitorApp.openAppSettings) {
+                           await CapacitorApp.openAppSettings();
+                        }
+                      } catch (e) {
+                         console.error("Failed to open app settings", e);
+                      }
+                    }}
+                    className="w-full py-4 rounded-[2rem] bg-indigo-600 text-white font-bold tracking-wide active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2"
+                  >
+                    Open Settings
+                  </button>
+                )}
+                <button 
+                  onClick={() => setShowPermissionModal(false)}
+                  className="w-full py-4 rounded-[2rem] bg-slate-100 text-slate-700 font-bold active:scale-95 transition-all"
+                >
+                  Continue without microphone
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="bg-white border-b border-black sticky top-0 z-30">
         <div className="flex items-center justify-between p-3 min-h-[48px]">
@@ -1962,15 +2098,9 @@ export default function PostJobWizard() {
                       <X className="w-4 h-4" />
                     </button>
                     <div className="pr-6">
-                      <p className="font-bold text-[#b91c1c] pr-2 flex items-center gap-1.5">⚠️ Microphone Permission Error</p>
+                      <p className="font-bold text-[#b91c1c] pr-2 flex items-center gap-1.5">⚠️ Error</p>
                       <p className="mt-1 font-normal text-slate-700 leading-normal">
-                        Your device's Android system has denied WebView microphone access. To fix this permanently, please go to:
-                      </p>
-                      <p className="mt-1 font-bold text-black border-l-2 border-black pl-2 leading-tight">
-                        Android Settings → Apps → AnyTrader → Permissions → Microphone → "Allow"
-                      </p>
-                      <p className="mt-2 font-normal text-slate-600 leading-normal">
-                        Alternatively, use the <strong className="font-bold text-black">Phone Recorder bypass</strong> button below to capture standard audio files using your phone's default voice recorder app.
+                        {voiceError}
                       </p>
                     </div>
                   </div>
