@@ -2,9 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, UserCircle, Star, Calendar, MessageSquare, CheckCircle } from "lucide-react";
 import { db, collection, query, where, getDocs, addDoc, serverTimestamp } from "@/src/firebase";
-import { GoogleGenAI } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { getProMatches } from "@/src/services/gemini";
 
 export function ProMatchmakerModal({ role, projectId, onClose }: { role: any, projectId: string, onClose: () => void }) {
   const [loading, setLoading] = useState(true);
@@ -56,42 +54,7 @@ export function ProMatchmakerModal({ role, projectId, onClose }: { role: any, pr
         }));
 
         // Step 2: Use Gemini to identify top matches based on the required role
-        const prompt = `
-          You are an AI Matchmaker for a professional services platform.
-          A project creator needs to fill a specific role for their project.
-
-          Role Requirements:
-          - Role Name: ${role.roleName}
-          - Estimated Budget: £${role.estimatedBudget}
-
-          Candidate Professionals:
-          ${JSON.stringify(candidatesContext, null, 2)}
-
-          Select the top 3 best matching professionals for this role based on their category and name. 
-          Return ONLY a JSON array of objects representing the matches. Each object MUST have:
-          - "id": The candidate's ID.
-          - "matchScore": A number from 0 to 100 representing how well they fit.
-          - "reason": A very brief 1-sentence explanation of why they are a good fit.
-          
-          If there are no good matches, return an empty array [].
-          Do not wrap your response in markdown code blocks, just return the raw JSON array.
-        `;
-
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-        });
-
-        const textResponse = response.text || "[]";
-        // Clean markdown backticks if any
-        const cleanedJson = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-        
-        let aiMatches = [];
-        try {
-          aiMatches = JSON.parse(cleanedJson);
-        } catch (e) {
-          console.error("Failed to parse Gemini response", e, cleanedJson);
-        }
+        const aiMatches = await getProMatches(role, candidatesContext);
 
         // Merge AI results with candidate data
         const enrichedMatches = aiMatches.map((m: any) => {

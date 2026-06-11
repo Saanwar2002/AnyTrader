@@ -8,8 +8,8 @@ import {
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
   Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList, CalendarClock
 } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { polishBio } from "@/src/services/gemini";
 import { motion, AnimatePresence } from "motion/react";
 import { usePWAInstall } from "@/src/hooks/usePWAInstall";
 import { usePortal } from "@/src/lib/PortalContext";
@@ -824,17 +824,9 @@ export default function Profile() {
     if (!editData.bio) return;
     setIsAIPolishing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const prompt = `Rewrite the following bio to be professional and suitable for a tradesperson profile. It must be strictly under 300 characters. Keep it concise, engaging, and highlight their trades: ${editData.trades} and tags: ${editData.tags}.\n\nCurrent Bio:\n${editData.bio}`;
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-      });
-      
-      const text = response.text?.trim() || "";
-      if (text) {
-        setEditData({ ...editData, bio: text.substring(0, 300) });
+      const polished = await polishBio(editData.bio, editData.trades, editData.tags);
+      if (polished) {
+        setEditData({ ...editData, bio: polished.substring(0, 300) });
       }
     } catch (err) {
       console.error("Error polishing bio:", err);

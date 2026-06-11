@@ -13,6 +13,7 @@ import Stripe from 'stripe';
 import twilio from 'twilio';
 import rateLimit from "express-rate-limit";
 import { startInstantMatchEngine } from "./instantMatchWorker.ts";
+import * as geminiServer from "./src/services/geminiServer.ts";
 
 dotenv.config();
 
@@ -2121,6 +2122,28 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       res.json({ insight });
     } catch (error: any) {
       res.json({ insight: "Drive near city center between 5 PM and 8 PM for peak fares." });
+    }
+  });
+
+  // Secure Gemini API Service Call Proxy
+  app.post("/api/gemini/call", requireAuth, async (req, res) => {
+    try {
+      const { functionName, args } = req.body;
+      if (!functionName) {
+        return res.status(400).json({ error: "Missing functionName" });
+      }
+
+      const targetFunc = (geminiServer as any)[functionName];
+
+      if (typeof targetFunc !== "function") {
+        return res.status(404).json({ error: `Function ${functionName} not found` });
+      }
+
+      const result = await targetFunc(...(args || []));
+      res.json(result);
+    } catch (error: any) {
+      console.error(`Gemini Server Execution Error for ${req.body?.functionName}:`, error);
+      res.status(500).json({ error: error.message || "Failed to execute Gemini function" });
     }
   });
 
