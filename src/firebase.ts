@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } from "firebase/app-check";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, signInWithCredential } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, signInWithCredential, browserPopupRedirectResolver } from "firebase/auth";
 import { enableMultiTabIndexedDbPersistence, initializeFirestore, getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot as originalOnSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 import { getPerformance, trace } from "firebase/performance";
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString } from "firebase/storage";
@@ -141,24 +141,57 @@ if (typeof window !== "undefined") {
 }
 
 // Set up resilient Firebase Auth initialization with safe fallbacks
-let authInstance;
+let authInstance: any;
+
 try {
-  authInstance = initializeAuth(app, {
-    persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence]
-  });
-  console.log("Firebase Auth initialized successfully with premium multi-tier persistence engines.");
+  // First, check if there's an existing instance already initialized for this app (preventing re-initialization crashes during hot-reloads)
+  authInstance = getAuth(app);
+  console.log("Retrieved already-initialized Firebase Auth instance.");
 } catch (e) {
-  console.warn("Failed primary Firebase Auth persistence initialization (typically because standard IndexedDB/DOM Storage is disabled or blocked inside iframes / Incognito mode / strict browser privacy settings). Cascading to standard session-memory persistence cascade:", e);
+  console.log("No existing Firebase Auth instance found. Performing safe initialization...");
+  
+  // Build a verified list of persistence engines based on current window access capabilities
+  const allowedPersistence: any[] = [];
+  
+  if (typeof window !== "undefined") {
+    // 1. Check indexedDB
+    try {
+      if (window.indexedDB) {
+        allowedPersistence.push(indexedDBLocalPersistence);
+      }
+    } catch (_) {}
+
+    // 2. Check localStorage
+    try {
+      if (window.localStorage) {
+        allowedPersistence.push(browserLocalPersistence);
+      }
+    } catch (_) {}
+
+    // 3. Check sessionStorage
+    try {
+      if (window.sessionStorage) {
+        allowedPersistence.push(browserSessionPersistence);
+      }
+    } catch (_) {}
+  }
+  
+  // Memory persistence is always globally safe
+  allowedPersistence.push(inMemoryPersistence);
+
   try {
     authInstance = initializeAuth(app, {
-      persistence: [browserSessionPersistence, inMemoryPersistence]
+      persistence: allowedPersistence,
+      popupRedirectResolver: browserPopupRedirectResolver
     });
-    console.log("Firebase Auth initialized successfully with secure container session persistence.");
-  } catch (err) {
-    console.warn("Standard session persistent fallbacks blocked. Initializing with dynamic in-memory lock:", err);
-    authInstance = initializeAuth(app, {
-      persistence: inMemoryPersistence
-    });
+    console.log("Firebase Auth initialized successfully with verified persistence list:", allowedPersistence.map(p => p.type));
+  } catch (initErr: any) {
+    console.warn("initializeAuth crashed, falling back to standard getAuth:", initErr);
+    try {
+      authInstance = getAuth(app);
+    } catch (fallbackErr) {
+      console.error("Critical: Could not initialize or retrieve Firebase Auth instance:", fallbackErr);
+    }
   }
 }
 
@@ -176,13 +209,37 @@ export const signInWithGoogle = async () => {
       const { FirebaseAuthentication } = await import(/* @vite-ignore */ packageName) as any;
       console.log("[signInWithGoogle] Triggering native Google Flow on device...");
       const result = await FirebaseAuthentication.signInWithGoogle({});
-      console.log("[signInWithGoogle] Native authentication successful. Creating credentials from token...");
-      const credential = GoogleAuthProvider.credential(result.credential?.idToken);
+      console.log("[signInWithGoogle] Native authentication completed. Checking credentials...");
+      
+      const idToken = result.credential?.idToken;
+      if (!idToken) {
+        console.error("[signInWithGoogle] No idToken returned in credential. Native result structure was:", JSON.stringify(result));
+        throw new Error("Google Sign-In completed, but no ID Token was returned. Please verify that your Web Client ID is correctly configured in your Google project settings.");
+      }
+      
+      const credential = GoogleAuthProvider.credential(idToken);
       console.log("[signInWithGoogle] Handshaking native credentials with Firebase SDK...");
-      return await signInWithCredential(auth, credential);
+      const userCredential = await signInWithCredential(auth, credential);
+      console.log("[signInWithGoogle] Success! Authenticated user ID:", userCredential.user?.uid);
+      return userCredential;
     } catch (err: any) {
-      console.error("[signInWithGoogle] Native Google Sign-In failed or was interrupted, fallback to standard popup wrapper:", err);
-      return signInWithPopup(auth, googleProvider);
+      console.error("[signInWithGoogle] Native Google Sign-In failed:", err);
+      
+      // Map common native Play Services / OAuth error codes to friendly developer-facing instructions
+      const rawErrorStr = err.message || JSON.stringify(err) || "Unknown Error";
+      let friendlyMsg = rawErrorStr;
+      
+      if (rawErrorStr.includes("10") || rawErrorStr.includes("DEVELOPER_ERROR")) {
+        friendlyMsg = "DEVELOPER_ERROR (Code 10). This occurs because your Android app's signing key SHA-1 fingerprint (both Debug and Play Store) is not registered in your Firebase Console project settings under your Android app, or Google Sign-In is disabled. Please verify your SHA-1 key and enabled providers.";
+      } else if (rawErrorStr.includes("12500")) {
+        friendlyMsg = "Google Configuration Error (Code 12500). Please verify that your Google Services configuration is correct and that the Android client is turned on with correct credentials.";
+      } else if (rawErrorStr.toLowerCase().includes("canceled") || rawErrorStr.toLowerCase().includes("cancel") || rawErrorStr.includes("12501")) {
+        friendlyMsg = "Sign-in was canceled by the user (Code 12501).";
+      } else if (rawErrorStr.includes("7") || rawErrorStr.toLowerCase().includes("network")) {
+        friendlyMsg = "Network Error (Code 7). Please check your device's network connection.";
+      }
+      
+      throw new Error(`Google Native Error: ${friendlyMsg}`);
     }
   } else {
     return signInWithPopup(auth, googleProvider);
