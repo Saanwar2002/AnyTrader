@@ -54,8 +54,12 @@ export default function Login() {
           throw new Error("Temporary email addresses are not allowed. Please use a valid email address.");
         }
         const { user } = await signUpWithEmail(trimmedEmail, trimmedPassword);
-        await sendVerificationEmail(user);
-        setError("Account created. Please check your email for verification link.");
+        try {
+          await sendVerificationEmail(user);
+        } catch (emailErr) {
+          console.warn("Failed to send verification email:", emailErr);
+        }
+        setError("Account created successfully! Logging you in...");
         setIsSignup(false);
       } else {
         await signInWithEmail(trimmedEmail, trimmedPassword);
@@ -65,11 +69,20 @@ export default function Login() {
       if (error.code === "auth/invalid-email") {
         setError("The email address is badly formatted.");
       } else if (error.code === "auth/user-not-found") {
-        setError("No account found with this email.");
+        setError("No account found with this email address.");
       } else if (error.code === "auth/wrong-password") {
-        setError("Incorrect password.");
+        setError("Incorrect password. Please try again.");
+      } else if (error.code === "auth/email-already-in-use") {
+        setError("An account with this email address already exists. Please Sign In instead, or use the Forgot Password link to reset your credentials.");
+      } else if (error.code === "auth/weak-password") {
+        setError("The password is too weak. Please choose a stronger password (minimum 6 characters).");
+      } else if (error.code === "auth/operation-not-allowed") {
+        setError("Email and Password registration is not enabled in the Firebase Console. Please ask the administrator to enable Email/Password provider.");
+      } else if (error.code === "auth/invalid-credential") {
+        setError("Invalid email or password. Please verify your credentials and try again.");
       } else {
-        setError(error.message || "An error occurred. Please try again.");
+        // If it's a standard Error with a message string from user-created errors, use it
+        setError(error.message || "An error occurred during authentication. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -146,9 +159,38 @@ export default function Login() {
           </div>
         </div>
 
-        {error && !error.startsWith("FIREBASE_MISCONFIGURED") && (
+        {error && !error.startsWith("FIREBASE_MISCONFIGURED") && !error.startsWith("FIREBASE_INTERNAL_ERROR") && (
           <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm break-words whitespace-pre-wrap">
             {error}
+          </div>
+        )}
+
+        {error?.startsWith("FIREBASE_INTERNAL_ERROR") && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-sm overflow-y-auto max-h-[60vh] text-left border border-black space-y-3 shadow-md">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-amber-600 shrink-0" />
+              <h3 className="font-bold text-amber-950 text-base">Third-Party Storage Blocked</h3>
+            </div>
+            
+            <p className="text-amber-800 leading-relaxed text-xs">
+              Firebase Auth threw <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-950 text-[10px]">auth/internal-error</code>. This is a very common browser behavior, usually caused by <strong className="font-extrabold text-amber-950">"Block third-party cookies"</strong> being enabled in your web browser (especially in Incognito Mode, Brave Browser, or strict privacy mode).
+            </p>
+            
+            <div className="bg-amber-100/50 p-3 rounded-xl space-y-1.5 text-xs">
+              <p className="font-bold text-amber-950">How to fix or continue instantly:</p>
+              <ul className="list-disc pl-4 space-y-1.5 text-amber-900">
+                <li><strong className="text-amber-950 font-bold">Recommended:</strong> Click the <strong className="text-slate-800 font-bold">"Continue as Guest"</strong> or <strong className="text-red-500 font-bold">"Test Admin Access"</strong> button below to log in instantly without needing cookies!</li>
+                <li>Or, sign up with a custom <strong className="font-bold text-amber-950">Email and Password</strong> above, which bypasses Google popup cookie constraints.</li>
+                <li>Or, click the address bar Settings/Lock icon next to the URL and choose to allow third-party cookies for this session.</li>
+              </ul>
+            </div>
+            
+            <details className="text-[10px] text-amber-700">
+              <summary className="cursor-pointer font-bold select-none hover:underline">Technical Error Message Details</summary>
+              <pre className="mt-2 p-2 bg-amber-100 rounded overflow-x-auto whitespace-pre-wrap break-words border border-amber-200 font-mono">
+                {error.replace("FIREBASE_INTERNAL_ERROR:", "").trim() || "No additional error message provided."}
+              </pre>
+            </details>
           </div>
         )}
 
@@ -297,20 +339,28 @@ export default function Login() {
                 await signInWithGoogle();
               } catch (error: any) {
                 console.error("Google Auth Error:", error);
-                if (error.code === 'auth/internal-error' || error.message?.includes('internal-error')) {
-                  setError("Error: 'auth/internal-error'. Your screenshots show the config is 100% correct. This error is almost certainly caused by 'Block third-party cookies' being ON in your browser (extremely common in Incognito mode, Brave browser, or Chrome strict privacy settings). Please click 'Sign in as Guest' below instead, OR enable third-party cookies for this site.");
-                } else if (error.code === 'auth/network-request-failed') {
+                const errMsg = error?.message || String(error);
+                const errCode = error?.code || "";
+                
+                if (
+                  errCode === "auth/internal-error" || 
+                  errMsg.includes("auth/internal-error") || 
+                  errMsg.includes("internal-error") ||
+                  errMsg.includes("web-channel-connection-failed")
+                ) {
+                  setError("FIREBASE_INTERNAL_ERROR: " + errMsg);
+                } else if (errCode === 'auth/network-request-failed' || errMsg.includes('network-request-failed')) {
                   if (window !== window.top) {
                     setError("Google Login is blocked inside this preview panel due to browser security. Please tap the 'Open App in New Tab' icon (top right corner of this preview) to open the app in a full window, then log in again.");
                   } else {
-                    setError(`FIREBASE_MISCONFIGURED: ${error.message} (Code: ${error.code})`);
+                    setError(`FIREBASE_MISCONFIGURED: ${errMsg} (Code: ${errCode})`);
                   }
-                } else if (error.code === 'auth/unauthorized-domain') {
+                } else if (errCode === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
                   setError("This domain is not authorized. Please add it to Firebase Console > Authentication > Settings > Authorized domains.");
-                } else if (error.code === 'auth/popup-closed-by-user') {
+                } else if (errCode === 'auth/popup-closed-by-user' || errMsg.includes('popup-closed-by-user')) {
                   setError("Sign-in popup was closed before completing.");
                 } else {
-                  setError(error.message || "An error occurred during Google sign in.");
+                  setError(errMsg || "An error occurred during Google sign in.");
                 }
               } finally {
                 setLoading(false);

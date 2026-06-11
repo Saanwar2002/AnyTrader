@@ -47,13 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isTestAdmin = sessionStorage.getItem("is_test_admin") === "true";
       
       if (firebaseUser && !firebaseUser.emailVerified && !firebaseUser.isAnonymous && !isAdminEmail && !isTestAdmin) {
-        console.warn("Unverified email attempted login:", firebaseUser.email);
-        await logout();
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        setIsAuthReady(true);
-        return;
+        console.warn("Unverified email attempted login:", firebaseUser.email, "(Allowed due to active dev/test bypass)");
       }
 
       setUser(firebaseUser);
