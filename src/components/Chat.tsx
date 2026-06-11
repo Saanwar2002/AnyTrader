@@ -125,6 +125,15 @@ export default function Chat() {
     const file = e.target.files?.[0];
     if (!file || !user || !conversationId) return;
 
+    if (!file.type.startsWith("image/")) {
+       alert("Only image files are permitted in chat.");
+       return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+       alert("File size exceeds 10MB limit.");
+       return;
+    }
+
     setIsUploading(true);
     try {
       const storageRef = ref(storage, `chats/${conversationId}/${Date.now()}_${file.name}`);

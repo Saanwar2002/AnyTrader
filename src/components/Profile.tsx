@@ -431,7 +431,12 @@ export default function Profile() {
 
   const fetchPaymentMethods = async (userId: string) => {
     try {
-      const res = await fetch(`/api/payment-methods/${userId}`);
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`/api/payment-methods/${userId}`, {
+        headers: {
+           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await res.json();
       if (data.paymentMethods) {
         setSavedCards(data.paymentMethods);
@@ -468,8 +473,12 @@ export default function Profile() {
   const handleDeletePaymentMethod = async (paymentMethodId: string) => {
     if (!user) return;
     try {
+      const token = await auth.currentUser?.getIdToken();
       await fetch(`/api/payment-methods/${user.uid}/${paymentMethodId}`, {
         method: "DELETE",
+        headers: {
+           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
       });
       setSavedCards(cards => cards.filter(c => c.id !== paymentMethodId));
     } catch (err) {

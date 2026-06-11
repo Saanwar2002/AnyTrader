@@ -3,10 +3,12 @@ import { Capacitor } from "@capacitor/core";
 import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, addDoc, collection, serverTimestamp } from "@/src/firebase";
 import { Loader2, ShieldAlert, LogOut } from "lucide-react";
 
+import { UserProfile } from "../types";
+
 interface AuthContextType {
   user: FirebaseUser | null;
-  profile: any | null;
-  setProfile: React.Dispatch<React.SetStateAction<any | null>>;
+  profile: UserProfile | null;
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   loading: boolean;
   isAuthReady: boolean;
   isAnonymous: boolean;
@@ -29,7 +31,7 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [profile, setProfile] = useState<any | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -44,15 +46,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isAdminEmail = firebaseUser?.email?.toLowerCase() === "saanwar2002@gmail.com";
       const isTestAdmin = sessionStorage.getItem("is_test_admin") === "true";
       
-      // if (firebaseUser && !firebaseUser.emailVerified && !firebaseUser.isAnonymous && !isAdminEmail && !isTestAdmin) {
-      //   console.warn("Unverified email attempted login:", firebaseUser.email);
-      //   await logout();
-      //   setUser(null);
-      //   setProfile(null);
-      //   setLoading(false);
-      //   setIsAuthReady(true);
-      //   return;
-      // }
+      if (firebaseUser && !firebaseUser.emailVerified && !firebaseUser.isAnonymous && !isAdminEmail && !isTestAdmin) {
+        console.warn("Unverified email attempted login:", firebaseUser.email);
+        await logout();
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        setIsAuthReady(true);
+        return;
+      }
 
       setUser(firebaseUser);
       setIsAnonymous(firebaseUser?.isAnonymous || false);

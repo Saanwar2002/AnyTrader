@@ -3040,6 +3040,9 @@ export default function PassengerBooking() {
     driverPosRef.current = driverPos;
   }, [driverPos]);
 
+  const lastQueriedDriverPosRef = useRef<any>(null);
+  const lastQueriedDestCoordsRef = useRef<any>(null);
+
   useEffect(() => {
     const destinationCoords = assignedDriverInfo?.status === "accepted" ? pickupCoords :
                               assignedDriverInfo?.status === "in_progress" ? dropoffCoords : null;
@@ -3052,6 +3055,22 @@ export default function PassengerBooking() {
 
         if (Math.abs(currentDriverPos.lat - destinationCoords.lat) < 0.0001 && Math.abs(currentDriverPos.lng - destinationCoords.lng) < 0.0001) return;
 
+        // Skip if driver moved less than 30m since last directions fetch AND destination remains the same
+        const destChanged = !lastQueriedDestCoordsRef.current ||
+          Math.abs(lastQueriedDestCoordsRef.current.lat - destinationCoords.lat) > 0.0001 ||
+          Math.abs(lastQueriedDestCoordsRef.current.lng - destinationCoords.lng) > 0.0001;
+
+        if (!destChanged && lastQueriedDriverPosRef.current) {
+          const lat1 = lastQueriedDriverPosRef.current.lat;
+          const lng1 = lastQueriedDriverPosRef.current.lng;
+          const lat2 = currentDriverPos.lat;
+          const lng2 = currentDriverPos.lng;
+          const dist = Math.sqrt(Math.pow((lat1 - lat2) * 111320, 2) + Math.pow((lng1 - lng2) * 111000 * Math.cos(lat1 * Math.PI / 180), 2));
+          if (dist < 30) {
+            return;
+          }
+        }
+
         try {
           const directionsService = new window.google.maps.DirectionsService();
           directionsService.route({
@@ -3060,6 +3079,8 @@ export default function PassengerBooking() {
             travelMode: window.google.maps.TravelMode.DRIVING,
           }, (result, status) => {
             if (status === window.google.maps.DirectionsStatus.OK && result && result.routes && result.routes[0]) {
+              lastQueriedDriverPosRef.current = currentDriverPos; // Update saved coords after a successful query
+              lastQueriedDestCoordsRef.current = destinationCoords; // Track target destination coordinates
               const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
               setLiveRouteLine(path);
               

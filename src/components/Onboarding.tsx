@@ -359,6 +359,7 @@ export default function Onboarding() {
         accountFlags,
         memberId,
         memberSequence,
+        fairnessScore: 100, // Starting score
         joinedDuringBeta: true,
         phantomFeesSaved: 0,
         postcode: finalRole === "admin" && !postcode ? "N/A" : postcode.toUpperCase().replace(/\s/g, ""),

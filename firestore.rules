@@ -8,7 +8,6 @@ service cloud.firestore {
     function isAdmin() { 
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token != null && 'email' in request.auth.token && request.auth.token.email != null && request.auth.token.email.lower() == "saanwar2002@gmail.com") ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'ecosystem_manager'])
       ); 
     }
@@ -75,10 +74,13 @@ service cloud.firestore {
     }
 
     match /ride_requests/{rideId} {
-      allow read, write: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.passengerId == request.auth.uid;
+      allow read: if isSignedIn() && (resource == null || resource.data.status == "pending" || resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid || resource.data.assignedDriverId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource == null || resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid || resource.data.assignedDriverId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
 
       match /chat/{messageId} {
-        allow read, write: if isSignedIn();
+        allow read, write: if isSignedIn() && (get(/databases/$(database)/documents/ride_requests/$(rideId)).data.passengerId == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.driverId == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.assignedDriverId == request.auth.uid || isAdmin());
       }
     }
 

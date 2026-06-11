@@ -10,6 +10,8 @@ import { GoogleGenAI } from "@google/genai";
 import jwt from "jsonwebtoken";
 import cron from "node-cron";
 import Stripe from 'stripe';
+import twilio from 'twilio';
+import rateLimit from "express-rate-limit";
 import { startInstantMatchEngine } from "./instantMatchWorker.ts";
 
 dotenv.config();
@@ -76,6 +78,52 @@ const initFirebase = () => {
 };
 initFirebase();
 
+const configCache = new Map<string, any>();
+const cacheUnsubscribers = new Map<string, () => void>();
+
+async function getCachedConfig(docId: string): Promise<any> {
+  // Return instantly from memory cache if already registered and loaded
+  if (configCache.has(docId)) {
+    return configCache.get(docId) ?? null;
+  }
+
+  // If db exists and we don't have a listener, set up a real-time listener
+  if (db) {
+    if (!cacheUnsubscribers.has(docId)) {
+      await new Promise<void>((resolve) => {
+        let isResolved = false;
+        try {
+          const unsub = db!.collection("platform_config").doc(docId).onSnapshot(
+            (docSnap) => {
+              const data = docSnap.exists ? docSnap.data() : null;
+              configCache.set(docId, data);
+              if (!isResolved) {
+                isResolved = true;
+                resolve();
+              }
+            },
+            (error) => {
+              console.error(`Real-time config listener error for ${docId}:`, error);
+              if (!isResolved) {
+                isResolved = true;
+                resolve();
+              }
+            }
+          );
+          cacheUnsubscribers.set(docId, unsub);
+        } catch (err) {
+          console.error(`Failed to register real-time config listener for ${docId}:`, err);
+          isResolved = true;
+          resolve();
+        }
+      });
+    }
+    return configCache.get(docId) ?? null;
+  }
+
+  return null;
+}
+
 // Scheduled task: Daily Profitability Aggregation
 async function runDailyAggregation() {
   if (!db) return;
@@ -128,6 +176,48 @@ async function runDailyAggregation() {
   }
 }
 
+// Scheduled task: Process SMS Queue
+async function processSmsQueue() {
+  if (!db) return;
+  const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN 
+      ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : null;
+      
+  try {
+    const queueSnap = await db.collection("sms_queue").where("status", "==", "pending").limit(50).get();
+    if (queueSnap.empty) return;
+
+    for (const docSnap of queueSnap.docs) {
+      const data = docSnap.data();
+      if (!data.to || !data.body) {
+        await docSnap.ref.update({ status: "failed", error: "Missing to or body" });
+        continue;
+      }
+
+      if (twilioClient) {
+        try {
+          const msg = await twilioClient.messages.create({
+            body: data.body,
+            from: process.env.TWILIO_PHONE_NUMBER || "AnyTrader",
+            to: data.to,
+          });
+          await docSnap.ref.update({ status: "sent", sentAt: admin.firestore.FieldValue.serverTimestamp(), twilioSid: msg.sid });
+        } catch (err: any) {
+          console.error("Twilio send error:", err.message);
+          await docSnap.ref.update({ status: "failed", error: err.message });
+        }
+      } else {
+        console.log(`Mock sent SMS to ${data.to}: ${data.body}`);
+        await docSnap.ref.update({ status: "sent", sentAt: admin.firestore.FieldValue.serverTimestamp(), mockStatus: true });
+      }
+    }
+  } catch (err) {
+    console.error("SMS Queue Processor Error:", err);
+  }
+}
+
+// Run SMS processor every minute
+cron.schedule("* * * * *", processSmsQueue);
+
 // Scheduled task: Background Orchestration for Automated Driver Payouts
 async function runDriverPayoutOrchestration() {
   if (!db) return { success: false, error: "Firebase not initialized" };
@@ -178,6 +268,16 @@ async function runDriverPayoutOrchestration() {
       const transferAmountPence = Math.round(driverEarnings * 100);
 
       try {
+        if (!db) continue;
+        await db.runTransaction(async (t) => {
+           const rSnap = await t.get(rideDoc.ref);
+           if (rSnap.data()?.payoutTransferred) throw new Error("Already paid");
+           t.update(rideDoc.ref, {
+              payoutTransferred: true, 
+              payoutTransferredAt: admin.firestore.FieldValue.serverTimestamp()
+           });
+        });
+
         if (stripe) {
           // Perform transfer
           const transfer = await stripe.transfers.create({
@@ -191,16 +291,12 @@ async function runDriverPayoutOrchestration() {
           });
           
           await rideDoc.ref.update({
-            payoutTransferred: true,
-            stripeTransferId: transfer.id,
-            payoutTransferredAt: admin.firestore.FieldValue.serverTimestamp()
+             stripeTransferId: transfer.id
           });
         } else {
           // Mock transfer
           await rideDoc.ref.update({
-            payoutTransferred: true,
-            stripeTransferId: "mock_transfer_" + rideDoc.id,
-            payoutTransferredAt: admin.firestore.FieldValue.serverTimestamp()
+            stripeTransferId: "mock_transfer_" + rideDoc.id
           });
         }
         
@@ -293,9 +389,9 @@ const startMatchingSystem = async () => {
       // Fetch global config for monetization check
       let globalConfig: any = { paywallEnabled: true };
       try {
-        const configDoc = await db.collection("platform_config").doc("global").get();
-        if (configDoc.exists) {
-          globalConfig = configDoc.data();
+        const cachedGlobal = await getCachedConfig("global");
+        if (cachedGlobal) {
+          globalConfig = cachedGlobal;
         }
       } catch (err) {
         console.error("Error fetching global config:", err);
@@ -303,9 +399,9 @@ const startMatchingSystem = async () => {
       
       // 3. AnyTrader Rides Dispatch Logic (Fairness Engine)
       try {
-        const platformRidesConfigDoc = await db.collection("platform_config").doc("rides").get();
-        const maxDailyDriverHours = platformRidesConfigDoc.exists && platformRidesConfigDoc.data()!.maxDailyDriverHours 
-          ? platformRidesConfigDoc.data()!.maxDailyDriverHours 
+        const cachedRides = await getCachedConfig("rides");
+        const maxDailyDriverHours = cachedRides && cachedRides.maxDailyDriverHours 
+          ? cachedRides.maxDailyDriverHours 
           : 12;
 
         const pendingRidesSnapshot = await db.collection("ride_requests")
@@ -628,9 +724,71 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
+// --- Authentication Middlewares ---
+const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: missing token" });
+  }
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    (req as any).user = decodedToken;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: "Unauthorized: invalid token" });
+  }
+};
+
+const requireAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: missing token" });
+  }
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    if (db) {
+       const userDoc = await db.collection("users").doc(decodedToken.uid).get();
+       const role = userDoc.data()?.role;
+       const adminDoc = await db.collection("admins").doc(decodedToken.uid).get();
+       if (!adminDoc.exists && role !== "admin" && role !== "ecosystem_manager") {
+          return res.status(403).json({ error: "Forbidden: requires admin privileges" });
+       }
+    }
+    (req as any).user = decodedToken;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: "Unauthorized: invalid token" });
+  }
+};
+
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Rate limiters
+  const aiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 10,
+    message: { error: "Too many AI requests from this IP, please try again after a minute" }
+  });
+  
+  const paymentLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 20,
+    message: { error: "Too many payment requests from this IP" }
+  });
+  
+  const generalLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 100,
+    message: { error: "Too many requests from this IP" }
+  });
+
+  // Apply general limiter to all API routes
+  app.use('/api/', generalLimiter);
 
   // Stripe Webhook MUST come before express.json()
   app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -662,6 +820,15 @@ async function startServer() {
       }
 
       // Handle the event
+      if (!db) {
+         return res.json({received: true});
+      }
+
+      const eventRef = db.collection("processed_stripe_events").doc(event.id);
+      const existing = await eventRef.get();
+      if (existing.exists) return res.status(200).send("Already processed");
+      await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() });
+
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.client_reference_id;
@@ -685,6 +852,16 @@ async function startServer() {
             });
           }
         } else if (session.mode === 'payment') {
+          if (session.metadata?.type === 'mediation_stake' && session.metadata?.jobId && db) {
+            await db.collection("jobs").doc(session.metadata.jobId).update({
+              status: "disputed",
+              mediationStakePaid: true,
+              disputeReason: session.metadata.disputeReason || "Unspecified",
+              technicalFaultReport: session.metadata.technicalFaultReport || "Unspecified",
+              disputedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            // We could also trigger notifications here if needed
+          }
           if (session.metadata?.type === 'boost' && session.metadata?.jobId && db) {
             const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
             const isIM = session.metadata.tier === 'instant_match';
@@ -891,7 +1068,7 @@ async function startServer() {
   });
 
   // Stripe Checkout Session
-  app.post("/api/create-checkout-session", async (req, res) => {
+  app.post("/api/create-checkout-session", paymentLimiter, async (req, res) => {
     try {
       const { priceId, userId, tierName, successUrl, cancelUrl, mode = 'subscription', metadata = {} } = req.body;
       const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
@@ -995,8 +1172,11 @@ async function startServer() {
         mode: mode as any,
         payment_method_types: ['card'],
         line_items: [
-          {
-            price: priceId, // Note: Expects an actual Stripe Price ID
+          req.body.price_data ? {
+            price_data: req.body.price_data,
+            quantity: 1,
+          } : {
+            price: priceId,
             quantity: 1,
           },
         ],
@@ -1028,7 +1208,7 @@ async function startServer() {
   });
 
   // Stripe Setup Session (Save Card)
-  app.post("/api/create-setup-session", async (req, res) => {
+  app.post("/api/create-setup-session", paymentLimiter, async (req, res) => {
     try {
       const { userId, successUrl, cancelUrl } = req.body;
       const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
@@ -1083,10 +1263,14 @@ async function startServer() {
   });
 
   // List Saved Cards
-  app.get("/api/payment-methods/:userId", async (req, res) => {
+  app.get("/api/payment-methods/:userId", requireAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       if (!db) return res.json({ paymentMethods: [], mock: true });
+
+      if ((req as any).user.uid !== userId) {
+        return res.status(403).json({ error: "Forbidden: Not your payment methods" });
+      }
 
       const userDoc = await db.collection("users").doc(userId).get();
       if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
@@ -1122,9 +1306,13 @@ async function startServer() {
   });
 
   // Delete Saved Card
-  app.delete("/api/payment-methods/:userId/:paymentMethodId", async (req, res) => {
+  app.delete("/api/payment-methods/:userId/:paymentMethodId", requireAuth, async (req, res) => {
     try {
-      const { paymentMethodId } = req.params;
+      const { userId, paymentMethodId } = req.params;
+      if ((req as any).user.uid !== userId) {
+        return res.status(403).json({ error: "Forbidden: Not your payment method" });
+      }
+
       let stripe;
       try {
         stripe = getStripe();
@@ -1188,9 +1376,8 @@ async function startServer() {
       let commissionRate = 0.12;
       let fixedTripFee = 0;
       try {
-        const configDoc = await db.collection("platform_config").doc("rides").get();
-        if (configDoc.exists) {
-          const configData = configDoc.data();
+        const configData = await getCachedConfig("rides");
+        if (configData) {
           if (configData.commissionRate !== undefined) {
             commissionRate = Number(configData.commissionRate);
           }
@@ -1334,7 +1521,7 @@ async function startServer() {
   });
 
   // Manual Driver Payouts Trigger (Admin)
-  app.post("/api/admin/trigger-payouts", async (req, res) => {
+  app.post("/api/admin/trigger-payouts", requireAdmin, async (req, res) => {
     try {
       const result = await runDriverPayoutOrchestration();
       if (!result?.success) {
@@ -1348,7 +1535,7 @@ async function startServer() {
   });
 
   // Manual Trigger for Consultancy Scheduled Jobs (Admin)
-  app.post("/api/admin/trigger-consultancy-jobs", async (req, res) => {
+  app.post("/api/admin/trigger-consultancy-jobs", requireAdmin, async (req, res) => {
     try {
       await runConsultancyRecurringSessionCreator();
       await runConsultancyScoreRecalculator();
@@ -1515,11 +1702,8 @@ async function startServer() {
       const tierId = userData?.tierId || (isBusiness ? "Business Basic" : "Basic");
       
       // Platform Configuration
-      const platformConfigDoc = await db.collection("platform_config").doc("global").get();
-      const platformConfig = platformConfigDoc.data();
-      
-      const globalTiersDoc = await db.collection("platform_config").doc("global_tiers").get();
-      const globalTiers = globalTiersDoc.exists ? globalTiersDoc.data() : null;
+      const platformConfig = await getCachedConfig("global");
+      const globalTiers = await getCachedConfig("global_tiers");
       
       if (platformConfig?.paywallEnabled === false) {
         return res.json({ allowed: true, count: 0, limit: Infinity, betaMode: true });
@@ -1624,8 +1808,8 @@ async function startServer() {
       if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
 
       const userData = userDoc.data() || {};
-      const platformConfig = (await db.collection("platform_config").doc("global").get()).data();
-      const globalTiers = (await db.collection("platform_config").doc("global_tiers").get()).data();
+      const platformConfig = await getCachedConfig("global");
+      const globalTiers = await getCachedConfig("global_tiers");
       
       // 1. Check Exclusive Job Constraints First
       let isJobExclusive = false;
@@ -1711,12 +1895,47 @@ async function startServer() {
     }
   });
 
+  // Postcode lookup proxy cache
+  const postcodeCache = new Map<string, { data: any; expiresAt: number }>();
+
   // Postcode lookup proxy
   app.get("/api/postcode/:postcode", async (req, res) => {
     try {
       const { postcode } = req.params;
+      const formattedPostcode = postcode.toUpperCase().replace(/\s/g, '');
+      const cached = postcodeCache.get(formattedPostcode);
+      if (cached && Date.now() < cached.expiresAt) {
+        return res.json(cached.data);
+      }
+
       const response = await fetch(`https://api.postcodes.io/postcodes/${postcode}`);
       const data = await response.json();
+      
+      // Prevent memory leaks - enforce a safe 1000-entry peak limit
+      if (postcodeCache.size >= 1000) {
+        let deleted = false;
+        const now = Date.now();
+        // Remove individual expired items first
+        for (const [k, v] of postcodeCache.entries()) {
+          if (now >= v.expiresAt) {
+            postcodeCache.delete(k);
+            deleted = true;
+          }
+        }
+        // Force-evict the first element if nothing was expired
+        if (!deleted) {
+          const firstKey = postcodeCache.keys().next().value;
+          if (firstKey !== undefined) {
+            postcodeCache.delete(firstKey);
+          }
+        }
+      }
+
+      postcodeCache.set(formattedPostcode, {
+        data,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000
+      });
+
       res.json(data);
     } catch (error) {
       res.status(500).json({ error: "Failed to lookup postcode" });
@@ -1740,7 +1959,7 @@ async function startServer() {
         const userData = userDoc.data();
         const tierId = userData?.tierId || (userData?.role === "tradesperson" ? "Basic" : "Standard");
         
-        const platformConfig = (await db.collection("platform_config").doc("global").get()).data();
+        const platformConfig = await getCachedConfig("global");
         const tiers = userData?.role === "tradesperson" ? platformConfig?.feeTiers : platformConfig?.businessTiers;
         const tier = tiers?.find((t: any) => t.name === tierId);
         discount = tier?.shopDiscount || 0;

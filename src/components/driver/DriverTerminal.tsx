@@ -6,6 +6,7 @@ import { useAuth } from "../AuthProvider";
 import { useRemoteConfig } from "../RemoteConfigProvider";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
+import DOMPurify from 'dompurify';
 import { QRCodeSVG } from 'qrcode.react';
 import { triggerHaptic, ImpactStyle, getGoogleMapsApiKey, isCapacitor, speakText } from "@/src/lib/capacitor";
 import { Capacitor } from '@capacitor/core';
@@ -1493,6 +1494,11 @@ export default function DriverTerminal() {
           isOffRoute = true;
         }
 
+        // If both origin (driver location) and destination moved less than 30 meters, do not fetch new directions
+        if (originMoved < 30 && destMoved < 30) {
+          return;
+        }
+
         // Smart API call reduction logic to save $$$
         // We SKIP fetching new directions IF:
         // 1. Destination hasn't changed (destMoved < 50m)
@@ -2434,9 +2440,12 @@ export default function DriverTerminal() {
             )
           : 999;
           
+        const MIN_SYNC_DISTANCE = 0.00090;  // ~100m — was 0.00015
+        const MIN_SYNC_INTERVAL = 15000;   // 15s minimum — was 10s
+          
         const shouldSync =
           timeSinceLastSync >= 60000 ||
-          (timeSinceLastSync >= 10000 && distToLastSync > 0.00015) ||
+          (timeSinceLastSync >= MIN_SYNC_INTERVAL && distToLastSync > MIN_SYNC_DISTANCE) ||
           !lastSyncCoordsRef.current;
           
         // Limit high-frequency React State re-renders to save battery (max 1Hz)
@@ -4188,7 +4197,7 @@ export default function DriverTerminal() {
                               const step1 = steps[currentStepIndex + 1];
                               html += ' <span style="opacity: 0.8; font-size: 0.85em;">then</span> <br/> ' + formatInstructionForDisplay(step1.instructions);
                             }
-                            return html;
+                            return DOMPurify.sanitize(html);
                           })()
                         }}
                       />

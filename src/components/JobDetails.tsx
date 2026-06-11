@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from 'qrcode.react';
-import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch, addDoc } from "@/src/firebase";
+import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch, addDoc, runTransaction } from "@/src/firebase";
 import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { useAuth } from "./AuthProvider";
@@ -350,19 +350,41 @@ const libraries: any[] = ['places', 'geometry'];
 
             // Fetch reviews and generate summary
             try {
-              const reviewsSnapshot = await getDoc(doc(db, "reviews", quote.tradespersonId)); // Wait, reviews are in a collection, not a single doc
-              // Actually, looking at blueprint, it's /reviews/{reviewId}
-              // So I need a query
+              const profileData = profileDoc.data();
+              const existingSummary = profileData?.aiReviewSummary;
+              const summaryAge = profileData?.aiReviewSummaryAt ? (profileData.aiReviewSummaryAt.toDate ? profileData.aiReviewSummaryAt.toDate() : new Date(profileData.aiReviewSummaryAt)) : null;
+
               const { getDocs } = await import("firebase/firestore");
               const reviewsQuery = query(collection(db, "reviews"), where("revieweeId", "==", quote.tradespersonId));
               const reviewsSnap = await getDocs(reviewsQuery);
               const reviewsData = reviewsSnap.docs.map(d => d.data());
+
               if (reviewsData.length > 0) {
-                const summary = await getReviewSummary(reviewsData);
-                setReviewSummaries(prev => ({
-                  ...prev,
-                  [quote.tradespersonId]: summary
+                const lastReviewTime = Math.max(...reviewsData.map(r => {
+                  if (r.createdAt?.toDate) return r.createdAt.toDate().getTime();
+                  if (r.createdAt) return new Date(r.createdAt).getTime();
+                  return 0;
                 }));
+
+                const shouldRegenerate = !existingSummary || !summaryAge || summaryAge.getTime() < lastReviewTime;
+
+                if (shouldRegenerate) {
+                  const summary = await getReviewSummary(reviewsData);
+                  setReviewSummaries(prev => ({
+                    ...prev,
+                    [quote.tradespersonId]: summary
+                  }));
+                  // Save generated summary to the user profile
+                  await updateDoc(doc(db, "users", quote.tradespersonId), {
+                    aiReviewSummary: summary,
+                    aiReviewSummaryAt: serverTimestamp()
+                  });
+                } else {
+                  setReviewSummaries(prev => ({
+                    ...prev,
+                    [quote.tradespersonId]: existingSummary
+                  }));
+                }
               }
             } catch (err) {
               console.error("Error generating review summary:", err);
@@ -748,9 +770,21 @@ const libraries: any[] = ['places', 'geometry'];
     setLoading(true);
     setError(null);
     try {
-      // 1. Update the accepted quote
-      await updateDoc(doc(db, "jobs", id, "quotes", quote.id), {
-        status: "accepted"
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+
+      await runTransaction(db, async (t) => {
+        const quoteRef = doc(db, "jobs", id, "quotes", quote.id);
+        const quoteSnap = await t.get(quoteRef);
+        if (quoteSnap.data()?.status !== "pending") throw new Error("Quote already processed or no longer pending.");
+        
+        t.update(quoteRef, { status: "accepted" });
+        t.update(doc(db, "jobs", id), {
+          status: "accepted",
+          acceptedTradespersonId: quote.tradespersonId,
+          scheduledDate: quote.startDate || new Date().toISOString().split('T')[0],
+          isConfirmedByTradesperson: false,
+          verificationPin: pin
+        });
       });
 
       // Notify tradesperson
@@ -761,16 +795,6 @@ const libraries: any[] = ['places', 'geometry'];
         "status",
         `/job/${id}`
       );
-
-      // 2. Update the job status
-      const pin = Math.floor(1000 + Math.random() * 9000).toString();
-      await updateDoc(doc(db, "jobs", id), {
-        status: "accepted",
-        acceptedTradespersonId: quote.tradespersonId,
-        scheduledDate: quote.startDate || new Date().toISOString().split('T')[0],
-        isConfirmedByTradesperson: false,
-        verificationPin: pin
-      });
 
       // 3. Notify tradesperson to confirm
       await sendNotification(
@@ -1299,46 +1323,58 @@ const libraries: any[] = ['places', 'geometry'];
 
       const isHandshakeVerified = job.paymentStatus === "handshake_complete";
 
+      // 1. Initial save of the dispute in pending state
       await updateDoc(doc(db, "jobs", id), {
-        status: "disputed",
         dispute: {
           raisedBy: user.uid,
           reason: disputeReason,
           technicalFaultReport,
           isHandshakeVerified,
-          mediationStakePaid,
+          mediationStakePaid: false, // will flip when paid
           isPropertyDamage,
           pliClaim: isPropertyDamage ? {
             status: "requested",
             initiatedAt: serverTimestamp()
           } : { status: "none" },
           photos: photoUrls,
-          status: "open",
+          status: "pending_payment",
           createdAt: serverTimestamp()
-        },
-        // Log to homeowner profile as well
-        totalDisputesRaised: increment(1)
+        }
       });
+
+      // 2. Redirect to Stripe
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: 'Mediation Stake',
+              description: '£15 Mediation Stake (Refundable if claim is valid)',
+            },
+            unit_amount: 1500,
+          },
+          userId: user.uid,
+          mode: 'payment',
+          metadata: {
+            type: 'mediation_stake',
+            jobId: id,
+            disputeReason,
+            technicalFaultReport,
+            isHandshakeVerified: String(isHandshakeVerified),
+            isPropertyDamage: String(isPropertyDamage)
+          },
+          successUrl: `${window.location.origin}/job/${id}?mediation_paid=true`,
+          cancelUrl: `${window.location.origin}/job/${id}?mediation_cancelled=true`
+        })
+      });
+
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
       
-      // Impact fairness score (simulated impact for now)
-      if (isHandshakeVerified && !isPropertyDamage) {
-          await updateDoc(doc(db, "users", user.uid), {
-             fairnessScore: increment(-5)
-          });
-      }
-
-      // Notify other party
-      const otherUserId = isHomeowner ? (quotes.find(q => q.status === "accepted")?.tradespersonId || job.acceptedTradespersonId) : job.homeownerId;
-      if (otherUserId) {
-        await sendNotification(
-          otherUserId,
-          "Dispute Raised",
-          `A dispute has been raised for the job: "${job.title}".`,
-          "status",
-          `/job/${id}`
-        );
-      }
-
       setJob((prev: any) => ({ ...prev, status: "disputed" }));
       setShowDisputeModal(false);
       setDisputeReason("");
@@ -4932,10 +4968,26 @@ const libraries: any[] = ['places', 'geometry'];
                   onClick={async () => {
                     if (!id) return;
                     try {
-                      await updateDoc(doc(db, "jobs", id), {
-                        paymentStatus: "handshake_complete",
-                        isPaid: true
-                      });
+                      const updatePromises = [
+                         updateDoc(doc(db, "jobs", id), {
+                           paymentStatus: "handshake_complete",
+                           isPaid: true
+                         })
+                      ];
+                      
+                      // Upward path for fairness score
+                      if (job.homeownerId) {
+                         updatePromises.push(updateDoc(doc(db, "users", job.homeownerId), {
+                            fairnessScore: increment(2)
+                         }));
+                      }
+                      if (job.acceptedTradespersonId) {
+                         updatePromises.push(updateDoc(doc(db, "users", job.acceptedTradespersonId), {
+                            fairnessScore: increment(2)
+                         }));
+                      }
+                      
+                      await Promise.all(updatePromises);
                       setJob((prev: any) => ({ ...prev, paymentStatus: "handshake_complete", isPaid: true }));
                       toast.success("Job marked as Paid!");
                     } catch (e) {

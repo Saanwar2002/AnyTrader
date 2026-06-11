@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, orderBy, onSnapshot, type FirebaseUser, handleFirestoreError, OperationType, updateDoc, doc } from "@/src/firebase";
+import { db, collection, query, where, orderBy, limit, onSnapshot, type FirebaseUser, handleFirestoreError, OperationType, updateDoc, doc } from "@/src/firebase";
 import { parseNaturalLanguageSearch } from "@/src/services/gemini";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
@@ -25,6 +25,7 @@ export default function JobFeed() {
   const entitlements = useEntitlements();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [limitCount, setLimitCount] = useState(50);
   
   // Persistence: Load initial states from profile (cross-device) or localStorage (device-specific)
   const [searchTerm, setSearchTerm] = useState(() => profile?.activeFilter?.searchTerm || localStorage.getItem("job_feed_searchTerm") || "");
@@ -215,11 +216,12 @@ export default function JobFeed() {
   useEffect(() => {
     if (!user) return;
 
-    // Fetch all posted jobs
+    // Fetch up to current limitCount posted jobs
     const q = query(
       collection(db, "jobs"),
       where("status", "==", "posted"),
-      orderBy("postedDate", "desc")
+      orderBy("postedDate", "desc"),
+      limit(limitCount)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -233,7 +235,7 @@ export default function JobFeed() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, limitCount]);
 
   const filteredJobs = jobs.filter(job => {
     // Time-Gate Security Check
@@ -1105,6 +1107,18 @@ export default function JobFeed() {
             </Link>
           );
         })}
+        </div>
+      )}
+
+      {jobs.length === limitCount && (
+        <div className="flex justify-center p-6 mt-4">
+          <button
+            onClick={() => setLimitCount(prev => prev + 50)}
+            className="px-6 py-3 bg-white border border-black rounded-2xl font-black text-sm hover:bg-slate-50 transition-all flex items-center gap-2 active:scale-95 shadow-sm text-slate-900"
+          >
+            <span>LOAD MORE OPPORTUNITIES</span>
+            <ChevronDown className="w-4 h-4" />
+          </button>
         </div>
       )}
     </>

@@ -148,18 +148,10 @@ export async function fetchLiveDemandZones(): Promise<SurgeZone[]> {
       }
     });
 
-    if (zones.length === 0) {
-      // Provide simulated default zones if empty to give drivers an idea
-      zones.push({ lat: 53.6458, lng: -1.7850, radius: 800, intensity: "high", label: isFixedModel ? `£${rules.highFee.toFixed(2)} Surge` : `${rules.highMultiplier}x Surge`, surgeMultiplier: rules.highMultiplier, extraFee: rules.highFee, isFixedModel, uiColor: rules.highColor || "red", uiOpacity: rules.surgeOpacity });
-      zones.push({ lat: 53.6558, lng: -1.7750, radius: 600, intensity: "medium", label: isFixedModel ? `£${rules.mediumFee.toFixed(2)} Surge` : `${rules.mediumMultiplier}x Surge`, surgeMultiplier: rules.mediumMultiplier, extraFee: rules.mediumFee, isFixedModel, uiColor: rules.mediumColor || "amber", uiOpacity: rules.surgeOpacity });
-    }
-
     return zones.sort((a,b) => b.surgeMultiplier - a.surgeMultiplier);
 
   } catch (error) {
     console.error("Error fetching live demand zones:", error);
-    return [
-      { lat: 53.6458, lng: -1.7850, radius: 800, intensity: "high", label: "£3.50 Surge", surgeMultiplier: 1.4 },
-    ];
+    return [];
   }
 }

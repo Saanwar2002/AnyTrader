@@ -24,16 +24,53 @@ export const lookupPostcode = async (postcode: string): Promise<PostcodeData | n
   const ukPostcodeRegex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
   if (!ukPostcodeRegex.test(postcode)) return null;
 
+  const key = `pc_${postcode.toUpperCase().replace(/\s/g, '')}`;
   try {
-    const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+    const cached = sessionStorage.getItem(key);
+    if (cached) return JSON.parse(cached);
+  } catch (e) {
+    console.warn("Failed to read from sessionStorage:", e);
+  }
+
+  try {
+    // Attempt cached proxy fetch via server first
+    let response = await fetch(`/api/postcode/${encodeURIComponent(postcode)}`);
+    if (!response.ok) {
+      // Fallback to direct API if backend is unreachable or returns an error
+      response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+    }
+    
     if (!response.ok) return null;
 
     const data = await response.json();
     if (data.status === 200 && data.result) {
-      return formatPostcodeData(data.result);
+      const result = formatPostcodeData(data.result);
+      try {
+        sessionStorage.setItem(key, JSON.stringify(result));
+      } catch (e) {
+        console.warn("Failed to write to sessionStorage:", e);
+      }
+      return result;
     }
   } catch (error) {
-    console.error("Postcode lookup failed:", error);
+    console.warn("Proxy postcode lookup failed, falling back to direct flight:", error);
+    try {
+      const fallbackResponse = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+      if (fallbackResponse.ok) {
+        const data = await fallbackResponse.json();
+        if (data.status === 200 && data.result) {
+          const result = formatPostcodeData(data.result);
+          try {
+            sessionStorage.setItem(key, JSON.stringify(result));
+          } catch (e) {
+            console.warn("Failed to write to sessionStorage:", e);
+          }
+          return result;
+        }
+      }
+    } catch (fallbackError) {
+      console.error("All postcode lookups exhausted:", fallbackError);
+    }
   }
   
   return null;

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { 
-  collection, query, where, orderBy, onSnapshot, db, collectionGroup, handleFirestoreError, OperationType, limit, updateDoc, doc, getDoc, getDocs
+  collection, query, where, orderBy, onSnapshot, db, collectionGroup, handleFirestoreError, OperationType, limit, updateDoc, doc, getDoc, getDocs, setDoc
 } from "@/src/firebase";
 import { getRecommendedJobs } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
@@ -11,7 +11,7 @@ import {
   Briefcase, Clock, MessageSquare, CheckCircle2, 
   ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus,
   Image as ImageIcon, Video as VideoIcon, Loader2, MapPin, Share2, Calendar, X, Info, Award, ArrowRight,
-  ChevronDown, ChevronUp, Activity, XCircle, AlertCircle
+  ChevronDown, ChevronUp, Activity, XCircle, AlertCircle, RotateCw
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -331,67 +331,92 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
     };
   }, [user, profile]);
 
-  useEffect(() => {
-    const fetchRecommendations = async () => {
-      if (!user || !profile || profile.role !== "tradesperson") return;
+  const fetchRecommendations = async (bypassCache = false) => {
+    if (!user || !profile || profile.role !== "tradesperson") return;
+    
+    setIsRecommending(true);
+    try {
+      const cacheRef = doc(db, "users", user.uid, "recommendations", "current");
       
+      if (!bypassCache) {
+        // 1. Attempt to load from 24h Firestore cache
+        const cacheSnap = await getDoc(cacheRef);
+        if (cacheSnap.exists()) {
+          const cacheData = cacheSnap.data();
+          const createdAt = cacheData.createdAt;
+          const cacheTime = createdAt ? new Date(createdAt).getTime() : 0;
+          if (Date.now() - cacheTime < 24 * 60 * 60 * 1000) {
+            setRecommendedJobs(cacheData.jobs || []);
+            setIsRecommending(false);
+            return;
+          }
+        }
+      }
+
       // Use profile trades, or default to null for guests/incomplete profiles
       const categoryToMatch = (profile.trades && profile.trades.length > 0) ? profile.trades[0] : null;
       
-      setIsRecommending(true);
-      try {
-        // Fetch some recent jobs (filtered by category if available)
-        let q;
-        if (categoryToMatch) {
-          q = query(
-            collection(db, "jobs"),
-            where("status", "==", "posted"),
-            where("category", "==", categoryToMatch),
-            orderBy("postedDate", "desc"),
-            limit(10)
-          );
-        } else {
-          q = query(
-            collection(db, "jobs"),
-            where("status", "==", "posted"),
-            orderBy("postedDate", "desc"),
-            limit(10)
-          );
-        }
-        
-        const snapshot = await getDocs(q);
-
-        const jobs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-        if (jobs.length > 0) {
-          const recommendations = await getRecommendedJobs(
-            { ...profile, category: categoryToMatch }, 
-            jobs, 
-            activeJobs, 
-            {
-              standard: profile.availability,
-              overrides: profile.dateOverrides
-            }
-          );
-          
-          const enriched = recommendations
-            .map(rec => {
-              const job = jobs.find(j => j.id === rec.id);
-              if (!job) return null;
-              return { ...job, aiReason: rec.reason };
-            })
-            .filter(Boolean);
-
-          setRecommendedJobs(enriched);
-        }
-      } catch (err) {
-        console.error("Error fetching recommendations:", err);
-      } finally {
-        setIsRecommending(false);
+      // Fetch some recent jobs (filtered by category if available)
+      let q;
+      if (categoryToMatch) {
+        q = query(
+          collection(db, "jobs"),
+          where("status", "==", "posted"),
+          where("category", "==", categoryToMatch),
+          orderBy("postedDate", "desc"),
+          limit(10)
+        );
+      } else {
+        q = query(
+          collection(db, "jobs"),
+          where("status", "==", "posted"),
+          orderBy("postedDate", "desc"),
+          limit(10)
+        );
       }
-    };
+      
+      const snapshot = await getDocs(q);
 
+      const jobs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      if (jobs.length > 0) {
+        const recommendations = await getRecommendedJobs(
+          { ...profile, category: categoryToMatch }, 
+          jobs, 
+          activeJobs, 
+          {
+            standard: profile.availability,
+            overrides: profile.dateOverrides
+          }
+        );
+        
+        const enriched = recommendations
+          .map(rec => {
+            const job = jobs.find(j => j.id === rec.id);
+            if (!job) return null;
+            return { ...job, aiReason: rec.reason };
+          })
+          .filter(Boolean);
+
+        setRecommendedJobs(enriched);
+
+        // Save to 24h Firestore cache
+        await setDoc(cacheRef, {
+          jobs: enriched,
+          createdAt: new Date().toISOString()
+        });
+      } else {
+        setRecommendedJobs([]);
+      }
+    } catch (err) {
+      console.error("Error fetching recommendations:", err);
+    } finally {
+      setIsRecommending(false);
+    }
+  };
+
+  useEffect(() => {
     if (activeJobs.length >= 0) {
-      fetchRecommendations();
+      fetchRecommendations(false);
     }
   }, [user, profile, activeJobs.length]);
 
@@ -766,7 +791,17 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
               <Zap className="w-5 h-5 text-orange-500" />
               <h2 className="text-xl font-bold text-slate-900">AI Recommended Jobs</h2>
             </div>
-            {isRecommending && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchRecommendations(true)}
+                disabled={isRecommending}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black rounded-lg text-xs font-bold text-black hover:bg-slate-50 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <RotateCw className={cn("w-3.5 h-3.5", isRecommending && "animate-spin")} />
+                <span>Refresh Matches</span>
+              </button>
+              {isRecommending && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            </div>
           </div>
           
           {recommendedJobs.length > 0 ? (

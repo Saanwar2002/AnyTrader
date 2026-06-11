@@ -8,6 +8,61 @@ import { RemoteConfigProvider } from './components/RemoteConfigProvider';
 import { HelmetProvider } from 'react-helmet-async';
 import { Capacitor } from '@capacitor/core';
 
+// Save the last known web origin for dynamic server-side routing inside Capacitor
+if (!Capacitor.isNativePlatform() && typeof window !== 'undefined') {
+  try {
+    localStorage.setItem('last_known_origin', window.location.origin);
+  } catch (e) {
+    console.warn('Failed to save last_known_origin:', e);
+  }
+}
+
+// Global Fetch Interceptor for Capacitor Native Platforms to redirect relative paths
+if (Capacitor.isNativePlatform()) {
+  const originalFetch = window.fetch;
+  window.fetch = async function (input, init) {
+    let url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input && 'url' in input ? (input as any).url : ''));
+    
+    if (typeof url === 'string' && url.startsWith('/api/')) {
+      const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_APP_URL || (import.meta as any).env?.APP_URL;
+      let baseUrl = "";
+      if (envUrl) {
+        baseUrl = envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+      } else {
+        try {
+          const lastOrigin = localStorage.getItem('last_known_origin');
+          if (lastOrigin) {
+            baseUrl = lastOrigin.endsWith('/') ? lastOrigin.slice(0, -1) : lastOrigin;
+          }
+        } catch (e) {
+          console.warn('Failed to read last_known_origin:', e);
+        }
+      }
+      
+      if (!baseUrl) {
+        baseUrl = "https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app";
+      }
+      
+      const newUrl = `${baseUrl}${url}`;
+      console.log(`[Capacitor Fetch interceptor] Resolving relative API call: ${url} -> ${newUrl}`);
+      
+      if (typeof input === 'string') {
+        input = newUrl;
+      } else if (input instanceof URL) {
+        input = new URL(newUrl);
+      } else if (input && typeof input === 'object') {
+        try {
+          input = new Request(newUrl, input as any);
+        } catch (requestErr) {
+          console.warn('Failed to construct Request object in interceptor, using string path:', requestErr);
+          input = newUrl;
+        }
+      }
+    }
+    return originalFetch.apply(this, [input, init]);
+  };
+}
+
 // Native Firebase Crashlytics Unhandled Error Listener
 if (Capacitor.isNativePlatform()) {
   import('@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {

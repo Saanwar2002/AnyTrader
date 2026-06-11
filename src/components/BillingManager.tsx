@@ -55,7 +55,12 @@ export default function BillingManager() {
 
   const fetchPaymentMethods = async (userId: string) => {
     try {
-      const res = await fetch(`/api/payment-methods/${userId}`);
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`/api/payment-methods/${userId}`, {
+        headers: {
+           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await res.json();
       if (data.paymentMethods) {
         setSavedCards(data.paymentMethods.map((pm: any, index: number) => ({
@@ -136,8 +141,12 @@ export default function BillingManager() {
   const handleDeletePaymentMethod = async (paymentMethodId: string) => {
     if (!user) return;
     try {
+      const token = await auth.currentUser?.getIdToken();
       await fetch(`/api/payment-methods/${user.uid}/${paymentMethodId}`, {
         method: "DELETE",
+        headers: {
+           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
       });
       // Removing locally
       setSavedCards(cards => cards.filter(c => c.id !== paymentMethodId));

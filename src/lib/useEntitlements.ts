@@ -5,7 +5,7 @@ import { usePortal } from "./PortalContext";
 // Tier Configurations based on Super App Blueprint Phase 2
 // These should ideally sync from platform_config/global but we define the schema here
 
-export type ProviderTierName = 'PAYG' | 'Pro' | 'Elite' | 'Enterprise';
+export type ProviderTierName = 'PAYG' | 'Silver Professional' | 'Gold Elite' | 'Platinum Enterprise';
 export type CustomerTierName = 'Free' | 'AnyTrader Plus';
 
 export interface ProviderTierEntitlements {
@@ -29,8 +29,8 @@ export interface ProviderTierEntitlements {
   propertyLimit: number | 'unlimited';
 }
 
-const PROVIDER_TIERS: Record<ProviderTierName, ProviderTierEntitlements> = {
-  PAYG: {
+export const PROVIDER_TIERS: Record<ProviderTierName, ProviderTierEntitlements> = {
+  'PAYG': {
     leadFeeDiscountPerc: 0,
     leadAccessDelayMinutes: 120, // 2 hours
     quotesPerMonth: 10,
@@ -50,7 +50,7 @@ const PROVIDER_TIERS: Record<ProviderTierName, ProviderTierEntitlements> = {
     surgeCapMultiplier: null,
     propertyLimit: 3
   },
-  Pro: {
+  'Silver Professional': {
     leadFeeDiscountPerc: 25,
     leadAccessDelayMinutes: 30,
     quotesPerMonth: 50,
@@ -70,7 +70,7 @@ const PROVIDER_TIERS: Record<ProviderTierName, ProviderTierEntitlements> = {
     surgeCapMultiplier: null,
     propertyLimit: 10
   },
-  Elite: {
+  'Gold Elite': {
     leadFeeDiscountPerc: 40,
     leadAccessDelayMinutes: 0,
     quotesPerMonth: 'unlimited',
@@ -90,7 +90,7 @@ const PROVIDER_TIERS: Record<ProviderTierName, ProviderTierEntitlements> = {
     surgeCapMultiplier: 1.5,
     propertyLimit: 50
   },
-  Enterprise: {
+  'Platinum Enterprise': {
     leadFeeDiscountPerc: 50,
     leadAccessDelayMinutes: 0,
     quotesPerMonth: 'unlimited',
@@ -112,30 +112,29 @@ const PROVIDER_TIERS: Record<ProviderTierName, ProviderTierEntitlements> = {
   }
 };
 
+export const resolveTier = (profile: any): ProviderTierName => {
+  if (!profile) return 'PAYG';
+  
+  const dbTier = profile.tierId || profile.subscriptionType || '';
+
+  // Founding member reward maps to Silver Professional
+  if (profile.isFoundingMember && (dbTier === "Free Trial" || !dbTier)) {
+      return 'Silver Professional';
+  }
+  
+  if (dbTier === 'Silver Professional' || dbTier === 'Pro' || dbTier.includes('Professional') || dbTier.includes('Silver')) return 'Silver Professional';
+  if (dbTier === 'Gold Elite' || dbTier === 'Elite' || dbTier.includes('Premium') || dbTier.includes('Gold')) return 'Gold Elite';
+  if (dbTier === 'Platinum Enterprise' || dbTier === 'Enterprise' || dbTier.includes('Powerhouse') || dbTier.includes('Platinum')) return 'Platinum Enterprise';
+  
+  return 'PAYG';
+};
+
 export function useEntitlements() {
   const { profile } = useAuth();
   const { activeRole } = usePortal();
 
   return useMemo(() => {
-    // Graceful fallback resolver to map current DB tier strings into our robust Phase 2 structure
-    const resolveTier = (): ProviderTierName => {
-      if (!profile) return 'PAYG';
-      
-      const dbTier = profile.tierId || profile.subscriptionType || '';
-
-      // Founding member reward maps to Pro
-      if (profile.isFoundingMember && (dbTier === "Free Trial" || !dbTier)) {
-         return 'Pro';
-      }
-      
-      if (dbTier === 'Pro' || dbTier.includes('Professional')) return 'Pro';
-      if (dbTier === 'Elite' || dbTier.includes('Premium')) return 'Elite';
-      if (dbTier === 'Enterprise' || dbTier.includes('Powerhouse') || dbTier.includes('Platinum')) return 'Enterprise';
-      
-      return 'PAYG';
-    };
-
-    const currentTierName = resolveTier();
+    const currentTierName = resolveTier(profile);
     const entitlements = PROVIDER_TIERS[currentTierName];
 
     // Computed Helpers
