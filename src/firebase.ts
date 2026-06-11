@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } from "firebase/app-check";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, signInWithCredential } from "firebase/auth";
 import { enableMultiTabIndexedDbPersistence, initializeFirestore, getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot as originalOnSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 import { getPerformance, trace } from "firebase/performance";
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString } from "firebase/storage";
@@ -140,13 +140,54 @@ if (typeof window !== "undefined") {
   }
 }
 
-export const auth = getAuth(app);
+// Set up resilient Firebase Auth initialization with safe fallbacks
+let authInstance;
+try {
+  authInstance = initializeAuth(app, {
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence]
+  });
+  console.log("Firebase Auth initialized successfully with premium multi-tier persistence engines.");
+} catch (e) {
+  console.warn("Failed primary Firebase Auth persistence initialization (typically because standard IndexedDB/DOM Storage is disabled or blocked inside iframes / Incognito mode / strict browser privacy settings). Cascading to standard session-memory persistence cascade:", e);
+  try {
+    authInstance = initializeAuth(app, {
+      persistence: [browserSessionPersistence, inMemoryPersistence]
+    });
+    console.log("Firebase Auth initialized successfully with secure container session persistence.");
+  } catch (err) {
+    console.warn("Standard session persistent fallbacks blocked. Initializing with dynamic in-memory lock:", err);
+    authInstance = initializeAuth(app, {
+      persistence: inMemoryPersistence
+    });
+  }
+}
+
+export const auth = authInstance;
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Auth Helpers
-export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
+export const signInWithGoogle = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      console.log("[signInWithGoogle] Capacitor native container detected. Loading native authentication plugin...");
+      const packageName = "@capacitor-firebase/authentication";
+      const { FirebaseAuthentication } = await import(/* @vite-ignore */ packageName) as any;
+      console.log("[signInWithGoogle] Triggering native Google Flow on device...");
+      const result = await FirebaseAuthentication.signInWithGoogle({});
+      console.log("[signInWithGoogle] Native authentication successful. Creating credentials from token...");
+      const credential = GoogleAuthProvider.credential(result.credential?.idToken);
+      console.log("[signInWithGoogle] Handshaking native credentials with Firebase SDK...");
+      return await signInWithCredential(auth, credential);
+    } catch (err: any) {
+      console.error("[signInWithGoogle] Native Google Sign-In failed or was interrupted, fallback to standard popup wrapper:", err);
+      return signInWithPopup(auth, googleProvider);
+    }
+  } else {
+    return signInWithPopup(auth, googleProvider);
+  }
+};
 export const handleRedirectResult = () => getRedirectResult(auth);
 export const signInAsGuest = () => signInAnonymously(auth);
 export const logout = () => auth.signOut();
