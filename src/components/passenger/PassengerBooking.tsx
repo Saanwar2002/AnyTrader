@@ -2672,7 +2672,7 @@ export default function PassengerBooking() {
              try {
                const textToSpeak = "Your driver has arrived outside.";
                if (Capacitor.isNativePlatform()) {
-                 import(/* @vite-ignore */ '@capacitor-community/text-to-speech').then(({ TextToSpeech }) => {
+                 import('@capacitor-community/text-to-speech').then(({ TextToSpeech }) => {
                    TextToSpeech.speak({
                      text: textToSpeak,
                      rate: 1.0,

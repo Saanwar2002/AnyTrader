@@ -767,25 +767,33 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
 
 async function startServer() {
   const app = express();
+  app.set("trust proxy", 1);
   const PORT = 3000;
 
   // Rate limiters
+  const keyGenerator = (req: express.Request) => {
+    return (req.headers["x-forwarded-for"] || req.headers["forwarded"] || req.ip || "unknown").toString();
+  };
+
   const aiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 10,
-    message: { error: "Too many AI requests from this IP, please try again after a minute" }
+    message: { error: "Too many AI requests from this IP, please try again after a minute" },
+    keyGenerator
   });
   
   const paymentLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 20,
-    message: { error: "Too many payment requests from this IP" }
+    message: { error: "Too many payment requests from this IP" },
+    keyGenerator
   });
   
   const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 100,
-    message: { error: "Too many requests from this IP" }
+    message: { error: "Too many requests from this IP" },
+    keyGenerator
   });
 
   // Apply general limiter to all API routes

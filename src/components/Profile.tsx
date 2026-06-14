@@ -1,6 +1,8 @@
 import { TradeBot } from "./TradeBot";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
+import { BiometricService } from "@/src/services/biometricService";
+import { Fingerprint, ScanFace } from "lucide-react";
 import { logout, db, doc, updateDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
 import { 
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
@@ -215,6 +217,174 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour = i.toString().padStart(2, '0');
   return `${hour}:00`;
 });
+
+const BiometricSettings: React.FC<{ user: any }> = ({ user }) => {
+  const [available, setAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState<"face" | "fingerprint" | "none" | "biometric">("biometric");
+  const [enabled, setEnabled] = useState(false);
+  const [password, setPassword] = useState("");
+  const [showEnrollForm, setShowEnrollForm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    async function checkSupport() {
+      const status = await BiometricService.checkAvailability();
+      setAvailable(status.available);
+      setBiometricType(status.type);
+      setEnabled(BiometricService.isEnabled());
+    }
+    checkSupport();
+  }, []);
+
+  const handleToggle = async () => {
+    setError(null);
+    setSuccess(null);
+    if (enabled) {
+      BiometricService.disable();
+      setEnabled(false);
+      setSuccess("Biometric sign-in successfully disabled.");
+    } else {
+      setShowEnrollForm(true);
+    }
+  };
+
+  const handleEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    const email = user?.email;
+    if (!email) {
+      setError("Please ensure you are signed in with a valid email account.");
+      return;
+    }
+    if (!password.trim()) {
+      setError("Please enter your account password to confirm enrollment.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // First, prompt biometric authorization gesture
+      const verified = await BiometricService.authenticate("Confirm biometric signature to enable secure biometric login");
+      if (verified) {
+        const enrolled = await BiometricService.enroll(email, password);
+        if (enrolled) {
+          setEnabled(true);
+          setShowEnrollForm(false);
+          setPassword("");
+          setSuccess("Biometric sign-in configured successfully!");
+        } else {
+          setError("Failed to enroll credentials locally.");
+        }
+      } else {
+        setError("Biometric validation cancelled or failed.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Verification failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-6 md:p-5 bg-slate-50/50 font-sans">
+      <div className="p-6 bg-white border border-black rounded-2xl shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 border border-black/10">
+              {biometricType === "face" ? (
+                <ScanFace className="w-6 h-6 text-blue-600" />
+              ) : (
+                <Fingerprint className="w-6 h-6 text-blue-600" />
+              )}
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-900 leading-tight">Biometric Authentication</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm font-bold">
+                {!available
+                  ? "Biometrics are not supported or configured on this device."
+                  : `Enable rapid ${biometricType === "face" ? "FaceID" : "Fingerprint"} sign-in on your next app launch.`}
+              </p>
+            </div>
+          </div>
+          {available && (
+            <button
+              onClick={handleToggle}
+              className={cn(
+                "w-14 h-8 rounded-full transition-colors relative flex-shrink-0",
+                enabled ? "bg-emerald-500" : "bg-slate-200"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm",
+                  enabled ? "translate-x-6" : "translate-x-0"
+                )}
+              />
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-4 p-3.5 bg-red-50 border border-red-200 text-red-800 text-xs font-bold rounded-xl flex items-center gap-2">
+            <p className="flex-1">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="mt-4 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+            <p className="flex-1">{success}</p>
+          </div>
+        )}
+
+        {showEnrollForm && (
+          <form onSubmit={handleEnroll} className="mt-6 pt-5 border-t border-slate-100 flex flex-col gap-4 text-left">
+            <div>
+              <label className="block text-[10px] font-black text-slate-700 uppercase tracking-wider mb-2">
+                Verify Account Password
+              </label>
+              <input
+                type="password"
+                placeholder="Enter password..."
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border border-black rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-xs font-medium text-slate-900"
+                required
+              />
+              <p className="text-[10px] text-slate-400 mt-2 font-bold">
+                Please enter your account password to secure biometric key setup on this client device.
+              </p>
+            </div>
+            
+            <div className="flex gap-2.5">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 px-5 py-3 bg-black text-white text-[11px] font-black uppercase tracking-wider rounded-xl hover:bg-slate-800 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Verify & Enable"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEnrollForm(false);
+                  setPassword("");
+                  setError(null);
+                }}
+                className="px-5 py-3 bg-slate-100 border border-black/10 text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl hover:bg-slate-200 active:scale-[0.98] transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function Profile() {
   const { user, profile, setProfile } = useAuth();

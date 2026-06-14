@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { signInWithGoogle, signInAsGuest, signUpWithEmail, signInWithEmail, sendVerificationEmail, resetPassword, handleRedirectResult } from "@/src/firebase";
 import { motion } from "motion/react";
-import { LogIn, Loader2, UserCircle, Shield, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { LogIn, Loader2, UserCircle, Shield, Mail, Lock, Eye, EyeOff, Fingerprint, ScanFace } from "lucide-react";
+import { BiometricService } from "@/src/services/biometricService";
 import { isTemporaryEmail } from "@/src/lib/utils";
 import { Logo } from "./Logo";
 
@@ -15,6 +16,65 @@ export default function Login() {
   const [isSignup, setIsSignup] = useState(false);
   const [isResetPassword, setIsResetPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Biometrics States
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState<"face" | "fingerprint" | "none" | "biometric">("biometric");
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+  const [enableBiometricCheckbox, setEnableBiometricCheckbox] = useState(false);
+  const [showBiometricOverlay, setShowBiometricOverlay] = useState(false);
+  const [biometricStatusText, setBiometricStatusText] = useState("");
+
+  useEffect(() => {
+    async function checkBiometrics() {
+      const status = await BiometricService.checkAvailability();
+      setBiometricAvailable(status.available);
+      setBiometricType(status.type);
+      
+      const enrolled = BiometricService.isEnabled();
+      setBiometricsEnabled(enrolled);
+      
+      // Auto-trigger biometric verification if enrolled on device mount
+      if (enrolled && status.available) {
+        const timer = setTimeout(() => {
+          handleBiometricSignIn();
+        }, 800);
+        return () => clearTimeout(timer);
+      }
+    }
+    checkBiometrics();
+  }, []);
+
+  const handleBiometricSignIn = async () => {
+    setError(null);
+    setBiometricStatusText("Scanning biometric profile...");
+    setShowBiometricOverlay(true);
+    
+    try {
+      // Simulate/Process Scan and verify
+      const success = await BiometricService.authenticate("Verify FaceID / Tap your fingerprint sensor to sign in securely.");
+      if (success) {
+        const credentials = BiometricService.getCredentials();
+        if (credentials) {
+          setBiometricStatusText("Biometric authenticated securely! Singing in...");
+          setEmail(credentials.email);
+          setPassword(credentials.pass);
+          setLoading(true);
+          await signInWithEmail(credentials.email, credentials.pass);
+        } else {
+          setError("No stored biometric credentials found. Please sign in manually and enable biometrics in App Settings.");
+        }
+      } else {
+        // Cancelled or failed
+        setError("Biometric verification canceled by user.");
+      }
+    } catch (err: any) {
+      console.error("Biometric Login error:", err);
+      setError(err?.message || "Biometric authentication failed.");
+    } finally {
+      setShowBiometricOverlay(false);
+    }
+  };
 
   useEffect(() => {
     // Disabled handleRedirectResult on mount to prevent CSP-related auth/internal-error
@@ -63,6 +123,11 @@ export default function Login() {
         setIsSignup(false);
       } else {
         await signInWithEmail(trimmedEmail, trimmedPassword);
+        // Enroll biometrics dynamically on successful login if requested
+        if (biometricAvailable && enableBiometricCheckbox) {
+          await BiometricService.enroll(trimmedEmail, trimmedPassword);
+          console.log("[Login] Biometrics enrolled successfully on login for:", trimmedEmail);
+        }
       }
     } catch (error: any) {
       console.error("Auth error:", error);
@@ -245,6 +310,33 @@ export default function Login() {
         <div className="space-y-4">
           {!isResetPassword && (
             <>
+              {biometricsEnabled && biometricAvailable && !isSignup && (
+                <div className="p-4.5 bg-slate-50 border border-black rounded-2xl flex flex-col items-center gap-3.5 text-center shadow-sm relative overflow-hidden">
+                  <div className="absolute right-3 top-3 w-4 h-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  </div>
+                  <div className="flex items-center gap-3 w-full self-start text-left font-sans">
+                    <div className="w-12 h-12 rounded-xl bg-primary/5 flex items-center justify-center shrink-0 border border-black/10">
+                      {biometricType === "face" ? (
+                        <ScanFace className="w-6 h-6 text-primary" />
+                      ) : (
+                        <Fingerprint className="w-6 h-6 text-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-sm text-black">Fast Biometric Sign-In</p>
+                      <p className="text-[11px] text-slate-500 font-bold">Use FaceID / TouchID on this device</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleBiometricSignIn}
+                    className="w-full bg-black text-white hover:bg-slate-800 text-xs font-black uppercase tracking-widest py-3.5 px-4 rounded-xl transition-all active:scale-[0.98] border border-black hover:-translate-y-0.5 shadow-sm"
+                  >
+                    Authenticate with Biometrics
+                  </button>
+                </div>
+              )}
+
               <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors" />
                 <input
@@ -273,6 +365,23 @@ export default function Login() {
                   </button>
                 </div>
               )}
+
+              {!isSignup && !isResetPassword && biometricAvailable && (
+                <div className="flex items-center gap-2.5 px-1 py-1 max-w-full">
+                  <input
+                    type="checkbox"
+                    id="enableBiometricCheckbox"
+                    checked={enableBiometricCheckbox}
+                    onChange={(e) => setEnableBiometricCheckbox(e.target.checked)}
+                    className="w-4.5 h-4.5 rounded border border-black accent-primary cursor-pointer shrink-0"
+                  />
+                  <label htmlFor="enableBiometricCheckbox" className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <Fingerprint className="w-4 h-4 text-slate-600" />
+                    <span>Enable Biometric Sign-In next time</span>
+                  </label>
+                </div>
+              )}
+
               <button
                 onClick={handleEmailAuth}
                 disabled={loading}
@@ -338,7 +447,7 @@ export default function Login() {
               try {
                 await signInWithGoogle();
               } catch (error: any) {
-                console.error("Google Auth Error:", error);
+                console.warn("Google Auth Warning:", error);
                 const errMsg = error?.message || String(error);
                 const errCode = error?.code || "";
                 
@@ -415,6 +524,80 @@ export default function Login() {
         </div>
       </motion.div>
       </div>
+
+      {showBiometricOverlay && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 z-50 animate-fade-in">
+          <div className="w-full max-w-sm bg-white border border-black rounded-3xl p-6 text-center shadow-2xl relative">
+            <div className="flex flex-col items-center gap-5 my-4">
+              <div className="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center border border-black/10 relative">
+                {biometricType === "face" ? (
+                  <ScanFace className="w-10 h-10 text-primary animate-pulse" />
+                ) : (
+                  <Fingerprint className="w-10 h-10 text-primary animate-pulse" />
+                )}
+                <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-lg text-black leading-tight">Security Verification</h3>
+                <p className="text-xs text-slate-500 font-bold mt-1 px-4">Please authenticate to access your AnyTrader account</p>
+              </div>
+              <div className="w-full bg-slate-50 border border-black/10 py-3 rounded-2xl">
+                <p className="text-xs font-bold text-slate-700">{biometricStatusText}</p>
+              </div>
+              
+              {!Capacitor.isNativePlatform() && (
+                <div className="w-full flex flex-col gap-2 pt-2 border-t border-slate-100">
+                  <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Web Simulator controls</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setBiometricStatusText("Simulated scan! Authenticating...");
+                        await new Promise(resolve => setTimeout(resolve, 800));
+                        const credentials = BiometricService.getCredentials();
+                        if (credentials) {
+                          setBiometricStatusText("Biometrics verified! Loading profile...");
+                          setEmail(credentials.email);
+                          setPassword(credentials.pass);
+                          setLoading(true);
+                          await signInWithEmail(credentials.email, credentials.pass);
+                        } else {
+                          setError("Simulator Alert: You haven't enrolled any credentials. Tick 'Enable Biometric Sign-In next time' below the password field, log in once with email/password, and on next logout you can log in instantly with one-click!");
+                        }
+                        setShowBiometricOverlay(false);
+                      }}
+                      className="flex-1 bg-black text-white text-[11px] font-black uppercase py-2.5 rounded-xl hover:bg-slate-800 active:scale-95 transition-transform"
+                    >
+                      Authenticate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError("Biometric identity challenge failed / rejected (simulated).");
+                        setShowBiometricOverlay(false);
+                      }}
+                      className="flex-1 bg-slate-100 border border-black/10 text-slate-700 text-[11px] font-black uppercase py-2.5 rounded-xl hover:bg-slate-200 active:scale-95 transition-transform"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {Capacitor.isNativePlatform() && (
+                <button
+                  type="button"
+                  onClick={() => setShowBiometricOverlay(false)}
+                  className="w-full bg-slate-100 border border-black/10 text-slate-700 text-xs font-extrabold py-3 rounded-xl hover:bg-slate-200 active:scale-95 transition-transform mt-2"
+                >
+                  Cancel Scan
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

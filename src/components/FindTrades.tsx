@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic } from "lucide-react";
 import { db, collection, query, where, onSnapshot, setDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { cn } from "@/src/lib/utils";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -10,6 +10,9 @@ import { TRADE_CATEGORIES, PROFESSIONAL_BADGES } from "@/src/constants";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { SEO } from "./SEO";
 import { seedMockTraders } from "@/src/services/seedService";
+import { Capacitor } from '@capacitor/core';
+import { SpeechRecognition } from "@capacitor-community/speech-recognition";
+import { toast } from "sonner";
 
 const iconMap: Record<string, any> = {
   Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase
@@ -87,6 +90,107 @@ export default function FindTrades() {
   const [selectedTraderPreview, setSelectedTraderPreview] = useState<Tradesperson | null>(null);
   const [selectedMiniProfile, setSelectedMiniProfile] = useState<Tradesperson | null>(null);
   const resultsRef = React.useRef<HTMLDivElement>(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = React.useRef<any>(null);
+
+  const startVoiceSearch = async () => {
+    try {
+      if (isListening) {
+        if (Capacitor.isNativePlatform()) {
+          try { await SpeechRecognition.stop(); } catch (e) {}
+        } else if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
+        setIsListening(false);
+        return;
+      }
+
+      if (Capacitor.isNativePlatform()) {
+        const { available } = await SpeechRecognition.available();
+        if (!available) {
+          toast.error("Speech recognition is not available on this device.");
+          return;
+        }
+
+        const check = await SpeechRecognition.checkPermissions();
+        if (check.speechRecognition !== 'granted') {
+          const req = await SpeechRecognition.requestPermissions();
+          if (req.speechRecognition !== 'granted') {
+            toast.error("Microphone permission is required for voice search.");
+            return;
+          }
+        }
+
+        setIsListening(true);
+        if ((window as any)._findTradesSpeechListener) await (window as any)._findTradesSpeechListener.remove().catch(() => {});
+        const listener = await SpeechRecognition.addListener('partialResults', (data: { matches: string[] }) => {
+          if (data.matches && data.matches.length > 0) {
+            setSearchQuery(data.matches[0]);
+          }
+        });
+        (window as any)._findTradesSpeechListener = listener;
+
+        if ((window as any)._findTradesStateListener) await (window as any)._findTradesStateListener.remove().catch(() => {});
+        const stateListener = await SpeechRecognition.addListener('listeningState', (data: { status: 'started' | 'stopped' }) => {
+          if (data.status === 'stopped') {
+            setIsListening(false);
+            if ((window as any)._findTradesSpeechListener) (window as any)._findTradesSpeechListener.remove().catch(() => {});
+            stateListener.remove().catch(() => {});
+          }
+        });
+        (window as any)._findTradesStateListener = stateListener;
+
+        await SpeechRecognition.start({
+          language: "en-GB",
+          maxResults: 2,
+          prompt: "What are you looking for...",
+          partialResults: true,
+          popup: false,
+        });
+
+      } else {
+        const InternalSpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!InternalSpeechRecognition) {
+          toast.error("Your browser does not support voice search. Please try Chrome, Edge, or Safari.");
+          return;
+        }
+
+        const recognition = new InternalSpeechRecognition();
+        recognitionRef.current = recognition;
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = "en-GB";
+
+        recognition.onstart = () => {
+          setIsListening(true);
+        };
+
+        recognition.onresult = (event: any) => {
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+          }
+          setSearchQuery(transcript);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          setIsListening(false);
+          toast.error("Failed to recognize speech. Please try again.");
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognition.start();
+      }
+    } catch (e: any) {
+      console.error(e);
+      setIsListening(false);
+      toast.error(e.message || "Error starting voice recognition. Please try again.");
+    }
+  };
 
   useEffect(() => {
     if (!selectedMiniProfile) return;
@@ -521,19 +625,51 @@ export default function FindTrades() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
             type="text"
-            placeholder="Name, trade, postcode..."
+            placeholder={isListening ? "Listening..." : "Name, trade, postcode..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white text-slate-900 pl-12 pr-12 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner"
+            className={cn(
+               "w-full bg-white pl-12 pr-24 py-3 rounded-2xl shadow-inner transition-colors",
+               isListening ? "focus:outline-none focus:ring-2 focus:ring-red-500 border-2 border-red-500 bg-red-50" : "text-slate-900 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+            )}
           />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery("")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 group">
+            <div className="relative flex items-center justify-center">
+              <button 
+                onClick={startVoiceSearch}
+                title="Voice Search"
+                className={cn(
+                  "p-2 rounded-xl transition-all flex items-center justify-center",
+                  isListening ? "bg-red-500 text-white animate-pulse shadow-md shadow-red-500/20" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                )}
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+
+              <div className={cn(
+                "absolute right-0 top-full mt-2 w-max max-w-[240px] p-3 bg-slate-800 text-white rounded-xl shadow-xl z-50 transition-all origin-top-right pointer-events-none",
+                isListening ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible group-hover:opacity-100 group-hover:scale-100 group-hover:visible"
+              )}>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
+                   <Info className="w-3 h-3" /> Voice Commands
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs bg-slate-700/50 px-2 py-1 rounded-md border border-slate-600/50">"Find a plumber in Manchester"</span>
+                  <span className="text-xs bg-slate-700/50 px-2 py-1 rounded-md border border-slate-600/50">"Emergency electrician"</span>
+                </div>
+                <div className="absolute -top-1.5 right-3 w-3 h-3 bg-slate-800 rotate-45 rounded-sm"></div>
+              </div>
+            </div>
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery("")}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+                title="Clear Search"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Categories */}

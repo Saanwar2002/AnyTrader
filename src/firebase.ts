@@ -205,8 +205,7 @@ export const signInWithGoogle = async () => {
   if (Capacitor.isNativePlatform()) {
     try {
       console.log("[signInWithGoogle] Capacitor native container detected. Loading native authentication plugin...");
-      const packageName = "@capacitor-firebase/authentication";
-      const { FirebaseAuthentication } = await import(/* @vite-ignore */ packageName) as any;
+      const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
       console.log("[signInWithGoogle] Triggering native Google Flow on device...");
       const result = await FirebaseAuthentication.signInWithGoogle({});
       console.log("[signInWithGoogle] Native authentication completed. Checking credentials...");
@@ -223,7 +222,7 @@ export const signInWithGoogle = async () => {
       console.log("[signInWithGoogle] Success! Authenticated user ID:", userCredential.user?.uid);
       return userCredential;
     } catch (err: any) {
-      console.error("[signInWithGoogle] Native Google Sign-In failed:", err);
+      console.warn("[signInWithGoogle] Native Google Sign-In status:", err);
       
       // Map common native Play Services / OAuth error codes to friendly developer-facing instructions
       const rawErrorStr = err.message || JSON.stringify(err) || "Unknown Error";
