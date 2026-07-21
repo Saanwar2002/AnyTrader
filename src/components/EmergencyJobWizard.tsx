@@ -730,7 +730,12 @@ export default function EmergencyJobWizard() {
                       async (position) => {
                         try {
                           const { latitude: lat, longitude: lng } = position.coords;
-                          const geocoder = new google.maps.Geocoder();
+                          if (!window.google) {
+                            toast.error("Google Maps API not loaded. Please try again in a moment.");
+                            setIsLocating(false);
+                            return;
+                          }
+                          const geocoder = new window.google.maps.Geocoder();
                           geocoder.geocode({ location: { lat, lng } }, (results, status) => {
                             if (status === "OK" && results?.[0]) {
                               const foundAddress = results[0].formatted_address;
@@ -758,20 +763,30 @@ export default function EmergencyJobWizard() {
                                 area: newArea,
                                 postcode: newPostcode
                               }));
+                            } else {
+                              toast.error(`Could not determine address from location (Status: ${status})`);
                             }
                             setIsLocating(false);
                           });
                         } catch (err) {
-                          console.error("Geocoding failed:", err);
+                          console.warn("Geocoding failed:", err);
+                          toast.error("Error during address lookup. Please try again.");
                           setIsLocating(false);
                         }
                       },
                       (err) => {
-                        console.error("Geolocation error:", err);
+                        let msg = "Could not determine your location.";
+                        if (err.code === 1) msg = "Location permission denied. Please allow location access in your device settings.";
+                        if (err.code === 2) msg = "Location unavailable. Please check your GPS/network.";
+                        if (err.code === 3) msg = "Location request timed out. Please try again.";
+                        toast.error(msg);
+                        console.warn("Geolocation error:", err);
                         setIsLocating(false);
                       },
-                      { timeout: 10000 }
+                      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
                     );
+                  } else {
+                    toast.error("Geolocation is not supported by your browser.");
                   }
                 }}
               >

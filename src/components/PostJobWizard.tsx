@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Search,
   Plus,
+  Play,
   Info,
   Building2,
   ChevronDown,
@@ -579,6 +580,119 @@ export default function PostJobWizard() {
   const currentSessionTextRef = useRef("");
 
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [isRecordingAudioNote, setIsRecordingAudioNote] = useState(false);
+  const [audioNoteTime, setAudioNoteTime] = useState(0);
+  const audioNoteChunksRef = useRef<Blob[]>([]);
+  const audioNoteRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioNoteTimerRef = useRef<any>(null);
+  const audioNoteStreamRef = useRef<MediaStream | null>(null);
+
+  const stopAudioNoteRecording = useCallback(async () => {
+    if (audioNoteRecorderRef.current && audioNoteRecorderRef.current.state !== 'inactive') {
+      audioNoteRecorderRef.current.stop();
+    }
+    if (audioNoteTimerRef.current) clearInterval(audioNoteTimerRef.current);
+    if (audioNoteStreamRef.current) {
+      audioNoteStreamRef.current.getTracks().forEach(track => track.stop());
+      audioNoteStreamRef.current = null;
+    }
+    setIsRecordingAudioNote(false);
+  }, []);
+
+  const handleStartAudioNote = async () => {
+    if (!user) return;
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const { available } = await SpeechRecognition.available();
+        if (available) {
+          const check = await SpeechRecognition.checkPermissions();
+          if (check.speechRecognition !== 'granted') {
+            const req = await SpeechRecognition.requestPermissions();
+            if (req.speechRecognition !== 'granted') {
+              toast.error("Microphone permission is required to record audio notes.");
+              return;
+            }
+          }
+        }
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioNoteStreamRef.current = stream;
+      
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/mp4';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = '';
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      audioNoteRecorderRef.current = mediaRecorder;
+      audioNoteChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioNoteChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        if (audioNoteChunksRef.current.length === 0) return;
+        setIsUploadingDoc(true);
+        try {
+          const actualMimeType = mediaRecorder.mimeType || 'audio/webm';
+          const extension = actualMimeType.includes('mp4') ? 'mp4' : 'webm';
+          const blob = new Blob(audioNoteChunksRef.current, { type: actualMimeType });
+          const fileName = `jobs/${user.uid}/audionotes/${Date.now()}_AudioNote.${extension}`;
+          
+          if (isSimulateMode) {
+             const localUrl = await readFileAsDataURL(new File([blob], fileName));
+             setFormData(prev => ({ 
+               ...prev, 
+               documents: [...prev.documents, { name: 'Audio Note', url: localUrl }] 
+             }));
+             toast.success("Audio note attached!");
+             return;
+          }
+          
+          const storageRef = ref(storage, fileName);
+          const arrayBuffer = await blob.arrayBuffer();
+          const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: blob.type || 'audio/webm' });
+          const url = await getDownloadURL(snapshot.ref);
+          
+          setFormData(prev => ({ 
+            ...prev, 
+            documents: [...prev.documents, { name: 'Audio Note', url }] 
+          }));
+          toast.success("Audio note added successfully!");
+        } catch (err) {
+          console.error("Audio note upload failed:", err);
+          toast.error("Failed to upload audio note");
+        } finally {
+          setIsUploadingDoc(false);
+        }
+      };
+      
+      mediaRecorder.start(200);
+      setIsRecordingAudioNote(true);
+      setAudioNoteTime(0);
+      audioNoteTimerRef.current = setInterval(() => {
+        setAudioNoteTime((prev) => {
+          if (prev >= 60) { // Max 60 seconds
+            stopAudioNoteRecording();
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+      
+    } catch (err) {
+      console.error("Microphone access denied:", err);
+      toast.error("Microphone permission denied. Please allow access to record audio notes.");
+    }
+  };
 
   const handleToggleListening = async () => {
     if (isListening) {
@@ -1572,6 +1686,7 @@ export default function PostJobWizard() {
           try {
             const { latitude: lat, longitude: lng } = position.coords;
             if (!window.google) {
+              toast.error("Google Maps API not loaded. Please try again in a moment.");
               setIsLocating(false);
               return;
             }
@@ -1604,20 +1719,30 @@ export default function PostJobWizard() {
                   area: newArea,
                   postcode: newPostcode
                 }));
+              } else {
+                toast.error(`Could not determine address from location (Status: ${status})`);
               }
               setIsLocating(false);
             });
           } catch (err) {
             console.error("Geocoding failed:", err);
+            toast.error("Error during address lookup. Please try again.");
             setIsLocating(false);
           }
         },
         (err) => {
-          console.error("Geolocation failed:", err);
+          let msg = "Could not determine your location.";
+          if (err.code === 1) msg = "Location permission denied. Please allow location access in your device settings.";
+          if (err.code === 2) msg = "Location unavailable. Please check your GPS/network.";
+          if (err.code === 3) msg = "Location request timed out. Please try again.";
+          toast.error(msg);
+          console.warn("Geolocation failed:", err);
           setIsLocating(false);
         },
-        { timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
+    } else {
+      toast.error("Geolocation is not supported by your browser.");
     }
   };
 
@@ -2562,6 +2687,27 @@ export default function PostJobWizard() {
                        <FileText className="w-4 h-4 text-[#0084a5]" /> Add PDF
                      </button>
                      <button 
+                       onClick={isRecordingAudioNote ? stopAudioNoteRecording : handleStartAudioNote}
+                       disabled={isUploadingDoc}
+                       className={cn(
+                         "px-3 py-2 rounded-xl border font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all",
+                         isRecordingAudioNote 
+                            ? "bg-red-500 border-red-600 text-white animate-pulse" 
+                            : "border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5]"
+                       )}
+                     >
+                       {isRecordingAudioNote ? (
+                         <>
+                           <StopCircle className="w-4 h-4 text-white" />
+                           Recording Note... {audioNoteTime}s
+                         </>
+                       ) : (
+                         <>
+                           <Mic className="w-4 h-4 text-[#0084a5]" /> Add Audio Note
+                         </>
+                       )}
+                     </button>
+                     <button 
                        onClick={() => setShowDrawingModal(true)}
                        className="px-3 py-2 rounded-xl border border-black text-slate-600 bg-white hover:border-[#0084a5] hover:text-[#0084a5] font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
                      >
@@ -2607,12 +2753,21 @@ export default function PostJobWizard() {
                         </div>
                       ))}
                       {formData.documents.map((doc, i) => (
-                        <div key={`doc-${i}`} className="flex items-center gap-2 p-2 w-16 h-16 bg-slate-50 flex-col justify-center rounded-xl border border-black shadow-sm relative">
-                          <FileText className="w-6 h-6 text-indigo-600 shrink-0" />
+                        <div key={`doc-${i}`} className="flex items-center gap-2 p-2 w-16 h-16 bg-slate-50 flex-col justify-center rounded-xl border border-black shadow-sm relative overflow-hidden group">
+                          {doc.name === 'Audio Note' ? (
+                            <Mic className="w-6 h-6 text-blue-600 shrink-0" />
+                          ) : (
+                            <FileText className="w-6 h-6 text-indigo-600 shrink-0" />
+                          )}
                           <span className="text-[9px] text-slate-700 truncate w-full text-center font-medium">{doc.name}</span>
+                          {doc.name === 'Audio Note' && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Play className="w-5 h-5 text-white cursor-pointer" onClick={() => window.open(doc.url, '_blank')} />
+                            </div>
+                          )}
                           <button 
-                            onClick={() => setFormData(prev => ({ ...prev, documents: prev.documents.filter((_, idx) => idx !== i) }))}
-                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600"
+                            onClick={() => setFormData(prev => ({ ...prev, documents: prev.documents.filter((_, idx) => i !== idx) }))}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 z-10"
                           >
                             <X className="w-3 h-3" />
                           </button>

@@ -7,6 +7,28 @@ import { AuthProvider } from './components/AuthProvider';
 import { RemoteConfigProvider } from './components/RemoteConfigProvider';
 import { HelmetProvider } from 'react-helmet-async';
 import { Capacitor } from '@capacitor/core';
+import { registerSW } from 'virtual:pwa-register';
+
+// Register service worker for offline support
+if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
+  const updateSW = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      // Optional: prompt user to refresh
+      console.log('App update available. Please refresh.');
+    },
+    onOfflineReady() {
+      console.log('App ready to work offline');
+    },
+  });
+
+  // Check for updates when the app comes back online
+  window.addEventListener('online', () => {
+    console.log('App is back online, checking for updates...');
+    updateSW(true);
+  });
+}
+
 
 // Save the last known web origin for dynamic server-side routing inside Capacitor
 if (!Capacitor.isNativePlatform() && typeof window !== 'undefined') {
@@ -22,6 +44,16 @@ if (Capacitor.isNativePlatform()) {
   const originalFetch = window.fetch;
   window.fetch = async function (input, init) {
     let url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input && 'url' in input ? (input as any).url : ''));
+    
+    // Explicitly exclude Firebase and Google API endpoints from redirection
+    if (typeof url === 'string' && (
+      url.includes('identitytoolkit.googleapis.com') ||
+      url.includes('securetoken.googleapis.com') ||
+      url.includes('firebasestorage.googleapis.com') ||
+      url.includes('firestore.googleapis.com')
+    )) {
+      return originalFetch.apply(this, [input, init]);
+    }
     
     if (typeof url === 'string' && url.startsWith('/api/')) {
       const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_APP_URL || (import.meta as any).env?.APP_URL;

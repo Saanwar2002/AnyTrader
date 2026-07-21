@@ -76,12 +76,8 @@ export default function Chat() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !user || !conversationId) return;
-
-    const text = newMessage.trim();
-    setNewMessage("");
+  const sendText = async (text: string) => {
+    if (!text || !user || !conversationId) return;
 
     try {
       await addDoc(collection(db, "conversations", conversationId, "messages"), {
@@ -120,6 +116,51 @@ export default function Chat() {
       }
     }
   };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+    
+    const text = newMessage.trim();
+    setNewMessage("");
+    await sendText(text);
+  };
+
+  const handleSendQuickReply = async (reply: string) => {
+    await sendText(reply);
+  };
+
+  const getQuickReplies = () => {
+    if (messages.length === 0) {
+      return [
+        "Are you available?",
+        "Can you provide a quote?",
+        "When can you start?",
+      ];
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.senderId !== user?.uid) {
+      const text = lastMessage.text?.toLowerCase() || "";
+      if (text.includes("available")) {
+        return ["Yes, it is!", "Not right now, sorry.", "When do you need it?"];
+      }
+      if (text.includes("quote") || text.includes("price") || text.includes("cost") || text.includes("estimate")) {
+        return ["Sure, what are the details?", "I'll send one shortly.", "What's your budget?"];
+      }
+      if (text.includes("when") || text.includes("time") || text.includes("start")) {
+        return ["I can start tomorrow.", "Next week works for me.", "Let's schedule a time."];
+      }
+      if (text.includes("where") || text.includes("location") || text.includes("address")) {
+        return ["Could you share the address?", "It's nearby.", "I will check the map."];
+      }
+      return ["Thanks!", "Sounds good.", "Let me know if you have questions."];
+    }
+    
+    return [];
+  };
+
+  const quickReplies = getQuickReplies();
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -414,6 +455,22 @@ export default function Chat() {
         </AnimatePresence>
         <div ref={scrollRef} />
       </div>
+
+      {/* Quick Replies */}
+      {quickReplies.length > 0 && (
+        <div className="px-2 sm:px-4 pb-2 pt-2 bg-white flex gap-2 overflow-x-auto shrink-0 border-t border-black/5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {quickReplies.map((reply) => (
+            <button
+              key={reply}
+              type="button"
+              onClick={() => handleSendQuickReply(reply)}
+              className="whitespace-nowrap px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium rounded-xl border border-blue-200 transition-colors active:scale-95 flex-shrink-0"
+            >
+              {reply}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Input */}
       <form onSubmit={handleSendMessage} className="p-2 sm:p-4 border-t border-black flex gap-1 sm:gap-2 items-center bg-white shrink-0">

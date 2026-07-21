@@ -25,14 +25,12 @@ const initFirebase = () => {
   try {
     // Check if the app is already initialized
     let app;
-    const existingApp = admin.apps.find(a => a?.name === "SERVER_INIT");
-    
-    if (existingApp) {
-      app = existingApp;
+    if (admin.apps.length > 0) {
+      app = admin.apps[0];
     } else {
       app = admin.initializeApp({
         projectId: firebaseConfig.projectId,
-      }, "SERVER_INIT");
+      });
       console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
     }
     
@@ -737,7 +735,7 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
     (req as any).user = decodedToken;
     next();
   } catch (error) {
-    return res.status(401).json({ error: "Unauthorized: invalid token" });
+    console.error("Token err:", error); return res.status(401).json({ error: "Unauthorized: invalid token" });
   }
 };
 
@@ -760,7 +758,7 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
     (req as any).user = decodedToken;
     next();
   } catch (error) {
-    return res.status(401).json({ error: "Unauthorized: invalid token" });
+    console.error("Token err:", error); return res.status(401).json({ error: "Unauthorized: invalid token" });
   }
 };
 
@@ -771,29 +769,23 @@ async function startServer() {
   const PORT = 3000;
 
   // Rate limiters
-  const keyGenerator = (req: express.Request) => {
-    return (req.headers["x-forwarded-for"] || req.headers["forwarded"] || req.ip || "unknown").toString();
-  };
 
   const aiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 10,
     message: { error: "Too many AI requests from this IP, please try again after a minute" },
-    keyGenerator
   });
   
   const paymentLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 20,
     message: { error: "Too many payment requests from this IP" },
-    keyGenerator
   });
   
   const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 100,
     message: { error: "Too many requests from this IP" },
-    keyGenerator
   });
 
   // Apply general limiter to all API routes

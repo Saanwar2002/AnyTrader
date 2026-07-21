@@ -13,7 +13,7 @@ import {
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
   BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation,
-  MessageCircle, Mail, Check, Plus, ImageIcon
+  MessageCircle, Mail, Check, Plus, ImageIcon, Mic, Play
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { Capacitor } from '@capacitor/core';
@@ -3535,7 +3535,7 @@ const libraries: any[] = ['places', 'geometry'];
         {/* Documents Section */}
         {job.documents && job.documents.length > 0 && (
           <div className="space-y-3">
-            <h3 className="text-xl font-bold text-slate-900">Plans & Drawings</h3>
+            <h3 className="text-xl font-bold text-slate-900">Files & Audio Notes</h3>
             <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
@@ -3543,11 +3543,13 @@ const libraries: any[] = ['places', 'geometry'];
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-900 text-sm">Project Documents</h4>
-                  <p className="text-[10px] text-slate-500">Essential plans for accurate quoting</p>
+                  <p className="text-[10px] text-slate-500">Essential plans and audio notes for accurate quoting</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-2">
-                {job.documents.map((doc: any, idx: number) => (
+                {job.documents.map((doc: any, idx: number) => {
+                  const isAudio = doc.name === 'Audio Note';
+                  return (
                   <a 
                     key={idx} 
                     href={doc.url} 
@@ -3557,13 +3559,13 @@ const libraries: any[] = ['places', 'geometry'];
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
-                        <FileText className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                        {isAudio ? <Mic className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" /> : <FileText className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />}
                       </div>
                       <span className="text-sm font-bold text-slate-700 truncate">{doc.name}</span>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                    {isAudio ? <Play className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-colors" /> : <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-colors" />}
                   </a>
-                ))}
+                )})}
               </div>
             </div>
           </div>

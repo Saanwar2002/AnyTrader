@@ -1787,6 +1787,7 @@ export default function PassengerBooking() {
       setMapZoom(16);
 
       if (!window.google || !window.google.maps) {
+        toast.error("Google Maps API not loaded. Please try again in a moment.");
         setIsDetecting(false);
         return;
       }
@@ -1816,9 +1817,13 @@ export default function PassengerBooking() {
         }
       });
     }, (err) => {
+      let msg = "Failed to detect location.";
+      if (err.code === 1) msg = "Location permission denied. Please allow location access in your device settings.";
+      if (err.code === 2) msg = "Location unavailable. Please check your GPS/network.";
+      if (err.code === 3) msg = "Location request timed out. Please try again.";
+      toast.error(msg);
       setIsDetecting(false);
-      toast.error("Failed to detect location. Please check browser permissions.");
-    }, { enableHighAccuracy: true });
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   };
 
   const [driverPos, setDriverPos] = useState<{lat: number, lng: number} | null>(null);
