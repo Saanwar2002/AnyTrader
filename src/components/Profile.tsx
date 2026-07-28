@@ -3,18 +3,20 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { BiometricService } from "@/src/services/biometricService";
 import { Fingerprint, ScanFace } from "lucide-react";
-import { logout, db, doc, updateDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
+import { auth, logout, db, doc, updateDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
 import { 
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
   ShieldCheck, CheckCircle, CheckCircle2, Heart, Moon, Award, RefreshCw, Pause, Play, XCircle, Sparkles, ShieldAlert, Phone,
-  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList, CalendarClock
+  Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList, CalendarClock, Smartphone, Monitor
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { polishBio } from "@/src/services/gemini";
 import { motion, AnimatePresence } from "motion/react";
 import { usePWAInstall } from "@/src/hooks/usePWAInstall";
 import { usePortal } from "@/src/lib/PortalContext";
+import { CURRENT_APP_VERSION, checkUpdateNeeded } from "@/src/lib/version";
+import { AppUpdateModal } from "./common/AppUpdateModal";
 import { cn } from "@/src/lib/utils";
 import { 
   DndContext, 
@@ -393,6 +395,130 @@ export default function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isInstallable, installApp } = usePWAInstall();
+
+  const [showManualUpdateModal, setShowManualUpdateModal] = useState(false);
+  const [uiMode, setUiMode] = useState<"classic" | "mobile">(
+    profile?.uiMode || (localStorage.getItem("app_ui_mode") as "classic" | "mobile") || "mobile"
+  );
+
+  useEffect(() => {
+    if (profile?.uiMode && profile.uiMode !== uiMode) {
+      setUiMode(profile.uiMode);
+      localStorage.setItem("app_ui_mode", profile.uiMode);
+    }
+  }, [profile?.uiMode]);
+
+  const handleUiModeChange = async (mode: "classic" | "mobile") => {
+    setUiMode(mode);
+    localStorage.setItem("app_ui_mode", mode);
+    if (user?.uid) {
+      try {
+        await updateDoc(doc(db, "users", user.uid), { uiMode: mode });
+      } catch (e) {
+        console.error("Error updating UI mode in Firestore:", e);
+      }
+    }
+    setProfile((prev: any) => ({ ...prev, uiMode: mode }));
+  };
+
+  const renderUiModeSelector = () => (
+    <div className="p-4 sm:p-5 bg-slate-50 border-t border-black rounded-b-3xl space-y-3">
+      <div className="bg-white p-4 rounded-2xl border border-black shadow-sm space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 className="text-sm font-black text-slate-900 leading-tight">Display Layout Mode</h4>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Choose your preferred layout experience for mobile and desktop screens.</p>
+          </div>
+          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-full border border-blue-100 shrink-0">
+            {uiMode === "mobile" ? "Mobile Friendly" : "Classic"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => handleUiModeChange("mobile")}
+            className={cn(
+              "p-3.5 rounded-xl border-2 text-left transition-all flex items-start gap-3 relative overflow-hidden",
+              uiMode === "mobile" 
+                ? "bg-slate-900 text-white border-black shadow-md" 
+                : "bg-white text-slate-800 border-slate-200 hover:border-slate-400"
+            )}
+          >
+            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5", uiMode === "mobile" ? "bg-blue-500/20 text-blue-400" : "bg-slate-100 text-slate-600")}>
+              <Smartphone className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-xs">Mobile Friendly</span>
+                {uiMode === "mobile" && <Check className="w-3.5 h-3.5 text-blue-400" />}
+              </div>
+              <p className={cn("text-[10px] leading-tight mt-1", uiMode === "mobile" ? "text-slate-300" : "text-slate-500")}>
+                Bottom sticky action bars, 48px touch targets, swipe sheets & haptic feedback.
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleUiModeChange("classic")}
+            className={cn(
+              "p-3.5 rounded-xl border-2 text-left transition-all flex items-start gap-3 relative overflow-hidden",
+              uiMode === "classic" 
+                ? "bg-slate-900 text-white border-black shadow-md" 
+                : "bg-white text-slate-800 border-slate-200 hover:border-slate-400"
+            )}
+          >
+            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5", uiMode === "classic" ? "bg-blue-500/20 text-blue-400" : "bg-slate-100 text-slate-600")}>
+              <Monitor className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-xs">Classic</span>
+                {uiMode === "classic" && <Check className="w-3.5 h-3.5 text-blue-400" />}
+              </div>
+              <p className={cn("text-[10px] leading-tight mt-1", uiMode === "classic" ? "text-slate-300" : "text-slate-500")}>
+                Standard desktop layout with classic top controls & traditional modals.
+              </p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* App Version & OTA Updates Section */}
+      <div className="bg-white p-4 rounded-2xl border border-black shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+              <Sparkles className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-900 leading-tight">App Information & Version</h4>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                Installed Version: <span className="font-mono font-bold text-slate-800">v{CURRENT_APP_VERSION}</span>
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowManualUpdateModal(true)}
+            className="px-3 py-2 bg-black hover:bg-slate-800 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Check for Updates</span>
+          </button>
+        </div>
+
+        <AppUpdateModal
+          platformConfig={platformConfig}
+          isOpenOverride={showManualUpdateModal}
+          onCloseOverride={() => setShowManualUpdateModal(false)}
+          isManualCheck={true}
+        />
+      </div>
+    </div>
+  );
+
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingMiniProfile, setIsEditingMiniProfile] = useState(false);
   const [expandedMenuId, setExpandedMenuId] = useState<string | null>(null);
@@ -1134,6 +1260,7 @@ export default function Profile() {
       title: "Account",
       items: [
         { icon: User, label: "Account Details", path: "#account" },
+        { icon: Smartphone, label: "Classic / Mobile Friendly", path: "#uimode" },
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
         { icon: Shield, label: "Privacy & Security", path: "#privacy" },
       ]
@@ -1200,8 +1327,9 @@ export default function Profile() {
       ]
     },
     {
-      title: "App",
+      title: "App Settings",
       items: [
+        { icon: Smartphone, label: "Classic / Mobile Friendly", path: "#uimode" },
         { icon: Repeat, label: "Switch to AnyTrader", path: "#switch_portal" },
         { icon: Bell, label: "Notifications", path: "/notifications" },
         { icon: Settings, label: "App Settings", path: "#settings" },
@@ -1215,6 +1343,7 @@ export default function Profile() {
       title: "Account",
       items: [
         { icon: User, label: "Account Details", path: "#account" },
+        { icon: Smartphone, label: "Classic / Mobile Friendly", path: "#uimode" },
         { icon: Bell, label: "Notification Preferences", path: "#notifications" },
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
         { icon: PoundSterling, label: "Billing & Pricing Tiers", path: "/billing" },
@@ -1486,6 +1615,9 @@ export default function Profile() {
               </div>
             </div>
           );
+        case "#uimode":
+        case "#settings":
+          return renderUiModeSelector();
         default:
           return (
             <div className="p-6 text-center bg-slate-50 border-t border-black rounded-b-3xl">
@@ -3014,6 +3146,8 @@ export default function Profile() {
                                         </div>
                                       </div>
                                     </div>
+                                  ) : item.path === "#uimode" || item.path === "#settings" ? (
+                                    renderUiModeSelector()
                                   ) : (
                                     <div className="p-5 text-center bg-slate-50">
                                       <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-black">

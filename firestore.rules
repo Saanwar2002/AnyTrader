@@ -63,7 +63,7 @@ service cloud.firestore {
 
     // --- Rides Portal ---
     match /driver_reviews/{reviewId} {
-      allow create: if isSignedIn() && request.resource.data.passengerId == request.auth.uid;
+      allow create: if isSignedIn() && (request.resource.data.get('passengerId', '') == request.auth.uid || request.resource.data.get('riderId', '') == request.auth.uid);
       // Passengers cannot read them afterwards.
       // Drivers can only list reviews that have passed the cooling-off period.
       allow read, list: if isAdmin() || (
@@ -74,13 +74,13 @@ service cloud.firestore {
     }
 
     match /ride_requests/{rideId} {
-      allow create: if isSignedIn() && request.resource.data.passengerId == request.auth.uid;
-      allow read: if isSignedIn() && (resource == null || resource.data.status == "pending" || resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid || resource.data.assignedDriverId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (resource == null || resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid || resource.data.assignedDriverId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('passengerId', '') == request.auth.uid || request.resource.data.get('riderId', '') == request.auth.uid);
+      allow read: if isSignedIn() && (resource == null || resource.data.status in ["pending", "searching", "offered", "draft"] || resource.data.get('passengerId', '') == request.auth.uid || resource.data.get('riderId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource == null || resource.data.get('passengerId', '') == request.auth.uid || resource.data.get('riderId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
 
       match /chat/{messageId} {
-        allow read, write: if isSignedIn() && (get(/databases/$(database)/documents/ride_requests/$(rideId)).data.passengerId == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.driverId == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.assignedDriverId == request.auth.uid || isAdmin());
+        allow read, write: if isSignedIn() && (get(/databases/$(database)/documents/ride_requests/$(rideId)).data.get('passengerId', '') == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.get('riderId', '') == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.get('driverId', '') == request.auth.uid || get(/databases/$(database)/documents/ride_requests/$(rideId)).data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
       }
     }
 
@@ -92,7 +92,7 @@ service cloud.firestore {
     
     match /live_tracking/{rideId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow write: if isSignedIn() && (resource == null || resource.data.driverId == request.auth.uid || request.resource.data.driverId == request.auth.uid || isAdmin());
     }
 
     match /driver_status/{driverId} {
@@ -289,49 +289,58 @@ service cloud.firestore {
       allow read: if isSignedIn() && (resource == null || resource.data.consultantId == request.auth.uid || isAdmin());
       allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
     }
+    // Helper function for consultancy ownership
+    function isConsultancyOwner() {
+      return isSignedIn() && (
+        (resource != null && (resource.data.businessId == request.auth.uid || resource.data.consultantId == request.auth.uid || resource.data.userId == request.auth.uid)) ||
+        (request.resource != null && (request.resource.data.businessId == request.auth.uid || request.resource.data.consultantId == request.auth.uid || request.resource.data.userId == request.auth.uid)) ||
+        isAdmin()
+      );
+    }
+
     match /projectRoles/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /projectBids/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner() || request.resource.data.bidderId == request.auth.uid);
     }
     match /projectShortlists/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /projects/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner() || resource.data.clientId == request.auth.uid);
     }
     match /clients/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || isConsultancyOwner());
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /proposals/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /proposalTemplates/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /projectMilestones/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /teamMembers/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /projectAssignments/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /projectVenues/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /venues/{id} {
       allow read: if isSignedIn();
@@ -339,42 +348,42 @@ service cloud.firestore {
     }
     match /projectSuppliers/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /supplierContacts/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /projectTimelineItems/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /invoices/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || isConsultancyOwner() || resource.data.clientId == request.auth.uid);
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /expenses/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || isConsultancyOwner());
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /portfolioItems/{id} {
       allow read: if true;
       allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
     }
     match /sessionNotes/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || isConsultancyOwner());
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /calendarEvents/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || isConsultancyOwner());
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /matchScores/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /enquiries/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || isConsultancyOwner() || resource.data.senderId == request.auth.uid);
       allow write: if isSignedIn();
     }
     match /support_tickets/{ticketId} {

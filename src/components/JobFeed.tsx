@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, orderBy, limit, onSnapshot, type FirebaseUser, handleFirestoreError, OperationType, updateDoc, doc } from "@/src/firebase";
+import { db, collection, query, where, orderBy, limit, getDocs, onSnapshot, type FirebaseUser, handleFirestoreError, OperationType, updateDoc, doc } from "@/src/firebase";
 import { parseNaturalLanguageSearch } from "@/src/services/gemini";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
@@ -14,6 +14,7 @@ import { useEntitlements } from "../lib/useEntitlements";
 import { Capacitor } from '@capacitor/core';
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import { toast } from "sonner";
+import { PullToRefresh } from "./common/PullToRefresh";
 
 const iconMap: Record<string, any> = {
   Wrench, Briefcase, Clock, MapPin, Search, Filter, X
@@ -341,6 +342,24 @@ export default function JobFeed() {
     return () => unsubscribe();
   }, [user, limitCount]);
 
+  const handleManualRefresh = async () => {
+    try {
+      const q = query(
+        collection(db, "jobs"),
+        where("status", "==", "posted"),
+        orderBy("postedDate", "desc"),
+        limit(limitCount)
+      );
+      const snapshot = await getDocs(q);
+      const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setJobs(jobsData);
+      toast.success("Job feed refreshed");
+    } catch (err) {
+      console.error("Error refreshing job feed:", err);
+      toast.error("Failed to refresh job feed");
+    }
+  };
+
   const filteredJobs = jobs.filter(job => {
     // Time-Gate Security Check
     const jobExclusiveUntil = job.exclusiveUntil?.toDate ? job.exclusiveUntil.toDate() : (job.exclusiveUntil ? new Date(job.exclusiveUntil) : null);
@@ -496,8 +515,9 @@ export default function JobFeed() {
   }
 
   return (
-    <div className="space-y-6">
-      <SEO 
+    <PullToRefresh onRefresh={handleManualRefresh} className="min-h-full pb-8">
+      <div className="space-y-6">
+        <SEO 
         title="Find Work | Job Feed" 
         description="Browse the latest jobs for tradespeople and community helpers on AnyTrader. Filter by category, location, and urgency."
       />
@@ -1299,13 +1319,14 @@ export default function JobFeed() {
     )}
   </AnimatePresence>
 
-  <MediaGalleryModal
+      <MediaGalleryModal
         isOpen={!!selectedJobMedia}
         onClose={() => setSelectedJobMedia(null)}
         photos={selectedJobMedia?.photos}
         videos={selectedJobMedia?.videos}
         title={selectedJobMedia?.title || "Job Media"}
       />
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }

@@ -11,6 +11,7 @@ export default function Login() {
   const [guestLoading, setGuestLoading] = useState(false);
   const [adminGuestLoading, setAdminGuestLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignup, setIsSignup] = useState(false);
@@ -85,6 +86,9 @@ export default function Login() {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
 
+    setError(null);
+    setInfoMessage(null);
+
     if (!trimmedEmail) {
       setError("Please enter your email address.");
       return;
@@ -97,17 +101,28 @@ export default function Login() {
       return;
     }
 
-    if (!isResetPassword && !trimmedPassword) {
-      setError("Please enter your password.");
-      return;
+    if (!isResetPassword) {
+      if (!trimmedPassword) {
+        setError("Please enter your password.");
+        return;
+      }
+      if (isSignup) {
+        if (trimmedPassword.length < 8) {
+          setError("Password must be at least 8 characters long.");
+          return;
+        }
+        if (!/\d/.test(trimmedPassword) || !/[a-zA-Z]/.test(trimmedPassword)) {
+          setError("Password must contain both letters and numbers.");
+          return;
+        }
+      }
     }
 
     setLoading(true);
-    setError(null);
     try {
       if (isResetPassword) {
         await resetPassword(trimmedEmail);
-        setError("Password reset email sent. Please check your inbox.");
+        setInfoMessage("Password reset link sent! Please check your email inbox.");
         setIsResetPassword(false);
       } else if (isSignup) {
         if (isTemporaryEmail(trimmedEmail)) {
@@ -119,7 +134,7 @@ export default function Login() {
         } catch (emailErr) {
           console.warn("Failed to send verification email:", emailErr);
         }
-        setError("Account created successfully! Logging you in...");
+        setInfoMessage("Account created successfully! Logging you in...");
         setIsSignup(false);
       } else {
         await signInWithEmail(trimmedEmail, trimmedPassword);
@@ -223,6 +238,12 @@ export default function Login() {
             Verified UK Marketplace
           </div>
         </div>
+
+        {infoMessage && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-sm font-medium">
+            {infoMessage}
+          </div>
+        )}
 
         {error && !error.startsWith("FIREBASE_MISCONFIGURED") && !error.startsWith("FIREBASE_INTERNAL_ERROR") && (
           <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm break-words whitespace-pre-wrap">
@@ -403,11 +424,11 @@ export default function Login() {
           )}
 
           <div className="flex justify-between text-xs font-semibold">
-            <button onClick={() => { setIsSignup(!isSignup); setIsResetPassword(false); }} className="text-primary hover:underline">
+            <button onClick={() => { setIsSignup(!isSignup); setIsResetPassword(false); setError(null); setInfoMessage(null); setPassword(""); }} className="text-primary hover:underline">
               {isSignup ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
             </button>
             {!isSignup && (
-              <button onClick={() => { setIsResetPassword(!isResetPassword); setIsSignup(false); }} className="text-slate-500 hover:text-primary">
+              <button onClick={() => { setIsResetPassword(!isResetPassword); setIsSignup(false); setError(null); setInfoMessage(null); setPassword(""); }} className="text-slate-500 hover:text-primary">
                 {isResetPassword ? "Back to Sign In" : "Forgot Password?"}
               </button>
             )}

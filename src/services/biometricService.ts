@@ -3,9 +3,13 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 export interface BiometricAuthPlugin {
   checkIsAvailable(): Promise<{ isAvailable: boolean; biometryType?: string }>;
   verifyBiometric(options: { reason: string; title?: string; subtitle?: string; description?: string }): Promise<void>;
+  isAvailable?(): Promise<{ isAvailable: boolean; biometryType?: string }>;
+  verify?(options: { reason: string; title?: string; subtitle?: string; description?: string }): Promise<void>;
 }
 
-const BiometricAuth = registerPlugin<BiometricAuthPlugin>("BiometricAuth");
+const BiometricAuth1 = registerPlugin<BiometricAuthPlugin>("BiometricAuth");
+const BiometricAuth2 = registerPlugin<BiometricAuthPlugin>("NativeBiometric");
+const BiometricAuth3 = registerPlugin<BiometricAuthPlugin>("Biometrics");
 
 export interface BiometricStatus {
   available: boolean;
@@ -23,19 +27,46 @@ const SKIP_KEY = "anytrader_biometric_prompt_skipped";
 
 export const BiometricService = {
   /**
+   * Helper to invoke biometric check across plugin aliases
+   */
+  async _getNativePlugin(): Promise<BiometricAuthPlugin | null> {
+    const plugins = [BiometricAuth1, BiometricAuth2, BiometricAuth3];
+    for (const plugin of plugins) {
+      if (!plugin) continue;
+      try {
+        if (typeof plugin.checkIsAvailable === "function" || typeof plugin.isAvailable === "function") {
+          return plugin;
+        }
+      } catch (e) {
+        // Continue to next plugin alias
+      }
+    }
+    return BiometricAuth1;
+  },
+
+  /**
    * Checks if biometric authentication is available on the current device / platform.
    */
   async checkAvailability(): Promise<BiometricStatus> {
     if (!Capacitor.isNativePlatform()) {
-      // For web/iframe development, we allow a premium mock fallback so users can interact and test.
+      // For web development/preview, check WebAuthn hardware support or offer simulator fallback
+      const hasWebAuthn = typeof window !== "undefined" && !!window.PublicKeyCredential;
       return {
         available: true,
-        type: "fingerprint"
+        type: hasWebAuthn ? "fingerprint" : "biometric"
       };
     }
 
     try {
-      const result = await BiometricAuth.checkIsAvailable();
+      const plugin = await this._getNativePlugin();
+      let result: { isAvailable?: boolean; biometryType?: string } | null = null;
+      
+      if (plugin?.checkIsAvailable) {
+        result = await plugin.checkIsAvailable();
+      } else if (plugin?.isAvailable) {
+        result = await plugin.isAvailable();
+      }
+
       const hasBiometrics = !!result?.isAvailable;
       
       // Map biometric types
@@ -74,12 +105,21 @@ export const BiometricService = {
     }
 
     try {
-      await BiometricAuth.verifyBiometric({
+      const plugin = await this._getNativePlugin();
+      const options = {
         reason,
         title: "Security Verification",
         subtitle: "Sign-In using Your Identity",
         description: "Verify using Face ID / Fingerprint to proceed"
-      });
+      };
+
+      if (plugin?.verifyBiometric) {
+        await plugin.verifyBiometric(options);
+      } else if (plugin?.verify) {
+        await plugin.verify(options);
+      } else if (BiometricAuth1?.verifyBiometric) {
+        await BiometricAuth1.verifyBiometric(options);
+      }
       return true;
     } catch (err: any) {
       console.warn("[BiometricService] Native biometric authentication failed or canceled:", err);

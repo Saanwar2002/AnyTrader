@@ -1,0 +1,18 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID1234.com.anytrader.app",
+        "paths": [
+          "/job/*",
+          "/chat/*",
+          "/profile/*",
+          "/my-jobs",
+          "/messages",
+          "*"
+        ]
+      }
+    ]
+  }
+}

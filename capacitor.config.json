@@ -4,12 +4,41 @@
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "hostname": "anytrader.app",
+    "url": "https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
+    "cleartext": true
   },
   "plugins": {
     "FirebaseAuthentication": {
       "skipNativeAuth": false,
       "providers": ["google.com"]
+    },
+    "App": {
+      "appUrlOpen": {
+        "domains": [
+          "anytrader.app",
+          "*.anytrader.app",
+          "ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
+          "ais-pre-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app"
+        ]
+      }
     }
+  },
+  "deepLinking": {
+    "scheme": "anytrader",
+    "hostname": "anytrader.app",
+    "domains": [
+      "anytrader.app",
+      "*.anytrader.app",
+      "ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
+      "ais-pre-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app"
+    ],
+    "routes": [
+      { "path": "/job/:id", "component": "JobDetails" },
+      { "path": "/chat/:id", "component": "Chat" },
+      { "path": "/profile/:id", "component": "PublicProfile" },
+      { "path": "/messages", "component": "Conversations" }
+    ]
   }
 }

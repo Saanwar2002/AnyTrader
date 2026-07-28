@@ -18,6 +18,7 @@ import { db, collection, query, where, onSnapshot, collectionGroup, doc } from "
 import { registerForPushNotifications } from "./lib/pushNotifications";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
+import { AppUpdateModal } from "./components/common/AppUpdateModal";
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { Camera } from '@capacitor/camera';
@@ -94,6 +95,59 @@ function IndexRoute() {
   }
 
   return <Dashboard />;
+}
+
+function DeepLinkListener() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let isSubscribed = true;
+
+    const setupListener = async () => {
+      try {
+        const { App: CapacitorApp } = await import('@capacitor/app');
+
+        CapacitorApp.addListener('appUrlOpen', (data: { url: string }) => {
+          if (!isSubscribed || !data?.url) return;
+          console.log('[DeepLink] App opened with URL:', data.url);
+
+          try {
+            let path = '';
+            if (data.url.includes('://')) {
+              if (data.url.startsWith('anytrader://')) {
+                const raw = data.url.replace('anytrader://', '');
+                path = raw.startsWith('/') ? raw : '/' + raw;
+              } else {
+                const urlObj = new URL(data.url);
+                path = urlObj.pathname + urlObj.search + urlObj.hash;
+              }
+            } else {
+              path = data.url;
+            }
+
+            if (path) {
+              console.log('[DeepLink] Navigating directly to path:', path);
+              navigate(path);
+            }
+          } catch (err) {
+            console.error('[DeepLink] Error handling deep link URL:', err);
+          }
+        });
+      } catch (err) {
+        console.error('[DeepLink] Error registering appUrlOpen listener:', err);
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [navigate]);
+
+  return null;
 }
 
 export default function App() {
@@ -212,6 +266,8 @@ export default function App() {
         style={{ marginTop: 'max(env(safe-area-inset-top), 48px)' }}
       />
       <BrowserRouter>
+        <AppUpdateModal platformConfig={platformConfig} />
+        <DeepLinkListener />
         <ReferralTracker />
         <PortalProvider>
           <PlatformSwitcher />

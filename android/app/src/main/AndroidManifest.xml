@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -20,6 +23,25 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Custom Scheme Deep Linking (anytrader://) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="anytrader" />
+            </intent-filter>
+
+            <!-- Android App Links (Universal Deep Links) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="anytrader.app" />
+                <data android:scheme="https" android:host="*.anytrader.app" />
+                <data android:scheme="https" android:host="ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app" />
+                <data android:scheme="https" android:host="ais-pre-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app" />
             </intent-filter>
 
         </activity>

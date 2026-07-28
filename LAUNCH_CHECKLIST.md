@@ -28,13 +28,18 @@ This document outlines the critical technical steps required to move AnyTrader f
     - Add the key to AI Studio Settings.
 - [ ] **Other Integrations**: Verify keys for Stripe, Twilio, or any other 3rd party services are correctly set in the environment.
 
-## 4. Final Application Audit
+## 4. Capacitor / Mobile App Configurations
+- [ ] **Remove Live Testing URL**: 
+    - Open `capacitor.config.json`.
+    - **CRITICAL**: Remove the `server.url` and `server.cleartext` properties before running your production build. Leaving these in will cause the app to load your development server instead of the bundled production files.
+
+## 5. Final Application Audit
 - [ ] **Clear Test Data**: Flush audit logs and delete "Test" users/jobs from the Admin Dashboard.
 - [ ] **Check "Super Admin" Access**: Confirm that your email (`saanwar2002@gmail.com`) is correctly hardcoded in `firestore.rules` and `AdminDashboard.tsx`.
 - [ ] **Mobile Responsiveness**: Test the live URL on multiple mobile devices.
 - [ ] **Performance Check**: Ensure images are optimized and the app loads within < 3 seconds.
 
-## 5. Post-Launch Monitoring
+## 6. Post-Launch Monitoring
 - [ ] **Error Tracking**: Monitor the Admin Dashboard "Audit Logs" for any "Permission Denied" errors.
 - [ ] **User Feedback**: Set up a support email or feedback form for early users.
 - [ ] **AI Insights**: Regularly check the "AI Platform Insights" tab to monitor marketplace health.

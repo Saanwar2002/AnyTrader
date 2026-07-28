@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
-import { db, doc, onSnapshot, updateDoc, collection, addDoc, serverTimestamp } from "@/src/firebase";
+import { auth, db, doc, onSnapshot, updateDoc, collection, addDoc, serverTimestamp } from "@/src/firebase";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Check, CreditCard, ShieldCheck, Zap, Star, Award, 

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import AnyTraderAdmin from "./AnyTraderAdmin";
-import AnyRollerAdmin from "./AnyRollerAdmin";
+import React, { useState, useEffect, lazy, Suspense } from "react";
+const AnyTraderAdmin = lazy(() => import("./AnyTraderAdmin"));
+const AnyRollerAdmin = lazy(() => import("./AnyRollerAdmin"));
 import { useAuth } from "./AuthProvider";
 import { Building2, Car, Shield, LogOut, Users, Activity, PoundSterling, Briefcase } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -211,7 +211,9 @@ export default function MasterAdminLayout() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col"
             >
-              <AnyTraderAdmin />
+              <Suspense fallback={<div className="p-12 text-center font-bold text-slate-500">Loading AnyTrader Admin...</div>}>
+                <AnyTraderAdmin />
+              </Suspense>
             </motion.div>
           )}
           {activePortal === "anyroller" && (
@@ -221,7 +223,9 @@ export default function MasterAdminLayout() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col h-full bg-slate-50"
             >
-              <AnyRollerAdmin />
+              <Suspense fallback={<div className="p-12 text-center font-bold text-slate-500">Loading AnyRoller Admin...</div>}>
+                <AnyRollerAdmin />
+              </Suspense>
             </motion.div>
           )}
       </div>

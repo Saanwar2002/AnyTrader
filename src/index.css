@@ -108,6 +108,34 @@
     font-size: 16px !important;
   }
 
+  /* Enforce minimum 44x44px touch target area for interactive elements */
+  button,
+  select,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  [role="button"] {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Ensure standalone link buttons meet 44px height requirement */
+  a[class*="button"],
+  a[class*="btn"],
+  a[class*="p-"],
+  a[class*="py-"],
+  a[class*="rounded"] {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
   h1, h2, h3, .font-display {
     @apply font-display tracking-tight;
   }

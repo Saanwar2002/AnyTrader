@@ -1021,7 +1021,7 @@ async function startServer() {
     }
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
 
   // API Routes
   app.get("/api/health", (req, res) => {
@@ -1029,7 +1029,7 @@ async function startServer() {
   });
 
   // Push Notification Dispatcher
-  app.post("/api/chat-push", async (req, res) => {
+  app.post("/api/chat-push", requireAuth, async (req, res) => {
     try {
       const { recipientId, title, body, rideId, type, channelId } = req.body;
       if (!recipientId || !db) return res.status(400).json({ error: "Missing parameters or DB offline" });
@@ -1436,10 +1436,25 @@ async function startServer() {
     }
   });
   
-  app.post("/api/driver/stripe-payout/:driverId", async (req, res) => {
+  app.post("/api/driver/stripe-payout/:driverId", requireAuth, async (req, res) => {
     try {
       const { driverId } = req.params;
       const { amount } = req.body; // Optional amount
+      const user = (req as any).user;
+
+      if (user.uid !== driverId) {
+        // Check if admin
+        if (db) {
+          const adminDoc = await db.collection("admins").doc(user.uid).get();
+          const userDoc = await db.collection("users").doc(user.uid).get();
+          const role = userDoc.data()?.role;
+          if (!adminDoc.exists && role !== "admin" && role !== "ecosystem_manager") {
+            return res.status(403).json({ error: "Forbidden: Unauthorized access to driver payout" });
+          }
+        } else {
+          return res.status(403).json({ error: "Forbidden: Unauthorized access to driver payout" });
+        }
+      }
 
       if (!db) return res.status(500).json({ error: "Database not connected" });
 
@@ -1637,15 +1652,16 @@ async function startServer() {
   });
 
   // Milestone Release Route
-  app.post("/api/release-milestone", async (req, res) => {
+  app.post("/api/release-milestone", requireAuth, async (req, res) => {
     try {
-      const { jobId, quoteId, milestoneId, userId } = req.body;
+      const { jobId, quoteId, milestoneId } = req.body;
+      const authUid = (req as any).user.uid;
       if (!db) return res.status(500).json({ error: "Database not initialized" });
 
       const jobRef = db.collection("jobs").doc(jobId);
       const jobDoc = await jobRef.get();
-      if (!jobDoc.exists || jobDoc.data()?.homeownerId !== userId) {
-        return res.status(403).json({ error: "Unauthorized" });
+      if (!jobDoc.exists || jobDoc.data()?.homeownerId !== authUid) {
+        return res.status(403).json({ error: "Unauthorized: only the job owner can release milestone funds" });
       }
 
       const quoteRef = jobRef.collection("quotes").doc(quoteId);

@@ -17,6 +17,8 @@ import {
   Plus, Edit2, Calendar, Award, Info, Key, Building2, Globe, Database, Download,
   Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag, Car, Cpu, Link as LinkIcon
 } from "lucide-react";
+import { CURRENT_APP_VERSION } from "@/src/lib/version";
+import { AppUpdateModal } from "./common/AppUpdateModal";
 import { cn } from "@/src/lib/utils";
 import AdminTierManager from "./AdminTierManager";
 import GuestJobs from "./GuestJobs";
@@ -151,6 +153,9 @@ export default function AnyTraderAdmin() {
   const [syncConfirmText, setSyncConfirmText] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
+  // App Update State
+  const [showAdminUpdatePreviewModal, setShowAdminUpdatePreviewModal] = useState(false);
+
   // Feature Search Logic
   const [featureSearchTerm, setFeatureSearchTerm] = useState("");
 
@@ -159,6 +164,7 @@ export default function AnyTraderAdmin() {
   const [exportCategory, setExportCategory] = useState("Plumbing");
 
   const ADMIN_FEATURES = [
+    { title: "App Version & OTA Update Prompt", tab: "settings", elementId: "app-update-control", keywords: ["ota", "version", "update prompt", "release notes", "force update", "store url", "app store", "play store"], icon: <Sparkles className="w-4 h-4" /> },
     { title: "User Management", tab: "users", keywords: ["people", "homeowner", "trader", "delete", "suspend"], icon: <Users className="w-4 h-4" /> },
     { title: "Job Oversight", tab: "jobs", keywords: ["projects", "status", "cancel", "refund"], icon: <Briefcase className="w-4 h-4" /> },
     { title: "Dispute Mediation", tab: "disputes", keywords: ["trouble", "argument", "refund", "court"], icon: <AlertTriangle className="w-4 h-4" /> },
@@ -4292,6 +4298,30 @@ export default function AnyTraderAdmin() {
                     )}
                   </div>
 
+                  {/* Portal Controls */}
+                  <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <Car className="w-4 h-4" /> Portal Controls
+                      </h4>
+                      <button 
+                        onClick={() => setTempConfig({ ...tempConfig, showBookTaxiButton: tempConfig.showBookTaxiButton === false ? true : false })}
+                        className={cn(
+                          "w-12 h-6 rounded-full relative transition-all",
+                          tempConfig.showBookTaxiButton !== false ? "bg-blue-600" : "bg-slate-200"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                          tempConfig.showBookTaxiButton !== false ? "right-1" : "left-1"
+                        )} />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Show the "Book Taxi" / AnyRoller toggle button in the main app header. You can disable this during the early days to focus entirely on the AnyTrader side of the business.
+                    </p>
+                  </div>
+
                   {/* Advertising Configuration */}
                   <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-6">
                     <div className="flex items-center justify-between">
@@ -4646,6 +4676,176 @@ export default function AnyTraderAdmin() {
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* App Version & OTA Update Control */}
+                  <div id="app-update-control" className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-6 scroll-mt-20">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 px-1">
+                        <Sparkles className="w-4 h-4 text-blue-600" /> App Version Control & Update Prompt Broadcast
+                      </h4>
+                      <span className="px-3 py-1 bg-blue-50 text-blue-700 font-mono text-xs font-bold rounded-full border border-blue-200">
+                        Current Installed: v{CURRENT_APP_VERSION}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                      Configure platform update alerts for iOS, Android, and Web users. When you bump the target version, all connected clients will instantly receive an in-app update prompt with release notes and store links.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Target Latest Version */}
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-black/50 space-y-2">
+                        <label className="text-xs font-bold text-slate-900 block">Target Latest Version</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 1.1.0"
+                          value={tempConfig?.latestVersion || CURRENT_APP_VERSION}
+                          onChange={(e) => setTempConfig({ ...tempConfig, latestVersion: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-white border border-black rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p className="text-[10px] text-slate-500">Users on versions lower than this will see an update recommendation.</p>
+                      </div>
+
+                      {/* Minimum Required Version */}
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-black/50 space-y-2">
+                        <label className="text-xs font-bold text-slate-900 block">Minimum Required Version</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 1.0.0"
+                          value={tempConfig?.minRequiredVersion || CURRENT_APP_VERSION}
+                          onChange={(e) => setTempConfig({ ...tempConfig, minRequiredVersion: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-white border border-black rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p className="text-[10px] text-slate-500">Users on versions below this will be forced to update to proceed.</p>
+                      </div>
+                    </div>
+
+                    {/* Force Update Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-black/50">
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", tempConfig?.forceUpdate ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600")}>
+                          <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">Force Update Mode (Mandatory)</p>
+                          <p className="text-[10px] text-slate-500">{tempConfig?.forceUpdate ? "All users must update immediately" : "Optional update prompt (users can dismiss)"}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setTempConfig({ ...tempConfig, forceUpdate: !tempConfig?.forceUpdate })}
+                        className={cn(
+                          "w-12 h-6 rounded-full relative transition-all",
+                          tempConfig?.forceUpdate ? "bg-red-600" : "bg-slate-200"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                          tempConfig?.forceUpdate ? "right-1" : "left-1"
+                        )} />
+                      </button>
+                    </div>
+
+                    {/* Title & Description */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-900 block">Update Headline</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. AnyTrader 1.1.0 Released!"
+                          value={tempConfig?.updateTitle || "New Version Available!"}
+                          onChange={(e) => setTempConfig({ ...tempConfig, updateTitle: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-black rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-900 block">Short Description</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Performance upgrades, new messaging tools, and instant biometrics."
+                          value={tempConfig?.updateDescription || "A new update for AnyTrader is ready. Update now to get the latest features and fixes."}
+                          onChange={(e) => setTempConfig({ ...tempConfig, updateDescription: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-black rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Release Notes */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-900 block">Release Notes (One feature per line)</label>
+                      <textarea
+                        rows={3}
+                        placeholder="⚡ Faster GPS live tracking&#10;🔒 Face ID & Touch ID login&#10;📲 Deep link navigation"
+                        value={Array.isArray(tempConfig?.releaseNotes) ? tempConfig.releaseNotes.join("\n") : (tempConfig?.releaseNotes || "")}
+                        onChange={(e) => setTempConfig({ ...tempConfig, releaseNotes: e.target.value.split("\n").filter(Boolean) })}
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-black rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Store URLs */}
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-black/50 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Download & Store URLs</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">iOS App Store URL</label>
+                          <input
+                            type="text"
+                            placeholder="https://apps.apple.com/app/id647000000"
+                            value={tempConfig?.iosAppUrl || ""}
+                            onChange={(e) => setTempConfig({ ...tempConfig, iosAppUrl: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border border-black rounded-lg text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Android Play Store URL</label>
+                          <input
+                            type="text"
+                            placeholder="https://play.google.com/store/apps/details?id=com.anytrader.app"
+                            value={tempConfig?.androidAppUrl || ""}
+                            onChange={(e) => setTempConfig({ ...tempConfig, androidAppUrl: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border border-black rounded-lg text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Web Refresh URL</label>
+                          <input
+                            type="text"
+                            placeholder="https://anytrader.app"
+                            value={tempConfig?.webAppUrl || ""}
+                            onChange={(e) => setTempConfig({ ...tempConfig, webAppUrl: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border border-black rounded-lg text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Admin Action Buttons */}
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <button
+                        onClick={() => setShowAdminUpdatePreviewModal(true)}
+                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-2 min-h-[44px]"
+                      >
+                        <Eye className="w-4 h-4 text-slate-600" />
+                        Preview Update Prompt Live
+                      </button>
+
+                      <button
+                        onClick={handleSaveSettings}
+                        disabled={isSavingSettings}
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 ml-auto min-h-[44px]"
+                      >
+                        {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        Broadcast App Update Prompt
+                      </button>
+                    </div>
+
+                    <AppUpdateModal
+                      platformConfig={tempConfig}
+                      isOpenOverride={showAdminUpdatePreviewModal}
+                      onCloseOverride={() => setShowAdminUpdatePreviewModal(false)}
+                      isManualCheck={true}
+                    />
                   </div>
 
                   {/* AI Global Settings */}

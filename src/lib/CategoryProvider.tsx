@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { db, collection, onSnapshot } from "@/src/firebase";
+import { UNSORTED_TRADE_CATEGORIES } from "@/src/constants";
 
 interface Category {
   id: number;
@@ -28,10 +29,8 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "platform_categories"), (snapshot) => {
       if (snapshot.empty) {
-        import("@/src/constants").then(({ UNSORTED_TRADE_CATEGORIES }) => {
-          setCategories(UNSORTED_TRADE_CATEGORIES.sort((a, b) => a.name.localeCompare(b.name)));
-          setLoading(false);
-        });
+        setCategories([...UNSORTED_TRADE_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name)));
+        setLoading(false);
         return;
       }
       

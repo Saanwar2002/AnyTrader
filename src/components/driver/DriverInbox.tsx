@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, Bell, Zap, ShieldAlert, CircleAlert, CheckCircle2, ChevronRight, Car, X, Trash2, Send, ChevronLeft } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { PullToRefresh } from "../common/PullToRefresh";
 
 type FilterType = 'all' | 'rides' | 'alerts' | 'anytrader';
 
@@ -106,7 +107,8 @@ export default function DriverInbox({ onClose, onNavigate }: { onClose?: () => v
   return (
     <div className="flex-1 bg-[#0D0D0F] text-white relative font-sans min-h-0 flex flex-col items-stretch overflow-hidden">
       {!selectedMessageId ? (
-        <div className="flex-1 overflow-y-auto px-4 py-6 pb-24">
+        <PullToRefresh onRefresh={async () => { await new Promise(r => setTimeout(r, 600)); }} className="flex-1">
+          <div className="flex-1 overflow-y-auto px-4 py-6 pb-24">
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-black tracking-tight">Inbox</h1>
@@ -228,6 +230,7 @@ export default function DriverInbox({ onClose, onNavigate }: { onClose?: () => v
             )}
           </div>
         </div>
+      </PullToRefresh>
       ) : (
         <AnimatePresence>
           {selectedMessage && (

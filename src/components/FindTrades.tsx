@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic } from "lucide-react";
 import { db, collection, query, where, onSnapshot, setDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
+import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
+import { findFuzzySuggestion, buildCandidateDictionary, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
 import { cn } from "@/src/lib/utils";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
@@ -92,6 +94,38 @@ export default function FindTrades() {
   const resultsRef = React.useRef<HTMLDivElement>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = React.useRef<any>(null);
+
+  // --- Fuzzy Matching State ---
+  const [candidateDictionary, setCandidateDictionary] = useState<CandidateItem[]>([]);
+  const [fuzzySuggestion, setFuzzySuggestion] = useState<FuzzyMatchResult | null>(null);
+
+  // Rebuild dictionary when tradespeople change
+  useEffect(() => {
+    setCandidateDictionary(buildCandidateDictionary(tradespeople));
+  }, [tradespeople]);
+
+  // Handle Fuzzy matching when search query changes
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (searchQuery.trim().length >= 3) {
+        const suggestion = findFuzzySuggestion(searchQuery, candidateDictionary);
+        setFuzzySuggestion(suggestion);
+      } else {
+        setFuzzySuggestion(null);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(handler);
+  }, [searchQuery, candidateDictionary]);
+
+  const handleApplySuggestion = (suggestion: FuzzyMatchResult) => {
+    setSearchQuery(suggestion.suggestion);
+    if (suggestion.categoryName) {
+      setSelectedCategory(suggestion.categoryName);
+    }
+    setFuzzySuggestion(null);
+  };
+  // ----------------------------
 
   const startVoiceSearch = async () => {
     try {
@@ -671,6 +705,14 @@ export default function FindTrades() {
             )}
           </div>
         </div>
+        
+        {/* Fuzzy Search Suggestion */}
+        <DidYouMeanSuggestion 
+          suggestion={fuzzySuggestion} 
+          onApplySuggestion={handleApplySuggestion}
+          onDismiss={() => setFuzzySuggestion(null)}
+          variant="dark"
+        />
 
         {/* Categories */}
         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -683,7 +725,7 @@ export default function FindTrades() {
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={cn(
-                  "px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2",
+                  "px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 shrink-0",
                   selectedCategory === cat 
                     ? "bg-orange-500 text-white shadow-md shadow-orange-500/20" 
                     : "bg-slate-700 text-slate-300 hover:bg-slate-600"
@@ -708,7 +750,7 @@ export default function FindTrades() {
               key={opt}
               onClick={() => setSortBy(opt)}
               className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border-2 border-black transition-all",
+                "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border-2 border-black transition-all shrink-0",
                 sortBy === opt 
                   ? "bg-[#1e293b] text-white" 
                   : "bg-white text-slate-900 hover:bg-slate-50"

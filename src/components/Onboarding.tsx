@@ -83,8 +83,8 @@ export default function Onboarding() {
         return;
       }
 
-      // Check for hardcoded admin email
-      if (user.email.toLowerCase() === "saanwar2002@gmail.com") {
+      // Check for hardcoded admin email or test admin flag
+      if (user.email?.toLowerCase() === "saanwar2002@gmail.com" || sessionStorage.getItem("is_test_admin") === "true") {
         setRole("admin");
         setCheckingInvite(false);
         return;

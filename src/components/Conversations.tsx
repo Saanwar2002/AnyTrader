@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, orderBy, onSnapshot, getDoc, doc, handleFirestoreError, OperationType, updateDoc, arrayUnion } from "@/src/firebase";
+import { db, collection, query, where, orderBy, getDocs, onSnapshot, getDoc, doc, handleFirestoreError, OperationType, updateDoc, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, Clock, ChevronRight, User as UserIcon, Loader2, Trash2, CheckCircle2, X, MoreVertical, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
+import { PullToRefresh } from "./common/PullToRefresh";
 
 export default function Conversations() {
   const { user } = useAuth();
@@ -109,6 +110,37 @@ export default function Conversations() {
     }
   };
 
+  const handleRefresh = async () => {
+    if (!user) return;
+    try {
+      const q = query(
+        collection(db, "conversations"),
+        where("participants", "array-contains", user.uid),
+        orderBy("updatedAt", "desc")
+      );
+      const snapshot = await getDocs(q);
+      const convs = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((conv: any) => !conv.deletedBy?.includes(user.uid));
+      setConversations(convs);
+
+      await Promise.all(convs.map(async (conv: any) => {
+        const recipientId = conv.participants.find((p: string) => p !== user.uid);
+        if (recipientId && !profiles[recipientId]) {
+          const profileDoc = await getDoc(doc(db, "users", recipientId));
+          if (profileDoc.exists()) {
+            setProfiles(prev => ({
+              ...prev,
+              [recipientId]: profileDoc.data()
+            }));
+          }
+        }
+      }));
+    } catch (err) {
+      console.error("Error refreshing inbox:", err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-12 flex justify-center">
@@ -118,7 +150,8 @@ export default function Conversations() {
   }
 
   return (
-    <div className="space-y-6">
+    <PullToRefresh onRefresh={handleRefresh} className="min-h-full pb-8">
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Messages</h1>
         {conversations.length > 0 && (
@@ -245,5 +278,6 @@ export default function Conversations() {
         </div>
       )}
     </div>
+  </PullToRefresh>
   );
 }

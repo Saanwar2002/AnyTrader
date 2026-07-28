@@ -121,12 +121,17 @@ export default defineConfig(({mode}) => {
               if (id.includes('lucide-react')) return 'vendor-icons';
               if (id.includes('recharts') || id.includes('d3')) return 'vendor-charts';
               if (id.includes('motion')) return 'vendor-animation';
+              if (id.includes('@react-google-maps/api')) return 'vendor-maps';
+              if (id.includes('leaflet') || id.includes('react-leaflet')) return 'vendor-leaflet';
+              if (id.includes('jspdf')) return 'vendor-pdf';
+              if (id.includes('@capacitor')) return 'vendor-capacitor';
+              if (id.includes('@google/genai')) return 'vendor-genai';
               return 'vendor';
             }
           }
         }
       },
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1500,
     },
     resolve: {
       alias: {

@@ -23,6 +23,8 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
     }
   });
 
+  const processingMatches = new Set<string>();
+
   // Real-time listener for searching matches instead of polling
   const matchesUnsubscribe = db.collection("instant_matches")
     .where("status", "==", "searching")
@@ -30,57 +32,64 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
       try {
         const now = new Date();
         for (const matchDoc of matchesSnap.docs) {
-          const match = matchDoc.data();
-          
-          // Find latest attempt array
-          const attemptsSnap = await db.collection("instant_match_attempts")
-            .where("instantMatchId", "==", matchDoc.id)
-            .orderBy("attemptNumber", "desc")
-            .limit(1)
-            .get();
+          if (processingMatches.has(matchDoc.id)) continue;
+          processingMatches.add(matchDoc.id);
 
-          const latestAttempt = attemptsSnap.docs[0]?.data();
-          const latestAttemptRef = attemptsSnap.docs[0]?.ref;
+          try {
+            const match = matchDoc.data();
+            
+            // Find latest attempt array
+            const attemptsSnap = await db.collection("instant_match_attempts")
+              .where("instantMatchId", "==", matchDoc.id)
+              .orderBy("attemptNumber", "desc")
+              .limit(1)
+              .get();
 
-          if (!latestAttempt) {
-            // No attempts yet, find top traders and create the first attempt
-            await initiateNextAttempt(db, matchDoc.ref, match, 1);
-          } else {
-            // Check if attempt timed out
-            const expiresAt = new Date(latestAttempt.expiresAt);
-            if (['pending', 'notified'].includes(latestAttempt.status) && expiresAt < now) {
-              // Expired!
-              await latestAttemptRef.update({
-                status: "timeout",
-                respondedAt: now.toISOString()
-              });
+            const latestAttempt = attemptsSnap.docs[0]?.data();
+            const latestAttemptRef = attemptsSnap.docs[0]?.ref;
 
-              // Initiate next attempt
-              const nextAttemptNum = latestAttempt.attemptNumber + 1;
-              const maxAttempts = globalConfig.imMaxAttempts ?? 10;
-              if (nextAttemptNum > maxAttempts) {
-                // Expire the match entirely if we tried max times
-                await matchDoc.ref.update({
-                  status: "expired",
-                  expiredAt: now.toISOString()
+            if (!latestAttempt) {
+              // No attempts yet, find top traders and create the first attempt
+              await initiateNextAttempt(db, matchDoc.ref, match, 1);
+            } else {
+              // Check if attempt timed out
+              const expiresAt = new Date(latestAttempt.expiresAt);
+              if (['pending', 'notified'].includes(latestAttempt.status) && expiresAt < now) {
+                // Expired!
+                await latestAttemptRef.update({
+                  status: "timeout",
+                  respondedAt: now.toISOString()
                 });
-                // Refund customer
-                if (match?.stripePaymentIntentId) {
-                   try {
-                       const Stripe = require('stripe');
-                       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-                       await stripe.refunds.create({
-                         payment_intent: match.stripePaymentIntentId,
-                         reason: 'requested_by_customer'
-                       });
-                   } catch (err) {
-                       console.error("Failed to refund instant match:", err);
-                   }
+
+                // Initiate next attempt
+                const nextAttemptNum = latestAttempt.attemptNumber + 1;
+                const maxAttempts = globalConfig.imMaxAttempts ?? 10;
+                if (nextAttemptNum > maxAttempts) {
+                  // Expire the match entirely if we tried max times
+                  await matchDoc.ref.update({
+                    status: "expired",
+                    expiredAt: now.toISOString()
+                  });
+                  // Refund customer
+                  if (match?.stripePaymentIntentId) {
+                     try {
+                         const Stripe = require('stripe');
+                         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+                         await stripe.refunds.create({
+                           payment_intent: match.stripePaymentIntentId,
+                           reason: 'requested_by_customer'
+                         });
+                     } catch (err) {
+                         console.error("Failed to refund instant match:", err);
+                     }
+                  }
+                } else {
+                  await initiateNextAttempt(db, matchDoc.ref, match, nextAttemptNum);
                 }
-              } else {
-                await initiateNextAttempt(db, matchDoc.ref, match, nextAttemptNum);
               }
             }
+          } finally {
+            processingMatches.delete(matchDoc.id);
           }
         }
       } catch (err) {

@@ -85,6 +85,21 @@ export default function Layout() {
   
   const [showQuickActions, setShowQuickActions] = useState(false);
   const quickActionsRef = useRef<HTMLDivElement>(null);
+  
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -428,6 +443,14 @@ export default function Layout() {
 
   return (
     <div className={cn("min-h-screen flex flex-col w-full overflow-x-hidden relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-medium z-[60] shadow-sm transition-all", isDriverTerminal ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600 border-b border-black", (!showMaintenanceBanner && !isOnline) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span>You're offline. App will sync data once reconnected.</span>
+        </div>
+      )}
+
       {/* Scheduled Maintenance Banner */}
       {showMaintenanceBanner && platformConfig?.scheduledMaintenance && (
         <div className="bg-primary text-white px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] flex items-center justify-between gap-4 shadow-lg z-[60]">
@@ -479,50 +502,63 @@ export default function Layout() {
                   <Menu className="w-6 h-6" />
                 </button>
               )}
-              <button 
-                onClick={() => {
-                  triggerHaptic();
-                  if (activePortal === "anytrader") {
-                    switchPortal("anyroller");
-                    setTimeout(() => {
-                      if (profile?.role === "driver" || profile?.role === "fleet_driver") {
-                        navigate("/driver-terminal");
-                      } else {
-                        navigate("/book-ride");
-                      }
-                    }, 50);
-                  } else {
-                    switchPortal("anytrader");
-                    setTimeout(() => navigate("/"), 50);
-                  }
-                }}
-                className="flex items-center gap-3 group text-left"
-              >
-                {activePortal === "anytrader" ? (
-                  <>
-                    <div className="w-11 h-11 sm:w-14 sm:h-14 bg-yellow-300 border-[2px] sm:border-[3px] border-black rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
-                      <Car className="w-4 h-4 sm:w-5 sm:h-5 text-black relative z-10 mb-0.5" />
-                      <span className="text-[7px] sm:text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-                    </div>
-                    <div className="hidden sm:block">
-                      <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRoller</span>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
-                      <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                      <span className="text-[8px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
-                    </div>
-                    <div className="hidden sm:block">
-                      <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
-                    </div>
-                  </>
-                )}
-              </button>
+              {platformConfig?.showBookTaxiButton === false && activePortal === "anytrader" ? (
+                <div className="flex items-center gap-3 text-left">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 shrink-0">
+                    <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                    <span className="text-[8px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+                  </div>
+                  <div className="hidden sm:block">
+                    <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">UK's #1 Platform</p>
+                  </div>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => {
+                    triggerHaptic();
+                    if (activePortal === "anytrader") {
+                      switchPortal("anyroller");
+                      setTimeout(() => {
+                        if (profile?.role === "driver" || profile?.role === "fleet_driver") {
+                          navigate("/driver-terminal");
+                        } else {
+                          navigate("/book-ride");
+                        }
+                      }, 50);
+                    } else {
+                      switchPortal("anytrader");
+                      setTimeout(() => navigate("/"), 50);
+                    }
+                  }}
+                  className="flex items-center gap-3 group text-left"
+                >
+                  {activePortal === "anytrader" ? (
+                    <>
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 bg-yellow-300 border-[2px] sm:border-[3px] border-black rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
+                        <Car className="w-4 h-4 sm:w-5 sm:h-5 text-black relative z-10 mb-0.5" />
+                        <span className="text-[7px] sm:text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
+                      </div>
+                      <div className="hidden sm:block">
+                        <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRoller</span>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
+                        <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                        <span className="text-[8px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+                      </div>
+                      <div className="hidden sm:block">
+                        <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+                      </div>
+                    </>
+                  )}
+                </button>
+              )}
 
               {/* Desktop Navigation */}
               {activePortal !== 'anyroller' && (

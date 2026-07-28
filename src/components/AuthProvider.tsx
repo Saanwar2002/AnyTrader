@@ -132,14 +132,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
 
               if (needsUpdate) {
-                await updateDoc(doc(db, "users", firebaseUser.uid), {
+                data.verificationDocs = updatedDocs;
+                data.verificationStatus = newVerificationStatus;
+                updateDoc(doc(db, "users", firebaseUser.uid), {
                   verificationDocs: updatedDocs,
                   verificationStatus: newVerificationStatus
-                });
-                return;
+                }).catch(e => console.error("Error auto-updating expired docs:", e));
               }
 
-              setProfile(data);
+              setProfile(data as UserProfile);
             } else {
               // If profile doesn't exist, check if it's the admin email or test admin
               if (isAdminEmail || isTestAdmin) {
@@ -171,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAuthReady(true);
         });
       } else {
+        sessionStorage.removeItem("is_test_admin");
         setProfile(null);
         setLoading(false);
         setIsAuthReady(true);
