@@ -50,3 +50,19 @@ export function getOutwardPostcode(postcode: string | null | undefined): string 
   // If it's shorter than 5 chars and has no space, it's likely already an outcode
   return cleaned;
 }
+
+/**
+ * Calculates distance in miles between two latitude/longitude points using Haversine formula
+ */
+export function calculateDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const R = 3958.8; // Radius of the Earth in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, Download, CheckCircle2, ShieldAlert, X, ExternalLink, RefreshCw } from "lucide-react";
+import { Sparkles, Download, CheckCircle2, ShieldAlert, X, ExternalLink, RefreshCw, Star } from "lucide-react";
 import { 
   CURRENT_APP_VERSION, 
   PlatformUpdateConfig, 
   checkUpdateNeeded, 
-  openUpdateStore 
+  openUpdateStore,
+  requestStoreReview
 } from "@/src/lib/version";
 import { triggerHaptic, ImpactStyle } from "@/src/lib/capacitor";
+import { useRemoteConfig } from "@/src/components/RemoteConfigProvider";
 
 interface AppUpdateModalProps {
   platformConfig?: PlatformUpdateConfig;
@@ -22,11 +24,25 @@ export function AppUpdateModal({
   onCloseOverride,
   isManualCheck = false,
 }: AppUpdateModalProps) {
+  const { values: remoteConfig } = useRemoteConfig();
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(() => {
     return localStorage.getItem("dismissed_app_version");
   });
 
-  const updateInfo = checkUpdateNeeded(platformConfig, CURRENT_APP_VERSION);
+  // Consolidate platformConfig with RemoteConfig fallback
+  const effectiveConfig: PlatformUpdateConfig = {
+    latestVersion: platformConfig?.latestVersion || remoteConfig?.latestVersion,
+    minRequiredVersion: platformConfig?.minRequiredVersion || remoteConfig?.minRequiredVersion,
+    forceUpdate: platformConfig?.forceUpdate ?? remoteConfig?.forceUpdate,
+    updateTitle: platformConfig?.updateTitle || remoteConfig?.updateTitle,
+    updateDescription: platformConfig?.updateDescription || remoteConfig?.updateDescription,
+    releaseNotes: platformConfig?.releaseNotes || remoteConfig?.releaseNotes,
+    androidAppUrl: platformConfig?.androidAppUrl || remoteConfig?.androidAppUrl,
+    iosAppUrl: platformConfig?.iosAppUrl || remoteConfig?.iosAppUrl,
+    webAppUrl: platformConfig?.webAppUrl,
+  };
+
+  const updateInfo = checkUpdateNeeded(effectiveConfig, CURRENT_APP_VERSION);
 
   // Determine visibility
   let isVisible = false;
@@ -55,7 +71,7 @@ export function AppUpdateModal({
 
   const handleUpdate = () => {
     triggerHaptic(ImpactStyle.Medium);
-    openUpdateStore(platformConfig);
+    openUpdateStore(effectiveConfig);
   };
 
   return (
@@ -133,7 +149,7 @@ export function AppUpdateModal({
                 className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 text-sm transition-all active:scale-[0.98] min-h-[48px]"
               >
                 <Download className="w-4 h-4" />
-                <span>Update Now</span>
+                <span>Update Now via App Store / Play Store</span>
                 <ExternalLink className="w-3.5 h-3.5 opacity-80" />
               </button>
 

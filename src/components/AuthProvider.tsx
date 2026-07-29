@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, addDoc, collection, serverTimestamp } from "@/src/firebase";
+import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, addDoc, collection, serverTimestamp, signInWithGoogle } from "@/src/firebase";
 import { Loader2, ShieldAlert, LogOut } from "lucide-react";
 
 import { UserProfile } from "../types";
@@ -14,6 +14,7 @@ interface AuthContextType {
   isAnonymous: boolean;
   isTradeBotOpen: boolean;
   setIsTradeBotOpen: (isOpen: boolean) => void;
+  signInWithGoogle: (options?: { forceWebView?: boolean }) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
   isAnonymous: false,
   isTradeBotOpen: false,
   setIsTradeBotOpen: () => {},
+  signInWithGoogle: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -186,7 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, profile, setProfile, loading, isAuthReady, isAnonymous, isTradeBotOpen, setIsTradeBotOpen }}>
+    <AuthContext.Provider value={{ user, profile, setProfile, loading, isAuthReady, isAnonymous, isTradeBotOpen, setIsTradeBotOpen, signInWithGoogle }}>
       {loading ? (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="flex flex-col items-center gap-4">

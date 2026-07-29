@@ -10,6 +10,11 @@
     "cleartext": true
   },
   "plugins": {
+    "Keyboard": {
+      "resize": "body",
+      "style": "DARK",
+      "resizeOnFullScreen": true
+    },
     "FirebaseAuthentication": {
       "skipNativeAuth": false,
       "providers": ["google.com"]

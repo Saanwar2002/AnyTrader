@@ -145,6 +145,18 @@ AnyTrader uses a cross-portal tiered subscription system managed in `platform_co
 
 ---
 
+## ⚡ Phase 13: UI Refinement, Persistence & Platform Stability Hub (Completed July 29, 2026)
+*   **The Mission**: Enhance client UI flexibility for searching trades, enable layout state retention, and mitigate aggressive platform rate limit triggers under heavy developer sandbox reloading.
+*   **List / Map View Toggle Vertical Revamp**:
+    *   *Implementation*: Refactored the `[List | Map]` toggle in `src/components/FindTrades.tsx` into an elegant, vertical, narrow control (20% less width than previous horizontal pill layouts) tucked safely along the screen edge to maximize mobile viewport space.
+    *   *Draggable State*: Integrated seamless pointer-capture drag listeners supporting continuous user positioning across viewports.
+    *   *State Persistence*: Position updates are persisted directly in `sessionStorage` (`findTradesDragOffset`) with bounds checking, ensuring the toggle resumes its customized placement across individual browser reloads or route transitions.
+*   **Stability / Rate Limiting Mitigation**:
+    *   *Root Cause Analysis*: Frequent HMR/page refreshes inside the AI Studio preview environment triggered continuous client-side API polling, hitting the strict limit of `100` requests/minute in `/api/` endpoints.
+    *   *Resolution*: Implemented environment-aware limits in `server.ts`. During development (`process.env.NODE_ENV !== "production"`), the general API rate limits are relaxed to `5,000` requests/minute, and payment limiters are bumped to `1,000` requests/minute to ensure uninterrupted coding flow, while maintaining robust, hardened controls in production.
+
+---
+
 ## ⚡ Recently Completed Feature: Exclusive Job Offers (Fast Pass Leads) & Material Finalization Window
 **Status:** Completed
 *   **Concept:** A "Fast Pass" for tradespeople to pay an extra flat Add-on (£10-£25/mo) to unlock jobs early. Combined with a post-quote Material List adjustment window.
@@ -587,3 +599,66 @@ The prefix is determined by the user's primary registration role:
   - Created an interactive UI component (`DidYouMeanSuggestion.tsx`) appearing beneath the search bar allowing users to quickly correct misspelled queries with a single tap.
 - 2026-07-28: Fixed squishing/overlapping buttons in horizontal scroll elements.
   - Added `shrink-0` Tailwind class to both `FindTrades.tsx` category navigation buttons and sort options buttons. This prevents flexbox in mobile browsers and inline frames from shrinking children to fit the viewport width, maintaining natural sizes and allowing smooth horizontal scrolling.
+- 2026-07-28: Implemented real-time Offline Pending Synchronization Status tracking.
+  - Created persistent local sync tracking engine (`src/lib/syncTracker.ts`) storing pending operations in `localStorage` to survive page refreshes while offline.
+  - Intercepted standard Firestore write methods (`setDoc`, `updateDoc`, `deleteDoc`, `addDoc`, `runTransaction`, `writeBatch`) in `src/firebase.ts` to automatically register mutations.
+  - Enhanced the online/offline banner in `Layout.tsx` to display a beautiful "Syncing X local updates..." banner when online but database changes are in progress.
+  - Integrated a pulsing, high-contrast "Syncing (X)" status badge and tooltip inside the main application header near notifications for transparent status communication.
+- 2026-07-29: Implemented AI Price Estimate Postcode Confidence Scoring Engine using historical job data.
+  - Upgraded `getJobEstimate` in `src/services/geminiServer.ts` to query anonymized historical job records in Firestore matching the user's specific postcode area (e.g. `SW1`, `M1`) and trade category.
+  - Instructed Gemini to calculate a data-driven confidence score (0.00-1.00), confidence rating ("High Confidence", "Medium Confidence", "Low Confidence"), specific confidence factors, historical average price, and local postcode regional benchmark.
+  - Updated `AIEstimate` interface in `src/services/gemini.ts` and `src/services/geminiServer.ts`.
+  - Created a modular SVG Circular Progress Gauge UI component (`src/components/common/ConfidenceGauge.tsx`) visualizing AI confidence percentages with clear color coding: Green (>=75% / High), Yellow/Amber (50-74% / Medium), and Red (<50% / Low). Supports light and dark canvas variants.
+  - Added AI Postcode Confidence Score & Historical Price Match Card in `PostJobWizard.tsx` (Step 2) featuring the `ConfidenceGauge`, postcode area match count, local average, confidence drivers checklist, and regional price notes.
+  - Saved confidence score metrics (`estimateConfidence`, `estimateConfidenceRating`, `estimateConfidenceFactors`, `estimatePostcodeArea`, `estimateHistoricalJobCount`, `estimateHistoricalAvgPrice`, `estimatePostcodeBenchmark`) onto job documents in Firestore.
+  - Upgraded `JobDetails.tsx` AI Price Estimate card to display the circular `ConfidenceGauge`, confidence rating pill badge, postcode area job count, local average price, and confidence drivers list for homeowners and tradespeople.
+- 2026-07-29: Implemented Geolocation-Driven 'Nearby Requests' Engine in Job Feed.
+  - Integrated device `navigator.geolocation` and `reverseLookupPostcode` in `src/services/postcodeService.ts` to detect user coordinates and outward postcode/city.
+  - Added Haversine formula distance calculation (`calculateDistanceMiles` in `src/lib/utils.ts`) to compute precise distance in miles from user position to nearby job requests.
+  - Created `getNearbyTradeInsights` in `src/services/geminiServer.ts` & `src/services/gemini.ts` to generate real-time AI summaries of local trade demand, urgent alert spikes, and actionable tips.
+  - Created `NearbyRequestsSection` component (`src/components/job-feed/NearbyRequestsSection.tsx`) rendered at the top of `JobFeed.tsx`.
+  - Features location status bar, urgent request count pills, AI local market summaries, interactive popular trade category filter chips, and nearby job request cards sorted by distance and urgency.
+- 2026-07-29: Configured `@capacitor/keyboard` Plugin for Mobile Layout Adjustments.
+  - Installed `@capacitor/keyboard` package and configured `capacitor.config.json` with `"resize": "body"`, `"style": "DARK"`, and `"resizeOnFullScreen": true`.
+  - Created `initCapacitorKeyboard()` in `src/lib/capacitor.ts` to attach lifecycle listeners (`keyboardWillShow`, `keyboardDidShow`, `keyboardWillHide`).
+  - Implemented auto-centering scroll (`scrollIntoView({ behavior: 'smooth', block: 'center' })`) for active inputs when the virtual keyboard pops up.
+  - Updated `src/index.css` with `.keyboard-is-open` utility classes to hide sticky bottom navigation bars when typing, ensuring focused input fields are never obscured by the virtual keyboard UI.
+- 2026-07-29: Integrated Biometric Quick-Login (`capacitor-biometric-auth`) for Mobile Re-authentication.
+  - Checked existing native biometric integration in `src/services/biometricService.ts` supporting `BiometricAuth`, `NativeBiometric`, and `Biometrics` plugin aliases.
+  - Integrated biometric authentication challenge with support for Face ID, Touch ID, and WebAuthn fallback in browser/preview environments.
+  - Enabled 'Biometric Quick-Login' configuration in `src/components/Profile.tsx` (`BiometricSettings` component) across Homeowner, Passenger, and Tradesperson account menus.
+  - Allows users to securely enroll their credentials with password confirmation and toggle biometric sign-in on/off with instant feedback.
+  - Handled auto-prompting and one-tap biometric verification on the Login screen (`src/components/Login.tsx`).
+- 2026-07-29: Google Sign-Up & Sign-In Architecture & Flow Enhancements.
+  - Native Mobile Flow: `@capacitor-firebase/authentication` integration in `src/firebase.ts` with error handling mapping Play Services codes (DEVELOPER_ERROR 10, 12500, 12501 Canceled, Network 7).
+  - Force-Web-View Fallback Logic: Implemented `signInWithGoogle({ forceWebView?: boolean })` helper with automatic fallback to `signInWithPopup` / `signInWithRedirect` if native Play Services or plugin initialization fails, guaranteeing a smooth authentication process on any mobile device or Webview container.
+  - AuthProvider Integration: Audited `AuthProvider.tsx` and exposed `signInWithGoogle` directly via `useAuth()` context for frictionless consumption across all client portals.
+  - Safe Redirect Check: `handleRedirectResult()` executed safely in standalone top-level windows (`window === window.top`) to prevent iframe CSP issues.
+  - Onboarding Lifecycle: Unprofiled Google sign-ups automatically pre-fill user display name and email in `Onboarding.tsx` before writing structured records to Firestore.
+- 2026-07-29: Added Persistent 'Recent Searches' Section in `FindTrades.tsx`.
+  - Audited `FindTrades.tsx` and confirmed no previous category search persistence existed (`recentlyViewedTraders` was previously tracking individual profile views only).
+  - Implemented local storage persistence under `recentTradeSearches` key maintaining up to 8 recent trade categories and search terms.
+  - Interactive Search Badges: Categorized search terms display orange `Tag` icons for trade categories and blue `Search` icons for freeform queries, styled with compact rounded squares and jet black borders (`border border-black`).
+  - Smooth Management: Added one-tap individual item removal and a "Clear All" action.
+  - Integrated auto-saving triggers across keyboard submission (`Enter`), blur events, voice search, category card taps, and hot search clicks.
+- 2026-07-29: Implemented Smart Quick-Filter Chips & Side-by-Side Trade Comparison Engine in `FindTrades.tsx`.
+  - **Option 1 (Smart Quick-Filters)**: Added single-tap filter preset pills for `24/7 Emergency`, `Verified`, `Top Rated 4.5+`, and `Fast Reply (<1hr)`. Features real-time matching count badges for each filter chip and instant filtering without needing to open the full modal.
+  - **Option 2 (Side-by-Side Comparison Engine)**: Added "Compare" toggle checkboxes to each trader card (up to 3 tradespeople simultaneously).
+  - Sticky Floating Compare Bar: Appears automatically when tradespeople are selected, showing avatar stacks and a "Compare Now" CTA.
+  - Side-by-Side Comparison Sheet: Modal presenting a side-by-side comparison matrix covering Star Ratings, Total Reviews, Call-Out & Hourly Rates, Emergency Availability, Verification & Badges, and direct "Request Quote" action triggers.
+- 2026-07-29: Implemented Live Auto-Complete Dropdown in `FindTrades.tsx`.
+  - Added real-time autocomplete suggestions popup attached to search input container with click-outside auto-dismiss (`searchContainerRef`).
+  - Categorized Suggestions: Displays matching Trade Categories & Services, Verified Tradespeople (with avatar, star rating, call-out fee, and direct profile preview action), Locations/Postcodes (with "Apply Area" action), and Recent Search History.
+  - Keyboard & UX: Handled `Escape` and `Enter` key listeners, clear search button, and direct profile modal preview trigger upon selecting a tradesperson from live results.
+- 2026-07-29: Implemented Interactive Map View vs. List View Toggle in `FindTrades.tsx`.
+  - Added floating draggable `[ List | Map ]` vertical toggle pillar tucked neatly at `right-4 bottom-32` above bottom tabs, styled with an elegant, ultra-slim dark palette (`bg-slate-950/95`), custom border (`border border-white/20`), and narrow space-saving width (exactly 20% narrower layout with optimized `w-11` container and `w-9` keys for non-obstructive look).
+  - Interactive Google Map View: Integrates `@react-google-maps/api` with custom "Premium Anti-Glare Golden" map style scheme (`#ebe3cd` base, no `mapId`).
+  - Pins nearby verified tradespeople using `MarkerF` with custom colored icons (red for emergency-available professionals, blue for standard).
+  - Distance Radius Circles: Renders a translucent blue `CircleF` radius boundary centered on local results with interactive radius distance selector (3km, 5km, 10km, 20km).
+  - Quick Info Windows (`InfoWindowF`): Interactive popup windows displaying trader avatar, name, verification shield, star rating, call-out fee, and direct "View Profile & Quote" CTA triggering bottom sheet modal.
+  - Interactive Draggable Pill: Supported seamless mouse/touch dragging via vertical custom pointer events with safe screen constraint boundaries so it remains fully movable and never gets lost.
+  - Auto Scroll & Focus: Added automated centering scroll and focus on map view when user clicks the "Map" toggle button, preventing screen mismatch issues.
+  - Session Persistence Rule: Default state resets strictly to List View on every fresh app session (`useState("list")`), while custom drag coordinate positions remain persistently locked during the session via automatic `sessionStorage` backing.
+
+
+

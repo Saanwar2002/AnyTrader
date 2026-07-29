@@ -769,22 +769,23 @@ async function startServer() {
   const PORT = 3000;
 
   // Rate limiters
+  const isDev = process.env.NODE_ENV !== "production";
 
   const aiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 10,
+    max: isDev ? 1000 : 30,
     message: { error: "Too many AI requests from this IP, please try again after a minute" },
   });
   
   const paymentLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 20,
+    max: isDev ? 1000 : 50,
     message: { error: "Too many payment requests from this IP" },
   });
   
   const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 100,
+    max: isDev ? 5000 : 250, // Relaxed for fluid navigation and iframe reloads
     message: { error: "Too many requests from this IP" },
   });
 

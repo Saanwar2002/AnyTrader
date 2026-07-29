@@ -78,8 +78,18 @@ export default function Login() {
   };
 
   useEffect(() => {
-    // Disabled handleRedirectResult on mount to prevent CSP-related auth/internal-error
-    // in this environment. Users should sign in using Email/Password.
+    // Only check redirect result in standalone top-level window to avoid iframe CSP issues
+    if (typeof window !== "undefined" && window === window.top) {
+      handleRedirectResult()
+        .then((result) => {
+          if (result?.user) {
+            console.log("[Login] Redirect sign-in success:", result.user.email);
+          }
+        })
+        .catch((err: any) => {
+          console.warn("[Login] Redirect sign-in check handled:", err?.message || err);
+        });
+    }
   }, []);
 
   const handleEmailAuth = async () => {

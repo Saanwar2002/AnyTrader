@@ -15,7 +15,7 @@ import { polishBio } from "@/src/services/gemini";
 import { motion, AnimatePresence } from "motion/react";
 import { usePWAInstall } from "@/src/hooks/usePWAInstall";
 import { usePortal } from "@/src/lib/PortalContext";
-import { CURRENT_APP_VERSION, checkUpdateNeeded } from "@/src/lib/version";
+import { CURRENT_APP_VERSION, checkUpdateNeeded, requestStoreReview } from "@/src/lib/version";
 import { AppUpdateModal } from "./common/AppUpdateModal";
 import { cn } from "@/src/lib/utils";
 import { 
@@ -500,13 +500,23 @@ export default function Profile() {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowManualUpdateModal(true)}
-            className="px-3 py-2 bg-black hover:bg-slate-800 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm flex items-center gap-1.5"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Check for Updates</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => requestStoreReview()}
+              className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-black text-[11px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm flex items-center gap-1.5"
+            >
+              <Star className="w-3.5 h-3.5 fill-black" />
+              <span>Rate App</span>
+            </button>
+
+            <button
+              onClick={() => setShowManualUpdateModal(true)}
+              className="px-3 py-2 bg-black hover:bg-slate-800 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Check for Updates</span>
+            </button>
+          </div>
         </div>
 
         <AppUpdateModal
@@ -1260,6 +1270,7 @@ export default function Profile() {
       title: "Account",
       items: [
         { icon: User, label: "Account Details", path: "#account" },
+        { icon: Fingerprint, label: "Enable Biometric Quick-Login", path: "#biometrics" },
         { icon: Smartphone, label: "Classic / Mobile Friendly", path: "#uimode" },
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
         { icon: Shield, label: "Privacy & Security", path: "#privacy" },
@@ -1329,6 +1340,7 @@ export default function Profile() {
     {
       title: "App Settings",
       items: [
+        { icon: Fingerprint, label: "Enable Biometric Quick-Login", path: "#biometrics" },
         { icon: Smartphone, label: "Classic / Mobile Friendly", path: "#uimode" },
         { icon: Repeat, label: "Switch to AnyTrader", path: "#switch_portal" },
         { icon: Bell, label: "Notifications", path: "/notifications" },
@@ -1343,6 +1355,7 @@ export default function Profile() {
       title: "Account",
       items: [
         { icon: User, label: "Account Details", path: "#account" },
+        { icon: Fingerprint, label: "Enable Biometric Quick-Login", path: "#biometrics" },
         { icon: Smartphone, label: "Classic / Mobile Friendly", path: "#uimode" },
         { icon: Bell, label: "Notification Preferences", path: "#notifications" },
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
@@ -3146,6 +3159,8 @@ export default function Profile() {
                                         </div>
                                       </div>
                                     </div>
+                                  ) : item.path === "#biometrics" || item.path === "#privacy" ? (
+                                    <BiometricSettings user={user} />
                                   ) : item.path === "#uimode" || item.path === "#settings" ? (
                                     renderUiModeSelector()
                                   ) : (

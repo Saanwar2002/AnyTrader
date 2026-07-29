@@ -43,6 +43,7 @@ import {
 import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
 import { useCategories } from "../lib/CategoryProvider";
+import { ConfidenceGauge } from "./common/ConfidenceGauge";
 import { lookupPostcode, reverseLookupPostcode } from "@/src/services/postcodeService";
 import { getJobEstimate, analyzeJobPhoto, getClarifyingQuestions, improveJobDescription, checkSafetyAndPII, processVoiceTranscript, transcribeVoiceAudio, processVoiceAudio, type AIEstimate } from "@/src/services/gemini";
 import { db, doc, setDoc, updateDoc, collection, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, addDoc, sendNotification, getDoc, getDocs, query, where, onSnapshot } from "@/src/firebase";
@@ -1880,6 +1881,13 @@ export default function PostJobWizard() {
           hasReview: editJob?.hasReview || false,
           estimateMin: estimate?.min || Math.floor(Number(formData.selectedBudget || 0) * 0.9),
           estimateMax: estimate?.max || Math.floor(Number(formData.selectedBudget || 0) * 1.1),
+          estimateConfidence: estimate?.confidence || null,
+          estimateConfidenceRating: estimate?.confidenceRating || null,
+          estimateConfidenceFactors: estimate?.confidenceFactors || [],
+          estimateHistoricalJobCount: estimate?.historicalJobCount || 0,
+          estimatePostcodeArea: estimate?.postcodeArea || (finalPostcode ? finalPostcode.split(' ')[0] : null),
+          estimateHistoricalAvgPrice: estimate?.historicalAvgPrice || null,
+          estimatePostcodeBenchmark: estimate?.postcodeBenchmark || null,
           postedDate: editJob?.postedDate || serverTimestamp(),
           updatedAt: serverTimestamp(),
           quoteCount: editJob?.quoteCount || 0,
@@ -3306,9 +3314,61 @@ export default function PostJobWizard() {
                       </div>
                       <h3 className="text-4xl sm:text-5xl font-black">£{estimate.min} - £{estimate.max}</h3>
                       
-                      <div className="bg-white/10 rounded-xl p-4 mt-4 border border-black/20">
+                      {/* AI Confidence Score Badge & Postcode Analysis */}
+                      <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 mt-3 border border-white/30 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-amber-300" />
+                            <span className="font-extrabold text-sm tracking-wide uppercase text-amber-200">
+                              Postcode Match Score
+                            </span>
+                          </div>
+                          <ConfidenceGauge 
+                            score={estimate.confidence} 
+                            rating={estimate.confidenceRating} 
+                            size={44} 
+                            variant="dark" 
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-cyan-100 font-medium">
+                          <MapPin className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                          <span>
+                            Mapped to <strong>{estimate.postcodeArea || formData.postcode || 'local'}</strong> area ({estimate.historicalJobCount || 5} similar historical jobs analyzed)
+                          </span>
+                        </div>
+
+                        {estimate.historicalAvgPrice && estimate.historicalAvgPrice > 0 && (
+                          <div className="flex items-center justify-between bg-black/20 px-3 py-2 rounded-xl text-xs">
+                            <span className="text-cyan-200">Postcode Local Avg:</span>
+                            <span className="font-bold text-white">£{estimate.historicalAvgPrice} (Range: £{estimate.historicalMinPrice || Math.floor(estimate.min * 0.95)} - £{estimate.historicalMaxPrice || Math.ceil(estimate.max * 1.05)})</span>
+                          </div>
+                        )}
+
+                        {estimate.confidenceFactors && estimate.confidenceFactors.length > 0 && (
+                          <div className="pt-2 border-t border-white/20 space-y-1">
+                            <p className="text-[10px] font-bold uppercase text-cyan-200 tracking-wider">Confidence Score Drivers:</p>
+                            <ul className="space-y-1">
+                              {estimate.confidenceFactors.map((factor, idx) => (
+                                <li key={idx} className="flex items-start gap-1.5 text-xs text-white/90">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
+                                  <span>{factor}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {estimate.postcodeBenchmark && (
+                          <p className="text-[11px] text-cyan-100/80 italic leading-relaxed pt-1">
+                            "{estimate.postcodeBenchmark}"
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="bg-white/10 rounded-xl p-4 mt-2 border border-black/20">
                         <p className="text-cyan-50 text-xs leading-relaxed">
-                          <strong>Note:</strong> This is an AI estimate, not a guaranteed quote. Tradespeople will see this as your target budget, but their actual quotes may vary based on specific job requirements, materials, and their rates.
+                          <strong>Note:</strong> This is an AI estimate based on historical postcode records, not a guaranteed quote. Tradespeople will see this as your target budget, but actual quotes may vary based on specific site requirements.
                         </p>
                       </div>
 

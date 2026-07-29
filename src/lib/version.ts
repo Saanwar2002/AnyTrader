@@ -1,4 +1,6 @@
 import { Capacitor } from '@capacitor/core';
+import { AppLauncher } from '@capacitor/app-launcher';
+import { NativeMarket } from '@capacitor-community/native-market';
 
 export const CURRENT_APP_VERSION = "1.0.0";
 
@@ -77,23 +79,74 @@ export function checkUpdateNeeded(config?: PlatformUpdateConfig, currentVersion:
   };
 }
 
-export function openUpdateStore(config?: PlatformUpdateConfig) {
+/**
+ * Uses AppLauncher and NativeMarket plugins to launch Google Play Store or Apple App Store listing
+ */
+export async function openUpdateStore(config?: PlatformUpdateConfig) {
   const platform = Capacitor.getPlatform();
-  let url = config?.webAppUrl || "https://anytrader.app";
+  const appId = "com.anytrader.app";
 
+  if (Capacitor.isNativePlatform()) {
+    try {
+      if (platform === "android") {
+        const canOpen = await AppLauncher.canOpenUrl({ url: `market://details?id=${appId}` }).catch(() => ({ value: false }));
+        if (canOpen.value) {
+          await AppLauncher.openUrl({ url: `market://details?id=${appId}` });
+          return;
+        }
+        await NativeMarket.openStoreListing({ appId });
+        return;
+      } else if (platform === "ios") {
+        const canOpen = await AppLauncher.canOpenUrl({ url: "itms-apps://itunes.apple.com/app/id647000000" }).catch(() => ({ value: false }));
+        if (canOpen.value) {
+          await AppLauncher.openUrl({ url: "itms-apps://itunes.apple.com/app/id647000000" });
+          return;
+        }
+        await NativeMarket.openStoreListing({ appId: "647000000" });
+        return;
+      }
+    } catch (err) {
+      console.warn("Native Store Launch error, executing URL fallback:", err);
+    }
+  }
+
+  // Web or fallback store URL handling
+  let fallbackUrl = config?.webAppUrl || "https://anytrader.app";
   if (platform === "android") {
-    url = config?.androidAppUrl || "https://play.google.com/store/apps/details?id=com.anytrader.app";
+    fallbackUrl = config?.androidAppUrl || `https://play.google.com/store/apps/details?id=${appId}`;
   } else if (platform === "ios") {
-    url = config?.iosAppUrl || "https://apps.apple.com/app/id647000000";
+    fallbackUrl = config?.iosAppUrl || "https://apps.apple.com/app/id647000000";
   }
 
   try {
     if (Capacitor.isNativePlatform()) {
-      window.open(url, "_system");
+      await AppLauncher.openUrl({ url: fallbackUrl }).catch(() => window.open(fallbackUrl, "_system"));
     } else {
-      window.open(url, "_blank");
+      window.open(fallbackUrl, "_blank");
     }
   } catch (e) {
-    window.location.href = url;
+    window.location.href = fallbackUrl;
   }
 }
+
+/**
+ * Requests in-app review or opens store rating page using NativeMarket plugin
+ */
+export async function requestStoreReview() {
+  const appId = "com.anytrader.app";
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await NativeMarket.openStoreListing({ appId });
+      return true;
+    } catch (err) {
+      console.warn("Store review prompt via NativeMarket failed:", err);
+    }
+  }
+
+  const fallbackUrl = Capacitor.getPlatform() === "ios"
+    ? "https://apps.apple.com/app/id647000000?action=write-review"
+    : `https://play.google.com/store/apps/details?id=${appId}`;
+  window.open(fallbackUrl, "_blank");
+  return false;
+}
+

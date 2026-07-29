@@ -22,6 +22,7 @@ import { AppUpdateModal } from "./components/common/AppUpdateModal";
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { Camera } from '@capacitor/camera';
+import { initCapacitorKeyboard } from './lib/capacitor';
 
 // Lazy loaded large components
 const DriverTerminal = React.lazy(() => import("./components/driver/DriverTerminal"));
@@ -172,9 +173,12 @@ export default function App() {
     return () => unsub();
   }, [isAuthReady, user]);
 
-  // Global auto-scroll for inputs to keep them in view, especially on mobile
+  // Native Capacitor plugin initializations (Keyboard, Geolocation, Camera, Microphones)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
+      // Initialize Capacitor Keyboard resize and scroll behavior
+      initCapacitorKeyboard();
+
       const requestNativePermissions = async () => {
         try {
           // Request Location permission

@@ -21,6 +21,7 @@ const iconMap: Record<string, any> = {
 };
 
 import { EmergencyTimer } from "./EmergencyTimer";
+import { NearbyRequestsSection } from "./job-feed/NearbyRequestsSection";
 
 export default function JobFeed() {
   const { user, profile } = useAuth();
@@ -997,6 +998,19 @@ export default function JobFeed() {
             Apply Filters & Close
           </button>
         </motion.div>
+      )}
+
+      {activeTab === "feed" && (
+        <NearbyRequestsSection
+          jobs={jobs}
+          onSelectCategoryFilter={(cat) => {
+            if (cat) {
+              setSelectedCategories([cat]);
+            } else {
+              setSelectedCategories([]);
+            }
+          }}
+        />
       )}
 
       {filteredJobs.length === 0 ? (

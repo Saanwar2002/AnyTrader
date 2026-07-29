@@ -48,6 +48,14 @@ export interface AIEstimate {
   min: number;
   max: number;
   confidence: number;
+  confidenceRating?: "High Confidence" | "Medium Confidence" | "Low Confidence";
+  confidenceFactors?: string[];
+  historicalJobCount?: number;
+  postcodeArea?: string;
+  historicalAvgPrice?: number;
+  historicalMinPrice?: number;
+  historicalMaxPrice?: number;
+  postcodeBenchmark?: string;
   breakdown: {
     materials: string;
     labour: string;
@@ -358,6 +366,20 @@ export async function getDynamicInstantMatchPricing(
 }
 
 // Newly introduced helpers
+export interface NearbyTradeInsights {
+  summary: string;
+  popularCategories: { category: string; count: number; urgencyLevel: string }[];
+  urgentAlert: string | null;
+  insightTip: string;
+}
+
+export async function getNearbyTradeInsights(
+  locationName: string,
+  jobsSummary: Array<{ category: string; title: string; urgency: string; distanceMiles?: number }>
+): Promise<NearbyTradeInsights> {
+  return callServerGemini("getNearbyTradeInsights", [locationName, jobsSummary]);
+}
+
 export async function polishBio(bio: string, trades: string, tags: string): Promise<string> {
   return callServerGemini("polishBio", [bio, trades, tags]);
 }

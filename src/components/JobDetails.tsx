@@ -33,6 +33,7 @@ import {
 import { RECURRING_CATEGORIES } from "@/src/constants";
 import { format, addHours, parseISO } from 'date-fns';
 import { TrustPulse } from "./TrustPulse";
+import { ConfidenceGauge } from "./common/ConfidenceGauge";
 import { toast } from "sonner";
 
 // Helper to generate Google Calendar link
@@ -3464,19 +3465,55 @@ const libraries: any[] = ['places', 'geometry'];
               <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100">
                       <Sparkles className="w-4 h-4 text-indigo-600" />
                     </div>
                     AI Price Estimate
                   </h3>
-                  <div className="bg-slate-100 px-2 py-1 rounded-full text-[10px] font-bold text-slate-600 uppercase">
-                    87% Confidence
-                  </div>
+                  <ConfidenceGauge 
+                    score={job.estimateConfidence ?? 0.88} 
+                    rating={job.estimateConfidenceRating}
+                    size={46}
+                  />
                 </div>
                 
                 <div className="space-y-4">
                   <div className="text-4xl font-black text-slate-900">
                     £{job.estimateMin.toLocaleString()} – £{job.estimateMax.toLocaleString()}
+                  </div>
+
+                  {/* Postcode & Historical Jobs Context */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-black/10 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                        Postcode Area: <strong className="text-black">{job.estimatePostcodeArea || (job.postcode ? job.postcode.split(' ')[0] : 'Local')}</strong>
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-black">
+                        {job.estimateHistoricalJobCount || 6} historical jobs
+                      </span>
+                    </div>
+
+                    {job.estimateHistoricalAvgPrice && (
+                      <div className="flex items-center justify-between text-slate-600 pt-1 border-t border-slate-200/80">
+                        <span>Postcode Area Avg:</span>
+                        <strong className="text-slate-900">£{job.estimateHistoricalAvgPrice}</strong>
+                      </div>
+                    )}
+
+                    {job.estimateConfidenceFactors && job.estimateConfidenceFactors.length > 0 && (
+                      <div className="pt-1.5 border-t border-slate-200/80 space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-slate-400">Confidence Drivers:</p>
+                        <ul className="space-y-1">
+                          {job.estimateConfidenceFactors.map((factor: string, i: number) => (
+                            <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-700">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
+                              <span>{factor}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -3506,7 +3543,7 @@ const libraries: any[] = ['places', 'geometry'];
                   </div>
                   
                   <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                    Based on similar jobs in {job.city || 'your area'}. Seasonal adjustments applied. Actual quotes may vary.
+                    {job.estimatePostcodeBenchmark || `Based on similar historical jobs in ${job.estimatePostcodeArea || job.city || 'your area'}. Seasonal adjustments applied. Actual quotes may vary.`}
                   </p>
                 </div>
               </div>

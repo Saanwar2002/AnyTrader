@@ -146,3 +146,14 @@ body.hide-driver-bottom-nav #mobile-bottom-nav {
   opacity: 0;
   pointer-events: none;
 }
+
+/* Capacitor Virtual Keyboard Layout Adjustments */
+body.keyboard-is-open #mobile-bottom-nav,
+body.keyboard-is-open .hide-on-keyboard {
+  display: none !important;
+}
+
+body.keyboard-is-open {
+  /* Prevent background scrolling locking while maintaining form focus */
+  overflow-y: auto !important;
+}

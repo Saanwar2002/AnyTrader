@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, type User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, signInWithCredential, browserPopupRedirectResolver } from "firebase/auth";
-import { enableMultiTabIndexedDbPersistence, initializeFirestore, getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot as originalOnSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { enableMultiTabIndexedDbPersistence, initializeFirestore, getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc as originalSetDoc, updateDoc as originalUpdateDoc, deleteDoc as originalDeleteDoc, onSnapshot as originalOnSnapshot, query, where, or, and, orderBy, limit, getDocFromServer, serverTimestamp, addDoc as originalAddDoc, runTransaction as originalRunTransaction, writeBatch as originalWriteBatch, deleteField, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 import { getPerformance, trace } from "firebase/performance";
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString } from "firebase/storage";
 import { Capacitor } from "@capacitor/core";
@@ -201,10 +201,12 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Auth Helpers
-export const signInWithGoogle = async () => {
-  if (Capacitor.isNativePlatform()) {
+export const signInWithGoogle = async (options?: { forceWebView?: boolean }) => {
+  const forceWebView = options?.forceWebView === true;
+
+  if (Capacitor.isNativePlatform() && !forceWebView) {
     try {
-      console.log("[signInWithGoogle] Capacitor native container detected. Loading native authentication plugin...");
+      console.log("[signInWithGoogle] Capacitor native container detected. Loading @capacitor-firebase/authentication plugin...");
       const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
       console.log("[signInWithGoogle] Triggering native Google Flow on device...");
       const result = await FirebaseAuthentication.signInWithGoogle({});
@@ -213,7 +215,7 @@ export const signInWithGoogle = async () => {
       const idToken = result.credential?.idToken;
       if (!idToken) {
         console.error("[signInWithGoogle] No idToken returned in credential. Native result structure was:", JSON.stringify(result));
-        throw new Error("Google Sign-In completed, but no ID Token was returned. Please verify that your Web Client ID is correctly configured in your Google project settings.");
+        throw new Error("Google Sign-In completed, but no ID Token was returned. Web Client ID may need configuration.");
       }
       
       const credential = GoogleAuthProvider.credential(idToken);
@@ -224,24 +226,37 @@ export const signInWithGoogle = async () => {
     } catch (err: any) {
       console.warn("[signInWithGoogle] Native Google Sign-In status:", err);
       
-      // Map common native Play Services / OAuth error codes to friendly developer-facing instructions
       const rawErrorStr = err.message || JSON.stringify(err) || "Unknown Error";
-      let friendlyMsg = rawErrorStr;
-      
-      if (rawErrorStr.includes("10") || rawErrorStr.includes("DEVELOPER_ERROR")) {
-        friendlyMsg = "DEVELOPER_ERROR (Code 10). This occurs because your Android app's signing key SHA-1 fingerprint (both Debug and Play Store) is not registered in your Firebase Console project settings under your Android app, or Google Sign-In is disabled. Please verify your SHA-1 key and enabled providers.";
-      } else if (rawErrorStr.includes("12500")) {
-        friendlyMsg = "Google Configuration Error (Code 12500). Please verify that your Google Services configuration is correct and that the Android client is turned on with correct credentials.";
-      } else if (rawErrorStr.toLowerCase().includes("canceled") || rawErrorStr.toLowerCase().includes("cancel") || rawErrorStr.includes("12501")) {
-        friendlyMsg = "Sign-in was canceled by the user (Code 12501).";
-      } else if (rawErrorStr.includes("7") || rawErrorStr.toLowerCase().includes("network")) {
-        friendlyMsg = "Network Error (Code 7). Please check your device's network connection.";
+      const isUserCanceled = rawErrorStr.toLowerCase().includes("canceled") || 
+                             rawErrorStr.toLowerCase().includes("cancel") || 
+                             rawErrorStr.includes("12501");
+
+      if (isUserCanceled) {
+        throw new Error("Sign-in was canceled by the user.");
       }
-      
-      throw new Error(`Google Native Error: ${friendlyMsg}`);
+
+      console.warn("[signInWithGoogle] Native flow encountered an issue. Executing force-web-view fallback for frictionless login...");
+      return await executeWebViewGoogleSignIn();
     }
   } else {
-    return signInWithPopup(auth, googleProvider);
+    return await executeWebViewGoogleSignIn();
+  }
+};
+
+const executeWebViewGoogleSignIn = async () => {
+  try {
+    return await signInWithPopup(auth, googleProvider);
+  } catch (popupErr: any) {
+    if (
+      popupErr?.code === 'auth/popup-blocked' || 
+      popupErr?.code === 'auth/cancelled-popup-request' ||
+      popupErr?.message?.includes('popup-blocked')
+    ) {
+      console.warn("[signInWithGoogle] Popup blocked. Falling back to signInWithRedirect...");
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    }
+    throw popupErr;
   }
 };
 export const handleRedirectResult = () => getRedirectResult(auth);
@@ -471,7 +486,68 @@ export const onSnapshot = (...args: any[]) => {
   }
 };
 
+import { startTrackedWrite, endTrackedWrite } from "./lib/syncTracker";
+
+export const setDoc = async (reference: any, data: any, options?: any) => {
+  const trackId = startTrackedWrite("setDoc");
+  try {
+    return await originalSetDoc(reference, data, options);
+  } finally {
+    endTrackedWrite(trackId);
+  }
+};
+
+export const updateDoc = async (reference: any, ...args: any[]) => {
+  const trackId = startTrackedWrite("updateDoc");
+  try {
+    return await (originalUpdateDoc as any)(reference, ...args);
+  } finally {
+    endTrackedWrite(trackId);
+  }
+};
+
+export const deleteDoc = async (reference: any) => {
+  const trackId = startTrackedWrite("deleteDoc");
+  try {
+    return await originalDeleteDoc(reference);
+  } finally {
+    endTrackedWrite(trackId);
+  }
+};
+
+export const addDoc = async (reference: any, data: any) => {
+  const trackId = startTrackedWrite("addDoc");
+  try {
+    return await originalAddDoc(reference, data);
+  } finally {
+    endTrackedWrite(trackId);
+  }
+};
+
+export const runTransaction = async (firestore: any, updateFunction: any, ...args: any[]) => {
+  const trackId = startTrackedWrite("runTransaction");
+  try {
+    return await originalRunTransaction(firestore, updateFunction, ...args);
+  } finally {
+    endTrackedWrite(trackId);
+  }
+};
+
+export const writeBatch = (firestore: any) => {
+  const batch = originalWriteBatch(firestore);
+  const originalCommit = batch.commit.bind(batch);
+  batch.commit = async () => {
+    const trackId = startTrackedWrite("writeBatch");
+    try {
+      return await originalCommit();
+    } finally {
+      endTrackedWrite(trackId);
+    }
+  };
+  return batch;
+};
+
 export { 
-  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, addDoc, runTransaction, writeBatch, deleteField, arrayUnion, arrayRemove, increment,
+  collection, collectionGroup, doc, getDoc, getDocs, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, deleteField, arrayUnion, arrayRemove, increment,
   ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString
 };

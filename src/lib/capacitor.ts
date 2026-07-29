@@ -1,6 +1,6 @@
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 export { ImpactStyle };
-import { Keyboard } from '@capacitor/keyboard';
+import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
@@ -66,6 +66,49 @@ export const hideNativeKeyboard = async () => {
       await Keyboard.hide();
     } catch (e) {
        // Ignore
+    }
+  }
+};
+
+export const initCapacitorKeyboard = async () => {
+  if (isCapacitor()) {
+    try {
+      // Configure body resize mode so WebView viewport adjusts when virtual keyboard opens
+      await Keyboard.setResizeMode({ mode: KeyboardResize.Body });
+      await Keyboard.setScroll({ isDisabled: false });
+
+      // Listen for keyboard lifecycle events to handle layout shifts and scroll active input into clear view
+      Keyboard.addListener('keyboardWillShow', (info) => {
+        document.body.classList.add('keyboard-is-open');
+        document.documentElement.style.setProperty('--keyboard-height', `${info.keyboardHeight}px`);
+
+        setTimeout(() => {
+          const activeEl = document.activeElement as HTMLElement | null;
+          if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+            const inputType = (activeEl as HTMLInputElement).type;
+            if (inputType !== 'checkbox' && inputType !== 'radio' && inputType !== 'file') {
+              activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+        }, 120);
+      });
+
+      Keyboard.addListener('keyboardDidShow', () => {
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+          const inputType = (activeEl as HTMLInputElement).type;
+          if (inputType !== 'checkbox' && inputType !== 'radio' && inputType !== 'file') {
+            activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      });
+
+      Keyboard.addListener('keyboardWillHide', () => {
+        document.body.classList.remove('keyboard-is-open');
+        document.documentElement.style.setProperty('--keyboard-height', '0px');
+      });
+    } catch (e) {
+      console.warn('Capacitor Keyboard setup warning:', e);
     }
   }
 };

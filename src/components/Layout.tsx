@@ -1,8 +1,9 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Plus, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark, Clock, ClipboardList } from "lucide-react";
+import { Home, Briefcase, MessageSquare, User as UserIcon, PlusCircle, Plus, Bell, LogOut, AlertCircle, PoundSterling, Search, Bot, Shield, Users, AlertTriangle, Calendar, X, BarChart3, LayoutGrid, Zap, ShoppingCart, Loader2, ChevronRight, Wrench, Hammer, HardHat, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, PenTool, Box, ChevronDown, CreditCard, Menu, Star, MapPin, Repeat, Car, Heart, ShieldAlert, Phone, Download, Ban, Info, Bookmark, Clock, ClipboardList, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { logout, db, collection, query, where, onSnapshot, handleFirestoreError, OperationType, doc, updateDoc, arrayRemove, orderBy, limit, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
+import { useSyncStatus } from "@/src/lib/syncTracker";
 import { toast } from "sonner";
 import React, { useEffect, useState, useRef } from "react";
 import { TradeBot } from "./TradeBot";
@@ -28,6 +29,9 @@ export default function Layout() {
   const { activeTab, activeSubTab } = useBusinessTab();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadTypes, setUnreadTypes] = useState<Set<string>>(new Set());
+  
+  // Local Database Sync Status
+  const { pendingCount, hasPendingChanges } = useSyncStatus();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [journeys, setJourneys] = useState<any[]>([]);
@@ -443,13 +447,18 @@ export default function Layout() {
 
   return (
     <div className={cn("min-h-screen flex flex-col w-full overflow-x-hidden relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
-      {/* Offline Banner */}
-      {!isOnline && (
-        <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-medium z-[60] shadow-sm transition-all", isDriverTerminal ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600 border-b border-black", (!showMaintenanceBanner && !isOnline) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+      {/* Network & Local Sync Status Banner */}
+      {!isOnline ? (
+        <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-medium z-[60] shadow-sm transition-all bg-slate-100 text-slate-600 border-b border-black", (!showMaintenanceBanner && !isOnline) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500 animate-pulse" />
           <span>You're offline. App will sync data once reconnected.</span>
         </div>
-      )}
+      ) : hasPendingChanges ? (
+        <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-bold z-[60] shadow-sm transition-all bg-blue-50 text-blue-700 border-b border-blue-200", (!showMaintenanceBanner) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
+          <RefreshCw className="w-3.5 h-3.5 shrink-0 text-blue-600 animate-spin" />
+          <span>Syncing {pendingCount} local update{pendingCount > 1 ? "s" : ""} to Cloud storage...</span>
+        </div>
+      ) : null}
 
       {/* Scheduled Maintenance Banner */}
       {showMaintenanceBanner && platformConfig?.scheduledMaintenance && (
@@ -765,6 +774,16 @@ export default function Layout() {
                   </Link>
                 </>
               )}
+
+            {isOnline && hasPendingChanges && (
+              <div 
+                className="flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 shadow-sm animate-pulse shrink-0 cursor-help"
+                title={`${pendingCount} database modifications pending server synchronization`}
+              >
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                <span className="text-[10px] font-extrabold tracking-wider uppercase hidden xs:inline">Syncing ({pendingCount})</span>
+              </div>
+            )}
 
             <button 
               onClick={() => setIsTradeBotOpen(true)}
