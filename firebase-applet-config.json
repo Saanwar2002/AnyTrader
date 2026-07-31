@@ -3,8 +3,10 @@
   "appId": "1:426882121063:web:1f5518a1d241c078f403c2",
   "apiKey": "AIzaSyBsn4wIoSSEPsmPVcMFK88L9sBUh8MFdYM",
   "authDomain": "anytradercombined.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-44dab8b3-bbc9-4352-b725-2cbe7a1dfd2a",
+  "firestoreDatabaseId": "ai-studio-anytrader-44dab8b3-bbc9-4352-b725-2cbe7a1dfd2a",
   "storageBucket": "anytradercombined.firebasestorage.app",
   "messagingSenderId": "426882121063",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "426882121063-jsfaqdquk5o1ie9dcluhffjmvokh5g0m.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

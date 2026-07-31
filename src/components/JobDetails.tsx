@@ -35,6 +35,7 @@ import { format, addHours, parseISO } from 'date-fns';
 import { TrustPulse } from "./TrustPulse";
 import { ConfidenceGauge } from "./common/ConfidenceGauge";
 import { toast } from "sonner";
+import { GoogleDocsContractModal } from "@/src/components/shared/GoogleDocsContractModal";
 
 // Helper to generate Google Calendar link
 const generateGoogleCalendarLink = (job: any, quote: any) => {
@@ -141,6 +142,7 @@ export default function JobDetails() {
   const [showMap, setShowMap] = useState(true);
   const [showDigitalId, setShowDigitalId] = useState(false);
   const [showJobSummary, setShowJobSummary] = useState(false);
+  const [showContractModal, setShowContractModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState("");
@@ -2448,10 +2450,16 @@ const libraries: any[] = ['places', 'geometry'];
                 >
                   <MessageSquare className="w-5 h-5" /> Open Chat
                 </button>
+                <button
+                  onClick={() => setShowContractModal(true)}
+                  className="bg-[#1e3a5f] text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95 border border-black"
+                >
+                  <FileText className="w-5 h-5 text-blue-300" /> Google Docs Legal Contract
+                </button>
                 {!job.trackingStatus && (
                   <button 
                     onClick={handleSetOnRoute}
-                    className="bg-[#2D68C4] text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95"
+                    className="bg-[#2D68C4] text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95 col-span-2"
                   >
                     <Navigation className="w-4 h-4 fill-white flex-shrink-0" /> Signal On Route
                   </button>
@@ -2459,7 +2467,7 @@ const libraries: any[] = ['places', 'geometry'];
                 {job.trackingStatus === "on_route" && (
                   <button 
                     onClick={handleSetArrived}
-                    className="bg-green-600 text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95"
+                    className="bg-green-600 text-white py-3 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transform hover:scale-[1.02] transition-transform active:scale-95 col-span-2"
                   >
                     <MapPin className="w-5 h-5" /> Signal Arrived
                   </button>
@@ -5899,6 +5907,25 @@ const libraries: any[] = ['places', 'geometry'];
           </div>
         )}
       </AnimatePresence>
+
+      <GoogleDocsContractModal
+        isOpen={showContractModal}
+        onClose={() => setShowContractModal(false)}
+        job={job}
+        quote={quotes.find(q => q.status === "accepted") || quotes[0]}
+        traderName={
+          tradespersonProfiles[job.acceptedTradespersonId]?.firstName
+            ? `${tradespersonProfiles[job.acceptedTradespersonId]?.firstName} ${tradespersonProfiles[job.acceptedTradespersonId]?.lastName || ""}`
+            : profile?.firstName
+            ? `${profile.firstName} ${profile.lastName || ""}`
+            : "Assigned Tradesperson"
+        }
+        clientName={
+          homeownerProfile?.firstName
+            ? `${homeownerProfile.firstName} ${homeownerProfile.lastName || ""}`
+            : "Homeowner"
+        }
+      />
     </div>
   );
 }

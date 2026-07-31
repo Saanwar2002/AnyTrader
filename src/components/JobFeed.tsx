@@ -322,22 +322,37 @@ export default function JobFeed() {
   useEffect(() => {
     if (!user) return;
 
-    // Fetch up to current limitCount posted jobs
-    const q = query(
+    // Fetch up to current limitCount posted jobs with optimized composite ordering and fallback
+    let q = query(
       collection(db, "jobs"),
       where("status", "==", "posted"),
       orderBy("postedDate", "desc"),
       limit(limitCount)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    let unsubscribe = onSnapshot(q, (snapshot) => {
       const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setJobs(jobsData);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching job feed:", error);
-      handleFirestoreError(error, OperationType.LIST, "jobs");
-      setLoading(false);
+      console.warn("Ordered job feed query error or indexing in progress, running resilient fallback query:", error);
+      // Resilient fallback query without explicit orderBy in case composite index is building
+      const fallbackQ = query(
+        collection(db, "jobs"),
+        where("status", "==", "posted"),
+        limit(limitCount)
+      );
+      unsubscribe = onSnapshot(fallbackQ, (fallbackSnapshot) => {
+        const jobsData = fallbackSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a: any, b: any) => new Date(b.postedDate || b.createdAt || 0).getTime() - new Date(a.postedDate || a.createdAt || 0).getTime());
+        setJobs(jobsData);
+        setLoading(false);
+      }, (fallbackErr) => {
+        console.error("Error fetching job feed fallback:", fallbackErr);
+        handleFirestoreError(fallbackErr, OperationType.LIST, "jobs");
+        setLoading(false);
+      });
     });
 
     return () => unsubscribe();

@@ -345,6 +345,28 @@ export async function getShopRecommendations(role: string, category: string): Pr
   return callServerGemini("getShopRecommendations", [role, category]);
 }
 
+export interface BuildingRegsPricingGrounding {
+  category: string;
+  buildingRegsSummary: string;
+  regulationsApplicable: string[];
+  gasSafeOrSpecialistNotice?: string;
+  supplierMaterialEstimate: {
+    min: number;
+    max: number;
+    summary: string;
+    itemizedSupplies: { name: string; approxPrice: string; supplier: string }[];
+  };
+  sources: { title: string; url: string }[];
+}
+
+export async function getBuildingRegsAndSupplierPricing(
+  category: string,
+  description: string,
+  postcode?: string
+): Promise<BuildingRegsPricingGrounding> {
+  return callServerGemini("getBuildingRegsAndSupplierPricing", [category, description, postcode]);
+}
+
 export async function callTradeBot(userMessage: string, history: {role: "user" | "model", text: string}[]): Promise<any> {
   return callServerGemini("callTradeBot", [userMessage, history]);
 }

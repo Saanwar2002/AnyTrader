@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2 } from "lucide-react";
+import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2, ShieldCheck, Tag, ExternalLink } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { lookupPostcode } from "@/src/services/postcodeService";

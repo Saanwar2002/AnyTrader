@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, collection, query, where, onSnapshot, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { differenceInDays, format, addDays, subDays, isSameDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addMonths, getDaysInMonth, isWithinInterval } from "date-fns";
-import { Calendar as CalendarIcon, Clock, MapPin, Search, Sparkles, BrainCircuit, ArrowRight, Zap, X, CalendarClock, CalendarDays, Check, XCircle, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, MapPin, Search, Sparkles, BrainCircuit, ArrowRight, Zap, X, CalendarClock, CalendarDays, Check, XCircle, ChevronLeft, ChevronRight, ChevronDown, CalendarCheck, RefreshCw } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { isGoogleCalendarConnected, requestCalendarAccessToken, disconnectGoogleCalendar, syncJobToGoogleCalendar } from "@/src/services/googleCalendarService";
 
 export default function TraderCalendar() {
   const { user } = useAuth();
@@ -14,6 +15,53 @@ export default function TraderCalendar() {
   const [analyzing, setAnalyzing] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncedCalendars, setSyncedCalendars] = useState<string[]>([]);
+  const [syncingJobId, setSyncingJobId] = useState<string | null>(null);
+  const [syncedJobIds, setSyncedJobIds] = useState<string[]>([]);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isGoogleCalendarConnected()) {
+      setSyncedCalendars(prev => prev.includes('google') ? prev : [...prev, 'google']);
+    }
+  }, []);
+
+  const handleConnectGoogleCalendar = async () => {
+    setSyncError(null);
+    try {
+      await requestCalendarAccessToken();
+      setSyncedCalendars(prev => prev.includes('google') ? prev : [...prev, 'google']);
+    } catch (err: any) {
+      setSyncError(err.message || "Failed to connect Google Calendar.");
+    }
+  };
+
+  const handleDisconnectGoogleCalendar = () => {
+    disconnectGoogleCalendar();
+    setSyncedCalendars(prev => prev.filter(c => c !== 'google'));
+  };
+
+  const handleSyncItemToGoogle = async (item: any, type: 'appointment' | 'job') => {
+    setSyncingJobId(item.id);
+    setSyncError(null);
+
+    const title = type === 'appointment' ? (item.serviceName || "Client Appointment") : (item.title || "Scheduled Job");
+    const startDate = item.date ? `${item.date}T${item.startTime || '09:00'}:00` : new Date().toISOString();
+
+    const res = await syncJobToGoogleCalendar({
+      title,
+      category: type === 'appointment' ? 'Appointment' : 'Trade Job',
+      address: item.location || 'Client location',
+      startDate,
+      description: item.notes || item.description || 'Scheduled via AnyTrader',
+    });
+
+    setSyncingJobId(null);
+    if (res.success) {
+      setSyncedJobIds(prev => [...prev, item.id]);
+    } else {
+      setSyncError(res.error || "Could not sync event to Google Calendar.");
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'schedule' | 'appointments'>('schedule');
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -283,39 +331,83 @@ export default function TraderCalendar() {
               </div>
             ) : (
               <div className="space-y-4">
-                {appointments
+                 {appointments
                   .filter(a => a.status === 'confirmed' && isSameDay(new Date(a.date), selectedDate))
                   .sort((a, b) => a.startTime.localeCompare(b.startTime))
                   .map(apt => (
-                  <div key={apt.id} className="p-4 rounded-2xl border border-blue-600 shadow-[4px_4px_0_0_rgba(37,99,235,1)] flex gap-4 bg-white relative">
+                  <div key={apt.id} className="p-4 rounded-2xl border border-blue-600 shadow-[4px_4px_0_0_rgba(37,99,235,1)] flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white relative">
                      <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-bl-xl rounded-tr-xl flex items-center gap-1">
                         <Check className="w-3 h-3" /> Confirmed
                      </div>
-                     <div className="w-16 h-16 bg-blue-50 border border-blue-100 rounded-xl flex-shrink-0 flex items-center justify-center text-blue-600">
-                        <CalendarClock className="w-8 h-8" />
+                     <div className="flex gap-4 items-center">
+                       <div className="w-16 h-16 bg-blue-50 border border-blue-100 rounded-xl flex-shrink-0 flex items-center justify-center text-blue-600">
+                          <CalendarClock className="w-8 h-8" />
+                       </div>
+                       <div>
+                          <h4 className="font-bold text-slate-800">{apt.serviceName}</h4>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-slate-500 mt-2">
+                             <span className="flex items-center gap-1 font-semibold text-slate-700"><Clock className="w-4 h-4" /> {apt.startTime} ({apt.durationMinutes}m)</span>
+                             <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> Customer Location</span>
+                          </div>
+                          {apt.notes && (
+                             <p className="text-sm mt-2 italic text-slate-600">"{apt.notes}"</p>
+                          )}
+                       </div>
                      </div>
-                     <div>
-                        <h4 className="font-bold text-slate-800">{apt.serviceName}</h4>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-slate-500 mt-2">
-                           <span className="flex items-center gap-1 font-semibold text-slate-700"><Clock className="w-4 h-4" /> {apt.startTime} ({apt.durationMinutes}m)</span>
-                           <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> Customer Location</span>
-                        </div>
-                        {apt.notes && (
-                           <p className="text-sm mt-2 italic text-slate-600">"{apt.notes}"</p>
+                     <button
+                        onClick={() => handleSyncItemToGoogle(apt, 'appointment')}
+                        disabled={syncingJobId === apt.id || syncedJobIds.includes(apt.id)}
+                        className={cn(
+                          "self-start sm:self-center px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all shrink-0",
+                          syncedJobIds.includes(apt.id)
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                            : "bg-slate-900 text-white border-black hover:bg-blue-600"
                         )}
-                     </div>
+                     >
+                       {syncingJobId === apt.id ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                       ) : syncedJobIds.includes(apt.id) ? (
+                          <CalendarCheck className="w-3.5 h-3.5" />
+                       ) : (
+                          <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
+                       )}
+                       <span>{syncedJobIds.includes(apt.id) ? "In Calendar" : "Sync to Google"}</span>
+                     </button>
                   </div>
                 ))}
                 {events.filter(e => e.date ? isSameDay(new Date(e.date), selectedDate) : isSameDay(new Date(), selectedDate)).map((evt) => (
-                  <div key={evt.id} className="p-4 rounded-2xl border border-black flex gap-4 bg-slate-50">
-                    <div className="w-16 h-16 bg-blue-100 rounded-xl flex-shrink-0" />
-                    <div>
-                      <h4 className="font-bold text-slate-800">{evt.title || "Scheduled Task"}</h4>
-                      <div className="flex items-center gap-4 text-sm text-slate-500 mt-2">
-                        <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> 10:00 AM - 1:00 PM</span>
-                        <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {evt.location || "Client address"}</span>
+                  <div key={evt.id} className="p-4 rounded-2xl border border-black flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50">
+                    <div className="flex gap-4 items-center">
+                      <div className="w-16 h-16 bg-blue-100 rounded-xl flex-shrink-0 flex items-center justify-center text-blue-700 font-bold">
+                        <CalendarDays className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800">{evt.title || "Scheduled Task"}</h4>
+                        <div className="flex items-center gap-4 text-sm text-slate-500 mt-2">
+                          <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> 10:00 AM - 1:00 PM</span>
+                          <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {evt.location || "Client address"}</span>
+                        </div>
                       </div>
                     </div>
+                    <button
+                      onClick={() => handleSyncItemToGoogle(evt, 'job')}
+                      disabled={syncingJobId === evt.id || syncedJobIds.includes(evt.id)}
+                      className={cn(
+                        "self-start sm:self-center px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all shrink-0",
+                        syncedJobIds.includes(evt.id)
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                          : "bg-slate-900 text-white border-black hover:bg-blue-600"
+                      )}
+                    >
+                      {syncingJobId === evt.id ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : syncedJobIds.includes(evt.id) ? (
+                        <CalendarCheck className="w-3.5 h-3.5" />
+                      ) : (
+                        <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
+                      )}
+                      <span>{syncedJobIds.includes(evt.id) ? "In Calendar" : "Sync to Google"}</span>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -517,24 +609,33 @@ export default function TraderCalendar() {
                 Connect your personal calendars to automatically block out time when you're busy, avoiding conflicting job bookings.
               </p>
               
+              {syncError && (
+                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">
+                  {syncError}
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-4 rounded-2xl border border-black bg-slate-50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
                       <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" className="w-6 h-6" />
                     </div>
-                    <span className="font-semibold text-slate-700">Google Calendar</span>
+                    <div>
+                      <span className="font-semibold text-slate-700 block">Google Calendar</span>
+                      <span className="text-[11px] text-slate-500 block">Sync jobs, rides & site inspections</span>
+                    </div>
                   </div>
                   {syncedCalendars.includes('google') ? (
                     <button 
-                      onClick={() => setSyncedCalendars(c => c.filter(x => x !== 'google'))}
+                      onClick={handleDisconnectGoogleCalendar}
                       className="text-sm font-bold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100"
                     >
                       Disconnect
                     </button>
                   ) : (
                     <button 
-                      onClick={() => setSyncedCalendars(c => [...c, 'google'])}
+                      onClick={handleConnectGoogleCalendar}
                       className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100"
                     >
                       Connect

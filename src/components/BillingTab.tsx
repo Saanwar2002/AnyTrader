@@ -2,13 +2,43 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, collection, query, where, onSnapshot } from "@/src/firebase";
 import { motion } from "motion/react";
-import { PoundSterling, Receipt, CreditCard, ChevronRight, ArrowUpRight, ArrowDownRight, Wallet, Loader2 } from "lucide-react";
+import { PoundSterling, Receipt, CreditCard, ChevronRight, ArrowUpRight, ArrowDownRight, Wallet, Loader2, FileSpreadsheet, Check } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { exportRideReceiptsToSheets } from "@/src/services/googleSheetsService";
 
 export default function BillingTab() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [rides, setRides] = useState<any[]>([]);
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportToSheets = async () => {
+    if (rides.length === 0) return;
+    setIsExportingSheets(true);
+    setExportError(null);
+
+    const formattedRides = rides.map(r => ({
+      dateTime: r.createdAt?.toDate ? new Date(r.createdAt.toDate()).toISOString() : new Date().toISOString(),
+      rideRef: r.id || 'RIDE-REF',
+      pickup: r.pickup || 'Pickup',
+      dropoff: r.destination || r.dropoff || 'Dropoff',
+      fare: parseFloat(r.totalFare) || 0,
+      tip: parseFloat(r.tipAmount) || 0,
+      total: (parseFloat(r.totalFare) || 0) + (parseFloat(r.tipAmount) || 0),
+      driverOrPassenger: "Passenger",
+    }));
+
+    const res = await exportRideReceiptsToSheets(formattedRides);
+    setIsExportingSheets(false);
+
+    if (res.success && res.spreadsheetUrl) {
+      setSheetsUrl(res.spreadsheetUrl);
+    } else {
+      setExportError(res.error || "Failed to export receipts to Google Sheets.");
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -121,9 +151,43 @@ export default function BillingTab() {
           </div>
         </section>
 
-        <button className="w-full py-4 bg-text-main text-surface rounded-2xl font-black text-sm hover:opacity-90 transition-opacity">
-          Download Annual Statement (PDF)
-        </button>
+        {exportError && (
+          <div className="p-3 bg-rose-50 text-rose-700 text-xs font-semibold rounded-xl border border-rose-200">
+            {exportError}
+          </div>
+        )}
+
+        {sheetsUrl && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-emerald-800 text-xs font-bold">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Exported to Google Sheets successfully!</span>
+            </div>
+            <a
+              href={sheetsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-colors shrink-0"
+            >
+              Open Sheet
+            </a>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <button
+            onClick={handleExportToSheets}
+            disabled={isExportingSheets || rides.length === 0}
+            className="w-full py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>{isExportingSheets ? "Syncing to Google Sheets..." : "Export Receipts to Google Sheets"}</span>
+          </button>
+
+          <button className="w-full py-4 bg-text-main text-surface rounded-2xl font-black text-sm hover:opacity-90 transition-opacity">
+            Download Annual Statement (PDF)
+          </button>
+        </div>
       </div>
     </div>
   );

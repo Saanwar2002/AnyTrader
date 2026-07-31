@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react";
 import { db, collection, collectionGroup, query, where, orderBy, onSnapshot, handleFirestoreError, OperationType, doc, getDoc, updateDoc, serverTimestamp, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { PoundSterling, Clock, MapPin, ChevronRight, AlertCircle, CheckCircle2, XCircle, Briefcase, Trash2, Sparkles, Calendar } from "lucide-react";
+import { PoundSterling, Clock, MapPin, ChevronRight, AlertCircle, CheckCircle2, XCircle, Briefcase, Trash2, Sparkles, Calendar, FileSpreadsheet } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
+import { exportInvoicesToSheets } from "@/src/services/googleSheetsService";
 
 export default function MyQuotes() {
   const { user } = useAuth();
@@ -21,6 +22,31 @@ export default function MyQuotes() {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [deletingQuote, setDeletingQuote] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null);
+
+  const handleExportQuotesToSheets = async () => {
+    if (quotes.length === 0) return;
+    setIsExportingSheets(true);
+
+    const formatted = quotes.map(q => ({
+      dateCreated: q.createdAt?.toDate ? new Date(q.createdAt.toDate()).toISOString() : new Date().toISOString(),
+      ref: q.id || 'QUOTE-REF',
+      clientName: jobs[q.jobId]?.clientName || 'Client',
+      serviceDescription: jobs[q.jobId]?.title || q.quoteScope || 'Trade Service',
+      subtotal: parseFloat(q.amount) || 0,
+      vat: Math.round((parseFloat(q.amount) || 0) * 0.2 * 100) / 100,
+      total: Math.round((parseFloat(q.amount) || 0) * 1.2 * 100) / 100,
+      status: q.status || 'Pending',
+    }));
+
+    const res = await exportInvoicesToSheets(formatted);
+    setIsExportingSheets(false);
+
+    if (res.success && res.spreadsheetUrl) {
+      setSheetsUrl(res.spreadsheetUrl);
+    }
+  };
 
   const handleDeleteQuote = async () => {
     if (!deletingQuote) return;
@@ -211,9 +237,28 @@ export default function MyQuotes() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">
-          My Trade Quotes
-        </h1>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-slate-900">
+            My Trade Quotes
+          </h1>
+          <button
+            onClick={handleExportQuotesToSheets}
+            disabled={isExportingSheets || quotes.length === 0}
+            className="self-start sm:self-auto px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 border border-black shadow-sm transition-all disabled:opacity-50 shrink-0"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+            <span>{isExportingSheets ? "Exporting..." : "Export Quotes to Google Sheets"}</span>
+          </button>
+        </div>
+
+        {sheetsUrl && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 text-xs font-bold text-emerald-800">
+            <span>Quotes exported to Google Sheets ledger!</span>
+            <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+              Open Sheet
+            </a>
+          </div>
+        )}
         
         <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar mt-2">
           {statusFilters.map((f) => (

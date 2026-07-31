@@ -74,8 +74,11 @@ export async function initRemoteConfig(): Promise<RemoteConfigValues> {
 
     console.log("Firebase Remote Config SDK initialized successfully. Fetching parameter overrides...");
     
-    // Fetch and activate configs
-    await fetchAndActivate(remoteConfigInstance);
+    // Fetch and activate configs with a fast 1000ms race timeout to prevent startup delays
+    const fetchPromise = fetchAndActivate(remoteConfigInstance);
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(false), 1000));
+    
+    await Promise.race([fetchPromise, timeoutPromise]);
 
     const activeValues: RemoteConfigValues = {
       platformCommissionRate: getValue(remoteConfigInstance, "platform_commission_rate").asNumber(),

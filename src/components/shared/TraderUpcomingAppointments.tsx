@@ -2,15 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/src/firebase';
 import { format, isAfter, isBefore, addDays, parseISO, startOfDay } from 'date-fns';
-import { CalendarIcon, ChevronDown, ChevronUp, MapPin, Clock } from 'lucide-react';
+import { CalendarIcon, ChevronDown, ChevronUp, MapPin, Clock, CalendarCheck, RefreshCw } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthProvider';
+import { syncJobToGoogleCalendar } from '@/src/services/googleCalendarService';
 
 export function TraderUpcomingAppointments() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncedIds, setSyncedIds] = useState<string[]>([]);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -59,6 +62,21 @@ export function TraderUpcomingAppointments() {
 
     return () => unsub();
   }, [user]);
+
+  const handleSyncToGoogle = async (apt: any) => {
+    setSyncingId(apt.id);
+    const res = await syncJobToGoogleCalendar({
+      title: apt.serviceName || apt.title || "Client Appointment",
+      category: "Appointment",
+      address: apt.location || "Client address",
+      startDate: apt.date ? `${apt.date}T${apt.startTime || '09:00'}:00` : new Date().toISOString(),
+      description: apt.notes || apt.description || "Scheduled via AnyTrader",
+    });
+    setSyncingId(null);
+    if (res.success) {
+      setSyncedIds(prev => [...prev, apt.id]);
+    }
+  };
 
   if (loading) return null;
 
@@ -120,9 +138,31 @@ export function TraderUpcomingAppointments() {
                     </div>
                   </div>
                   
-                  <Link to="/calendar" className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full whitespace-nowrap uppercase tracking-wider border border-indigo-100 hover:bg-indigo-100 transition-colors shrink-0">
-                    View
-                  </Link>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleSyncToGoogle(apt)}
+                      disabled={syncingId === apt.id || syncedIds.includes(apt.id)}
+                      title="Sync to Google Calendar"
+                      className={cn(
+                        "text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border transition-colors",
+                        syncedIds.includes(apt.id)
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                          : "bg-slate-900 text-white border-black hover:bg-indigo-600"
+                      )}
+                    >
+                      {syncingId === apt.id ? (
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                      ) : syncedIds.includes(apt.id) ? (
+                        <CalendarCheck className="w-3 h-3 text-emerald-600" />
+                      ) : (
+                        <CalendarIcon className="w-3 h-3 text-indigo-400" />
+                      )}
+                      <span>{syncedIds.includes(apt.id) ? "Synced" : "Sync GCal"}</span>
+                    </button>
+                    <Link to="/calendar" className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full whitespace-nowrap uppercase tracking-wider border border-indigo-100 hover:bg-indigo-100 transition-colors">
+                      View
+                    </Link>
+                  </div>
                 </div>
               </div>
             );

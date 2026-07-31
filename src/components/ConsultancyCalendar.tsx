@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, collection, query, where, onSnapshot } from "@/src/firebase";
-import { Calendar as CalendarIcon, Clock, Users, Video, RefreshCw, X } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Users, Video, RefreshCw, X, CalendarCheck } from "lucide-react";
 import { format, addDays, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
+import { isGoogleCalendarConnected, requestCalendarAccessToken, disconnectGoogleCalendar, syncSiteInspectionToGoogleCalendar } from "@/src/services/googleCalendarService";
 
 export function ConsultancyCalendar() {
   const { user } = useAuth();
@@ -10,6 +11,50 @@ export function ConsultancyCalendar() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncedCalendars, setSyncedCalendars] = useState<string[]>([]);
+  const [syncingEventId, setSyncingEventId] = useState<string | null>(null);
+  const [syncedEventIds, setSyncedEventIds] = useState<string[]>([]);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isGoogleCalendarConnected()) {
+      setSyncedCalendars(prev => prev.includes('google') ? prev : [...prev, 'google']);
+    }
+  }, []);
+
+  const handleConnectGoogleCalendar = async () => {
+    setSyncError(null);
+    try {
+      await requestCalendarAccessToken();
+      setSyncedCalendars(prev => prev.includes('google') ? prev : [...prev, 'google']);
+    } catch (err: any) {
+      setSyncError(err.message || "Failed to connect Google Calendar.");
+    }
+  };
+
+  const handleDisconnectGoogleCalendar = () => {
+    disconnectGoogleCalendar();
+    setSyncedCalendars(prev => prev.filter(c => c !== 'google'));
+  };
+
+  const handleSyncEventToGoogle = async (evt: any) => {
+    setSyncingEventId(evt.id);
+    setSyncError(null);
+
+    const res = await syncSiteInspectionToGoogleCalendar({
+      projectName: evt.title || "Consultancy Meeting",
+      clientName: evt.clientName || "Client",
+      address: evt.location || "Office / Virtual",
+      scheduledTime: evt.startTime || new Date().toISOString(),
+      notes: evt.notes || "Project consultation meeting",
+    });
+
+    setSyncingEventId(null);
+    if (res.success) {
+      setSyncedEventIds(prev => [...prev, evt.id]);
+    } else {
+      setSyncError(res.error || "Could not sync to Google Calendar.");
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -97,31 +142,51 @@ export function ConsultancyCalendar() {
         ) : (
           <div className="space-y-3">
             {activeDayEvents.map(evt => (
-              <div key={evt.id} className="p-4 bg-slate-50 border border-black rounded-xl flex gap-4">
-                <div className="w-16 h-16 shrink-0 bg-indigo-100 rounded-xl flex flex-col items-center justify-center border border-indigo-200">
-                  <span className="text-[10px] font-black text-indigo-600 uppercase">
-                    {format(new Date(evt.startTime), "a")}
-                  </span>
-                  <span className="text-lg font-black text-indigo-900 leading-none">
-                    {format(new Date(evt.startTime), "h:mm")}
-                  </span>
-                </div>
-                <div className="flex-1">
-                  <h5 className="font-bold text-black text-sm mb-1">{evt.title}</h5>
-                  <div className="flex items-center gap-3 text-[11px] font-medium text-black/70 mb-2">
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" /> {evt.clientName || "Team"}
+              <div key={evt.id} className="p-4 bg-slate-50 border border-black rounded-xl flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 shrink-0 bg-indigo-100 rounded-xl flex flex-col items-center justify-center border border-indigo-200">
+                    <span className="text-[10px] font-black text-indigo-600 uppercase">
+                      {format(new Date(evt.startTime), "a")}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Video className="w-3.5 h-3.5" /> {evt.location === "video" ? "Virtual Meeting" : evt.location}
+                    <span className="text-lg font-black text-indigo-900 leading-none">
+                      {format(new Date(evt.startTime), "h:mm")}
                     </span>
                   </div>
-                  {evt.projectId && (
-                     <div className="inline-block px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] font-black uppercase rounded-md">
-                       Project Associated
-                     </div>
-                  )}
+                  <div className="flex-1">
+                    <h5 className="font-bold text-black text-sm mb-1">{evt.title}</h5>
+                    <div className="flex items-center gap-3 text-[11px] font-medium text-black/70 mb-1">
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5" /> {evt.clientName || "Team"}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Video className="w-3.5 h-3.5" /> {evt.location === "video" ? "Virtual Meeting" : evt.location}
+                      </span>
+                    </div>
+                    {evt.projectId && (
+                       <div className="inline-block px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] font-black uppercase rounded-md">
+                         Project Associated
+                       </div>
+                    )}
+                  </div>
                 </div>
+                <button
+                  onClick={() => handleSyncEventToGoogle(evt)}
+                  disabled={syncingEventId === evt.id || syncedEventIds.includes(evt.id)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5 transition-all shrink-0 ${
+                    syncedEventIds.includes(evt.id)
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                      : "bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700"
+                  }`}
+                >
+                  {syncingEventId === evt.id ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : syncedEventIds.includes(evt.id) ? (
+                    <CalendarCheck className="w-3.5 h-3.5" />
+                  ) : (
+                    <CalendarIcon className="w-3.5 h-3.5" />
+                  )}
+                  <span>{syncedEventIds.includes(evt.id) ? "In Calendar" : "Sync Google"}</span>
+                </button>
               </div>
             ))}
           </div>
@@ -142,24 +207,33 @@ export function ConsultancyCalendar() {
                 Connect your personal calendars to automatically block out time when you're busy, avoiding conflicting job bookings.
               </p>
               
+              {syncError && (
+                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">
+                  {syncError}
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-4 rounded-xl border border-black bg-slate-50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-white rounded-xl border border-black/10 flex items-center justify-center">
                       <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" className="w-6 h-6" />
                     </div>
-                    <span className="font-semibold text-black">Google Calendar</span>
+                    <div>
+                      <span className="font-semibold text-black block">Google Calendar</span>
+                      <span className="text-[10px] text-slate-500 block">Sync site visits & client sessions</span>
+                    </div>
                   </div>
                   {syncedCalendars.includes('google') ? (
                     <button 
-                      onClick={() => setSyncedCalendars(c => c.filter(x => x !== 'google'))}
+                      onClick={handleDisconnectGoogleCalendar}
                       className="text-[10px] uppercase font-bold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg hover:bg-rose-100"
                     >
                       Disconnect
                     </button>
                   ) : (
                     <button 
-                      onClick={() => setSyncedCalendars(c => [...c, 'google'])}
+                      onClick={handleConnectGoogleCalendar}
                       className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100"
                     >
                       Connect

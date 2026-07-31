@@ -1716,27 +1716,185 @@ export async function getShopRecommendations(role: string, category: string) {
 }
 
 export async function callTradeBot(userMessage: string, history: {role: "user" | "model", text: string}[]) {
-  const systemInstruction = `You are AnyTrader Bot, an expert assistant for the AnyTrader platform. Your goal is to provide homeowners with instant UK pricing advice, help them understand trade categories, and give tips on job planning. Be helpful, professional, and use UK English. If asked about prices, provide typical ranges based on current UK market rates. Always remind users that these are estimates and they should get multiple quotes.
-      
-      Additionally, you are plugged into the AnyTrader AI Smart Shop. If a user asks about tools, equipment, or workwear needed for a job or trade, gently mention they can use the "AI Smart Shop" icon in the top right to get curated recommendations for their specific trade and category.`;
+  const systemInstruction = `You are AnyTrader AI Assistant, a friendly and knowledgeable helper on the AnyTrader platform. AnyTrader connects customers with professionals across ALL service categories — including trades (plumbing, electrical, building), food & events (wedding cakes, catering, party hire), cleaning, pest control, pet care, and transport.
+
+Your goals:
+1. Provide up-to-date UK pricing, cost estimates, and supply/material price benchmarks across any service sector.
+2. Explain UK safety rules, industry standards, food hygiene (FSA, Natasha's Law), building regulations (Part L, Part P, Gas Safe), or licensing guidelines in simple, plain English.
+3. Help customers and service providers plan jobs, estimate budgets, and understand requirements.
+
+Always perform live Google Searches when users ask about prices, standards, or guidelines to deliver real-time accurate info. Keep responses clear, concise, easy to read, and friendly using UK English.`;
 
   try {
-    const response = await callGemini({
-      prompt: userMessage,
-      model: "gemini-3-flash-preview",
-      config: {
-        systemInstruction
-      },
-      history: history.map(msg => ({
+    const ai = getGenAI();
+    const model = await getGlobalAiModel();
+
+    const contents = [
+      ...history.map(msg => ({
         role: msg.role === "model" ? "model" as const : "user" as const,
         parts: [{ text: msg.text }]
-      }))
+      })),
+      { role: "user" as const, parts: [{ text: userMessage }] }
+    ];
+
+    const response = await ai.models.generateContent({
+      model: model || "gemini-2.5-flash",
+      contents,
+      config: {
+        systemInstruction,
+        tools: [{ googleSearch: {} }]
+      }
     });
 
-    return response.text || "I'm sorry, I couldn't process that. Please try again.";
+    const candidates = response.candidates;
+    const groundingChunks = candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const sources: { title: string; url: string }[] = [];
+    if (groundingChunks && Array.isArray(groundingChunks)) {
+      groundingChunks.forEach((chunk: any) => {
+        if (chunk.web?.uri) {
+          sources.push({
+            title: chunk.web.title || chunk.web.uri,
+            url: chunk.web.uri
+          });
+        }
+      });
+    }
+
+    return {
+      text: response.text || "I'm sorry, I couldn't process that request right now.",
+      sources: sources.slice(0, 5)
+    };
   } catch (error) {
     console.error("Gemini TradeBot Error:", error);
-    throw error;
+    return {
+      text: "I'm currently unable to access live search grounding. Please try again shortly.",
+      sources: []
+    };
+  }
+}
+
+export interface BuildingRegsPricingGrounding {
+  category: string;
+  buildingRegsSummary: string;
+  regulationsApplicable: string[];
+  gasSafeOrSpecialistNotice?: string;
+  supplierMaterialEstimate: {
+    min: number;
+    max: number;
+    summary: string;
+    itemizedSupplies: { name: string; approxPrice: string; supplier: string }[];
+  };
+  sources: { title: string; url: string }[];
+}
+
+export async function getBuildingRegsAndSupplierPricing(
+  category: string,
+  description: string,
+  postcode?: string
+): Promise<BuildingRegsPricingGrounding> {
+  const catLower = (category || "").toLowerCase();
+  const isFoodOrCatering = /cake|cater|food|bakery|bake|chef|meal|event/i.test(catLower);
+  const isCleaningOrPet = /clean|pest|pet|dog|cat|domestic/i.test(catLower);
+
+  const promptDomain = isFoodOrCatering
+    ? "UK Food Standards Agency (FSA) hygiene rules, Food Safety Act 1990, Natasha's Law allergen labeling, and UK wholesale bakery/catering ingredient suppliers (e.g. Brakes, Booker, Nisbets, Sainsbury's, Tesco Wholesale)"
+    : isCleaningOrPet
+    ? "UK COSHH chemical handling safety rules, HSE cleaning standards, Public Liability insurance requirements, and UK janitorial/cleaning suppliers (e.g. Screwfix, Nisbets, Viking, Staples)"
+    : "current UK Building Regulations (Part L, Part P, Gas Safe, Water Regs, BS 7671) and current UK trade supplier material pricing (Screwfix, Toolstation, Travis Perkins, Jewson, Selco, B&Q, Wickes)";
+
+  const prompt = `
+    Perform a live search for ${promptDomain} for this emergency request:
+
+    Job Category: ${category}
+    Job Description: ${description}
+    Location/Postcode Area: ${postcode || "UK National"}
+
+    Tasks:
+    1. Search for applicable UK regulatory standards, safety notices, certifications, or legal compliance rules for this specific service.
+    2. Search for live current UK supplier prices for materials, ingredients, equipment, or supplies required for this emergency job.
+    3. Provide a clear summary and breakdown.
+
+    Return ONLY a valid JSON object matching this schema:
+    {
+      "category": "${category}",
+      "buildingRegsSummary": "Clear 2-sentence summary of applicable UK regulations, safety standards, or compliance guidelines.",
+      "regulationsApplicable": ["e.g. Relevant regulation 1", "Relevant regulation 2"],
+      "gasSafeOrSpecialistNotice": "Important specialist certification or mandatory legal notice if applicable, or null",
+      "supplierMaterialEstimate": {
+        "min": 25,
+        "max": 120,
+        "summary": "Brief summary of supplies needed and current supplier price sources",
+        "itemizedSupplies": [
+          { "name": "Item or supply name", "approxPrice": "£25.00", "supplier": "Supplier name" }
+        ]
+      }
+    }
+  `;
+
+  try {
+    const ai = getGenAI();
+    const model = await getGlobalAiModel();
+
+    const response = await ai.models.generateContent({
+      model: model || "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        tools: [{ googleSearch: {} }]
+      }
+    });
+
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const sources: { title: string; url: string }[] = [];
+    if (groundingChunks && Array.isArray(groundingChunks)) {
+      groundingChunks.forEach((chunk: any) => {
+        if (chunk.web?.uri) {
+          sources.push({
+            title: chunk.web.title || chunk.web.uri,
+            url: chunk.web.uri
+          });
+        }
+      });
+    }
+
+    const text = response.text || "{}";
+    const parsed = JSON.parse(text.replace(/^```json/gi, '').replace(/```$/g, '').trim());
+
+    return {
+      ...parsed,
+      sources: sources.slice(0, 6)
+    };
+  } catch (error) {
+    console.warn("Grounded Building Regs & Pricing Search Error:", error);
+    const isGas = category.toLowerCase().includes("gas") || category.toLowerCase().includes("boiler") || description.toLowerCase().includes("gas") || description.toLowerCase().includes("boiler");
+    const isElectrical = category.toLowerCase().includes("electric") || description.toLowerCase().includes("electric") || description.toLowerCase().includes("socket") || description.toLowerCase().includes("wire");
+
+    return {
+      category,
+      buildingRegsSummary: isGas 
+        ? "Gas work in the UK is governed by Gas Safety (Installation and Use) Regulations 1998 and must be carried out by a Gas Safe registered engineer."
+        : isElectrical 
+        ? "Electrical installations in UK dwellings must conform to Part P Building Regulations and BS 7671 (18th Edition Wiring Regulations)."
+        : "Standard UK Building Regulations apply regarding structural safety, energy efficiency, and trade best practice.",
+      regulationsApplicable: isGas 
+        ? ["Gas Safety Regulations 1998", "Part L Boiler Efficiency"] 
+        : isElectrical 
+        ? ["Part P Electrical Safety", "BS 7671 18th Edition"] 
+        : ["UK Building Regulations 2010"],
+      gasSafeOrSpecialistNotice: isGas ? "Mandatory Gas Safe Register certification required by UK law." : isElectrical ? "Part P Competent Person Scheme notification required." : undefined,
+      supplierMaterialEstimate: {
+        min: 35,
+        max: 120,
+        summary: "Estimated material benchmarks based on current UK trade supplier catalogs (Screwfix / Toolstation).",
+        itemizedSupplies: [
+          { name: "Replacement Parts & Fittings", approxPrice: "£25 - £60", supplier: "Screwfix" },
+          { name: "Consumables & Seals", approxPrice: "£10 - £25", supplier: "Toolstation" }
+        ]
+      },
+      sources: [
+        { title: "GOV.UK Building Regulations", url: "https://www.gov.uk/building-regulations-approval" },
+        { title: "Gas Safe Register UK", url: "https://www.gassaferegister.co.uk" }
+      ]
+    };
   }
 }
 

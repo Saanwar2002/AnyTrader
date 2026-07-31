@@ -34,7 +34,9 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  FileSpreadsheet,
 } from "lucide-react";
+import { exportRideReceiptsToSheets } from "@/src/services/googleSheetsService";
 import {
   db,
   doc,
@@ -100,6 +102,46 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
   const [isReportListExpanded, setIsReportListExpanded] = useState(false);
   const [showPaymentPortal, setShowPaymentPortal] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null);
+
+  const handleExportGoogleSheets = async () => {
+    const listToExport = customReportJobs.length > 0 ? customReportJobs : recentTrips;
+    if (listToExport.length === 0) {
+      toast.error("No trip data available to export.");
+      return;
+    }
+
+    setIsExportingSheets(true);
+    const formatted = listToExport.map(job => {
+      const grossFare = job.price || job.quotedPrice || job.finalFare || job.fareEstimate || 0;
+      const tip = job.tipAmount || 0;
+      const driverEarned = job.driverEarnings || (job.finalFare ? (job.finalFare - tip) * 0.88 + tip : grossFare * 0.88 + tip);
+      const pickupStr = typeof job.pickupAddress === 'string' ? job.pickupAddress : (job.pickup?.address || job.pickup || 'Unknown');
+      const dropoffStr = typeof job.dropoffAddress === 'string' ? job.dropoffAddress : (job.dropoff?.address || job.dropoff || 'Unknown');
+
+      return {
+        dateTime: job.completedAt?.seconds ? new Date(job.completedAt.seconds * 1000).toISOString() : new Date().toISOString(),
+        rideRef: job.id || 'RIDE-REF',
+        pickup: pickupStr,
+        dropoff: dropoffStr,
+        fare: driverEarned,
+        tip,
+        total: driverEarned + tip,
+        driverOrPassenger: "Driver Earnings",
+      };
+    });
+
+    const res = await exportRideReceiptsToSheets(formatted);
+    setIsExportingSheets(false);
+
+    if (res.success && res.spreadsheetUrl) {
+      setSheetsUrl(res.spreadsheetUrl);
+      toast.success("Successfully exported trips to Google Sheets!");
+    } else {
+      toast.error(res.error || "Failed to export to Google Sheets.");
+    }
+  };
 
   const currentYear = new Date().getFullYear();
   const yearsList = ["----", ...Array.from({length: 5}, (_, i) => (currentYear - i).toString())];
@@ -953,10 +995,21 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
                     <button onClick={handleGenerateReport} disabled={isGeneratingReport} className="flex-1 bg-[#2C2C30] hover:bg-[#333338] active:scale-95 text-white text-[10px] font-black uppercase tracking-widest py-2.5 rounded-xl transition-all">
                        {isGeneratingReport ? 'Generating...' : 'Generate Report'}
                     </button>
-                    <button onClick={handleDownloadCSV} className="flex items-center gap-2 bg-[#00D26A]/20 hover:bg-[#00D26A] active:scale-95 hover:text-black text-[#00D26A] text-[10px] font-black uppercase tracking-widest py-2.5 px-4 rounded-xl transition-all">
+                    <button onClick={handleExportGoogleSheets} disabled={isExportingSheets} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[10px] font-black uppercase tracking-widest py-2.5 px-3.5 rounded-xl transition-all">
+                       <FileSpreadsheet className="w-4 h-4"/> {isExportingSheets ? 'Syncing...' : 'Google Sheets'}
+                    </button>
+                    <button onClick={handleDownloadCSV} className="flex items-center gap-2 bg-[#00D26A]/20 hover:bg-[#00D26A] active:scale-95 hover:text-black text-[#00D26A] text-[10px] font-black uppercase tracking-widest py-2.5 px-3.5 rounded-xl transition-all">
                        <Download className="w-4 h-4"/> CSV
                     </button>
                  </div>
+                 {sheetsUrl && (
+                    <div className="mt-2 p-3 bg-emerald-950/60 border border-emerald-500/30 rounded-xl flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-emerald-300">Exported to Google Sheets!</span>
+                      <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 bg-emerald-500 text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-emerald-400">
+                        Open Sheet
+                      </a>
+                    </div>
+                 )}
                  {showReportSubPrompt && (
                     <div className="bg-[#FF3B30]/10 border border-[#FF3B30]/20 rounded-xl p-3 flex items-start gap-3 mt-2">
                        <AlertCircle className="w-5 h-5 text-[#FF3B30] shrink-0 mt-0.5" />
