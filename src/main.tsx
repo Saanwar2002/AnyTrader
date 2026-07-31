@@ -9,17 +9,48 @@ import { HelmetProvider } from 'react-helmet-async';
 import { Capacitor } from '@capacitor/core';
 import { registerSW } from 'virtual:pwa-register';
 
-// Register service worker for offline support
+// Register service worker for offline support and versioned cache management
 if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
+  // Clear legacy or outdated versioned caches on startup
+  if ('caches' in window) {
+    const activeCachePrefix = 'anytrader-v1.0.0';
+    caches.keys().then((cacheNames) => {
+      cacheNames.forEach((cacheName) => {
+        if (cacheName.startsWith('anytrader-') && !cacheName.startsWith(activeCachePrefix)) {
+          console.log(`[SW] Purging outdated cache: ${cacheName}`);
+          caches.delete(cacheName);
+        }
+      });
+    }).catch((err) => console.warn('[SW] Cache cleanup check error:', err));
+  }
+
   const updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
-      // Optional: prompt user to refresh
-      console.log('App update available. Please refresh.');
+      console.log('App update available. Activating new service worker...');
+      updateSW(true);
     },
     onOfflineReady() {
       console.log('App ready to work offline');
     },
+    onRegisteredSW(_swUrl, registration) {
+      if (registration) {
+        // Periodically check for updates every hour
+        setInterval(() => {
+          registration.update().catch((e) => console.warn('[SW] Periodic update check failed:', e));
+        }, 60 * 60 * 1000);
+      }
+    }
+  });
+
+  // Automatically refresh window when a new service worker controller takes over
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      console.log('[SW] Controller updated. Reloading page to ensure latest code execution...');
+      window.location.reload();
+    }
   });
 
   // Check for updates when the app comes back online

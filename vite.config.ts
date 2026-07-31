@@ -12,14 +12,19 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: 'auto',
         workbox: {
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
+          cacheId: 'anytrader-v1.0.0',
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'google-fonts-cache',
+                cacheName: 'google-fonts-cache-v1',
                 expiration: {
                   maxEntries: 10,
                   maxAgeSeconds: 60 * 60 * 24 * 365
@@ -33,7 +38,7 @@ export default defineConfig(({mode}) => {
               urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'gstatic-fonts-cache',
+                cacheName: 'gstatic-fonts-cache-v1',
                 expiration: {
                   maxEntries: 10,
                   maxAgeSeconds: 60 * 60 * 24 * 365
@@ -47,7 +52,7 @@ export default defineConfig(({mode}) => {
               urlPattern: /^https:\/\/maps\.googleapis\.com\/.*/i,
               handler: 'NetworkFirst',
               options: {
-                cacheName: 'google-maps-cache',
+                cacheName: 'google-maps-cache-v1',
                 expiration: {
                   maxEntries: 50,
                   maxAgeSeconds: 60 * 60 * 24 * 7
@@ -62,7 +67,7 @@ export default defineConfig(({mode}) => {
               urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'firebase-storage-cache',
+                cacheName: 'firebase-storage-cache-v1',
                 expiration: {
                   maxEntries: 100,
                   maxAgeSeconds: 60 * 60 * 24 * 30
@@ -76,7 +81,7 @@ export default defineConfig(({mode}) => {
               urlPattern: /\/api\/.*/i,
               handler: 'NetworkFirst',
               options: {
-                cacheName: 'api-cache',
+                cacheName: 'api-cache-v1',
                 expiration: {
                   maxEntries: 100,
                   maxAgeSeconds: 60 * 60 * 24 * 7
@@ -94,6 +99,12 @@ export default defineConfig(({mode}) => {
           name: 'AnyTrader UK',
           short_name: 'AnyTrader',
           description: 'Hire a tradesperson as easily as ordering a taxi.',
+          version: '1.0.0',
+          start_url: '/',
+          scope: '/',
+          display: 'standalone',
+          orientation: 'portrait',
+          background_color: '#ffffff',
           theme_color: '#2563eb',
           icons: [
             {

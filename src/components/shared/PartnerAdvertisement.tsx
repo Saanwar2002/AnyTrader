@@ -89,6 +89,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
       const activeAds = snapshot.docs
         .map(d => ({ id: d.id, ...(d.data() as any) }))
         .filter((ad: any) => ad.isActive !== false)
+        .filter((ad: any) => !ad.placement || ad.placement === "banner_ad" || ad.placement === "both")
         .filter((ad: any) => {
            if (ad.type === "trader_promo" && ad.endDate) {
               const endMillis = ad.endDate.toMillis ? ad.endDate.toMillis() : ad.endDate.seconds * 1000;
@@ -135,15 +136,21 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
     // Only track clicks for database-driven ads
     if (clickedAd.id && clickedAd.id !== "default-1" && clickedAd.id !== "default-2") {
       try {
-        const updateData: any = { clicks: increment(1) };
+        const updateData: any = { clicks: increment(1), bannerClicks: increment(1) };
         const cost = clickedAd.costPerDisplay || 0;
         
         if (clickedAd.billingCycle === "prepaid" && typeof clickedAd.prepaidBalance === "number") {
           const newBalance = clickedAd.prepaidBalance - cost;
-          updateData.prepaidBalance = increment(-cost);
           
-          if (newBalance <= 0) {
-            updateData.isActive = false; // Stop promotion
+          if (clickedAd.autoTopUpEnabled && newBalance <= (clickedAd.autoTopUpThreshold || 10)) {
+            const reloadAmount = clickedAd.autoTopUpAmount || 50;
+            updateData.prepaidBalance = increment(-cost + reloadAmount);
+            updateData.lastAutoTopUpAt = new Date().toISOString();
+          } else {
+            updateData.prepaidBalance = increment(-cost);
+            if (newBalance <= 0) {
+              updateData.isActive = false; // Stop promotion
+            }
           }
           
           // Notification logic

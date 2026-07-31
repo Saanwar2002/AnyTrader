@@ -135,10 +135,21 @@ const compressImageFile = (file: File, maxDim = 1200, quality = 0.75): Promise<F
 };
 
 export default function PostJobWizard() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, ensureFreshToken } = useAuth();
   const { categories } = useCategories();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Read search query params and location state for pre-filled tasks (e.g. from AI Home Health)
+  const searchParams = new URLSearchParams(location.search);
+  const paramCategory = searchParams.get("category") || (location.state as any)?.category || "";
+  const paramSubcategory = searchParams.get("subcategory") || (location.state as any)?.subcategory || "";
+  const paramTitle = searchParams.get("title") || (location.state as any)?.title || "";
+  const paramDescription = searchParams.get("description") || (location.state as any)?.description || "";
+  const paramUrgency = searchParams.get("urgency") || (location.state as any)?.urgency || "flexible";
+  const paramBudget = searchParams.get("budget") || (location.state as any)?.selectedBudget || null;
+  const isPrefilledByAI = searchParams.get("prefilledByAI") === "true" || (location.state as any)?.prefilledByAI || Boolean(paramCategory && (paramTitle || paramDescription));
+
   const editJob = (location.state as any)?.editJob;
   const targetTradespersonId = (location.state as any)?.targetTradespersonId;
   const targetTradespersonName = (location.state as any)?.targetTradespersonName;
@@ -154,7 +165,7 @@ export default function PostJobWizard() {
   
   const isB2B = (location.state as any)?.isB2B;
   const { activeTab } = useBusinessTab();
-  const [isInitializing, setIsInitializing] = useState(!editJob);
+  const [isInitializing, setIsInitializing] = useState(!editJob && !isPrefilledByAI);
   
   const JobReminder = () => {
     if (!formData.category && !formData.title) return null;
@@ -184,14 +195,15 @@ export default function PostJobWizard() {
     );
   };
 
-  // Step 0 is landing, 1 is category, 2 is subcategory, etc.
-  const [step, setStep] = useState(editJob ? 3 : 0);
+  // Step 0 is landing, 1 is category, 2 is subcategory, 3 is description/details
+  const initialStep = (editJob || isPrefilledByAI) ? 3 : 0;
+  const [step, setStep] = useState(initialStep);
   const [formData, setFormData] = useState({
-    category: editJob?.category || "",
-    subcategory: editJob?.subcategory || "",
-    title: editJob?.title || "",
-    description: editJob?.description || "",
-    urgency: editJob?.urgency || (location.state as any)?.urgency || "flexible",
+    category: editJob?.category || paramCategory || "",
+    subcategory: editJob?.subcategory || paramSubcategory || "",
+    title: editJob?.title || paramTitle || "",
+    description: editJob?.description || paramDescription || "",
+    urgency: editJob?.urgency || paramUrgency || "flexible",
     jobDate: editJob?.jobDate || "",
     postcode: editJob?.postcode || "",
     city: editJob?.city || "", 
@@ -206,7 +218,7 @@ export default function PostJobWizard() {
     quoteScope: editJob?.quoteScope || "complete_package",
     estimatedCompletionTime: editJob?.estimatedCompletionTime || "",
     estimatedCompletionTimeUnit: editJob?.estimatedCompletionTimeUnit || "hours",
-    selectedBudget: editJob?.selectedBudget || null,
+    selectedBudget: editJob?.selectedBudget || paramBudget || null,
     mobileNumber: editJob?.mobileNumber || profile?.phoneNumber || "",
     selectedAssets: [] as any[],
     isEmergencyBoost: false,
@@ -520,22 +532,24 @@ export default function PostJobWizard() {
     if (editJob) return;
     if (authLoading) return; // Wait for auth to be fully loaded
 
+    const hasPrefilledData = isPrefilledByAI || Boolean(formData.category && (formData.title || formData.description));
+
     if (profile?.subscriptionType === "business" && user) {
       setLoadingAssets(true);
       getDocs(query(collection(db, "properties"), where("ownerId", "==", user.uid)))
         .then(snapshot => {
           const assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setUserAssets(assets);
-          if (assets.length > 0 && (!linkedProperties || linkedProperties.length === 0)) {
+          if (assets.length > 0 && (!linkedProperties || linkedProperties.length === 0) && !hasPrefilledData) {
             setStep(-0.5);
           } else if (linkedProperties && linkedProperties.length > 0) {
             const preselectedAssets = assets.filter(a => linkedProperties.some((lp: any) => lp.id === a.id));
             if (preselectedAssets.length > 0) {
               setFormData(prev => ({ ...prev, selectedAssets: preselectedAssets }));
             }
-            setStep(0);
+            setStep(hasPrefilledData ? 3 : 0);
           } else {
-            setStep(0);
+            setStep(hasPrefilledData ? 3 : 0);
           }
         })
         .finally(() => {
@@ -543,10 +557,13 @@ export default function PostJobWizard() {
           setIsInitializing(false);
         });
     } else {
-      setStep(0);
+      setStep(hasPrefilledData ? 3 : 0);
+      if (hasPrefilledData) {
+        toast.info("✨ AI pre-filled your job details based on your AI Home Health forecast!");
+      }
       setIsInitializing(false);
     }
-  }, [user, profile, authLoading, editJob]);
+  }, [user, profile, authLoading, editJob, isPrefilledByAI]);
   
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -1749,6 +1766,13 @@ export default function PostJobWizard() {
 
   const handleSubmit = async () => {
     if (!user) return;
+
+    // Validate Auth session token first with lightweight session heartbeat check
+    const isTokenFresh = await ensureFreshToken();
+    if (!isTokenFresh) {
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
@@ -2586,6 +2610,32 @@ export default function PostJobWizard() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-4"
             >
+              {isPrefilledByAI && (
+                <div className="bg-slate-900 text-white p-4 rounded-2xl border border-black shadow-md flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 shrink-0">
+                      <Sparkles className="w-5 h-5 animate-pulse text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full">
+                          AI Pre-filled
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-300">
+                          Seasonal Maintenance
+                        </span>
+                      </div>
+                      <h4 className="font-extrabold text-sm text-white mt-1">
+                        Pre-filled from AI Home Health Forecast
+                      </h4>
+                      <p className="text-xs text-slate-300">
+                        We've filled in the category, title, description, and budget for you. Feel free to review or adjust below!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <JobReminder />
               <div className="space-y-1">
                 <h2 className="text-xl font-bold text-slate-900">Tell us about the job</h2>

@@ -93,6 +93,18 @@
             "type": "string"
           }
         },
+        "faqs": {
+          "type": "array",
+          "description": "Trader Frequently Asked Questions and answers for public profile display.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "question": { "type": "string" },
+              "answer": { "type": "string" }
+            }
+          }
+        },
         "isTopTradesperson": {
           "type": "boolean"
         },

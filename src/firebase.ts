@@ -549,5 +549,5 @@ export const writeBatch = (firestore: any) => {
 
 export { 
   collection, collectionGroup, doc, getDoc, getDocs, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, deleteField, arrayUnion, arrayRemove, increment,
-  ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString
+  ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, signInWithEmailAndPassword
 };

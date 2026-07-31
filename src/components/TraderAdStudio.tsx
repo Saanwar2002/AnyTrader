@@ -3,13 +3,15 @@ import { Link } from "react-router-dom";
 import { collection, query, where, onSnapshot, doc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "./AuthProvider";
-import { Zap, Plus, ArrowLeft, Loader2, CreditCard, LayoutGrid, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Zap, Plus, ArrowLeft, Loader2, CreditCard, LayoutGrid, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Sparkles, Target, Flame, HelpCircle } from "lucide-react";
 
 export default function TraderAdStudio() {
   const { user, profile } = useAuth();
   const [adverts, setAdverts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [openModalInfo, setOpenModalInfo] = useState<string | null>("autotopup");
 
   // Determine click cost based on tier
   const tierCost = profile?.subscriptionType === "premium" ? 0.50 : profile?.subscriptionType === "pro" ? 0.70 : 1.00;
@@ -37,6 +39,9 @@ export default function TraderAdStudio() {
     if (!user) return;
     const formData = new FormData(e.currentTarget);
     const budget = Number(formData.get("budget"));
+    const placement = formData.get("placement") || "both";
+    const selectedCat = formData.get("targetCategory") || "all";
+    const promotionRadius = formData.get("promotionRadius") || "20";
     
     try {
       await setDoc(doc(collection(db, "advertisements")), {
@@ -48,8 +53,14 @@ export default function TraderAdStudio() {
         url: `${window.location.origin}/profile/${user.uid}`,
         bgColor: "bg-blue-600",
         iconName: "Zap",
+        placement: placement, // "search_feed", "banner_ad", or "both"
+        promotionRadius: promotionRadius, // "5", "10", "15", "20", "50", or "nationwide"
+        autoTopUpEnabled: formData.get("autoTopUpEnabled") === "on",
+        autoTopUpThreshold: 10,
+        autoTopUpAmount: 50,
+        lowBalanceAlertsEnabled: formData.get("lowBalanceAlertsEnabled") === "on",
         targetRole: formData.get("targetRole"),
-        targetCategories: [],
+        targetCategories: selectedCat === "all" ? [] : [selectedCat],
         costPerDisplay: tierCost,
         dailyDisplayLimit: 100,
         durationDays: 30,
@@ -59,6 +70,8 @@ export default function TraderAdStudio() {
         totalBudget: budget,
         prepaidBalance: budget,
         clicks: 0,
+        searchFeedClicks: 0,
+        bannerClicks: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -95,6 +108,74 @@ export default function TraderAdStudio() {
         </div>
       </div>
 
+      {/* Interactive Collapsible Feature Benefits & ROI Guide */}
+      <div className="bg-slate-900 text-white rounded-3xl p-6 border border-black shadow-xl space-y-4">
+        <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => setShowGuide(!showGuide)}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/30 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base text-white flex flex-wrap items-center gap-2">
+                Promoted Profiles & Search Monetisation Guide
+                <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Maximise ROI</span>
+              </h3>
+              <p className="text-xs text-slate-300">Understand how Auto-Reload, Radius Targeting, & Peak Bidding bring you direct customer leads.</p>
+            </div>
+          </div>
+          <button type="button" className="flex items-center gap-1.5 text-xs font-bold bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-xl border border-white/20 transition shrink-0">
+            {showGuide ? "Hide Benefits" : "View Benefits"}
+            {showGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {showGuide && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-white/10">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                <Zap className="w-4 h-4 shrink-0" />
+                <span>Smart Auto Top-Up</span>
+              </div>
+              <p className="text-xs text-slate-200 font-semibold">Zero Campaign Downtime</p>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Automatically reloads £50.00 into your wallet when balance hits £10.00. Ensures your profile never drops out of top 3 search slots during peak homeowner search surges.
+              </p>
+              <div className="bg-amber-400/10 border border-amber-400/20 text-amber-300 rounded-lg p-2 text-[10px] font-bold">
+                📈 Up to 3.5x higher inquiry conversion rate
+              </div>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                <Target className="w-4 h-4 shrink-0" />
+                <span>Geo-Radius Lead Matching</span>
+              </div>
+              <p className="text-xs text-slate-200 font-semibold">Zero Wasted CPC Budget</p>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Target homeowners strictly within 5 to 50 miles of your registered postcode. Your budget is spent 100% on nearby customers you can actually travel to and service.
+              </p>
+              <div className="bg-blue-400/10 border border-blue-400/20 text-blue-300 rounded-lg p-2 text-[10px] font-bold">
+                🎯 100% local lead qualification
+              </div>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                <Flame className="w-4 h-4 shrink-0" />
+                <span>Seasonal & Category Boost</span>
+              </div>
+              <p className="text-xs text-slate-200 font-semibold">Capture Emergency Surges</p>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Homeowners search for emergency fixes (heating in winter, roofing in storms) with high urgency. Priority category bidding places you at the top of high-intent searches.
+              </p>
+              <div className="bg-emerald-400/10 border border-emerald-400/20 text-emerald-300 rounded-lg p-2 text-[10px] font-bold">
+                💰 Premium callout rates & instant job hires
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="col-span-1 md:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
@@ -119,6 +200,19 @@ export default function TraderAdStudio() {
                 <div key={ad.id} className="bg-white border border-black rounded-2xl p-6 shadow-sm">
                   <div className="flex justify-between items-start mb-4">
                     <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          {ad.placement === "search_feed" ? "🔍 Search Feed" : ad.placement === "banner_ad" ? "🖼️ Banner Ad" : "⚡ Dual Boost"}
+                        </span>
+                        {ad.targetCategories?.length > 0 && (
+                          <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                            {ad.targetCategories[0]}
+                          </span>
+                        )}
+                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                          {ad.promotionRadius === "nationwide" ? "🌍 Nationwide" : `📍 ${ad.promotionRadius || 20} Miles`}
+                        </span>
+                      </div>
                       <h3 className="font-bold text-lg text-slate-900 leading-tight">{ad.title}</h3>
                       <p className="text-sm text-slate-500">{ad.description}</p>
                     </div>
@@ -137,28 +231,67 @@ export default function TraderAdStudio() {
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div className="bg-slate-50 rounded-xl p-3 border border-black">
-                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none mb-1">Clicks</p>
-                      <p className="text-lg font-black text-slate-900">{ad.clicks || 0}</p>
+                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none mb-1">Search Clicks</p>
+                      <p className="text-lg font-black text-slate-900">{ad.searchFeedClicks || 0}</p>
                     </div>
                     <div className="bg-slate-50 rounded-xl p-3 border border-black">
-                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none mb-1">Cost / Click</p>
+                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none mb-1">Banner Clicks</p>
+                      <p className="text-lg font-black text-slate-900">{ad.bannerClicks || 0}</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3 border border-black">
+                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none mb-1">CPC Rate</p>
                       <p className="text-lg font-black text-slate-900">£{(ad.costPerDisplay || tierCost).toFixed(2)}</p>
                     </div>
-                    <div className="bg-slate-50 rounded-xl p-3 border border-black md:col-span-2">
+                    <div className="bg-slate-50 rounded-xl p-3 border border-black">
                       <div className="flex justify-between items-end mb-1">
-                        <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none">Wallet Balance</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none">Prepaid Balance</p>
                         <p className="text-lg font-black text-blue-600 leading-none">£{(ad.prepaidBalance || 0).toFixed(2)}</p>
                       </div>
-                      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden w-full">
+                      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden w-full mt-2">
                         <div className={`h-full rounded-full ${balancePct > 20 ? 'bg-blue-600' : 'bg-red-500'}`} style={{ width: `${balancePct}%` }}></div>
                       </div>
-                      {balancePct <= 10 && ad.approvalStatus !== "pending" && (
-                        <p className="text-[10px] text-red-600 font-bold mt-2 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" /> Balance critically low. Top up to continue promotion.
-                        </p>
+                    </div>
+                  </div>
+
+                  {/* Low Balance & Auto Top-Up Status Banner */}
+                  <div className={`p-3 rounded-xl border mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-medium ${
+                    (ad.prepaidBalance || 0) <= 10 
+                      ? 'bg-amber-50 border-amber-300 text-amber-900' 
+                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {(ad.prepaidBalance || 0) <= 10 ? (
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 animate-bounce" />
+                      ) : (
+                        <Zap className="w-4 h-4 text-blue-600 shrink-0" />
                       )}
+                      <div>
+                        {(ad.prepaidBalance || 0) <= 10 ? (
+                          <span className="font-bold text-amber-800">⚠️ Low Balance Warning: £{(ad.prepaidBalance || 0).toFixed(2)} remaining. </span>
+                        ) : null}
+                        <span>
+                          {ad.autoTopUpEnabled 
+                            ? "⚡ Auto Top-Up Active: Automatically reloads £50.00 if balance drops below £10.00." 
+                            : "Auto Top-Up Disabled: Campaign will pause when balance reaches £0.00."}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700">
+                        <input 
+                          type="checkbox" 
+                          checked={ad.autoTopUpEnabled || false} 
+                          onChange={async (e) => {
+                            await updateDoc(doc(db, "advertisements", ad.id), {
+                              autoTopUpEnabled: e.target.checked
+                            });
+                          }}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                        />
+                        Auto-Reload
+                      </label>
                     </div>
                   </div>
 
@@ -258,6 +391,84 @@ export default function TraderAdStudio() {
                 <input name="description" required type="text" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Available for 24/7 emergency callouts." />
               </div>
               
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Campaign Placement *</label>
+                <select name="placement" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+                  <option value="search_feed">🔍 Search Feed Promoted Profile (Top 3 Category Slots)</option>
+                  <option value="banner_ad">🖼️ Dashboard Banner Ad</option>
+                  <option value="both">⚡ Dual Promotion (Search Feed + Dashboard Banner)</option>
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">Select where your profile or business campaign will be showcased.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Target Trade Category</label>
+                <select name="targetCategory" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium text-slate-800">
+                  <option value="all">All Trade Categories</option>
+                  <option value="Plumbing">Plumbing</option>
+                  <option value="Electrical">Electrical</option>
+                  <option value="Roofing">Roofing</option>
+                  <option value="Joinery & Carpentry">Joinery & Carpentry</option>
+                  <option value="Building & Construction">Building & Construction</option>
+                  <option value="Painting & Decorating">Painting & Decorating</option>
+                  <option value="Heating & Gas">Heating & Gas</option>
+                  <option value="Landscaping & Gardening">Landscaping & Gardening</option>
+                  <option value="Tiling">Tiling</option>
+                  <option value="Handyman">Handyman</option>
+                </select>
+                <div className="mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setOpenModalInfo(openModalInfo === 'category' ? null : 'category')}
+                    className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>How Category & Seasonal Surge Bidding works?</span>
+                    {openModalInfo === 'category' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                  {openModalInfo === 'category' && (
+                    <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 space-y-1">
+                      <p className="font-bold">🔥 Category & Seasonal Demand Spikes:</p>
+                      <p className="opacity-90 leading-relaxed">
+                        During seasonal demand spikes (e.g. Heating & Gas in winter, Landscaping in spring, Roofing after storms), homeowner searches surge by over 300%. Target your specific category to capture high-intent customers who need immediate quotes.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Targeting Radius (Miles around registered location)</label>
+                <select name="promotionRadius" defaultValue="20" className="w-full bg-slate-50 border border-black rounded-xl px-4 h-12 outline-none font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+                  <option value="5">📍 Within 5 Miles</option>
+                  <option value="10">📍 Within 10 Miles</option>
+                  <option value="15">📍 Within 15 Miles</option>
+                  <option value="20">📍 Within 20 Miles</option>
+                  <option value="50">📍 Within 50 Miles</option>
+                  <option value="nationwide">🌍 Nationwide (No Radius Limit)</option>
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">Your promoted profile will be showcased to homeowners searching within this radius of your registered address ({profile?.postcode || 'registered postcode'}).</p>
+                <div className="mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setOpenModalInfo(openModalInfo === 'radius' ? null : 'radius')}
+                    className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>Why set a local radius limit?</span>
+                    {openModalInfo === 'radius' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                  {openModalInfo === 'radius' && (
+                    <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 space-y-1">
+                      <p className="font-bold">🎯 100% Qualified Local Leads:</p>
+                      <p className="opacity-90 leading-relaxed">
+                        Restricting your radius ensures every single paid click comes from a homeowner located within your travel range. Zero wasted ad spend on leads outside your service territory.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Show To</label>
@@ -276,6 +487,43 @@ export default function TraderAdStudio() {
                         <option value="500">£500</option>
                     </select>
                  </div>
+              </div>
+
+              <div className="bg-slate-50 border border-black rounded-xl p-4 space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="autoTopUpEnabled" defaultChecked className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">⚡ Enable Smart Auto Top-Up</span>
+                    <span className="text-[11px] text-slate-500 block">Automatically reloads £50.00 when balance falls below £10.00 to keep campaign active during peak search hours.</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer pt-2 border-t border-slate-200">
+                  <input type="checkbox" name="lowBalanceAlertsEnabled" defaultChecked className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">🔔 Enable Low Balance Notifications</span>
+                    <span className="text-[11px] text-slate-500 block">Receive instant in-app/push alerts when wallet balance drops below £10.00.</span>
+                  </div>
+                </label>
+
+                <div className="pt-2 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setOpenModalInfo(openModalInfo === 'autotopup' ? null : 'autotopup')}
+                    className="flex items-center gap-1 text-[11px] font-bold text-amber-700 hover:text-amber-900 transition"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Why keep Smart Auto Top-Up enabled?</span>
+                    {openModalInfo === 'autotopup' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                  {openModalInfo === 'autotopup' && (
+                    <div className="mt-2 bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs text-amber-950 space-y-1">
+                      <p className="font-bold">⚡ Never Lose Top Search Slots:</p>
+                      <p className="opacity-90 leading-relaxed">
+                        Homeowners search for emergency trades most heavily between 7–9 AM & 5–8 PM. If your balance hits zero, your promoted profile pauses and drops off the top 3 spots. Smart Auto Top-Up reloads £50 only when needed, guaranteeing unbroken visibility.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">

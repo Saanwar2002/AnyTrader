@@ -1,9 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, addDoc, collection, serverTimestamp, signInWithGoogle } from "@/src/firebase";
 import { Loader2, ShieldAlert, LogOut } from "lucide-react";
+import { toast } from "sonner";
 
 import { UserProfile } from "../types";
+import { SessionReauthModal } from "./SessionReauthModal";
+
+export type SessionStatus = "active" | "expiring_soon" | "expired" | "invalid";
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -15,6 +19,12 @@ interface AuthContextType {
   isTradeBotOpen: boolean;
   setIsTradeBotOpen: (isOpen: boolean) => void;
   signInWithGoogle: (options?: { forceWebView?: boolean }) => Promise<any>;
+  sessionStatus: SessionStatus;
+  lastHeartbeatAt: number | null;
+  ensureFreshToken: (forceRefresh?: boolean) => Promise<boolean>;
+  showReauthModal: boolean;
+  setShowReauthModal: (show: boolean) => void;
+  triggerReauthPrompt: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -27,6 +37,12 @@ const AuthContext = createContext<AuthContextType>({
   isTradeBotOpen: false,
   setIsTradeBotOpen: () => {},
   signInWithGoogle: async () => {},
+  sessionStatus: "active",
+  lastHeartbeatAt: null,
+  ensureFreshToken: async () => true,
+  showReauthModal: false,
+  setShowReauthModal: () => {},
+  triggerReauthPrompt: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -38,6 +54,134 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [isTradeBotOpen, setIsTradeBotOpen] = useState(false);
+
+  // Session Heartbeat States
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("active");
+  const [lastHeartbeatAt, setLastHeartbeatAt] = useState<number | null>(null);
+  const [showReauthModal, setShowReauthModal] = useState(false);
+
+  // Lightweight, non-blocking token check
+  const performHeartbeatCheck = useCallback(async (forceRefresh = false): Promise<boolean> => {
+    if (!auth.currentUser) {
+      setSessionStatus("active");
+      return true;
+    }
+
+    const currentUser = auth.currentUser;
+
+    return new Promise<boolean>((resolve) => {
+      const runCheck = async () => {
+        try {
+          // getIdTokenResult(false) lightweight check of cached token claims and expiry
+          const tokenResult = await currentUser.getIdTokenResult(forceRefresh);
+          const expirationTimeMs = new Date(tokenResult.expirationTime).getTime();
+          const nowMs = Date.now();
+          const timeUntilExpiryMs = expirationTimeMs - nowMs;
+
+          setLastHeartbeatAt(nowMs);
+
+          // If token expires in < 5 minutes (300,000 ms), trigger background refresh
+          if (timeUntilExpiryMs < 5 * 60 * 1000) {
+            console.log(`[SessionHeartbeat] Auth token expiring in ~${Math.round(timeUntilExpiryMs / 1000)}s. Performing background token refresh...`);
+            setSessionStatus("expiring_soon");
+            try {
+              await currentUser.getIdToken(true);
+              setSessionStatus("active");
+              console.log("[SessionHeartbeat] Auth token successfully refreshed in background.");
+              resolve(true);
+              return;
+            } catch (refreshErr) {
+              console.warn("[SessionHeartbeat] Background token refresh failed:", refreshErr);
+              setSessionStatus("expired");
+              setShowReauthModal(true);
+              resolve(false);
+              return;
+            }
+          }
+
+          setSessionStatus("active");
+          resolve(true);
+        } catch (err: any) {
+          console.error("[SessionHeartbeat] Token validation error:", err);
+          if (
+            err?.code === "auth/user-token-expired" ||
+            err?.code === "auth/user-disabled" ||
+            err?.code === "auth/user-not-found" ||
+            err?.code === "auth/invalid-user-token"
+          ) {
+            setSessionStatus("invalid");
+            setShowReauthModal(true);
+            resolve(false);
+          } else {
+            // Transient offline or network delay
+            setSessionStatus("expiring_soon");
+            resolve(true);
+          }
+        }
+      };
+
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        (window as any).requestIdleCallback(() => runCheck(), { timeout: 2000 });
+      } else {
+        setTimeout(runCheck, 0);
+      }
+    });
+  }, []);
+
+  const ensureFreshToken = useCallback(async (forceRefresh = false): Promise<boolean> => {
+    if (!auth.currentUser) return false;
+    try {
+      await auth.currentUser.getIdToken(forceRefresh);
+      setSessionStatus("active");
+      setLastHeartbeatAt(Date.now());
+      return true;
+    } catch (err: any) {
+      console.warn("[SessionHeartbeat] ensureFreshToken failed:", err);
+      setSessionStatus("expired");
+      setShowReauthModal(true);
+      toast.error("Session verification required before proceeding with critical action.", {
+        id: "session-reauth-warning",
+        duration: 5000,
+      });
+      return false;
+    }
+  }, []);
+
+  const triggerReauthPrompt = useCallback(() => {
+    setShowReauthModal(true);
+  }, []);
+
+  // Periodic Session Heartbeat & Tab Focus Listener
+  useEffect(() => {
+    if (!user) return;
+
+    performHeartbeatCheck(false);
+
+    // Heartbeat every 5 minutes (300,000ms)
+    const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+    const intervalId = setInterval(() => {
+      performHeartbeatCheck(false);
+    }, HEARTBEAT_INTERVAL_MS);
+
+    // Re-check when window regains focus / tab visibility
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        const now = Date.now();
+        if (!lastHeartbeatAt || now - lastHeartbeatAt > 60 * 1000) {
+          performHeartbeatCheck(false);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+    };
+  }, [user, performHeartbeatCheck, lastHeartbeatAt]);
 
   useEffect(() => {
     let profileUnsubscribe: (() => void) | null = null;
@@ -188,7 +332,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, profile, setProfile, loading, isAuthReady, isAnonymous, isTradeBotOpen, setIsTradeBotOpen, signInWithGoogle }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      setProfile, 
+      loading, 
+      isAuthReady, 
+      isAnonymous, 
+      isTradeBotOpen, 
+      setIsTradeBotOpen, 
+      signInWithGoogle,
+      sessionStatus,
+      lastHeartbeatAt,
+      ensureFreshToken,
+      showReauthModal,
+      setShowReauthModal,
+      triggerReauthPrompt
+    }}>
       {loading ? (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="flex flex-col items-center gap-4">
@@ -197,7 +357,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           </div>
         </div>
       ) : (
-        children
+        <>
+          {children}
+          <SessionReauthModal />
+        </>
       )}
     </AuthContext.Provider>
   );

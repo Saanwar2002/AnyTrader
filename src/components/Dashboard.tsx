@@ -23,6 +23,7 @@ import { SEO } from "./SEO";
 import { getMaintenancePredictions } from "@/src/services/gemini";
 import HomeownerPerks from "./HomeownerPerks";
 import PartnerAdvertisement from "./shared/PartnerAdvertisement";
+import HomeHealthWidget from "./HomeHealthWidget";
 
 const iconMap: Record<string, any> = {
   Search, BarChart3, Briefcase, Plus, ChevronRight, Clock, ImageIcon, VideoIcon
@@ -517,6 +518,12 @@ export default function Dashboard() {
               ))
             )}
           </div>
+
+          {/* AI Home Health & Seasonal Preventive Maintenance Forecast */}
+          <HomeHealthWidget 
+            completedJobs={allJobs.filter(j => j.status === 'completed')} 
+            userPostcode={profile?.postcode} 
+          />
         </div>
 
         {/* Recent Quotes Section */}

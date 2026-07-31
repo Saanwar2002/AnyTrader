@@ -77,7 +77,7 @@ const compressImageFile = (file: File, maxDim = 1200, quality = 0.75): Promise<F
 };
 
 export default function EmergencyJobWizard() {
-  const { user } = useAuth();
+  const { user, ensureFreshToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -345,6 +345,12 @@ export default function EmergencyJobWizard() {
   const handleSubmit = async (isPaidOption: boolean): Promise<string | void> => {
     if (!user) return;
     
+    // Validate Auth session token first with lightweight session heartbeat check
+    const isTokenFresh = await ensureFreshToken();
+    if (!isTokenFresh) {
+      return;
+    }
+
     setError("");
     
     try {

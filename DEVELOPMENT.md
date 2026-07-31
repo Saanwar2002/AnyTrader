@@ -650,15 +650,46 @@ The prefix is determined by the user's primary registration role:
   - Added real-time autocomplete suggestions popup attached to search input container with click-outside auto-dismiss (`searchContainerRef`).
   - Categorized Suggestions: Displays matching Trade Categories & Services, Verified Tradespeople (with avatar, star rating, call-out fee, and direct profile preview action), Locations/Postcodes (with "Apply Area" action), and Recent Search History.
   - Keyboard & UX: Handled `Escape` and `Enter` key listeners, clear search button, and direct profile modal preview trigger upon selecting a tradesperson from live results.
-- 2026-07-29: Implemented Interactive Map View vs. List View Toggle in `FindTrades.tsx`.
-  - Added floating draggable `[ List | Map ]` vertical toggle pillar tucked neatly at `right-4 bottom-32` above bottom tabs, styled with an elegant, ultra-slim dark palette (`bg-slate-950/95`), custom border (`border border-white/20`), and narrow space-saving width (exactly 20% narrower layout with optimized `w-11` container and `w-9` keys for non-obstructive look).
-  - Interactive Google Map View: Integrates `@react-google-maps/api` with custom "Premium Anti-Glare Golden" map style scheme (`#ebe3cd` base, no `mapId`).
-  - Pins nearby verified tradespeople using `MarkerF` with custom colored icons (red for emergency-available professionals, blue for standard).
-  - Distance Radius Circles: Renders a translucent blue `CircleF` radius boundary centered on local results with interactive radius distance selector (3km, 5km, 10km, 20km).
-  - Quick Info Windows (`InfoWindowF`): Interactive popup windows displaying trader avatar, name, verification shield, star rating, call-out fee, and direct "View Profile & Quote" CTA triggering bottom sheet modal.
-  - Interactive Draggable Pill: Supported seamless mouse/touch dragging via vertical custom pointer events with safe screen constraint boundaries so it remains fully movable and never gets lost.
-  - Auto Scroll & Focus: Added automated centering scroll and focus on map view when user clicks the "Map" toggle button, preventing screen mismatch issues.
-  - Session Persistence Rule: Default state resets strictly to List View on every fresh app session (`useState("list")`), while custom drag coordinate positions remain persistently locked during the session via automatic `sessionStorage` backing.
-
-
-
+- 2026-07-30: Added Top-Right Close Cross Button & Compact Compare Boxes in `FindTrades.tsx`.
+  - Added a sticky top header bar to the live auto-complete dropdown box containing a clear 'X' close button allowing users to dismiss search suggestions at any time.
+  - Scaled down the Compare checkbox boxes on trader result cards by ~30% (width, height, text, and icon) for a neat, compact visual footprint.
+- 2026-07-30: Integrated Unified Advertising System & Fair Dynamic Impression Rotation Engine for Promoted Profiles.
+  - **Unified Advertising Placement**: Updated `TraderAdStudio.tsx` to support placement choices (`Search Feed Promoted Profile`, `Dashboard Banner Ad`, or `Dual Promotion`) and target trade categories (`Plumbing`, `Electrical`, `Roofing`, `All Categories`, etc.).
+  - **Fair Dynamic Rotation Engine**: Implemented dynamic hourly hash-based rotation in `FindTrades.tsx`. For categories with 15–20 active paying promoters, candidate profile campaigns are dynamically scored and rotated fairly into the **top 3 promoted slots** of the search feed.
+  - **Promoted Profile UI**: Promoted cards feature a distinct **⭐ Promoted Profile** gradient pill header, amber border glow, and a "sponsored" badge.
+  - **Click Attribution & Wallet Deduction**: Clicking a promoted profile card automatically increments `clicks` and `searchFeedClicks` and deducts the CPC rate (e.g. £1.00) from the ad's `prepaidBalance` in Firestore.
+  - **Campaign Analytics**: `TraderAdStudio.tsx` displays placement tags and search feed click breakdown for each campaign card.
+- 2026-07-30: Integrated Geographic Area & Radius Targeting Engine for Promoted Profiles.
+  - **Trader Ad Controls (`TraderAdStudio.tsx`)**: Added `promotionRadius` field allowing tradespeople to set local radius bounds (`5`, `10`, `15`, `20`, `50` Miles, or `Nationwide`) centered around their registered address/postcode.
+  - **Radius Badge**: Added a visual radius indicator (`📍 20 Miles` / `🌍 Nationwide`) to active campaign cards in `TraderAdStudio.tsx`.
+  - **Location Matching Engine (`FindTrades.tsx`)**: Promoted profiles are evaluated against the homeowner's search area/postcode. Only active promoters whose radius covers the homeowner's location are entered into the fair dynamic rotation pool for the top 3 promoted search slots.
+- 2026-07-30: Integrated Smart Automatic Top-Up & Low Balance Alerts.
+  - **Auto Top-Up Engine**: When a campaign's prepaid balance drops below £10.00 during search or banner clicks, the system automatically reloads £50.00 into the prepaid wallet if `autoTopUpEnabled` is active, ensuring zero downtime during peak search hours.
+  - **Trader Controls (`TraderAdStudio.tsx`)**: Traders can toggle Auto Top-Up and Low Balance Alerts during campaign creation or at any time on active campaign cards.
+  - **Visual Low Balance Warning**: Active campaign cards display prominent low balance warnings (e.g. `⚠️ Low Balance Warning: £X.XX remaining`) whenever the prepaid balance drops to £10.00 or lower.
+- 2026-07-30: Built Trader Public Profile & Business Dashboard 'Frequently Asked Questions' (FAQs) Manager (`PublicProfile.tsx`, `Profile.tsx`, `firebase-blueprint.json`).
+  - **Schema Definition (`firebase-blueprint.json`)**: Added `faqs` array property to the `User` blueprint entity for structured storage of question and answer pairs.
+  - **Dashboard FAQ Management (`Profile.tsx`)**: Built a dedicated FAQ Manager card for tradespeople and business users with 1-click preset templates (e.g., "Do you offer emergency callouts?", "Do you provide free estimates?", "What payment methods do you accept?", "Are you fully insured?", "Do you guarantee your work?"), custom Q&A creation, inline editing, item deletion, and direct Firestore database sync.
+  - **Public Profile FAQ Section (`PublicProfile.tsx`)**: Created an interactive FAQ accordion section on trader public profiles showcasing common customer questions with expandable answers, clean jet black borders, and direct management shortcuts for profile owners.
+- 2026-07-30: Added Interactive Collapsible ROI & Feature Benefit Info Cards (`TraderAdStudio.tsx`).
+  - **Promoted Profiles & Monetisation Guide**: Added a collapsible dashboard header card (`Promoted Profiles & Search Monetisation Guide`) detailing the ROI benefits of Auto Top-Up, Geo-Radius Lead Filtering, and Seasonal/Category Demand Boosts.
+  - **In-Modal Benefit Cards**: Added inline toggleable helper cards (`Why set a local radius limit?`, `How Category & Seasonal Surge Bidding works?`, and `Why keep Smart Auto Top-Up enabled?`) inside the Campaign Creation modal so tradespeople can clearly see the tangible financial benefits before configuring settings.
+- 2026-07-30: Built AI Home Health & Seasonal Preventive Maintenance Forecast Widget (`HomeHealthWidget.tsx` & `Dashboard.tsx`).
+  - **Relocated Placement**: Moved the `AI Home Health` widget directly below the `Your Jobs` (Active Jobs) container as requested by homeowners.
+  - **Compact Height Design**: Streamlined layout, reduced vertical padding (`p-4 sm:p-5`), and condensed forecast cards for optimal screen space usage.
+  - **Notification Bubble Logic**: Integrated a dynamic alert badge (`🚨 X Alerts Need Attention` with an animated pulsating red notification bubble) that computes high-priority seasonal maintenance items to instantly catch homeowner attention.
+  - **Home Health Index**: Calculates a real-time property health score (0–100) based on property age/era, heating system type, and past completed job history.
+  - **UK Seasonal Weather Synchronization**: Syncs with live UK weather cycles (e.g. Autumn/Winter Freeze Prep, Spring Thaw, Summer Maintenance, Autumn Rainfall Surge) to flag high-risk preventive tasks before emergencies happen.
+  - **Property Spec Customization Drawer**: Allows homeowners to configure their property era (Victorian, 1930s-1970s, 1980s-1990s, New Build), property layout (Detached, Semi, Terraced, Flat), and heating system.
+  - **1-Click Preventive Job Pre-Filling (`PostJobWizard.tsx`)**: Clicking "Request Quotes" from an AI Home Health task constructs structured search parameters and location state (`category`, `title`, `description`, `urgency`, `budget`, `prefilledByAI`). `PostJobWizard` automatically parses these parameters on launch, skips introductory steps directly to Step 3, displays a prominent "✨ AI Pre-filled from AI Home Health Forecast" banner, and populates all form fields for immediate submission.
+- 2026-07-30: Implemented Non-Blocking Lightweight Session Heartbeat & Auth Validation System (`AuthProvider.tsx`, `SessionReauthModal.tsx`, `PostJobWizard.tsx`, `EmergencyJobWizard.tsx`).
+  - **Background Heartbeat Interval (`AuthProvider.tsx`)**: Periodically checks Firebase Auth ID token expiration and claims every 5 minutes in the background using non-blocking `requestIdleCallback` / microtasks without locking the main rendering thread.
+  - **Tab Focus & Visibility Restoration**: Automatically validates session tokens when the user restores browser tab focus or visibility state if the last check was > 60 seconds ago.
+  - **Auto Background Token Refresh**: Detects tokens expiring in < 5 minutes and silently refreshes them via `getIdToken(true)` before expiration occurs.
+  - **Re-Authentication Prompt Modal (`SessionReauthModal.tsx`)**: Non-disruptive security modal with 1-click token refresh, account password re-authentication, Google sign-in verification, and secure sign-out option.
+  - **Pre-Critical Action Verification (`ensureFreshToken()`)**: Exposed `ensureFreshToken()` helper in `useAuth()` hook. Critical workflows (such as `PostJobWizard.tsx` and `EmergencyJobWizard.tsx`) validate the token immediately before job submission to prevent authorization failures.
+- 2026-07-30: Updated AI Home Health & Seasonal Forecast Widget with Auto-Close Timer & Expand Label (`HomeHealthWidget.tsx`).
+  - **Untouched 10-Second Auto-Close**: Integrated a 10-second timer (`autoCloseTimerRef`) that automatically collapses the widget if no user touch, mouse, or keyboard interaction is detected within the section.
+  - **Touch & Mouse Interaction Reset**: Attached touch and mouse event listeners (`onTouchStart`, `onTouchMove`, `onMouseEnter`, `onMouseMove`, `onClick`) across the container so any user interaction resets the 10-second countdown.
+  - **Explicit Expand / Collapse Label**: Added `Expand` text alongside the down arrow icon (`<ChevronDown />`) when collapsed, and `Collapse` alongside the up arrow icon (`<ChevronUp />`) when expanded.
+  - **Header Tap To Expand**: Added 1-click header tap expansion so homeowners can easily open the forecast box whenever needed.

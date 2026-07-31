@@ -7,7 +7,7 @@ import {
 import { useAuth } from "./AuthProvider";
 import { 
   Star, MapPin, Calendar, Shield, Check, Briefcase, Clock, Zap, MessageSquare, ChevronLeft, Loader2, Image as ImageIcon, Users, ChevronDown,
-  ShieldCheck, CheckCircle, Heart, FileText, AlertTriangle, X, Send, ChevronRight, Award, Share2, UserPlus, HelpCircle, Medal, CalendarClock
+  ShieldCheck, CheckCircle, Heart, FileText, AlertTriangle, X, Send, ChevronRight, Award, Share2, UserPlus, HelpCircle, Medal, CalendarClock, Pencil
 } from "lucide-react";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -31,6 +31,15 @@ export default function PublicProfile() {
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isServicesExpanded, setIsServicesExpanded] = useState(false);
+  const [openFaqIds, setOpenFaqIds] = useState<string[]>([]);
+
+  const toggleFaq = (faqId: string) => {
+    setOpenFaqIds(prev => 
+      prev.includes(faqId) ? prev.filter(id => id !== faqId) : [...prev, faqId]
+    );
+  };
+
+  const isOwnProfile = currentUser && profile && (currentUser.uid === profile.uid || currentUser.uid === profile.id);
 
   // Quote Request State
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
@@ -783,6 +792,90 @@ export default function PublicProfile() {
                </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Frequently Asked Questions */}
+      {((profile.faqs && profile.faqs.length > 0) || isOwnProfile) && (
+        <div id="faqs" className="bg-white rounded-3xl border border-black shadow-sm p-6 sm:p-8 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
+                <HelpCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Frequently Asked Questions</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Quick answers provided directly by {profile.name || "this trader"}</p>
+              </div>
+            </div>
+            {isOwnProfile && (
+              <Link
+                to="/profile#faqs"
+                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition-colors flex items-center gap-1 shrink-0"
+              >
+                <Pencil className="w-3 h-3" />
+                Edit FAQs
+              </Link>
+            )}
+          </div>
+
+          {profile.faqs && profile.faqs.length > 0 ? (
+            <div className="space-y-3">
+              {profile.faqs.map((faq: any, idx: number) => {
+                const faqId = faq.id || `faq_${idx}`;
+                const isOpen = openFaqIds.includes(faqId) || profile.faqs.length <= 3;
+                return (
+                  <div 
+                    key={faqId} 
+                    className="border border-black rounded-2xl overflow-hidden bg-slate-50/60 transition-all hover:bg-slate-50"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleFaq(faqId)}
+                      className="w-full text-left p-4 flex items-center justify-between gap-3 font-bold text-sm text-slate-900 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-600 shrink-0" />
+                        <span>{faq.question}</span>
+                      </div>
+                      <ChevronDown className={cn("w-4 h-4 text-slate-500 shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />
+                    </button>
+                    
+                    <AnimatePresence>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-4 pt-1 border-t border-black/10 text-xs text-slate-700 leading-relaxed font-medium bg-white/80">
+                            <div className="pl-3 border-l-2 border-indigo-500/60 py-1">
+                              {faq.answer}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-black/30 p-4">
+              <HelpCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs text-slate-500 font-medium">No frequently asked questions added yet.</p>
+              {isOwnProfile && (
+                <Link
+                  to="/profile#faqs"
+                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  + Add FAQs in Business Dashboard
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       )}
 

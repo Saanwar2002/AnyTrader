@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, ChevronDown } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react-google-maps/api";
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { db, collection, query, where, onSnapshot, setDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
@@ -279,6 +279,13 @@ export default function FindTrades() {
     };
   }, [tradespeople]);
 
+  const [displayLimit, setDisplayLimit] = useState(10);
+  const loadMoreSentinelRef = React.useRef<HTMLDivElement>(null);
+  const [isCategoryAutoReset, setIsCategoryAutoReset] = useState(false);
+  const categoryInactivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const previousSearchQueryRef = React.useRef(searchQuery);
+  const [activeAds, setActiveAds] = useState<any[]>([]);
+
   const handleCategorySelect = (catName: string) => {
     setSelectedCategory(catName);
     setSearchQuery("");
@@ -554,42 +561,57 @@ export default function FindTrades() {
     return counts;
   }, [tradespeople]);
 
-  // Handle category persistence and 30s reset logic
+  // Reset category to "All" after 15 seconds of inactivity
   useEffect(() => {
-    const savedCategory = localStorage.getItem("lastSelectedCategory");
-    const savedTimestamp = localStorage.getItem("lastSelectedCategoryTime");
-    
-    if (savedCategory && savedTimestamp) {
-      const timeDiff = Date.now() - parseInt(savedTimestamp);
-      if (timeDiff < 30000) {
-        setSelectedCategory(savedCategory);
-      } else {
+    if (selectedCategory === "All") {
+      setIsCategoryAutoReset(false);
+      if (categoryInactivityTimerRef.current) {
+        clearTimeout(categoryInactivityTimerRef.current);
+        categoryInactivityTimerRef.current = null;
+      }
+      return;
+    }
+
+    const resetInactivityTimer = () => {
+      if (categoryInactivityTimerRef.current) {
+        clearTimeout(categoryInactivityTimerRef.current);
+      }
+      categoryInactivityTimerRef.current = setTimeout(() => {
         setSelectedCategory("All");
-        localStorage.removeItem("lastSelectedCategory");
-        localStorage.removeItem("lastSelectedCategoryTime");
-      }
-    }
-  }, []);
+        setIsCategoryAutoReset(true);
+        setTimeout(() => setIsCategoryAutoReset(false), 2500);
+      }, 15000); // 15 seconds inactivity
+    };
 
-  // Update timestamp whenever category changes or user interacts
-  useEffect(() => {
-    if (selectedCategory !== "All") {
-      localStorage.setItem("lastSelectedCategory", selectedCategory);
-      localStorage.setItem("lastSelectedCategoryTime", Date.now().toString());
-    } else {
-      localStorage.removeItem("lastSelectedCategory");
-      localStorage.removeItem("lastSelectedCategoryTime");
-    }
-  }, [selectedCategory]);
+    resetInactivityTimer();
 
-  // Update timestamp on unmount to track when user leaves the tab
-  useEffect(() => {
+    const handleUserActivity = () => {
+      resetInactivityTimer();
+    };
+
+    window.addEventListener("mousemove", handleUserActivity, { passive: true });
+    window.addEventListener("keydown", handleUserActivity, { passive: true });
+    window.addEventListener("touchstart", handleUserActivity, { passive: true });
+    window.addEventListener("scroll", handleUserActivity, { passive: true });
+
     return () => {
-      if (selectedCategory !== "All") {
-        localStorage.setItem("lastSelectedCategoryTime", Date.now().toString());
+      if (categoryInactivityTimerRef.current) {
+        clearTimeout(categoryInactivityTimerRef.current);
       }
+      window.removeEventListener("mousemove", handleUserActivity);
+      window.removeEventListener("keydown", handleUserActivity);
+      window.removeEventListener("touchstart", handleUserActivity);
+      window.removeEventListener("scroll", handleUserActivity);
     };
   }, [selectedCategory]);
+
+  // Default selectedCategory to "All" whenever search input is cleared / emptied
+  useEffect(() => {
+    if (previousSearchQueryRef.current.trim() !== "" && searchQuery.trim() === "") {
+      setSelectedCategory("All");
+    }
+    previousSearchQueryRef.current = searchQuery;
+  }, [searchQuery]);
 
   useEffect(() => {
     const stored = localStorage.getItem("recentlyViewedTraders");
@@ -647,6 +669,17 @@ export default function FindTrades() {
       }
     });
 
+    // Subscribe to active search-feed promoted campaigns for dynamic rotation
+    const adsQuery = query(collection(db, "advertisements"), where("approvalStatus", "==", "approved"), where("isActive", "==", true));
+    const unsubAds = onSnapshot(adsQuery, (snapshot) => {
+      const ads = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((ad: any) => (ad.prepaidBalance || 0) > 0);
+      setActiveAds(ads);
+    }, (err) => {
+      console.error("Error fetching active search ads:", err);
+    });
+
     const q = query(collection(db, "users"), where("role", "==", "tradesperson"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Tradesperson));
@@ -672,6 +705,7 @@ export default function FindTrades() {
     return () => {
       unsubscribe();
       unsubConfig();
+      unsubAds();
       unsubAssets();
     };
   }, []);
@@ -749,6 +783,149 @@ export default function FindTrades() {
         return 0;
       });
   }, [tradespeople, searchQuery, selectedCategory, sortBy, minRating, verifiedOnly, postcodeFilterEnabled, postcodeFilterValue, profile, quickEmergency, quickVerified, quickTopRated, quickFastReply]);
+
+  // Reset pagination limit when filters or search change
+  useEffect(() => {
+    setDisplayLimit(10);
+  }, [selectedCategory, searchQuery, sortBy, minRating, verifiedOnly, postcodeFilterEnabled, postcodeFilterValue, quickEmergency, quickVerified, quickTopRated, quickFastReply]);
+
+  // Fair Dynamic Rotation Engine for Promoted Profiles (15-20 active promoters rotated fairly into top 3)
+  const finalDisplayList = useMemo(() => {
+    const userLocationPostcode = profile?.postcode?.toUpperCase().replace(/\s/g, "") || "";
+    const searchPostcode = postcodeFilterEnabled && postcodeFilterValue ? postcodeFilterValue.toUpperCase().replace(/\s/g, "") : "";
+    const effectiveSearchPostcode = searchPostcode || userLocationPostcode;
+
+    const matchingAds = activeAds.filter((ad: any) => {
+      const placementMatch = !ad.placement || ad.placement === "search_feed" || ad.placement === "both";
+      const categoryMatch = selectedCategory === "All" || !ad.targetCategories?.length || ad.targetCategories.includes(selectedCategory) || ad.targetCategories.includes("all");
+      
+      // Radius / Location targeting check
+      let radiusMatch = true;
+      if (ad.promotionRadius && ad.promotionRadius !== "nationwide") {
+        const radiusMiles = Number(ad.promotionRadius);
+        const tp = tradespeople.find(t => t.uid === ad.advertiserUid);
+        const traderPostcode = tp?.postcode?.toUpperCase().replace(/\s/g, "") || "";
+
+        if (effectiveSearchPostcode && traderPostcode && radiusMiles > 0) {
+          const tpOutward = traderPostcode.substring(0, 3);
+          const searchOutward = effectiveSearchPostcode.substring(0, 3);
+          const tpArea = traderPostcode.substring(0, 2);
+          const searchArea = effectiveSearchPostcode.substring(0, 2);
+
+          if (radiusMiles <= 10) {
+            radiusMatch = tpOutward === searchOutward || tpArea === searchArea;
+          } else if (radiusMiles <= 25) {
+            radiusMatch = tpArea === searchArea || traderPostcode.charAt(0) === effectiveSearchPostcode.charAt(0);
+          } else {
+            radiusMatch = traderPostcode.charAt(0) === effectiveSearchPostcode.charAt(0);
+          }
+        }
+      }
+
+      return placementMatch && categoryMatch && radiusMatch && (ad.prepaidBalance || 0) > 0;
+    });
+
+    if (matchingAds.length === 0) {
+      return filteredTradespeople;
+    }
+
+    // Dynamic hourly hash seed to rotate impressions across all active paying promoters
+    const currentHourSeed = new Date().getHours() + new Date().getDate() * 24 + new Date().getMonth() * 720;
+    
+    const scoredPromotedUids = matchingAds.map((ad: any) => {
+      const uid = ad.advertiserUid;
+      let hash = 0;
+      for (let i = 0; i < uid.length; i++) {
+        hash = (hash << 5) - hash + uid.charCodeAt(i);
+        hash |= 0;
+      }
+      const pseudoRandomHash = Math.abs(hash + currentHourSeed) % 1000;
+      const tp = tradespeople.find(t => t.uid === uid);
+      const rating = tp?.rating || 4.0;
+      const budgetWeight = Math.min(2.0, 1 + (ad.prepaidBalance || 0) / 200);
+      const score = pseudoRandomHash * (rating / 5) * budgetWeight;
+
+      return { uid, score, adId: ad.id, costPerDisplay: ad.costPerDisplay || 1.00, adData: ad };
+    });
+
+    scoredPromotedUids.sort((a, b) => b.score - a.score);
+    const topPromotedCandidates = scoredPromotedUids.slice(0, 3);
+    const topPromotedUidSet = new Set(topPromotedCandidates.map(c => c.uid));
+
+    const promotedTraders: (Tradesperson & { isPromotedAd?: boolean; adId?: string; costPerDisplay?: number; clicks?: number; searchFeedClicks?: number; prepaidBalance?: number })[] = [];
+    
+    topPromotedCandidates.forEach(cand => {
+      const tp = tradespeople.find(t => t.uid === cand.uid);
+      if (tp && !tp.isDisabled) {
+        promotedTraders.push({
+          ...tp,
+          isPromotedAd: true,
+          adId: cand.adId,
+          costPerDisplay: cand.costPerDisplay,
+          clicks: cand.adData.clicks || 0,
+          searchFeedClicks: cand.adData.searchFeedClicks || 0,
+          prepaidBalance: cand.adData.prepaidBalance || 0,
+          adData: cand.adData
+        });
+      }
+    });
+
+    const organicTraders = filteredTradespeople.filter(tp => !topPromotedUidSet.has(tp.uid));
+
+    return [...promotedTraders, ...organicTraders];
+  }, [filteredTradespeople, activeAds, selectedCategory, tradespeople]);
+
+  // Sliced list for compact initial rendering
+  const visibleTradespeople = useMemo(() => {
+    return finalDisplayList.slice(0, displayLimit);
+  }, [finalDisplayList, displayLimit]);
+
+  // Handle logging clicks and deducting budget on promoted profile clicks
+  const handlePromotedCardClick = async (tp: any) => {
+    if (tp.isPromotedAd && tp.adId) {
+      try {
+        const adRef = doc(db, "advertisements", tp.adId);
+        const cost = tp.costPerDisplay || 1.00;
+        const currentBal = tp.prepaidBalance || cost;
+        const newBal = Math.max(0, currentBal - cost);
+
+        const updateData: any = {
+          clicks: (tp.clicks || 0) + 1,
+          searchFeedClicks: (tp.searchFeedClicks || 0) + 1,
+          prepaidBalance: newBal
+        };
+
+        // Smart Auto Top-Up: Reload £50 when balance drops <= £10
+        if (tp.adData?.autoTopUpEnabled && newBal <= (tp.adData?.autoTopUpThreshold || 10)) {
+          const topUpAmount = tp.adData?.autoTopUpAmount || 50;
+          updateData.prepaidBalance = newBal + topUpAmount;
+          updateData.lastAutoTopUpAt = new Date().toISOString();
+        }
+
+        await updateDoc(adRef, updateData);
+      } catch (e) {
+        console.error("Error logging promoted profile click:", e);
+      }
+    }
+  };
+
+  // Infinite scroll listener to reveal 10 more on scroll near bottom
+  useEffect(() => {
+    if (displayLimit >= filteredTradespeople.length) return;
+
+    const handleInfiniteScroll = () => {
+      if (!loadMoreSentinelRef.current) return;
+      const rect = loadMoreSentinelRef.current.getBoundingClientRect();
+      if (rect.top <= window.innerHeight + 500) {
+        setDisplayLimit(prev => Math.min(prev + 10, filteredTradespeople.length));
+      }
+    };
+
+    window.addEventListener("scroll", handleInfiniteScroll, { passive: true });
+    handleInfiniteScroll();
+
+    return () => window.removeEventListener("scroll", handleInfiniteScroll);
+  }, [displayLimit, filteredTradespeople.length]);
 
   useEffect(() => {
     if (!loading && filteredTradespeople.length === 0 && (searchQuery || selectedCategory !== "All" || minRating !== null || verifiedOnly || postcodeFilterEnabled)) {
@@ -1031,6 +1208,23 @@ export default function FindTrades() {
                 transition={{ duration: 0.15 }}
                 className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-black rounded-2xl shadow-2xl z-[100] overflow-hidden text-slate-900 divide-y divide-slate-100 max-h-[420px] overflow-y-auto"
               >
+                {/* Top Header Bar with Close Cross Button */}
+                <div className="sticky top-0 z-[110] bg-white/95 backdrop-blur-sm px-3.5 py-2 border-b border-slate-200 flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Search Suggestions
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSearchFocused(false);
+                    }}
+                    className="p-1 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Close suggestions"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
                 {/* Category Section */}
                 {autocompleteSuggestions.matchingCategories.length > 0 && (
                   <div className="p-2">
@@ -1225,22 +1419,31 @@ export default function FindTrades() {
           {categoryNames.map(cat => {
             const categoryData = categories.find(c => c.name === cat);
             const Icon = categoryData ? iconMap[categoryData.icon] : null;
+            const isAll = cat === "All";
+            const isSelected = selectedCategory === cat;
             
             return (
               <button
                 key={cat}
                 onClick={() => handleCategorySelect(cat)}
                 className={cn(
-                  "px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 shrink-0",
-                  selectedCategory === cat 
+                  "px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 shrink-0 cursor-pointer relative",
+                  isSelected 
                     ? "bg-orange-500 text-white shadow-md shadow-orange-500/20" 
-                    : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    : "bg-slate-700 text-slate-300 hover:bg-slate-600",
+                  isAll && isCategoryAutoReset && "ring-2 ring-amber-400 bg-orange-600 animate-pulse scale-105"
                 )}
               >
                 {categoryData && (
                   Icon ? <Icon className="w-4 h-4" /> : <span className="text-base">{categoryData.icon}</span>
                 )}
                 {cat}
+                {isAll && isCategoryAutoReset && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1764,7 +1967,7 @@ export default function FindTrades() {
           )}
         </AnimatePresence>
 
-        {filteredTradespeople.map((tp, index) => {
+        {visibleTradespeople.map((tp, index) => {
           let testReviews = tp.totalReviews || 0;
           let testRecmd = tp.totalRecommendations || 0;
 
@@ -1795,14 +1998,27 @@ export default function FindTrades() {
             animate={{ opacity: 1, scale: 1 }}
             key={tp.uid}
             onClick={() => {
+              if ((tp as any).isPromotedAd) {
+                handlePromotedCardClick(tp);
+              }
               if (isMiniProfileFlipped) {
                 setSelectedMiniProfile(null);
               } else {
                 setSelectedTraderPreview(tp);
               }
             }}
-            className="bg-white rounded-3xl border-2 border-black shadow-sm overflow-hidden flex flex-col relative cursor-pointer hover:border-slate-800 hover:shadow-md transition-all group"
+            className={`bg-white rounded-3xl border-2 shadow-sm overflow-hidden flex flex-col relative cursor-pointer hover:border-slate-800 hover:shadow-md transition-all group ${(tp as any).isPromotedAd ? 'border-amber-400 ring-2 ring-amber-400/20' : 'border-black'}`}
           >
+            {/* Promoted Sponsor Header Pill */}
+            {(tp as any).isPromotedAd && (
+              <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-1 flex items-center justify-between text-[11px] font-black uppercase tracking-wider">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 fill-white text-white animate-pulse" /> Promoted Profile
+                </span>
+                <span className="text-[9px] opacity-90 lowercase font-medium">sponsored</span>
+              </div>
+            )}
+
             {/* Top Right Triangle Corner */}
             {!isMiniProfileFlipped && (
               <div 
@@ -1956,7 +2172,7 @@ export default function FindTrades() {
                   type="button"
                   onClick={(e) => toggleCompareTrader(tp.uid, e)}
                   className={cn(
-                    "px-2.5 py-1 text-[11px] font-bold rounded-lg border flex items-center gap-1 transition-all cursor-pointer z-10",
+                    "px-1.5 py-0.5 text-[9.5px] font-bold rounded-md border flex items-center gap-0.5 transition-all cursor-pointer z-10 shrink-0",
                     selectedCompareIds.includes(tp.uid)
                       ? "bg-blue-600 text-white border-black shadow-xs"
                       : "bg-slate-100 text-slate-800 border-black hover:bg-slate-200"
@@ -1964,11 +2180,11 @@ export default function FindTrades() {
                 >
                   {selectedCompareIds.includes(tp.uid) ? (
                     <>
-                      <CheckSquare className="w-3.5 h-3.5 text-white" /> Comparing
+                      <CheckSquare className="w-3 h-3 text-white shrink-0" /> Comparing
                     </>
                   ) : (
                     <>
-                      <Square className="w-3.5 h-3.5 text-slate-500" /> Compare
+                      <Square className="w-3 h-3 text-slate-500 shrink-0" /> Compare
                     </>
                   )}
                 </button>
@@ -1984,6 +2200,30 @@ export default function FindTrades() {
           </motion.div>
           );
         })}
+
+        {/* Compact Infinite Scroll Sentinel & Status Indicator */}
+        <div ref={loadMoreSentinelRef} className="col-span-full py-6 flex flex-col items-center justify-center text-center">
+          {displayLimit < filteredTradespeople.length ? (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs font-bold text-slate-500">
+                Showing {visibleTradespeople.length} of {filteredTradespeople.length} verified tradespeople
+              </p>
+              <button
+                type="button"
+                onClick={() => setDisplayLimit(prev => Math.min(prev + 10, filteredTradespeople.length))}
+                className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-blue-600 border border-black shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              >
+                <ChevronDown className="w-4 h-4 text-amber-400 animate-bounce" />
+                Show More Tradespeople (+10)
+              </button>
+            </div>
+          ) : filteredTradespeople.length > 0 ? (
+            <div className="px-4 py-2 bg-slate-100 rounded-full border border-slate-200 text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+              <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+              Showing all {filteredTradespeople.length} verified tradespeople
+            </div>
+          ) : null}
+        </div>
       </div>
       )}
 

@@ -11,6 +11,7 @@ import {
   Settings, Gift, MessageSquare, Repeat, Ticket, Locate, Accessibility, Percent, Lock, Globe, Building, PoundSterling, ClipboardList, CalendarClock, Smartphone, Monitor
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { toast } from "sonner";
 import { polishBio } from "@/src/services/gemini";
 import { motion, AnimatePresence } from "motion/react";
 import { usePWAInstall } from "@/src/hooks/usePWAInstall";
@@ -1263,6 +1264,108 @@ export default function Profile() {
     setNewService("");
   };
 
+  // FAQ Manager State & Logic
+  const FAQ_PRESETS = [
+    {
+      question: "Do you offer emergency callouts?",
+      answer: "Yes, we offer 24/7 emergency callout services across our local coverage area with rapid response times."
+    },
+    {
+      question: "Do you provide free estimates?",
+      answer: "Yes, we provide free, no-obligation written estimates and quotes for all standard jobs and consultations."
+    },
+    {
+      question: "What payment methods do you accept?",
+      answer: "We accept debit/credit cards, direct bank transfer, cash, and instant scan-to-pay card payments via AnyTrader."
+    },
+    {
+      question: "Are you fully insured & certified?",
+      answer: "Yes, we carry comprehensive £2M+ public liability insurance and all required industry trade accreditations."
+    },
+    {
+      question: "Do you guarantee your work?",
+      answer: "Yes, all our workmanship comes with a 12-month guarantee in addition to standard manufacturer warranties."
+    }
+  ];
+
+  const [faqs, setFaqs] = useState<Array<{ id: string; question: string; answer: string }>>(
+    profile?.faqs || []
+  );
+  const [isEditingFaqs, setIsEditingFaqs] = useState(false);
+  const [isSavingFaqs, setIsSavingFaqs] = useState(false);
+
+  useEffect(() => {
+    if (profile?.faqs) {
+      setFaqs(profile.faqs);
+    }
+  }, [profile?.faqs]);
+
+  const handleAddPresetFaq = (preset: { question: string; answer: string }) => {
+    const exists = faqs.some(f => f.question.toLowerCase().trim() === preset.question.toLowerCase().trim());
+    if (exists) {
+      toast.info("That question is already in your FAQ list.");
+      return;
+    }
+    const newFaq = {
+      id: `faq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      question: preset.question,
+      answer: preset.answer
+    };
+    setFaqs(prev => [...prev, newFaq]);
+    setIsEditingFaqs(true);
+    toast.success("Added preset question! You can now customize or save it.");
+  };
+
+  const handleAddCustomFaq = () => {
+    const newFaq = {
+      id: `faq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      question: "",
+      answer: ""
+    };
+    setFaqs(prev => [...prev, newFaq]);
+    setIsEditingFaqs(true);
+  };
+
+  const handleUpdateFaq = (id: string, field: "question" | "answer", value: string) => {
+    setFaqs(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
+  };
+
+  const handleDeleteFaq = (id: string) => {
+    setFaqs(prev => prev.filter(f => f.id !== id));
+    setIsEditingFaqs(true);
+  };
+
+  const handleSaveFaqs = async () => {
+    if (!user) return;
+    setIsSavingFaqs(true);
+    try {
+      const cleanedFaqs = faqs
+        .filter(f => f.question.trim() !== "" && f.answer.trim() !== "")
+        .map(f => ({
+          id: f.id || `faq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          question: f.question.trim(),
+          answer: f.answer.trim()
+        }));
+
+      await updateDoc(doc(db, "users", user.uid), {
+        faqs: cleanedFaqs
+      });
+      setProfile((prev: any) => ({ ...prev, faqs: cleanedFaqs }));
+      setFaqs(cleanedFaqs);
+      setIsEditingFaqs(false);
+      toast.success("Profile FAQs saved successfully!");
+    } catch (err) {
+      console.error("Error saving FAQs:", err);
+      try {
+        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+      } catch (e: any) {
+        setError(e.message);
+      }
+    } finally {
+      setIsSavingFaqs(false);
+    }
+  };
+
   if (!user || !profile) return null;
 
   const homeownerMenuGroups = [
@@ -1372,6 +1475,7 @@ export default function Profile() {
         { icon: BarChart3, label: "Job Analytics", path: "/analytics" },
         { icon: Calendar, label: "Availability Calendar", path: "/availability" },
         { icon: CalendarClock, label: "Booking Appointments", path: "#appointments" },
+        { icon: HelpCircle, label: "Profile FAQs", path: "#faqs" },
         ...(isBannerAdsEnabled ? [{ icon: Zap, label: "Traders Banner Ad Studio", path: "/trader/banner-ads" }] : []),
       ]
     },
@@ -2581,6 +2685,146 @@ export default function Profile() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Frequently Asked Questions (FAQs) Manager Section */}
+            <div id="faqs" className="mt-6 pt-6 border-t-4 border-dotted border-black">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="w-5 h-5 text-indigo-600" />
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">Frequently Asked Questions (FAQs)</h4>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isEditingFaqs ? (
+                    <button 
+                      type="button"
+                      onClick={() => setIsEditingFaqs(true)}
+                      className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Manage FAQs
+                    </button>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={handleSaveFaqs}
+                      disabled={isSavingFaqs}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingFaqs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      Save FAQs
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                Answer common customer questions (like emergency callouts or free estimates) on your public profile to build trust and increase quote requests.
+              </p>
+
+              {/* Quick Preset Questions Bar */}
+              <div className="bg-slate-50 border border-black rounded-2xl p-4 mb-4">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>1-Click Preset Templates:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {FAQ_PRESETS.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleAddPresetFaq(preset)}
+                      className="text-[11px] font-bold bg-white text-slate-800 hover:text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-xl border border-black shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3 text-indigo-600" />
+                      {preset.question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* List of FAQs */}
+              <div className="space-y-3">
+                {faqs.map((faq, index) => (
+                  <div key={faq.id || index} className="p-4 bg-white rounded-2xl border border-black shadow-xs space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                        Q{index + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFaq(faq.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Remove FAQ"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Question
+                      </label>
+                      <input
+                        type="text"
+                        value={faq.question}
+                        onChange={(e) => handleUpdateFaq(faq.id, "question", e.target.value)}
+                        placeholder="e.g. Do you offer emergency callouts?"
+                        className="w-full p-2.5 text-sm font-bold border border-black rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Answer
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={faq.answer}
+                        onChange={(e) => handleUpdateFaq(faq.id, "answer", e.target.value)}
+                        placeholder="e.g. Yes, we offer 24/7 emergency callout services with rapid local response times."
+                        className="w-full p-2.5 text-xs text-slate-800 border border-black rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {faqs.length === 0 && (
+                  <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-black">
+                    <HelpCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs text-slate-500 font-medium">No FAQs added to your profile yet.</p>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomFaq}
+                      className="mt-2 text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
+                    >
+                      + Add your first custom question & answer
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between mt-4">
+                <button
+                  type="button"
+                  onClick={handleAddCustomFaq}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-black transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Custom Q&A
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveFaqs}
+                  disabled={isSavingFaqs}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingFaqs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Save All FAQs
+                </button>
+              </div>
             </div>
           </>
         )}
