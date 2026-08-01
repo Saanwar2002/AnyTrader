@@ -4176,29 +4176,38 @@ export default function PassengerBooking() {
                         
                         {/* Add-Ons */}
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 flex justify-between items-center bg-white border border-black rounded-[8px] px-3 py-2.5 shadow-sm">
-                             <div className="flex items-center gap-2 text-slate-900 font-bold">
-                               <Zap className="w-4 h-4" />
-                               <span className="text-[13px]">Priority</span>
+                          <div 
+                            onClick={() => setIsPriority(!isPriority)}
+                            className={cn(
+                              "flex-1 flex justify-between items-center bg-white border border-black rounded-[10px] px-3 py-2 shadow-xs cursor-pointer select-none transition-all active:scale-[0.99]",
+                              isPriority ? "bg-blue-50/70" : "hover:bg-slate-50"
+                            )}
+                          >
+                             <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+                               <Zap className={cn("w-4 h-4 shrink-0 transition-colors", isPriority ? "text-[#2563EB] fill-[#2563EB]" : "text-slate-700")} />
+                               <span className="text-[13px] tracking-tight">Priority</span>
                              </div>
-                             <button 
-                               onClick={() => setIsPriority(!isPriority)}
-                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPriority ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-black")}
-                             >
-                               <div className={cn("absolute top-[1.5px] w-4 h-4 bg-white rounded-full transition-transform shadow-sm", isPriority ? "right-[1.5px]" : "left-[1.5px]")} />
-                             </button>
+                             {/* Compact Slider Switch */}
+                             <div className={cn("w-[34px] h-[18px] rounded-full p-[2px] transition-colors relative flex items-center shrink-0 border border-black", isPriority ? "bg-[#2563EB]" : "bg-slate-200")}>
+                               <div className={cn("w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out shrink-0", isPriority ? "translate-x-[16px]" : "translate-x-0")} />
+                             </div>
                           </div>
-                          <div className="flex-1 flex justify-between items-center bg-white border border-black rounded-[8px] px-3 py-2.5 shadow-sm">
-                             <div className="flex items-center gap-2 text-slate-900 font-bold">
-                               <Dog className="w-4 h-4" />
-                               <span className="text-[13px]">Pet</span>
+
+                          <div 
+                            onClick={() => setIsPetFriendly(!isPetFriendly)}
+                            className={cn(
+                              "flex-1 flex justify-between items-center bg-white border border-black rounded-[10px] px-3 py-2 shadow-xs cursor-pointer select-none transition-all active:scale-[0.99]",
+                              isPetFriendly ? "bg-blue-50/70" : "hover:bg-slate-50"
+                            )}
+                          >
+                             <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+                               <Dog className={cn("w-4 h-4 shrink-0 transition-colors", isPetFriendly ? "text-[#2563EB]" : "text-slate-700")} />
+                               <span className="text-[13px] tracking-tight">Pet</span>
                              </div>
-                             <button 
-                               onClick={() => setIsPetFriendly(!isPetFriendly)}
-                               className={cn("w-9 h-5 rounded-full transition-colors relative border", isPetFriendly ? "bg-[#2563EB] border-[#2563EB]" : "bg-slate-200 border-black")}
-                             >
-                               <div className={cn("absolute top-[1.5px] w-4 h-4 bg-white rounded-full transition-transform shadow-sm", isPetFriendly ? "right-[1.5px]" : "left-[1.5px]")} />
-                             </button>
+                             {/* Compact Slider Switch */}
+                             <div className={cn("w-[34px] h-[18px] rounded-full p-[2px] transition-colors relative flex items-center shrink-0 border border-black", isPetFriendly ? "bg-[#2563EB]" : "bg-slate-200")}>
+                               <div className={cn("w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out shrink-0", isPetFriendly ? "translate-x-[16px]" : "translate-x-0")} />
+                             </div>
                           </div>
                         </div>
 
@@ -4455,8 +4464,9 @@ export default function PassengerBooking() {
                         <h4 className="text-amber-950 font-black text-[13px] leading-[1.1]">Boost Priority (+£3)</h4>
                         <p className="text-amber-800/80 text-[11px] font-bold tracking-tight mt-0.5 leading-[1.1]">Jump to the top of the queue.</p>
                       </div>
-                      <div className={cn("w-[42px] h-[26px] rounded-full p-1 transition-colors relative flex items-center shrink-0 border", isPriority ? "bg-amber-900 border-amber-950/20" : "bg-black/10 border-white/20/5")}>
-                        <div className={cn("w-[18px] h-[18px] bg-white rounded-full shadow-sm transition-transform", isPriority ? "translate-x-4" : "translate-x-0")} />
+                      {/* Compact Slider Switch */}
+                      <div className={cn("w-[34px] h-[18px] rounded-full p-[2px] transition-colors relative flex items-center shrink-0 border border-black/40", isPriority ? "bg-amber-900" : "bg-black/15")}>
+                        <div className={cn("w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out shrink-0", isPriority ? "translate-x-[16px]" : "translate-x-0")} />
                       </div>
                     </div>
                   </div>
