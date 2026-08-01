@@ -1259,7 +1259,7 @@ export default function Layout() {
                           "bg-[#0055DD]"
                         ) : "bg-[#0055DD]"
                      )}
-                     transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                     transition={{ duration: 0.15, ease: "easeOut" }}
                    />
                 )}
               </Link>

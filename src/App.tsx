@@ -28,6 +28,19 @@ import Dashboard from "./components/Dashboard";
 import TradesDashboard from "./components/TradesDashboard";
 import BusinessDashboard from "./components/BusinessDashboard";
 import Profile from "./components/Profile";
+import FindTrades from "./components/FindTrades";
+import PostJobWizard from "./components/PostJobWizard";
+import EmergencyJobWizard from "./components/EmergencyJobWizard";
+import MyJobs from "./components/MyJobs";
+import TradeJobs from "./components/TradeJobs";
+import MyQuotes from "./components/MyQuotes";
+import Conversations from "./components/Conversations";
+import Notifications from "./components/Notifications";
+import JobFeed from "./components/JobFeed";
+import TraderCalendar from "./components/TraderCalendar";
+import Chat from "./components/Chat";
+import DriverTerminal from "./components/driver/DriverTerminal";
+import PassengerBooking from "./components/passenger/PassengerBooking";
 
 // Lazy loading helper with auto-retry for resilient chunk fetching
 function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () => Promise<{ default: T } | any>) {
@@ -49,8 +62,6 @@ function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () =
 }
 
 // Lazy loaded secondary components
-const DriverTerminal = lazyWithRetry(() => import("./components/driver/DriverTerminal"));
-const PassengerBooking = lazyWithRetry(() => import("./components/passenger/PassengerBooking"));
 const PassengerRideHistory = lazyWithRetry(() => import("./components/passenger/PassengerRideHistory"));
 const DriverEarnings = lazyWithRetry(() => import("./components/driver/DriverEarnings"));
 const DriverInbox = lazyWithRetry(() => import("./components/driver/DriverInbox"));
@@ -58,24 +69,13 @@ const PlatformFeeSuccess = lazyWithRetry(() => import("./components/driver/Platf
 const CorporatePortal = lazyWithRetry(() => import("./components/anyroller/CorporatePortal"));
 const EcosystemAdmin = lazyWithRetry(() => import("./components/EcosystemAdmin"));
 const MasterAdminLayout = lazyWithRetry(() => import("./components/MasterAdminLayout"));
-const EmergencyJobWizard = lazyWithRetry(() => import("./components/EmergencyJobWizard"));
-const PostJobWizard = lazyWithRetry(() => import("./components/PostJobWizard"));
-const MyJobs = lazyWithRetry(() => import("./components/MyJobs"));
-const TradeJobs = lazyWithRetry(() => import("./components/TradeJobs"));
-const MyQuotes = lazyWithRetry(() => import("./components/MyQuotes"));
-const Conversations = lazyWithRetry(() => import("./components/Conversations"));
-const Notifications = lazyWithRetry(() => import("./components/Notifications"));
 const ReferralTracker = lazyWithRetry(() => import("./components/shared/ReferralTracker"));
 const RefRedirect = lazyWithRetry(() => import("./components/shared/ReferralTracker").then(m => ({ default: m.RefRedirect })));
-const JobFeed = lazyWithRetry(() => import("./components/JobFeed"));
 const JobDetails = lazyWithRetry(() => import("./components/JobDetails"));
 const JobTimeline = lazyWithRetry(() => import("./components/JobTimeline"));
-const TraderCalendar = lazyWithRetry(() => import("./components/TraderCalendar"));
 const PublicProfile = lazyWithRetry(() => import("./components/PublicProfile"));
-const Chat = lazyWithRetry(() => import("./components/Chat"));
 const Analytics = lazyWithRetry(() => import("./components/Analytics"));
 const Availability = lazyWithRetry(() => import("./components/Availability"));
-const FindTrades = lazyWithRetry(() => import("./components/FindTrades"));
 const Portfolio = lazyWithRetry(() => import("./components/Portfolio"));
 const TradesBannerAdStudio = lazyWithRetry(() => import("./components/TradesBannerAdStudio"));
 const BusinessTeamManagement = lazyWithRetry(() => import("./components/BusinessTeamManagement"));

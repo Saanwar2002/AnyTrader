@@ -35,19 +35,31 @@ export default function Conversations() {
       setConversations(convs);
       setLoading(false);
 
-      // Fetch profiles for recipients
-      convs.forEach(async (conv: any) => {
-        const recipientId = conv.participants.find((p: string) => p !== user.uid);
-        if (recipientId && !profiles[recipientId]) {
-          const profileDoc = await getDoc(doc(db, "users", recipientId));
-          if (profileDoc.exists()) {
-            setProfiles(prev => ({
-              ...prev,
-              [recipientId]: profileDoc.data()
-            }));
+      // Fetch profiles for recipients in a batched manner
+      const missingRecipientIds = Array.from(new Set(
+        convs
+          .map((conv: any) => conv.participants?.find((p: string) => p !== user.uid))
+          .filter((id: string | undefined): id is string => Boolean(id) && !profiles[id])
+      ));
+
+      if (missingRecipientIds.length > 0) {
+        Promise.all(missingRecipientIds.map(async (recipientId) => {
+          try {
+            const profileDoc = await getDoc(doc(db, "users", recipientId));
+            return profileDoc.exists() ? { id: recipientId, data: profileDoc.data() } : null;
+          } catch (e) {
+            return null;
           }
-        }
-      });
+        })).then((results) => {
+          const fetchedProfiles: Record<string, any> = {};
+          results.forEach((res) => {
+            if (res) fetchedProfiles[res.id] = res.data;
+          });
+          if (Object.keys(fetchedProfiles).length > 0) {
+            setProfiles(prev => ({ ...prev, ...fetchedProfiles }));
+          }
+        });
+      }
     }, (error) => {
       console.error("Error fetching conversations:", error);
       handleFirestoreError(error, OperationType.LIST, "conversations");

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, ChevronDown } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react-google-maps/api";
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
-import { db, collection, query, where, onSnapshot, setDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
+import { db, collection, query, where, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
 import { findFuzzySuggestion, buildCandidateDictionary, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
 import { cn } from "@/src/lib/utils";
@@ -108,6 +108,53 @@ interface Tradesperson {
   isFoundingMember?: boolean;
 }
 
+const COMPARE_THEMES = [
+  {
+    num: "#1",
+    numVal: 1,
+    badgeBg: "bg-blue-600",
+    badgeText: "text-white",
+    chipBg: "bg-blue-100 border-blue-300 text-blue-900",
+    cardBg: "bg-blue-50/90 border-2 border-blue-400",
+    cellBg: "bg-blue-50/80 border border-blue-200 text-slate-900",
+    btnBg: "bg-blue-600 hover:bg-blue-700 text-white",
+    avatarRing: "ring-2 ring-blue-500",
+  },
+  {
+    num: "#2",
+    numVal: 2,
+    badgeBg: "bg-purple-600",
+    badgeText: "text-white",
+    chipBg: "bg-purple-100 border-purple-300 text-purple-900",
+    cardBg: "bg-purple-50/90 border-2 border-purple-400",
+    cellBg: "bg-purple-50/80 border border-purple-200 text-slate-900",
+    btnBg: "bg-purple-600 hover:bg-purple-700 text-white",
+    avatarRing: "ring-2 ring-purple-500",
+  },
+  {
+    num: "#3",
+    numVal: 3,
+    badgeBg: "bg-emerald-600",
+    badgeText: "text-white",
+    chipBg: "bg-emerald-100 border-emerald-300 text-emerald-900",
+    cardBg: "bg-emerald-50/90 border-2 border-emerald-400",
+    cellBg: "bg-emerald-50/80 border border-emerald-200 text-slate-900",
+    btnBg: "bg-emerald-600 hover:bg-emerald-700 text-white",
+    avatarRing: "ring-2 ring-emerald-500",
+  },
+  {
+    num: "#4",
+    numVal: 4,
+    badgeBg: "bg-amber-600",
+    badgeText: "text-white",
+    chipBg: "bg-amber-100 border-amber-300 text-amber-900",
+    cardBg: "bg-amber-50/90 border-2 border-amber-400",
+    cellBg: "bg-amber-50/80 border border-amber-200 text-slate-900",
+    btnBg: "bg-amber-600 hover:bg-amber-700 text-white",
+    avatarRing: "ring-2 ring-amber-500",
+  },
+];
+
 export default function FindTrades() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -208,10 +255,30 @@ export default function FindTrades() {
 
   const [showNoResultsToast, setShowNoResultsToast] = useState(false);
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("recentTradeSearches");
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const now = Date.now();
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        const validItems = parsed
+          .map((item: any) => {
+            if (typeof item === "string") {
+              return { term: item, timestamp: now };
+            }
+            return item;
+          })
+          .filter((item: any) => item && item.term && (now - item.timestamp) < THIRTY_DAYS_MS)
+          .slice(0, 5);
+
+        // Update localStorage with clean dataset
+        localStorage.setItem("recentTradeSearches", JSON.stringify(validItems));
+        return validItems.map((item: any) => item.term);
+      }
+      return [];
     } catch {
       return [];
     }
@@ -220,20 +287,66 @@ export default function FindTrades() {
   const addRecentSearch = (term: string) => {
     const clean = term.trim();
     if (!clean || clean.length < 2) return;
+    const now = Date.now();
+
     setRecentSearches(prev => {
-      const filtered = prev.filter(s => s.toLowerCase() !== clean.toLowerCase());
-      const updated = [clean, ...filtered].slice(0, 8);
-      localStorage.setItem("recentTradeSearches", JSON.stringify(updated));
-      return updated;
+      let storedItems: { term: string; timestamp: number }[] = [];
+      try {
+        const raw = localStorage.getItem("recentTradeSearches");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            storedItems = parsed.map((item: any) =>
+              typeof item === "string" ? { term: item, timestamp: now } : item
+            );
+          }
+        }
+      } catch {}
+
+      const filtered = storedItems.filter(
+        item =>
+          item &&
+          item.term &&
+          item.term.toLowerCase() !== clean.toLowerCase() &&
+          now - item.timestamp < THIRTY_DAYS_MS
+      );
+
+      const updatedItems = [{ term: clean, timestamp: now }, ...filtered].slice(0, 5);
+      localStorage.setItem("recentTradeSearches", JSON.stringify(updatedItems));
+      return updatedItems.map(i => i.term);
     });
   };
 
   const removeRecentSearch = (termToRemove: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const now = Date.now();
+
     setRecentSearches(prev => {
-      const updated = prev.filter(s => s !== termToRemove);
-      localStorage.setItem("recentTradeSearches", JSON.stringify(updated));
-      return updated;
+      let storedItems: { term: string; timestamp: number }[] = [];
+      try {
+        const raw = localStorage.getItem("recentTradeSearches");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            storedItems = parsed.map((item: any) =>
+              typeof item === "string" ? { term: item, timestamp: now } : item
+            );
+          }
+        }
+      } catch {}
+
+      const updatedItems = storedItems
+        .filter(
+          item =>
+            item &&
+            item.term &&
+            item.term.toLowerCase() !== termToRemove.toLowerCase() &&
+            now - item.timestamp < THIRTY_DAYS_MS
+        )
+        .slice(0, 5);
+
+      localStorage.setItem("recentTradeSearches", JSON.stringify(updatedItems));
+      return updatedItems.map(i => i.term);
     });
   };
 
@@ -343,68 +456,6 @@ export default function FindTrades() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const autocompleteSuggestions = useMemo(() => {
-    const queryTrimmed = searchQuery.trim().toLowerCase();
-    if (!queryTrimmed) {
-      return {
-        matchingRecent: [],
-        matchingCategories: [],
-        matchingTradespeople: [],
-        matchingLocations: [],
-        hasSuggestions: false,
-      };
-    }
-
-    // 1. Matching Recent Searches
-    const matchingRecent = recentSearches
-      .filter(s => s.toLowerCase().includes(queryTrimmed))
-      .slice(0, 3);
-
-    // 2. Matching Categories
-    const matchingCategories = categories
-      .filter(cat => 
-        cat.name.toLowerCase().includes(queryTrimmed) || 
-        (cat.description && cat.description.toLowerCase().includes(queryTrimmed)) ||
-        (cat.subcategories && cat.subcategories.some((sub: string) => sub.toLowerCase().includes(queryTrimmed)))
-      )
-      .slice(0, 4);
-
-    // 3. Matching Tradespeople
-    const matchingTradespeople = tradespeople
-      .filter(tp => 
-        tp.name.toLowerCase().includes(queryTrimmed) ||
-        (tp.companyName || '').toLowerCase().includes(queryTrimmed) ||
-        (tp.trades || []).some(t => t.toLowerCase().includes(queryTrimmed))
-      )
-      .slice(0, 4);
-
-    // 4. Matching Locations / Postcodes
-    const locationsSet = new Set<string>();
-    tradespeople.forEach(tp => {
-      if (tp.postcode && tp.postcode.toLowerCase().includes(queryTrimmed)) {
-        locationsSet.add(tp.postcode.toUpperCase());
-      }
-      if (tp.city && tp.city.toLowerCase().includes(queryTrimmed)) {
-        locationsSet.add(tp.city);
-      }
-    });
-    const matchingLocations = Array.from(locationsSet).slice(0, 3);
-
-    const hasSuggestions = 
-      matchingRecent.length > 0 || 
-      matchingCategories.length > 0 || 
-      matchingTradespeople.length > 0 || 
-      matchingLocations.length > 0;
-
-    return {
-      matchingRecent,
-      matchingCategories,
-      matchingTradespeople,
-      matchingLocations,
-      hasSuggestions,
-    };
-  }, [searchQuery, categories, tradespeople, recentSearches]);
 
   // Handle Fuzzy matching when search query changes
   useEffect(() => {
@@ -683,6 +734,9 @@ export default function FindTrades() {
     const q = query(collection(db, "users"), where("role", "==", "tradesperson"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Tradesperson));
+      if (data.length === 0) {
+        seedMockTraders().catch(console.error);
+      }
       setTradespeople(data);
       setLoading(false);
     }, (error) => {
@@ -796,15 +850,52 @@ export default function FindTrades() {
     const effectiveSearchPostcode = searchPostcode || userLocationPostcode;
 
     const matchingAds = activeAds.filter((ad: any) => {
+      if ((ad.prepaidBalance || 0) <= 0) return false;
+
       const placementMatch = !ad.placement || ad.placement === "search_feed" || ad.placement === "both";
-      const categoryMatch = selectedCategory === "All" || !ad.targetCategories?.length || ad.targetCategories.includes(selectedCategory) || ad.targetCategories.includes("all");
-      
-      // Radius / Location targeting check
+      if (!placementMatch) return false;
+
+      const tp = tradespeople.find(t => t.uid === ad.advertiserUid);
+      if (!tp || tp.isDisabled) return false;
+
+      // 1. Search Query Relevance Filter
+      if (searchQuery.trim().length > 0) {
+        const queryLower = searchQuery.toLowerCase().trim();
+        const tpMatches = 
+          tp.name.toLowerCase().includes(queryLower) ||
+          tp.businessName?.toLowerCase().includes(queryLower) ||
+          tp.trades?.some(t => t.toLowerCase().includes(queryLower)) ||
+          tp.services?.some(s => s.toLowerCase().includes(queryLower)) ||
+          tp.tags?.some(tag => tag.toLowerCase().includes(queryLower)) ||
+          tp.postcode?.toLowerCase().includes(queryLower);
+        
+        const adMatches = 
+          ad.title?.toLowerCase().includes(queryLower) ||
+          ad.tagline?.toLowerCase().includes(queryLower) ||
+          ad.targetCategories?.some((cat: string) => cat.toLowerCase().includes(queryLower));
+
+        if (!tpMatches && !adMatches) return false;
+      }
+
+      // 2. Category Relevance Filter
+      if (selectedCategory !== "All") {
+        const adTargetsCategory = ad.targetCategories?.includes(selectedCategory);
+        const traderHasTrade = tp.trades?.includes(selectedCategory);
+        if (!adTargetsCategory && !traderHasTrade) return false;
+      }
+
+      // 3. Quick & Advanced Filter Matching
+      if (quickEmergency && !tp.isAvailableForEmergency) return false;
+      if ((quickVerified || verifiedOnly) && tp.verificationStatus !== "verified") return false;
+      if (quickTopRated && (tp.rating || 0) < 4.5) return false;
+      if (quickFastReply && (tp.responseRate || 0) < 70) return false;
+      if (minRating !== null && (tp.rating || 0) < minRating) return false;
+
+      // 4. Radius / Location targeting check
       let radiusMatch = true;
       if (ad.promotionRadius && ad.promotionRadius !== "nationwide") {
         const radiusMiles = Number(ad.promotionRadius);
-        const tp = tradespeople.find(t => t.uid === ad.advertiserUid);
-        const traderPostcode = tp?.postcode?.toUpperCase().replace(/\s/g, "") || "";
+        const traderPostcode = tp.postcode?.toUpperCase().replace(/\s/g, "") || "";
 
         if (effectiveSearchPostcode && traderPostcode && radiusMiles > 0) {
           const tpOutward = traderPostcode.substring(0, 3);
@@ -822,7 +913,7 @@ export default function FindTrades() {
         }
       }
 
-      return placementMatch && categoryMatch && radiusMatch && (ad.prepaidBalance || 0) > 0;
+      return radiusMatch;
     });
 
     if (matchingAds.length === 0) {
@@ -873,7 +964,107 @@ export default function FindTrades() {
     const organicTraders = filteredTradespeople.filter(tp => !topPromotedUidSet.has(tp.uid));
 
     return [...promotedTraders, ...organicTraders];
-  }, [filteredTradespeople, activeAds, selectedCategory, tradespeople]);
+  }, [filteredTradespeople, activeAds, selectedCategory, searchQuery, minRating, verifiedOnly, postcodeFilterEnabled, postcodeFilterValue, quickEmergency, quickVerified, quickTopRated, quickFastReply, profile, tradespeople]);
+
+  const autocompleteSuggestions = useMemo(() => {
+    const queryTrimmed = searchQuery.trim().toLowerCase();
+    if (!queryTrimmed) {
+      return {
+        matchingRecent: [],
+        matchingCategories: [],
+        matchingTradespeople: [],
+        matchingLocations: [],
+        hasSuggestions: false,
+      };
+    }
+
+    // 1. Matching Recent Searches (Max 2)
+    const matchingRecent = recentSearches
+      .filter(s => s.toLowerCase().includes(queryTrimmed))
+      .slice(0, 2);
+
+    // 2. Matching Categories (Max 2) with Smart Word Boundary Relevance
+    const escapedQuery = queryTrimmed.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    const wordBoundaryRegex = new RegExp(`\\b${escapedQuery}`, "i");
+
+    const categoryCandidates = categories
+      .map(cat => {
+        const catNameLower = cat.name.toLowerCase();
+        
+        // Category Name Direct Matches
+        const nameStartsWith = catNameLower.startsWith(queryTrimmed);
+        const nameMatches = catNameLower.includes(queryTrimmed);
+
+        // Subcategory Matches
+        let matchingSub: string | undefined = undefined;
+        if (cat.subcategories && cat.subcategories.length > 0) {
+          matchingSub = cat.subcategories.find((sub: string) => {
+            const subLower = sub.toLowerCase();
+            // For short queries (<=3 chars e.g. "plu"), require word-start boundary
+            if (queryTrimmed.length <= 3) {
+              return subLower.startsWith(queryTrimmed) || wordBoundaryRegex.test(subLower);
+            }
+            return subLower.includes(queryTrimmed);
+          });
+        }
+
+        // Calculate relevance priority score
+        let priority = 0;
+        if (nameStartsWith) {
+          priority = 100;
+        } else if (nameMatches) {
+          priority = 80;
+        } else if (matchingSub && matchingSub.toLowerCase().startsWith(queryTrimmed)) {
+          priority = 60;
+        } else if (matchingSub && wordBoundaryRegex.test(matchingSub.toLowerCase())) {
+          priority = 40;
+        } else if (matchingSub && queryTrimmed.length > 3) {
+          priority = 20;
+        }
+
+        return {
+          cat,
+          matchingSub,
+          priority,
+        };
+      })
+      .filter(item => item.priority > 0)
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, 2)
+      .map(item => ({
+        ...item.cat,
+        matchedSubcategory: item.matchingSub
+      }));
+
+    // 3. Matching Tradespeople - strictly max 3 from finalDisplayList so dropdown order matches search results
+    const matchingTradespeople = finalDisplayList.slice(0, 3);
+
+    // 4. Matching Locations / Postcodes (Max 2)
+    const locationsSet = new Set<string>();
+    tradespeople.forEach(tp => {
+      if (tp.postcode && tp.postcode.toLowerCase().includes(queryTrimmed)) {
+        locationsSet.add(tp.postcode.toUpperCase());
+      }
+      if (tp.city && tp.city.toLowerCase().includes(queryTrimmed)) {
+        locationsSet.add(tp.city);
+      }
+    });
+    const matchingLocations = Array.from(locationsSet).slice(0, 2);
+
+    const hasSuggestions = 
+      matchingRecent.length > 0 || 
+      categoryCandidates.length > 0 || 
+      matchingTradespeople.length > 0 || 
+      matchingLocations.length > 0;
+
+    return {
+      matchingRecent,
+      matchingCategories: categoryCandidates,
+      matchingTradespeople,
+      matchingLocations,
+      hasSuggestions,
+    };
+  }, [searchQuery, categories, finalDisplayList, tradespeople, recentSearches]);
 
   // Sliced list for compact initial rendering
   const visibleTradespeople = useMemo(() => {
@@ -1132,71 +1323,81 @@ export default function FindTrades() {
         </div>
 
         {/* Search Bar */}
-        <div ref={searchContainerRef} className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            placeholder={isListening ? "Listening..." : "Name, trade, postcode..."}
-            value={searchQuery}
-            onFocus={() => setIsSearchFocused(true)}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setIsSearchFocused(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && searchQuery.trim()) {
-                addRecentSearch(searchQuery);
-                setIsSearchFocused(false);
-              }
-              if (e.key === "Escape") {
-                setIsSearchFocused(false);
-              }
-            }}
-            className={cn(
-               "w-full bg-white pl-12 pr-24 py-3 rounded-2xl shadow-inner transition-colors",
-               isListening ? "focus:outline-none focus:ring-2 focus:ring-red-500 border-2 border-red-500 bg-red-50" : "text-slate-900 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-            )}
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 group">
-            <div className="relative flex items-center justify-center">
-              <button 
-                onClick={startVoiceSearch}
-                title="Voice Search"
-                className={cn(
-                  "p-2 rounded-xl transition-all flex items-center justify-center",
-                  isListening ? "bg-red-500 text-white animate-pulse shadow-md shadow-red-500/20" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                )}
-              >
-                <Mic className="w-5 h-5" />
-              </button>
-
-              <div className={cn(
-                "absolute right-0 top-full mt-2 w-max max-w-[240px] p-3 bg-slate-800 text-white rounded-xl shadow-xl z-50 transition-all origin-top-right pointer-events-none",
-                isListening ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible group-hover:opacity-100 group-hover:scale-100 group-hover:visible"
-              )}>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
-                   <Info className="w-3 h-3" /> Voice Commands
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-xs bg-slate-700/50 px-2 py-1 rounded-md border border-slate-600/50">"Find a plumber in Manchester"</span>
-                  <span className="text-xs bg-slate-700/50 px-2 py-1 rounded-md border border-slate-600/50">"Emergency electrician"</span>
-                </div>
-                <div className="absolute -top-1.5 right-3 w-3 h-3 bg-slate-800 rotate-45 rounded-sm"></div>
-              </div>
-            </div>
-            {searchQuery && (
-              <button 
-                onClick={() => {
-                  setSearchQuery("");
+        <div ref={searchContainerRef} className="relative mb-6 z-[90]">
+          <div className="relative z-[95]">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              placeholder={isListening ? "Listening..." : "Name, trade, postcode..."}
+              value={searchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchFocused(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && searchQuery.trim()) {
+                  addRecentSearch(searchQuery);
                   setIsSearchFocused(false);
-                }}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
-                title="Clear Search"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
+                }
+                if (e.key === "Escape") {
+                  setIsSearchFocused(false);
+                }
+              }}
+              className={cn(
+                 "w-full bg-white pl-12 pr-24 py-3 rounded-2xl shadow-inner transition-colors",
+                 isListening ? "focus:outline-none focus:ring-2 focus:ring-red-500 border-2 border-red-500 bg-red-50" : "text-slate-900 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+              )}
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 group">
+              <div className="relative flex items-center justify-center">
+                <button 
+                  onClick={startVoiceSearch}
+                  title="Voice Search"
+                  className={cn(
+                    "p-2 rounded-xl transition-all flex items-center justify-center",
+                    isListening ? "bg-red-500 text-white animate-pulse shadow-md shadow-red-500/20" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                  )}
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+
+                <div className={cn(
+                  "absolute right-0 top-full mt-2 w-max max-w-[240px] p-3 bg-slate-800 text-white rounded-xl shadow-xl z-50 transition-all origin-top-right pointer-events-none",
+                  isListening ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible group-hover:opacity-100 group-hover:scale-100 group-hover:visible"
+                )}>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
+                     <Info className="w-3 h-3" /> Voice Commands
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs bg-slate-700/50 px-2 py-1 rounded-md border border-slate-600/50">"Find a plumber in Manchester"</span>
+                    <span className="text-xs bg-slate-700/50 px-2 py-1 rounded-md border border-slate-600/50">"Emergency electrician"</span>
+                  </div>
+                  <div className="absolute -top-1.5 right-3 w-3 h-3 bg-slate-800 rotate-45 rounded-sm"></div>
+                </div>
+              </div>
+              {searchQuery && (
+                <button 
+                  onClick={() => {
+                    setSearchQuery("");
+                    setIsSearchFocused(false);
+                  }}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+                  title="Clear Search"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Backdrop when search suggestion box is open to prevent card bleed-through */}
+          {isSearchFocused && searchQuery.trim().length >= 1 && autocompleteSuggestions.hasSuggestions && (
+            <div 
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[80] transition-opacity" 
+              onClick={() => setIsSearchFocused(false)} 
+            />
+          )}
 
           {/* Live Auto-Complete Dropdown */}
           <AnimatePresence>
@@ -1206,7 +1407,7 @@ export default function FindTrades() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-black rounded-2xl shadow-2xl z-[100] overflow-hidden text-slate-900 divide-y divide-slate-100 max-h-[420px] overflow-y-auto"
+                className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-black rounded-2xl shadow-2xl z-[100] overflow-hidden text-slate-900 divide-y divide-slate-100 max-h-[320px] overflow-y-auto"
               >
                 {/* Top Header Bar with Close Cross Button */}
                 <div className="sticky top-0 z-[110] bg-white/95 backdrop-blur-sm px-3.5 py-2 border-b border-slate-200 flex items-center justify-between">
@@ -1239,6 +1440,7 @@ export default function FindTrades() {
                     <div className="space-y-1 mt-1">
                       {autocompleteSuggestions.matchingCategories.map(cat => {
                         const Icon = iconMap[cat.icon];
+                        const matchedSub = (cat as any).matchedSubcategory;
                         return (
                           <button
                             key={cat.docId || cat.id}
@@ -1255,7 +1457,9 @@ export default function FindTrades() {
                               </div>
                               <div className="truncate">
                                 <p className="text-xs font-bold text-black truncate">{cat.name}</p>
-                                <p className="text-[10px] text-slate-500 truncate">{cat.description || "Browse trade category"}</p>
+                                <p className="text-[10px] text-slate-500 truncate">
+                                  {matchedSub ? `Matches: ${matchedSub}` : (cat.description || "Browse trade category")}
+                                </p>
                               </div>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -1283,6 +1487,9 @@ export default function FindTrades() {
                           key={tp.uid}
                           type="button"
                           onClick={() => {
+                            if ((tp as any).isPromotedAd) {
+                              handlePromotedCardClick(tp);
+                            }
                             setSelectedTraderPreview(tp);
                             addRecentSearch(tp.name);
                             setIsSearchFocused(false);
@@ -1300,8 +1507,14 @@ export default function FindTrades() {
                             <div className="truncate min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <p className="text-xs font-bold text-black truncate">{tp.name}</p>
-                                {tp.verificationStatus === "verified" && (
-                                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                {(tp as any).isPromotedAd ? (
+                                  <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.2 rounded font-extrabold uppercase shrink-0">
+                                    Promoted
+                                  </span>
+                                ) : (
+                                  tp.verificationStatus === "verified" && (
+                                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  )
                                 )}
                               </div>
                               <p className="text-[10px] text-slate-500 truncate">
@@ -1728,7 +1941,7 @@ export default function FindTrades() {
                 Trending in {profile?.postcode?.split(' ')[0] || "Your Area"}
               </h2>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+            <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
               {topRatedNearYou.map((tp, index) => {
                 let testRecmd = tp.totalRecommendations || 0;
                 let testReviews = tp.totalReviews || 0;
@@ -1738,32 +1951,37 @@ export default function FindTrades() {
                   key={tp.uid} 
                   to={`/profile/${tp.uid}`}
                   state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
-                  className="flex-shrink-0 w-28 bg-white p-3 rounded-2xl border-2 border-black shadow-sm hover:shadow-md transition-shadow text-center"
+                  className="flex-shrink-0 w-36 bg-white p-3 rounded-2xl border border-black shadow-sm hover:shadow-md transition-all text-center flex flex-col items-center justify-between overflow-hidden"
                 >
-                  <div className="relative mb-2 mx-auto">
-                    <div className="w-14 h-14 bg-slate-800 rounded-2xl flex items-center justify-center text-white font-bold text-xl mx-auto">
-                      {tp.avatarUrl ? (
-                        <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover rounded-2xl" referrerPolicy="no-referrer" />
-                      ) : (
-                        tp.name.charAt(0)
+                  <div className="w-full flex flex-col items-center">
+                    <div className="relative mb-2 shrink-0">
+                      <div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center text-slate-800 font-bold text-xl border border-slate-200">
+                        {tp.avatarUrl ? (
+                          <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          tp.name.charAt(0)
+                        )}
+                      </div>
+                      {tp.verificationStatus === "verified" && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center border border-white shadow-sm" title="Verified Trade">
+                          <ShieldCheck className="w-3 h-3 text-white" />
+                        </div>
                       )}
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center border-2 border-black">
-                      <SlidersHorizontal className="w-3 h-3 text-white" />
-                    </div>
+                    <h3 className="text-xs font-bold text-slate-900 truncate w-full px-0.5 mb-0.5" title={tp.name}>{tp.name}</h3>
+                    <p className="text-[10px] text-slate-500 truncate w-full px-0.5 mb-2">{tp.trades?.[0] || 'Tradesperson'}</p>
                   </div>
-                  <h3 className="text-xs font-bold text-slate-900 truncate mb-1">{tp.name}</h3>
-                  <p className="text-[10px] text-slate-500 truncate mb-1">{tp.trades?.[0] || 'Tradesperson'}</p>
-                  <div className="flex flex-col items-center justify-center gap-1">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-3 h-3 text-orange-500 fill-orange-500" />
-                      <span className="text-[10px] font-bold text-slate-900">{tp.rating || 'N/A'}</span>
-                      <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">({testReviews})</span>
+
+                  <div className="w-full pt-1.5 border-t border-slate-100 flex flex-col items-center gap-1">
+                    <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-900">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                      <span>{tp.rating ? Number(tp.rating).toFixed(1) : 'N/A'}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">({testReviews})</span>
                     </div>
                     {testRecmd > 0 && (
-                      <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-md px-1 py-0.5 text-green-800 shrink-0">
-                        <Users className="w-2.5 h-2.5 text-green-700" />
-                        <span className="text-[7.5px] font-black uppercase tracking-widest text-green-900 shrink-0 whitespace-nowrap">Recmd By {testRecmd}</span>
+                      <div className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-1 py-0.5 flex items-center justify-center gap-1 text-[8.5px] font-bold text-emerald-800 truncate">
+                        <Users className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                        <span className="truncate">{testRecmd} Recmds</span>
                       </div>
                     )}
                   </div>
@@ -2595,19 +2813,25 @@ export default function FindTrades() {
           >
             <div className="flex items-center gap-2 min-w-0">
               <div className="flex -space-x-2 shrink-0">
-                {compareTradersList.map((tp) => (
-                  <div key={tp.uid} className="w-8 h-8 rounded-full border-2 border-slate-900 bg-slate-800 overflow-hidden text-[10px] font-black flex items-center justify-center text-white">
-                    {tp.avatarUrl ? (
-                      <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" />
-                    ) : (
-                      tp.name.charAt(0)
-                    )}
-                  </div>
-                ))}
+                {compareTradersList.map((tp, idx) => {
+                  const theme = COMPARE_THEMES[idx % COMPARE_THEMES.length];
+                  return (
+                    <div key={tp.uid} className={cn("relative w-8 h-8 rounded-full border-2 border-slate-900 bg-slate-800 overflow-hidden text-[10px] font-black flex items-center justify-center text-white shrink-0", theme.avatarRing)}>
+                      {tp.avatarUrl ? (
+                        <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" />
+                      ) : (
+                        tp.name.charAt(0)
+                      )}
+                      <span className={cn("absolute bottom-0 right-0 w-3.5 h-3.5 text-[8px] font-black rounded-full flex items-center justify-center border border-white shadow-xs", theme.badgeBg, theme.badgeText)}>
+                        {idx + 1}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
               <div className="truncate">
                 <p className="text-xs font-bold text-white truncate">{selectedCompareIds.length} Trader{selectedCompareIds.length > 1 ? 's' : ''} Selected</p>
-                <p className="text-[10px] text-slate-400">Ready for side-by-side comparison</p>
+                <p className="text-[10px] text-slate-400">Color-coded side-by-side comparison</p>
               </div>
             </div>
 
@@ -2639,7 +2863,7 @@ export default function FindTrades() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white border-2 border-black rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+              className="bg-white border-2 border-black rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
             >
               {/* Header */}
               <div className="p-4 sm:p-6 bg-slate-900 text-white flex items-center justify-between border-b-2 border-black shrink-0">
@@ -2649,7 +2873,7 @@ export default function FindTrades() {
                   </div>
                   <div>
                     <h2 className="text-lg sm:text-xl font-bold">Side-by-Side Comparison</h2>
-                    <p className="text-xs text-slate-400">Comparing {compareTradersList.length} verified tradespeople</p>
+                    <p className="text-xs text-slate-400">Comparing {compareTradersList.length} tradespeople with matching color sequence</p>
                   </div>
                 </div>
                 <button
@@ -2662,126 +2886,214 @@ export default function FindTrades() {
               </div>
 
               {/* Matrix Content */}
-              <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
-                {/* Profiles Column Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 divide-x divide-slate-200">
-                  {compareTradersList.map((tp) => (
-                    <div key={tp.uid} className="px-2 flex flex-col items-center text-center">
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-800 overflow-hidden border-2 border-black mb-2 relative">
-                        {tp.avatarUrl ? (
-                          <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-2xl font-bold text-white flex items-center justify-center h-full">{tp.name.charAt(0)}</span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => toggleCompareTrader(tp.uid, e)}
-                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors cursor-pointer"
-                          title="Remove from comparison"
+              <div className="p-2.5 sm:p-6 overflow-y-auto flex-1 space-y-3.5 sm:space-y-5">
+                {/* Profiles Column Grid Header */}
+                <div className="w-full">
+                  <div className={cn(
+                    "grid gap-1.5 sm:gap-3 w-full",
+                    compareTradersList.length === 2 ? "grid-cols-2" : compareTradersList.length === 4 ? "grid-cols-4" : "grid-cols-3"
+                  )}>
+                    {compareTradersList.map((tp, idx) => {
+                      const theme = COMPARE_THEMES[idx % COMPARE_THEMES.length];
+                      return (
+                        <div 
+                          key={tp.uid} 
+                          className={cn("p-2 sm:p-3 rounded-2xl flex flex-col items-center text-center relative shadow-xs transition-all min-w-0 pt-2.5 sm:pt-3", theme.cardBg)}
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-tight truncate w-full">{tp.name}</h3>
-                      <p className="text-xs text-slate-500 font-medium truncate w-full">{tp.trades?.[0] || 'Professional'}</p>
-                    </div>
-                  ))}
+                          {/* Top-Right Remove Cross Button (Not overlapping avatar) */}
+                          <button
+                            type="button"
+                            onClick={(e) => toggleCompareTrader(tp.uid, e)}
+                            className="absolute top-1.5 right-1.5 p-1 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors cursor-pointer shadow-xs z-10"
+                            title="Remove from comparison"
+                          >
+                            <X className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                          </button>
+
+                          {/* Position Number Pill */}
+                          <div className="flex items-center gap-1 mb-1.5">
+                            <span className={cn("px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-xs whitespace-nowrap", theme.badgeBg, theme.badgeText)}>
+                              Trader #{idx + 1}
+                            </span>
+                          </div>
+
+                          {/* Profile Avatar (Unobstructed) */}
+                          <div className="w-11 h-11 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-slate-800 overflow-hidden border-2 border-black mb-1.5 shrink-0 shadow-sm">
+                            {tp.avatarUrl ? (
+                              <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-base sm:text-2xl font-bold text-white flex items-center justify-center h-full">{tp.name.charAt(0)}</span>
+                            )}
+                          </div>
+                          <h3 className="font-extrabold text-slate-900 text-[11px] sm:text-base leading-tight truncate w-full px-0.5" title={tp.name}>{tp.name}</h3>
+                          <p className="text-[9.5px] sm:text-[11px] text-slate-600 font-bold truncate w-full px-0.5">{tp.trades?.[0] || 'Professional'}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Metric Section: Rating & Reviews */}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-black space-y-3">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> Star Rating & Reviews
+                <div className="bg-slate-50 p-2.5 sm:p-4 rounded-2xl border border-black space-y-2">
+                  <h4 className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" /> Star Rating & Reviews
                   </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
-                    {compareTradersList.map((tp) => (
-                      <div key={tp.uid} className="space-y-1">
-                        <p className="text-lg font-extrabold text-slate-900 flex items-center justify-center gap-1">
-                          {tp.rating?.toFixed(1) || '5.0'}
-                          <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                        </p>
-                        <p className="text-xs text-slate-500 font-medium">{tp.totalReviews || 0} reviews</p>
-                      </div>
-                    ))}
+                  <div className="w-full">
+                    <div className={cn(
+                      "grid gap-1.5 sm:gap-2.5 text-center w-full",
+                      compareTradersList.length === 2 ? "grid-cols-2" : compareTradersList.length === 4 ? "grid-cols-4" : "grid-cols-3"
+                    )}>
+                      {compareTradersList.map((tp, idx) => {
+                        const theme = COMPARE_THEMES[idx % COMPARE_THEMES.length];
+                        return (
+                          <div key={tp.uid} className={cn("p-1.5 sm:p-2.5 rounded-xl flex flex-col items-center justify-center space-y-0.5 min-w-0 transition-all", theme.cellBg)}>
+                            <div className="flex items-center gap-1 mb-0.5 max-w-full">
+                              <span className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full text-[8.5px] sm:text-[9px] font-black flex items-center justify-center shrink-0 shadow-xs", theme.badgeBg, theme.badgeText)}>
+                                {idx + 1}
+                              </span>
+                              <span className="text-[9.5px] sm:text-[10px] font-extrabold text-slate-800 truncate">{tp.name.split(' ')[0]}</span>
+                            </div>
+                            <p className="text-xs sm:text-base font-black text-slate-900 flex items-center justify-center gap-0.5 sm:gap-1">
+                              {tp.rating?.toFixed(1) || '5.0'}
+                              <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-slate-600 font-bold truncate">{tp.totalReviews || 0} reviews</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
                 {/* Metric Section: Pricing & Rates */}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-black space-y-3">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Briefcase className="w-4 h-4 text-blue-600" /> Rates & Call-Out Fees
+                <div className="bg-slate-50 p-2.5 sm:p-4 rounded-2xl border border-black space-y-2">
+                  <h4 className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" /> Rates & Call-Out Fees
                   </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
-                    {compareTradersList.map((tp) => (
-                      <div key={tp.uid} className="space-y-1">
-                        <p className="text-sm font-bold text-slate-900">
-                          Call-Out: <span className="text-blue-600 font-black">£{tp.miniProfileSettings?.callOutFee || 0}</span>
-                        </p>
-                        <p className="text-xs text-slate-600">
-                          Hourly: <span className="font-bold">£{tp.miniProfileSettings?.hourlyRate || 0}/hr</span>
-                        </p>
-                      </div>
-                    ))}
+                  <div className="w-full">
+                    <div className={cn(
+                      "grid gap-1.5 sm:gap-2.5 text-center w-full",
+                      compareTradersList.length === 2 ? "grid-cols-2" : compareTradersList.length === 4 ? "grid-cols-4" : "grid-cols-3"
+                    )}>
+                      {compareTradersList.map((tp, idx) => {
+                        const theme = COMPARE_THEMES[idx % COMPARE_THEMES.length];
+                        return (
+                          <div key={tp.uid} className={cn("p-1.5 sm:p-2.5 rounded-xl flex flex-col items-center justify-center space-y-0.5 min-w-0 transition-all", theme.cellBg)}>
+                            <div className="flex items-center gap-1 mb-0.5 max-w-full">
+                              <span className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full text-[8.5px] sm:text-[9px] font-black flex items-center justify-center shrink-0 shadow-xs", theme.badgeBg, theme.badgeText)}>
+                                {idx + 1}
+                              </span>
+                              <span className="text-[9.5px] sm:text-[10px] font-extrabold text-slate-800 truncate">{tp.name.split(' ')[0]}</span>
+                            </div>
+                            <p className="text-[10px] sm:text-xs font-extrabold text-slate-900 leading-tight">
+                              Call-Out: <span className="text-blue-700 font-black">£{tp.miniProfileSettings?.callOutFee || 0}</span>
+                            </p>
+                            <p className="text-[9.5px] sm:text-[10.5px] text-slate-700 font-bold leading-tight">
+                              Hourly: <span className="font-extrabold text-slate-900">£{tp.miniProfileSettings?.hourlyRate || 0}/hr</span>
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
                 {/* Metric Section: Emergency & Reply Time */}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-black space-y-3">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-emerald-600" /> Emergency & Availability
+                <div className="bg-slate-50 p-2.5 sm:p-4 rounded-2xl border border-black space-y-2">
+                  <h4 className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Emergency & Availability
                   </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
-                    {compareTradersList.map((tp) => (
-                      <div key={tp.uid} className="space-y-1">
-                        {tp.isAvailableForEmergency ? (
-                          <span className="inline-block px-2.5 py-0.5 bg-red-100 text-red-700 font-extrabold text-[10px] rounded-full uppercase tracking-wider border border-red-200">
-                            24/7 Emergency
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-500 font-medium">Standard Hours</span>
-                        )}
-                        <p className="text-xs text-slate-500">&lt; 1 hr avg reply</p>
-                      </div>
-                    ))}
+                  <div className="w-full">
+                    <div className={cn(
+                      "grid gap-1.5 sm:gap-2.5 text-center w-full",
+                      compareTradersList.length === 2 ? "grid-cols-2" : compareTradersList.length === 4 ? "grid-cols-4" : "grid-cols-3"
+                    )}>
+                      {compareTradersList.map((tp, idx) => {
+                        const theme = COMPARE_THEMES[idx % COMPARE_THEMES.length];
+                        return (
+                          <div key={tp.uid} className={cn("p-1.5 sm:p-2.5 rounded-xl flex flex-col items-center justify-center space-y-0.5 min-w-0 transition-all", theme.cellBg)}>
+                            <div className="flex items-center gap-1 mb-0.5 max-w-full">
+                              <span className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full text-[8.5px] sm:text-[9px] font-black flex items-center justify-center shrink-0 shadow-xs", theme.badgeBg, theme.badgeText)}>
+                                {idx + 1}
+                              </span>
+                              <span className="text-[9.5px] sm:text-[10px] font-extrabold text-slate-800 truncate">{tp.name.split(' ')[0]}</span>
+                            </div>
+                            {tp.isAvailableForEmergency ? (
+                              <span className="inline-block px-1.5 py-0.5 bg-red-100 text-red-800 font-extrabold text-[8px] sm:text-[9px] rounded-full uppercase tracking-wider border border-red-300 truncate max-w-full">
+                                24/7 Emergency
+                              </span>
+                            ) : (
+                              <span className="text-[10px] sm:text-[11px] text-slate-700 font-bold truncate">Standard</span>
+                            )}
+                            <p className="text-[8.5px] sm:text-[10px] text-slate-500 font-medium truncate">&lt; 1 hr avg reply</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
                 {/* Metric Section: Verification & Badges */}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-black space-y-3">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" /> Verification & Badges
+                <div className="bg-slate-50 p-2.5 sm:p-4 rounded-2xl border border-black space-y-2">
+                  <h4 className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" /> Verification & Badges
                   </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
-                    {compareTradersList.map((tp) => (
-                      <div key={tp.uid} className="space-y-1">
-                        {tp.verificationStatus === "verified" ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600">
-                            <ShieldCheck className="w-3.5 h-3.5" /> ID Verified
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400">Basic Member</span>
-                        )}
-                        <p className="text-[11px] font-bold text-slate-600">{tp.totalJobsDone || 0} jobs done</p>
-                      </div>
-                    ))}
+                  <div className="w-full">
+                    <div className={cn(
+                      "grid gap-1.5 sm:gap-2.5 text-center w-full",
+                      compareTradersList.length === 2 ? "grid-cols-2" : compareTradersList.length === 4 ? "grid-cols-4" : "grid-cols-3"
+                    )}>
+                      {compareTradersList.map((tp, idx) => {
+                        const theme = COMPARE_THEMES[idx % COMPARE_THEMES.length];
+                        return (
+                          <div key={tp.uid} className={cn("p-1.5 sm:p-2.5 rounded-xl flex flex-col items-center justify-center space-y-0.5 min-w-0 transition-all", theme.cellBg)}>
+                            <div className="flex items-center gap-1 mb-0.5 max-w-full">
+                              <span className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full text-[8.5px] sm:text-[9px] font-black flex items-center justify-center shrink-0 shadow-xs", theme.badgeBg, theme.badgeText)}>
+                                {idx + 1}
+                              </span>
+                              <span className="text-[9.5px] sm:text-[10px] font-extrabold text-slate-800 truncate">{tp.name.split(' ')[0]}</span>
+                            </div>
+                            {tp.verificationStatus === "verified" ? (
+                              <span className="inline-flex items-center gap-0.5 text-[9.5px] sm:text-[11px] font-extrabold text-blue-700 truncate">
+                                <ShieldCheck className="w-3 h-3 shrink-0" /> Verified
+                              </span>
+                            ) : (
+                              <span className="text-[9.5px] sm:text-[11px] text-slate-500 font-medium truncate">Basic</span>
+                            )}
+                            <p className="text-[8.5px] sm:text-[10px] font-bold text-slate-700 truncate">{tp.totalJobsDone || 0} jobs done</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
                 {/* Direct Actions */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                  {compareTradersList.map((tp) => (
-                    <button
-                      key={tp.uid}
-                      type="button"
-                      onClick={() => {
-                        setIsCompareModalOpen(false);
-                        setSelectedTraderPreview(tp);
-                      }}
-                      className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer"
-                    >
-                      Request Quote
-                    </button>
-                  ))}
+                <div className="w-full pt-1">
+                  <div className={cn(
+                    "grid gap-1.5 sm:gap-2.5 w-full",
+                    compareTradersList.length === 2 ? "grid-cols-2" : compareTradersList.length === 4 ? "grid-cols-4" : "grid-cols-3"
+                  )}>
+                    {compareTradersList.map((tp, idx) => {
+                      const theme = COMPARE_THEMES[idx % COMPARE_THEMES.length];
+                      return (
+                        <button
+                          key={tp.uid}
+                          type="button"
+                          onClick={() => {
+                            setIsCompareModalOpen(false);
+                            setSelectedTraderPreview(tp);
+                          }}
+                          className={cn(
+                            "w-full py-2 sm:py-2.5 px-1 sm:px-2 font-extrabold rounded-xl text-[10px] sm:text-xs shadow-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1 truncate",
+                            theme.btnBg
+                          )}
+                        >
+                          <span className="truncate">Quote #{idx + 1}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </motion.div>
