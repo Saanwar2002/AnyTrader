@@ -157,3 +157,24 @@ body.keyboard-is-open {
   /* Prevent background scrolling locking while maintaining form focus */
   overflow-y: auto !important;
 }
+
+@keyframes slowScrollMarquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-slow-scroll {
+  display: flex;
+  width: max-content;
+  animation: slowScrollMarquee 35s linear infinite;
+}
+
+.animate-slow-scroll:hover,
+.animate-slow-scroll:active,
+.animate-slow-scroll:focus-within {
+  animation-play-state: paused;
+}

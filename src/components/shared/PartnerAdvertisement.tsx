@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ChevronRight, Zap, Briefcase, ShieldCheck, Star, Gift, ShieldAlert, Award, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { collection, query, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, updateDoc, setDoc, increment, addDoc, serverTimestamp } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../../firebase";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../AuthProvider";
@@ -134,7 +134,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
 
   const handleAdClick = async (clickedAd: any) => {
     // Only track clicks for database-driven ads
-    if (clickedAd.id && clickedAd.id !== "default-1" && clickedAd.id !== "default-2") {
+    if (clickedAd.id && !String(clickedAd.id).startsWith("default") && !String(clickedAd.id).startsWith("seed-")) {
       try {
         const updateData: any = { clicks: increment(1), bannerClicks: increment(1) };
         const cost = clickedAd.costPerDisplay || 0;
@@ -180,7 +180,7 @@ export default function PartnerAdvertisement({ role = "tradesperson", category }
           }
         }
         
-        await updateDoc(doc(db, "advertisements", clickedAd.id), updateData);
+        await setDoc(doc(db, "advertisements", clickedAd.id), updateData, { merge: true });
       } catch (e) {
         console.error("Failed to track ad click", e);
       }

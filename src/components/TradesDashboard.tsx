@@ -250,7 +250,17 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
   };
 
   useEffect(() => {
-    if (!user || !profile) return;
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     // Fetch active quotes
     const quotesQuery = query(
@@ -419,12 +429,6 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       fetchRecommendations(false);
     }
   }, [user, profile, activeJobs.length]);
-
-  if (loading) return (
-    <div className="py-12 flex justify-center">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    </div>
-  );
 
   return (
     <div className={cn("space-y-6", !isSubView && "pb-12")}>

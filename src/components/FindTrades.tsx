@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { TRADE_CATEGORIES, PROFESSIONAL_BADGES } from "@/src/constants";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { SEO } from "./SEO";
-import { seedMockTraders } from "@/src/services/seedService";
+import { seedMockTraders, INITIAL_MOCK_TRADERS } from "@/src/services/seedService";
 import { Capacitor } from '@capacitor/core';
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import { toast } from "sonner";
@@ -160,7 +160,7 @@ export default function FindTrades() {
   const location = useLocation();
   const { categories } = useCategories();
   const { user, profile } = useAuth();
-  const [tradespeople, setTradespeople] = useState<Tradesperson[]>([]);
+  const [tradespeople, setTradespeople] = useState<Tradesperson[]>(INITIAL_MOCK_TRADERS as any[]);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
   
   const isB2B = location.state?.isB2B;
@@ -168,7 +168,7 @@ export default function FindTrades() {
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [userAssets, setUserAssets] = useState<any[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortBy, setSortBy] = useState("Top Rated");
@@ -734,10 +734,11 @@ export default function FindTrades() {
     const q = query(collection(db, "users"), where("role", "==", "tradesperson"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Tradesperson));
-      if (data.length === 0) {
+      if (data.length > 0) {
+        setTradespeople(data);
+      } else {
         seedMockTraders().catch(console.error);
       }
-      setTradespeople(data);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching tradespeople:", error);
@@ -1073,7 +1074,7 @@ export default function FindTrades() {
 
   // Handle logging clicks and deducting budget on promoted profile clicks
   const handlePromotedCardClick = async (tp: any) => {
-    if (tp.isPromotedAd && tp.adId) {
+    if (tp.isPromotedAd && tp.adId && !String(tp.adId).startsWith("default") && !String(tp.adId).startsWith("seed-")) {
       try {
         const adRef = doc(db, "advertisements", tp.adId);
         const cost = tp.costPerDisplay || 1.00;
@@ -1093,7 +1094,7 @@ export default function FindTrades() {
           updateData.lastAutoTopUpAt = new Date().toISOString();
         }
 
-        await updateDoc(adRef, updateData);
+        await setDoc(adRef, updateData, { merge: true });
       } catch (e) {
         console.error("Error logging promoted profile click:", e);
       }
@@ -1145,11 +1146,53 @@ export default function FindTrades() {
 
   const sortOptions = ["Top Rated", "Most Reviews", "Response Rate", "Most Jobs Done", "Near Me"];
 
+  // Criteria & Fair Equal-Chance Rotation for Trending Profiles:
+  // 1. Max 10 profiles limit (increased from 5).
+  // 2. Score & filter candidates using composite threshold criteria: rating (>=4.0), local postcode proximity, recommendations & verification.
+  // 3. Apply a fair periodic rotation across qualifying candidates to give all eligible local traders equal visibility.
   const topRatedNearYou = useMemo(() => {
-    return [...tradespeople]
-      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-      .slice(0, 5);
-  }, [tradespeople]);
+    if (!tradespeople || tradespeople.length === 0) return [];
+
+    const userPrefix = profile?.postcode?.trim().split(' ')[0]?.toUpperCase() || "";
+
+    // Score candidates based on composite quality metrics & area match
+    const scored = tradespeople.map((tp) => {
+      const ratingScore = (tp.rating || 4.5) * 20; // up to 100
+      const recsScore = Math.min((tp.totalRecommendations || 0) * 2, 20); // up to 20
+      const verifiedBonus = tp.verificationStatus === "verified" ? 15 : 0;
+      
+      const tpPostcode = (tp.postcode || "").trim().toUpperCase();
+      const areaMatchBonus = (userPrefix && tpPostcode.startsWith(userPrefix)) ? 25 : 0;
+
+      const totalScore = ratingScore + recsScore + verifiedBonus + areaMatchBonus;
+      return { tp, score: totalScore, isAreaMatch: !!(userPrefix && tpPostcode.startsWith(userPrefix)) };
+    });
+
+    // Sort by composite score descending
+    scored.sort((a, b) => b.score - a.score);
+
+    // Filter qualifying pool (traders meeting quality threshold: rating >= 4.0 or area match)
+    let qualifyingPool = scored.filter(item => (item.tp.rating || 0) >= 4.0 || item.isAreaMatch);
+    if (qualifyingPool.length < 5) {
+      qualifyingPool = scored.slice(0, 20); // Fallback to top 20 if strict threshold yields few candidates
+    } else if (qualifyingPool.length > 20) {
+      qualifyingPool = qualifyingPool.slice(0, 20); // Keep top 20 qualifying pool for rotation
+    }
+
+    // Fair Equal-Chance Rotation: Time/session-based rotation seed so every qualifying trader gets equal exposure
+    const rotationSeed = Math.floor(Date.now() / (1000 * 60 * 15)); // Rotates every 15 minutes or session update
+    const candidates = qualifyingPool.map(item => item.tp);
+
+    // Deterministic shuffle using candidate UID & rotation seed
+    const shuffled = [...candidates].sort((a, b) => {
+      const hashA = (a.uid.charCodeAt(0) + rotationSeed) % 17;
+      const hashB = (b.uid.charCodeAt(0) + rotationSeed) % 17;
+      return hashA - hashB;
+    });
+
+    // Return maximum of 10 profiles for the trending section
+    return shuffled.slice(0, 10);
+  }, [tradespeople, profile?.postcode]);
 
   const hotSearches = [
     { label: "Emergency Plumber", query: "Plumber" },
@@ -1272,14 +1315,6 @@ export default function FindTrades() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-5xl mx-auto -mt-6 relative">
       {(platformConfig?.isDemo || true) && (
@@ -1330,10 +1365,17 @@ export default function FindTrades() {
               type="text"
               placeholder={isListening ? "Listening..." : "Name, trade, postcode..."}
               value={searchQuery}
-              onFocus={() => setIsSearchFocused(true)}
+              onFocus={() => {
+                setIsSearchFocused(true);
+                setSelectedCategory("All");
+              }}
+              onClick={() => {
+                setSelectedCategory("All");
+              }}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setIsSearchFocused(true);
+                setSelectedCategory("All");
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && searchQuery.trim()) {
@@ -1941,52 +1983,59 @@ export default function FindTrades() {
                 Trending in {profile?.postcode?.split(' ')[0] || "Your Area"}
               </h2>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
-              {topRatedNearYou.map((tp, index) => {
-                let testRecmd = tp.totalRecommendations || 0;
-                let testReviews = tp.totalReviews || 0;
-                
-                return (
-                <Link 
-                  key={tp.uid} 
-                  to={`/profile/${tp.uid}`}
-                  state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
-                  className="flex-shrink-0 w-36 bg-white p-3 rounded-2xl border border-black shadow-sm hover:shadow-md transition-all text-center flex flex-col items-center justify-between overflow-hidden"
-                >
-                  <div className="w-full flex flex-col items-center">
-                    <div className="relative mb-2 shrink-0">
-                      <div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center text-slate-800 font-bold text-xl border border-slate-200">
-                        {tp.avatarUrl ? (
-                          <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          tp.name.charAt(0)
+            <div className="overflow-hidden w-full pb-2 relative group">
+              <div className="animate-slow-scroll flex gap-3 w-max">
+                {(topRatedNearYou.length > 0 
+                  ? (topRatedNearYou.length < 6 
+                      ? [...topRatedNearYou, ...topRatedNearYou, ...topRatedNearYou, ...topRatedNearYou] 
+                      : [...topRatedNearYou, ...topRatedNearYou])
+                  : []
+                ).map((tp, index) => {
+                  let testRecmd = tp.totalRecommendations || 0;
+                  let testReviews = tp.totalReviews || 0;
+                  
+                  return (
+                  <Link 
+                    key={`${tp.uid}-${index}`} 
+                    to={`/profile/${tp.uid}`}
+                    state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
+                    className="flex-shrink-0 w-36 bg-white p-3 rounded-2xl border border-black shadow-sm hover:shadow-md transition-all text-center flex flex-col items-center justify-between overflow-hidden"
+                  >
+                    <div className="w-full flex flex-col items-center">
+                      <div className="relative mb-2 shrink-0">
+                        <div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center text-slate-800 font-bold text-xl border border-slate-200">
+                          {tp.avatarUrl ? (
+                            <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            tp.name.charAt(0)
+                          )}
+                        </div>
+                        {tp.verificationStatus === "verified" && (
+                          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center border border-white shadow-sm" title="Verified Trade">
+                            <ShieldCheck className="w-3 h-3 text-white" />
+                          </div>
                         )}
                       </div>
-                      {tp.verificationStatus === "verified" && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center border border-white shadow-sm" title="Verified Trade">
-                          <ShieldCheck className="w-3 h-3 text-white" />
+                      <h3 className="text-xs font-bold text-black truncate w-full px-0.5 mb-0.5" title={tp.name}>{tp.name}</h3>
+                      <p className="text-[10.5px] font-semibold text-black truncate w-full px-0.5 mb-2">{tp.trades?.[0] || 'Tradesperson'}</p>
+                    </div>
+
+                    <div className="w-full pt-1.5 border-t border-slate-100 flex flex-col items-center gap-1">
+                      <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-900">
+                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                        <span>{tp.rating ? Number(tp.rating).toFixed(1) : 'N/A'}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">({testReviews})</span>
+                      </div>
+                      {testRecmd > 0 && (
+                        <div className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-1 py-0.5 flex items-center justify-center gap-1 text-[8.5px] font-bold text-emerald-800 truncate">
+                          <Users className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                          <span className="truncate">{testRecmd} Recmds</span>
                         </div>
                       )}
                     </div>
-                    <h3 className="text-xs font-bold text-slate-900 truncate w-full px-0.5 mb-0.5" title={tp.name}>{tp.name}</h3>
-                    <p className="text-[10px] text-slate-500 truncate w-full px-0.5 mb-2">{tp.trades?.[0] || 'Tradesperson'}</p>
-                  </div>
-
-                  <div className="w-full pt-1.5 border-t border-slate-100 flex flex-col items-center gap-1">
-                    <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-900">
-                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                      <span>{tp.rating ? Number(tp.rating).toFixed(1) : 'N/A'}</span>
-                      <span className="text-[10px] text-slate-400 font-medium">({testReviews})</span>
-                    </div>
-                    {testRecmd > 0 && (
-                      <div className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-1 py-0.5 flex items-center justify-center gap-1 text-[8.5px] font-bold text-emerald-800 truncate">
-                        <Users className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                        <span className="truncate">{testRecmd} Recmds</span>
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              )})}
+                  </Link>
+                )})}
+              </div>
             </div>
           </div>
         </motion.div>

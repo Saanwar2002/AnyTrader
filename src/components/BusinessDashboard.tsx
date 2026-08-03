@@ -37,7 +37,17 @@ export default function BusinessDashboard() {
   }, [location.pathname, setActiveTab]);
 
   useEffect(() => {
-    if (!user || !profile) return;
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     // Fetch recent quotes across all business jobs
     const quotesQuery = query(
@@ -76,9 +86,7 @@ export default function BusinessDashboard() {
       unsubscribeAllJobs();
       unsubscribeQuotes();
     };
-  }, [user, profile]);
-
-  if (loading) return <div className="py-12 flex justify-center"><Loader2 className="animate-spin" /></div>;
+  }, [user]);
 
   const stats = {
     total: allJobs.length,

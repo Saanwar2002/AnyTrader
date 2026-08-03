@@ -12,7 +12,7 @@ import {
   ChevronRight, Plus, Loader2, AlertCircle, Star,
   Search, BarChart3, Zap as EmergencyIcon, Bot, Bell,
   MapPin, Image as ImageIcon, Video as VideoIcon,
-  ShieldCheck, Activity, Calendar as CalendarIcon
+  ShieldCheck, Activity, Calendar as CalendarIcon, Car
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
@@ -57,7 +57,17 @@ export default function Dashboard() {
   }, [user, profile]);
 
   useEffect(() => {
-    if (!user || !profile) return;
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     // Fetch recent quotes across all jobs
     const quotesQuery = query(
@@ -98,7 +108,7 @@ export default function Dashboard() {
       unsubscribeAllJobs();
       unsubscribeQuotes();
     };
-  }, [user, profile]);
+  }, [user]);
 
   useEffect(() => {
     if (allJobs.length > 0 && maintenancePredictions.length === 0 && !isGeneratingPredictions) {
@@ -158,8 +168,6 @@ export default function Dashboard() {
     
     return jobDate.toLocaleDateString('en-GB');
   };
-
-  if (loading) return <div className="py-12 flex justify-center"><Loader2 className="animate-spin" /></div>;
 
   const stats = {
     total: allJobs.length,
@@ -223,8 +231,8 @@ export default function Dashboard() {
       </button>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-4 gap-2.5">
-        <Link to="/find-trades" className="bg-white border border-black p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square">
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+        <Link to="/find-trades" className="bg-white border border-black p-2.5 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square">
           <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-blue-50 transition-colors shrink-0">
             <Search className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
           </div>
@@ -232,7 +240,7 @@ export default function Dashboard() {
         </Link>
         <Link 
           to="/analytics" 
-          className="bg-white border border-black p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
+          className="bg-white border border-black p-2.5 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
         >
           <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors shrink-0">
             <BarChart3 className="w-4 h-4 text-green-500" />
@@ -241,61 +249,44 @@ export default function Dashboard() {
         </Link>
         <Link 
           to="/post-emergency-job" 
-          className="bg-red-50 border border-red-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-red-700 hover:bg-red-100 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
+          className="bg-red-50 border border-black p-2.5 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-red-700 hover:bg-red-100 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
         >
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:bg-red-100 transition-colors border border-red-100 shrink-0">
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:bg-red-100 transition-colors border border-black/20 shrink-0">
             <EmergencyIcon className="w-4 h-4 text-red-600" />
           </div>
           <span className="text-[9px] sm:text-[10px] text-center leading-[1.1]">Emergency<br/>Fast Job Post</span>
         </Link>
-        <button 
-          onClick={async () => {
-             if (!user) return;
-             try {
-               const jobRef = doc(collection(db, "jobs"));
-               const matchRef = doc(collection(db, "instant_matches"));
-               const attemptRef = doc(collection(db, "instant_match_attempts"));
-               const batch = writeBatch(db);
-
-               batch.set(jobRef, {
-                 title: "Simulation Emergency Leak",
-                 description: "Water is everywhere. Full simulation job.",
-                 homeownerId: user.uid,
-                 status: "posted",
-                 boostTier: "instant_match",
-                 category: "Plumbing",
-                 subcategory: "Emergency Leak",
-                 createdAt: serverTimestamp(),
-               });
-               batch.set(matchRef, {
-                 jobId: jobRef.id,
-                 customerId: user.uid,
-                 status: "searching",
-                 createdAt: serverTimestamp()
-               });
-               batch.set(attemptRef, {
-                 instantMatchId: matchRef.id,
-                 traderId: user.uid,
-                 status: "pending",
-                 attemptNumber: 1,
-                 createdAt: serverTimestamp(),
-                 expiresAt: new Date(Date.now() + 60000).toISOString()
-               });
-               await batch.commit();
-               toast.success("Simulation triggered!")
-               navigate(`/job/${jobRef.id}`);
-             } catch (e: any) {
-               toast.error("Error: " + e.message);
-             }
-          }}
-          className="bg-orange-50 border border-orange-200 p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 font-bold text-orange-700 hover:bg-orange-100 transition-all shadow-sm group min-w-0 min-h-0 aspect-[4/5] sm:aspect-square"
-        >
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:bg-orange-100 transition-colors border border-orange-100 shrink-0">
-            <EmergencyIcon className="w-4 h-4 text-orange-600" />
-          </div>
-          <span className="text-[9px] sm:text-[10px] text-center leading-[1.1]">Simulate<br/>Instant Match</span>
-        </button>
       </div>
+
+      {/* Prominent Post New Job Section */}
+      <Link 
+        to="/post-job" 
+        className="w-full bg-gradient-to-br from-orange-50 via-amber-50 to-orange-50/80 border border-black p-4 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 shadow-sm hover:shadow-md transition-all group cursor-pointer"
+      >
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black text-white rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-black/20 group-hover:bg-slate-900 transition-colors mt-0.5 sm:mt-0">
+            <Plus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-display font-black text-black text-base sm:text-lg leading-tight">
+                Post a New Job
+              </h3>
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-orange-200/90 text-orange-950 px-2 py-0.5 rounded-full border border-black/20 whitespace-nowrap">
+                Free Quotes
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-800 font-extrabold mt-1 leading-snug">
+              Connect with top-rated local tradespeople in minutes
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-black text-white text-xs sm:text-sm font-bold px-4 py-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm group-hover:bg-slate-900 transition-all border border-black w-full sm:w-auto">
+          <span>Post Job Now</span>
+          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+        </div>
+      </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Emergency Taxi Requests Section */}
@@ -336,13 +327,14 @@ export default function Dashboard() {
               </div>
               Your Jobs
             </h2>
-            <Link to="/post-job" className="text-sm font-bold text-orange-600 hover:underline flex items-center gap-1 bg-orange-50 px-3 py-1.5 rounded-full">
-              <Plus className="w-4 h-4" />
-              Post new
-            </Link>
           </div>
           <div className="space-y-4">
-            {activeJobs.length === 0 ? (
+            {loading ? (
+              <div className="bg-slate-50 p-8 rounded-3xl border border-black animate-pulse flex items-center justify-center gap-3">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                <span className="text-sm font-bold text-slate-700">Loading your active jobs...</span>
+              </div>
+            ) : activeJobs.length === 0 ? (
               <div className="bg-slate-50 p-12 rounded-3xl border border-dashed border-black text-center space-y-3">
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-black">
                   <Briefcase className="w-8 h-8 text-slate-300" />

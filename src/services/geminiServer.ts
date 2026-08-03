@@ -1,5 +1,27 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
+import firebaseConfig from "../../firebase-applet-config.json" with { type: "json" };
+
+function getSafeAdminDb() {
+  try {
+    if (admin.apps.length === 0) {
+      admin.initializeApp({ projectId: firebaseConfig.projectId });
+    }
+    const app = admin.apps[0];
+    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+    return getFirestore(app, dbId);
+  } catch (e) {
+    try {
+      if (admin.apps.length > 0) {
+        return getFirestore(admin.apps[0], "(default)");
+      }
+    } catch (err) {
+      return null;
+    }
+    return null;
+  }
+}
 
 // Initialize the Gemini client lazily to avoid crashes if API key is missing on startup
 let genAI: GoogleGenAI | null = null;
@@ -26,12 +48,25 @@ async function getGlobalAiModel(): Promise<string> {
       return cachedAiModel;
    }
    try {
-      const db = admin.firestore();
-      const snap = await db.collection("platform_config").doc("global").get();
-      if (snap.exists) {
-         cachedAiModel = snap.data()?.aiModel || "gemini-2.5-flash";
-         lastCacheTime = Date.now();
-         return cachedAiModel as string;
+      const db = getSafeAdminDb();
+      if (db) {
+         let snap;
+         try {
+           snap = await db.collection("platform_config").doc("global").get();
+         } catch (dbErr: any) {
+           if (dbErr?.code === 5 || String(dbErr).includes("5 NOT_FOUND")) {
+             const app = admin.apps[0];
+             const defaultDb = getFirestore(app, "(default)");
+             snap = await defaultDb.collection("platform_config").doc("global").get();
+           } else {
+             throw dbErr;
+           }
+         }
+         if (snap && snap.exists) {
+            cachedAiModel = snap.data()?.aiModel || "gemini-2.5-flash";
+            lastCacheTime = Date.now();
+            return cachedAiModel as string;
+         }
       }
    } catch(e) { }
    return "gemini-2.5-flash"; // Default modern fast model
@@ -265,39 +300,54 @@ export async function getJobEstimate(
   let categoryJobCount = 0;
 
   try {
-    const db = admin.firestore();
-    const snap = await db.collection("jobs").limit(60).get();
-    
-    snap.docs.forEach(doc => {
-      const data = doc.data();
-      if (!data) return;
-
-      const jobPostcode = (data.postcode || "").trim().toUpperCase();
-      const jobArea = jobPostcode.split(' ')[0] || jobPostcode.slice(0, 4);
-      const isAreaMatch = jobArea && postcodeArea && (jobArea === postcodeArea || jobArea.startsWith(postcodeArea.slice(0, 2)));
-      const isCategoryMatch = data.category && category && (data.category.toLowerCase().includes(category.toLowerCase()) || category.toLowerCase().includes(data.category.toLowerCase()));
-
-      if (isAreaMatch) areaJobCount++;
-      if (isCategoryMatch) categoryJobCount++;
-
-      // Include anonymized data point if it matches area or category
-      if (isAreaMatch || isCategoryMatch) {
-        const recordedPrice = data.acceptedQuoteAmount || data.selectedBudget || data.estimateMin || 0;
-        const numPrice = typeof recordedPrice === 'number' ? recordedPrice : parseFloat(String(recordedPrice).replace(/[^0-9.]/g, '')) || 0;
-
-        if (numPrice > 0) {
-          historicalJobsContext.push({
-            category: data.category || "General",
-            postcodeArea: jobArea || "Local",
-            priceGBP: numPrice,
-            urgency: data.urgency || "routine",
-            status: data.status || "completed"
-          });
+    const db = getSafeAdminDb();
+    if (db) {
+      let snap: any = null;
+      try {
+        snap = await db.collection("jobs").limit(60).get();
+      } catch (dbErr: any) {
+        if (dbErr?.code === 5 || String(dbErr).includes("5 NOT_FOUND")) {
+          const app = admin.apps[0];
+          const defaultDb = getFirestore(app, "(default)");
+          snap = await defaultDb.collection("jobs").limit(60).get();
+        } else {
+          throw dbErr;
         }
       }
-    });
-  } catch (err) {
-    console.warn("Could not fetch historical job data for estimate confidence calculation:", err);
+
+      if (snap && snap.docs) {
+        snap.docs.forEach((doc: any) => {
+          const data = doc.data();
+          if (!data) return;
+
+          const jobPostcode = (data.postcode || "").trim().toUpperCase();
+          const jobArea = jobPostcode.split(' ')[0] || jobPostcode.slice(0, 4);
+          const isAreaMatch = jobArea && postcodeArea && (jobArea === postcodeArea || jobArea.startsWith(postcodeArea.slice(0, 2)));
+          const isCategoryMatch = data.category && category && (data.category.toLowerCase().includes(category.toLowerCase()) || category.toLowerCase().includes(data.category.toLowerCase()));
+
+          if (isAreaMatch) areaJobCount++;
+          if (isCategoryMatch) categoryJobCount++;
+
+          // Include anonymized data point if it matches area or category
+          if (isAreaMatch || isCategoryMatch) {
+            const recordedPrice = data.acceptedQuoteAmount || data.selectedBudget || data.estimateMin || 0;
+            const numPrice = typeof recordedPrice === 'number' ? recordedPrice : parseFloat(String(recordedPrice).replace(/[^0-9.]/g, '')) || 0;
+
+            if (numPrice > 0) {
+              historicalJobsContext.push({
+                category: data.category || "General",
+                postcodeArea: jobArea || "Local",
+                priceGBP: numPrice,
+                urgency: data.urgency || "routine",
+                status: data.status || "completed"
+              });
+            }
+          }
+        });
+      }
+    }
+  } catch (err: any) {
+    console.warn("Could not fetch historical job data for estimate confidence calculation:", err?.message || String(err));
   }
 
   const prompt = `
