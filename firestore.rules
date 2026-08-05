@@ -208,10 +208,19 @@ service cloud.firestore {
       allow write: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
     }
     match /properties/{propertyId} {
-      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow get: if true;
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.userId == request.auth.uid);
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /tenant_issues/{issueId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if isSignedIn();
     }
 
     match /field_agents/{agentId} {

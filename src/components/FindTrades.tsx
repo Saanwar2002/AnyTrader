@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, ChevronDown } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, ChevronDown, Trophy } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react-google-maps/api";
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { db, collection, query, where, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
-import { findFuzzySuggestion, buildCandidateDictionary, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
+import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
 import { cn } from "@/src/lib/utils";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
@@ -12,6 +12,9 @@ import { useCategories } from "../lib/CategoryProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { TRADE_CATEGORIES, PROFESSIONAL_BADGES } from "@/src/constants";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
+import { getTraderUnifiedTrustBadges } from "@/src/lib/trustBadges";
+import { TraderDocumentViewerModal } from "./TraderDocumentViewerModal";
+import { SlowTrustBadgesCarousel } from "./SlowTrustBadgesCarousel";
 import { SEO } from "./SEO";
 import { seedMockTraders, INITIAL_MOCK_TRADERS } from "@/src/services/seedService";
 import { Capacitor } from '@capacitor/core';
@@ -400,6 +403,7 @@ export default function FindTrades() {
   const [activeAds, setActiveAds] = useState<any[]>([]);
 
   const handleCategorySelect = (catName: string) => {
+    previousSearchQueryRef.current = "";
     setSelectedCategory(catName);
     setSearchQuery("");
     if (catName !== "All") {
@@ -437,6 +441,10 @@ export default function FindTrades() {
   // --- Fuzzy Matching State ---
   const [candidateDictionary, setCandidateDictionary] = useState<CandidateItem[]>([]);
   const [fuzzySuggestion, setFuzzySuggestion] = useState<FuzzyMatchResult | null>(null);
+
+  // --- Document Viewer Modal State ---
+  const [documentViewerTrader, setDocumentViewerTrader] = useState<any>(null);
+  const [documentViewerInitialBadge, setDocumentViewerInitialBadge] = useState<string>("liability_insurance");
 
   // Rebuild dictionary when tradespeople change
   useEffect(() => {
@@ -582,21 +590,13 @@ export default function FindTrades() {
   useEffect(() => {
     if (!selectedMiniProfile) return;
 
-    // Auto-close after 5 seconds
+    // Auto-close after 15 seconds
     const timeoutId = setTimeout(() => {
       setSelectedMiniProfile(null);
-    }, 5000);
-
-    // Auto-close on scroll
-    const handleScroll = () => {
-      setSelectedMiniProfile(null);
-    };
-
-    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    }, 15000);
 
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('scroll', handleScroll, { capture: true } as any);
     };
   }, [selectedMiniProfile]);
 
@@ -776,12 +776,7 @@ export default function FindTrades() {
     return tradespeople
       .filter(tp => !tp.isDisabled)
       .filter(tp => {
-        const matchesSearch = 
-          tp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          tp.trades?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          tp.services?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          tp.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          tp.postcode?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = matchTraderWithSearchQuery(tp, searchQuery, candidateDictionary);
         
         const matchesCategory = selectedCategory === "All" || tp.trades?.includes(selectedCategory);
         
@@ -862,18 +857,16 @@ export default function FindTrades() {
       // 1. Search Query Relevance Filter
       if (searchQuery.trim().length > 0) {
         const queryLower = searchQuery.toLowerCase().trim();
-        const tpMatches = 
-          tp.name.toLowerCase().includes(queryLower) ||
-          tp.businessName?.toLowerCase().includes(queryLower) ||
-          tp.trades?.some(t => t.toLowerCase().includes(queryLower)) ||
-          tp.services?.some(s => s.toLowerCase().includes(queryLower)) ||
-          tp.tags?.some(tag => tag.toLowerCase().includes(queryLower)) ||
-          tp.postcode?.toLowerCase().includes(queryLower);
+        const tpMatches = matchTraderWithSearchQuery(tp, searchQuery, candidateDictionary);
         
         const adMatches = 
           ad.title?.toLowerCase().includes(queryLower) ||
           ad.tagline?.toLowerCase().includes(queryLower) ||
-          ad.targetCategories?.some((cat: string) => cat.toLowerCase().includes(queryLower));
+          ad.targetCategories?.some((cat: string) => {
+            const catLower = cat.toLowerCase();
+            if (catLower === "all") return false;
+            return catLower.includes(queryLower) || queryLower.includes(catLower);
+          });
 
         if (!tpMatches && !adMatches) return false;
       }
@@ -1009,10 +1002,16 @@ export default function FindTrades() {
           });
         }
 
+        // Synonym & Trade Title Matches
+        const synonymMeta = CATEGORY_SYNONYMS[queryTrimmed];
+        const isSynonymMatch = synonymMeta && synonymMeta.categoryName.toLowerCase() === catNameLower;
+
         // Calculate relevance priority score
         let priority = 0;
         if (nameStartsWith) {
           priority = 100;
+        } else if (isSynonymMatch) {
+          priority = 90;
         } else if (nameMatches) {
           priority = 80;
         } else if (matchingSub && matchingSub.toLowerCase().startsWith(queryTrimmed)) {
@@ -1370,12 +1369,15 @@ export default function FindTrades() {
                 setSelectedCategory("All");
               }}
               onClick={() => {
+                setIsSearchFocused(true);
                 setSelectedCategory("All");
               }}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setIsSearchFocused(true);
-                setSelectedCategory("All");
+                if (e.target.value.trim().length > 0) {
+                  setSelectedCategory("All");
+                }
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && searchQuery.trim()) {
@@ -1436,7 +1438,7 @@ export default function FindTrades() {
           {/* Backdrop when search suggestion box is open to prevent card bleed-through */}
           {isSearchFocused && searchQuery.trim().length >= 1 && autocompleteSuggestions.hasSuggestions && (
             <div 
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[80] transition-opacity" 
+              className="fixed inset-0 bg-slate-900/15 backdrop-blur-[0.5px] z-[80] transition-opacity" 
               onClick={() => setIsSearchFocused(false)} 
             />
           )}
@@ -2310,9 +2312,18 @@ export default function FindTrades() {
                   className="bg-white p-6 relative w-full h-full flex flex-col justify-center min-h-[160px]"
                   style={{ transformStyle: 'preserve-3d' }}
                 >
+                  {/* 15s Auto-Close Visual Timer Bar */}
+                  <motion.div 
+                    initial={{ width: "100%" }}
+                    animate={{ width: "0%" }}
+                    transition={{ duration: 15, ease: "linear" }}
+                    className="absolute top-0 left-0 h-1 bg-[#0066cc] rounded-t-3xl z-30"
+                  />
+
                   <button 
                     onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(null); }}
                     className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors flex items-center justify-center z-20"
+                    title="Close Info"
                   >
                     <X className="w-4 h-4 text-slate-400 font-bold" />
                   </button>
@@ -2323,7 +2334,7 @@ export default function FindTrades() {
                     </div>
                     <div>
                       <h3 className="font-bold text-[#0066cc] text-xl tracking-tight leading-tight">Instant Info</h3>
-                      <p className="text-xs text-slate-400 font-medium">Pricing & Details</p>
+                      <p className="text-xs text-slate-400 font-medium">Pricing & Details • Auto-closes in 15s</p>
                     </div>
                   </div>
 
@@ -2348,6 +2359,89 @@ export default function FindTrades() {
                       </div>
                     )}
                   </div>
+
+                  {/* Performance Badges & Achievements Section (At Very Bottom) */}
+                  <div className="border-t border-slate-200 pt-3 mt-3 w-full">
+                    {/* Performance Metrics Bar */}
+                    <div className="grid grid-cols-3 gap-1.5 text-center mb-2.5 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                      <div>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Rating</p>
+                        <p className="text-xs font-black text-slate-900 flex items-center justify-center gap-0.5">
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                          {tp.rating?.toFixed(1) || "5.0"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Jobs Done</p>
+                        <p className="text-xs font-black text-slate-900 flex items-center justify-center gap-0.5">
+                          <Trophy className="w-3 h-3 text-purple-600" />
+                          {tp.totalJobsDone || 0}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Trust Score</p>
+                        <p className="text-xs font-black text-slate-900 flex items-center justify-center gap-0.5">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          {tp.trustScore || 95}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* All Earned Badges & Achievements */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">
+                          Badges & Achievements
+                        </span>
+                        <span className="text-[8px] text-slate-400 font-bold">
+                          {getTraderBadges(tp).length + (Array.from(new Set([...(tp.badges || []), ...(tp.searchFeedBadges || [])])).filter(id => !getTraderBadges(tp).some(b => b.id === id)).length)} Badges
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-1 max-h-[85px] overflow-y-auto pr-0.5">
+                        {/* 1. Dynamic Performance & Milestone Badges */}
+                        {getTraderBadges(tp).map((badge) => (
+                          <span 
+                            key={`dynamic-${badge.id}`} 
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold border shadow-2xs",
+                              badge.bgColor,
+                              badge.color,
+                              "border-current/20"
+                            )}
+                            title={badge.description}
+                          >
+                            {badge.icon}
+                            <span>{badge.label}</span>
+                          </span>
+                        ))}
+
+                        {/* 2. Professional Accreditation Badges */}
+                        {Array.from(new Set([...(tp.badges || []), ...(tp.searchFeedBadges || [])])).map((badgeId) => {
+                          const badge = PROFESSIONAL_BADGES.find(b => b.id === badgeId);
+                          if (!badge) return null;
+                          if (getTraderBadges(tp).some(b => b.id === badgeId)) return null;
+                          return (
+                            <span 
+                              key={`prof-${badge.id}`} 
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300"
+                            >
+                              <Award className="w-2.5 h-2.5 text-blue-600" />
+                              <span>{badge.label}</span>
+                            </span>
+                          );
+                        })}
+
+                        {/* Fallback if no badges exist */}
+                        {getTraderBadges(tp).length === 0 && (!tp.badges || tp.badges.length === 0) && (!tp.searchFeedBadges || tp.searchFeedBadges.length === 0) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-50 text-slate-600 border border-slate-200">
+                            <ShieldCheck className="w-2.5 h-2.5 text-blue-500" />
+                            <span>Verified AnyTrader Member</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div
@@ -2358,109 +2452,110 @@ export default function FindTrades() {
                   transition={{ duration: 0.3 }}
                   style={{ transformStyle: 'preserve-3d' }}
                 >
-                  <div className="p-4">
-                    <div className="flex gap-4">
-                {/* Photo: Large & Left-Aligned for rapid scanning */}
-                <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center text-white font-black text-2xl relative shrink-0 overflow-hidden shadow-inner">
-                  {tp.avatarUrl ? (
-                    <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    tp.name.charAt(0)
-                  )}
-                  {tp.isAvailableForEmergency && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-red-600 py-0.5 text-[8px] font-black tracking-widest text-white text-center uppercase">
-                      24/7
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <h3 className="font-bold text-slate-900 text-lg truncate group-hover:text-blue-600 transition-colors">
-                      {tp.name}
-                    </h3>
-                    {tp.verificationStatus === "verified" && (
-                      <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                    )}
-                  </div>
-                  
-                  <p className="text-xs text-slate-500 font-medium truncate mb-1.5">
-                    {tp.trades?.[0] || 'Professional'}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 text-[11px] font-bold text-slate-600 leading-normal">
-                     <div className="flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
-                      <span className="text-slate-900">{tp.rating?.toFixed(1) || '5.0'}</span>
-                      <span className="text-slate-400 font-medium tracking-tight whitespace-nowrap shrink-0">({testReviews})</span>
-                    </div>
-                    <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-md px-1.5 py-0.5 text-green-800 shrink-0">
-                      <Users className="w-2.5 h-2.5 text-green-700" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-green-900 shrink-0 whitespace-nowrap">Recmd By {testRecmd}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-slate-500">
-                      <MapPin className="w-3 h-3" />
-                      <span className="truncate">{tp.postcode?.split(' ')[0] || 'Local'}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-slate-500">
-                       <Clock className="w-3 h-3" />
-                       <span className="truncate">&lt; 1hr reply</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Badges & Trust Signals */}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border-2 border-black">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                  <span className="text-[10px] font-bold text-slate-800 tracking-tight">Available this week</span>
-                </div>
-                {typicalPriceHtml}
-              </div>
-
-              {searchFeedBadgeObjects.length > 0 && (
-                <div className="mt-3 grid grid-cols-2 gap-1.5">
-                  {searchFeedBadgeObjects.map((badge: any) => {
-                    const Icon = { ShieldCheck, Clock, FileText, Shield, CheckCircle, MapPin, Heart, Star }[badge.icon as string] as any;
-                    return (
-                      <div key={badge.id} className="flex items-center gap-1 py-0.5 overflow-hidden">
-                        <Icon className="w-3 h-3 shrink-0 text-blue-600" />
-                        <span className="text-[9px] leading-snug font-black text-blue-600 uppercase tracking-widest truncate">{badge.name}</span>
+                  <div className="p-3 sm:p-3.5">
+                    <div className="flex gap-3 items-center">
+                      {/* Photo: Compact & Left-Aligned */}
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-xl flex items-center justify-center text-white font-black text-xl relative shrink-0 overflow-hidden shadow-inner border border-black/20">
+                        {tp.avatarUrl ? (
+                          <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          tp.name.charAt(0)
+                        )}
+                        {tp.isAvailableForEmergency && (
+                          <div className="absolute bottom-0 left-0 right-0 bg-red-600 py-0.2 text-[7.5px] font-black tracking-widest text-white text-center uppercase">
+                            24/7
+                          </div>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
 
-              {/* Click Affordance & Compare Toggle */}
-              <div className="mt-3 pt-3 border-t-2 border-black flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={(e) => toggleCompareTrader(tp.uid, e)}
-                  className={cn(
-                    "px-1.5 py-0.5 text-[9.5px] font-bold rounded-md border flex items-center gap-0.5 transition-all cursor-pointer z-10 shrink-0",
-                    selectedCompareIds.includes(tp.uid)
-                      ? "bg-blue-600 text-white border-black shadow-xs"
-                      : "bg-slate-100 text-slate-800 border-black hover:bg-slate-200"
-                  )}
-                >
-                  {selectedCompareIds.includes(tp.uid) ? (
-                    <>
-                      <CheckSquare className="w-3 h-3 text-white shrink-0" /> Comparing
-                    </>
-                  ) : (
-                    <>
-                      <Square className="w-3 h-3 text-slate-500 shrink-0" /> Compare
-                    </>
-                  )}
-                </button>
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <h3 className="font-bold text-slate-900 text-base sm:text-lg truncate group-hover:text-blue-600 transition-colors leading-snug">
+                            {tp.name}
+                          </h3>
+                          {tp.verificationStatus === "verified" && (
+                            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                          )}
+                        </div>
+                        
+                        <p className="text-[11px] text-slate-500 font-semibold truncate mb-1 leading-tight">
+                          {tp.trades?.[0] || 'Professional'}
+                        </p>
 
-                <span className="text-xs font-bold text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                  View Profile & Quotes <ChevronRight className="w-3 h-3" />
-                </span>
-              </div>
-            </div>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] font-bold text-slate-600 leading-none">
+                          <div className="flex items-center gap-1">
+                            <Star className="w-3 h-3 text-orange-500 fill-orange-500" />
+                            <span className="text-slate-900 font-extrabold">{tp.rating?.toFixed(1) || '5.0'}</span>
+                            <span className="text-slate-400 font-medium tracking-tight shrink-0">({testReviews})</span>
+                          </div>
+                          <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded px-1 py-0.2 text-green-800 shrink-0">
+                            <Users className="w-2.5 h-2.5 text-green-700" />
+                            <span className="text-[8px] font-black uppercase tracking-widest text-green-900 shrink-0 whitespace-nowrap">Recmd By {testRecmd}</span>
+                          </div>
+                          <div className="flex items-center gap-0.5 font-black text-slate-900 shrink-0">
+                            <MapPin className="w-3 h-3 text-slate-900" />
+                            <span className="font-black text-slate-900 tracking-tight">{tp.postcode?.split(' ')[0] || 'Local'}</span>
+                          </div>
+                          <div className="flex items-center gap-0.5 text-slate-500">
+                             <Clock className="w-2.5 h-2.5" />
+                             <span className="truncate">&lt; 1hr reply</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Availability & Price Bar */}
+                    <div className="mt-2 flex items-center justify-between gap-2 bg-slate-50 p-1.5 px-2.5 rounded-lg border border-black text-[10px]">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(34,197,94,0.6)]" />
+                        <span className="font-bold text-slate-800">Available this week</span>
+                      </div>
+                      {typicalPriceHtml}
+                    </div>
+
+                    {/* 5 Unified Trust Checkmarks Very Slow Scrollable Carousel */}
+                    <div className="mt-1.5 pt-1 border-t border-slate-200">
+                      <SlowTrustBadgesCarousel
+                        trader={tp}
+                        onSelectBadge={(badgeId) => {
+                          setDocumentViewerTrader(tp);
+                          setDocumentViewerInitialBadge(badgeId);
+                        }}
+                        onOpenAllDocs={() => {
+                          setDocumentViewerTrader(tp);
+                          setDocumentViewerInitialBadge("liability_insurance");
+                        }}
+                      />
+                    </div>
+
+                    {/* Click Affordance & Compare Toggle */}
+                    <div className="mt-2 pt-1.5 border-t border-black flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={(e) => toggleCompareTrader(tp.uid, e)}
+                        className={cn(
+                          "px-2 py-0.5 text-[9px] font-bold rounded border flex items-center gap-1 transition-all cursor-pointer z-10 shrink-0",
+                          selectedCompareIds.includes(tp.uid)
+                            ? "bg-blue-600 text-white border-black shadow-2xs"
+                            : "bg-slate-100 text-slate-800 border-black hover:bg-slate-200"
+                        )}
+                      >
+                        {selectedCompareIds.includes(tp.uid) ? (
+                          <>
+                            <CheckSquare className="w-3 h-3 text-white shrink-0" /> Comparing
+                          </>
+                        ) : (
+                          <>
+                            <Square className="w-3 h-3 text-slate-500 shrink-0" /> Compare
+                          </>
+                        )}
+                      </button>
+
+                      <span className="text-[11px] font-black text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                        View Profile & Quotes <ChevronRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  </div>
             </motion.div>
             )}
             </AnimatePresence>
@@ -3159,23 +3254,23 @@ export default function FindTrades() {
           transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
           touchAction: "none"
         }}
-        className="fixed bottom-32 right-4 z-[110] bg-slate-950/95 backdrop-blur-md text-white py-1.5 px-1 rounded-2xl border border-white/20 shadow-2xl flex flex-col items-center gap-1.5 select-none cursor-grab active:cursor-grabbing w-11"
+        className="fixed bottom-32 right-4 z-[110] bg-slate-950/95 backdrop-blur-md text-white py-1 px-0.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col items-center gap-1 select-none cursor-grab active:cursor-grabbing w-8"
       >
         <div className="py-0.5 text-slate-500 hover:text-slate-300 transition-colors shrink-0">
-          <GripHorizontal className="w-3.5 h-3.5" />
+          <GripHorizontal className="w-2.5 h-2.5" />
         </div>
 
         <button
           type="button"
           onClick={() => setViewMode("list")}
           className={cn(
-            "w-9 h-11 rounded-xl text-[9px] font-black uppercase tracking-wider flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer shrink-0",
+            "w-6 h-8 rounded-xl text-[6.5px] font-black uppercase tracking-wider flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer shrink-0",
             viewMode === "list"
               ? "bg-blue-600 text-white shadow-sm font-black"
               : "text-slate-300 hover:text-white hover:bg-slate-800/80"
           )}
         >
-          <List className="w-3.5 h-3.5" />
+          <List className="w-2.5 h-2.5" />
           <span>List</span>
         </button>
 
@@ -3183,16 +3278,24 @@ export default function FindTrades() {
           type="button"
           onClick={() => setViewMode("map")}
           className={cn(
-            "w-9 h-11 rounded-xl text-[9px] font-black uppercase tracking-wider flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer shrink-0",
+            "w-6 h-8 rounded-xl text-[6.5px] font-black uppercase tracking-wider flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer shrink-0",
             viewMode === "map"
               ? "bg-blue-600 text-white shadow-sm font-black"
               : "text-slate-300 hover:text-white hover:bg-slate-800/80"
           )}
         >
-          <Map className="w-3.5 h-3.5" />
+          <Map className="w-2.5 h-2.5" />
           <span>Map</span>
         </button>
       </div>
+
+      {/* Trader Document & Compliance Proof Viewer Modal */}
+      <TraderDocumentViewerModal
+        isOpen={!!documentViewerTrader}
+        onClose={() => setDocumentViewerTrader(null)}
+        trader={documentViewerTrader}
+        initialBadgeId={documentViewerInitialBadge}
+      />
     </div>
   );
 }

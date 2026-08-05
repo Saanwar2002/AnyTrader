@@ -32,6 +32,37 @@ export const INITIAL_MOCK_TRADERS = [
     searchFeedBadges: ["verified", "fast_reply", "top_rated", "guarantee"],
     miniProfileSettings: { callOutFee: 45, hourlyRate: 65, extraInfo: "24/7 Emergency Gas Safe Engineer. Free phone estimates & upfront transparent pricing." },
     recommendedCategories: ["Plumbing", "Gas & Heating"],
+    videoVerificationStatus: "approved",
+    stripeConnected: true,
+    verificationDocs: [
+      {
+        type: "Public Liability Insurance",
+        status: "approved",
+        expiryDate: "2027-11-15",
+        policyNumber: "AXA-PL-992014",
+        fileName: "Marcus_Vance_Public_Liability_2M.pdf",
+        fileUrl: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800&auto=format&fit=crop&q=80",
+        autoCheck: { message: "Matched active £2M Public Liability cover on AXA Insurance API.", status: "passed", provider: "AXA UK Insurance API" }
+      },
+      {
+        type: "Gas Safe Register ID & WaterSafe",
+        status: "approved",
+        expiryDate: "2028-04-30",
+        regNumber: "GS-5839201-UK",
+        fileName: "Gas_Safe_Register_Card_Marcus_Vance.jpg",
+        fileUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800&auto=format&fit=crop&q=80",
+        autoCheck: { message: "Verified active Gas Safe Engineer #5839201 in Gas Safe Register API.", status: "passed", provider: "Gas Safe Register API" }
+      },
+      {
+        type: "Identity Verification (Passport/Driving License)",
+        status: "approved",
+        expiryDate: "2031-08-20",
+        idNumber: "VANCE880193MV99",
+        fileName: "UK_Driving_License_Marcus_Vance.jpg",
+        fileUrl: "https://images.unsplash.com/photo-1544717305-2782549b5136?w=800&auto=format&fit=crop&q=80",
+        autoCheck: { message: "Biometric photo ID matched against DVLA GB driver database.", status: "passed", provider: "DVLA Driver Verification API" }
+      }
+    ],
   },
   {
     uid: "seed-promoted-electrician",

@@ -19,6 +19,8 @@ import { registerForPushNotifications } from "./lib/pushNotifications";
 import { PortalProvider, usePortal } from "./lib/PortalContext";
 import PlatformSwitcher from "./components/shared/PlatformSwitcher";
 import { AppUpdateModal } from "./components/common/AppUpdateModal";
+import { ShareViewModal } from "./components/ShareViewModal";
+import { ShareType } from "./utils/shareUtils";
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { Camera } from '@capacitor/camera';
@@ -84,6 +86,7 @@ const SavedJourneys = lazyWithRetry(() => import("./components/SavedJourneys"));
 const RecurringJobManager = lazyWithRetry(() => import("./components/RecurringJobManager").then(m => ({ default: m.RecurringJobManager })));
 const AdReport = lazyWithRetry(() => import("./components/AdReport"));
 const TraderAdStudio = lazyWithRetry(() => import("./components/TraderAdStudio"));
+const TenantReportPortal = lazyWithRetry(() => import("./components/TenantReportPortal").then(m => ({ default: m.TenantReportPortal })));
 
 const PageSkeleton = () => (
   <div className="flex h-[50vh] items-center justify-center">
@@ -169,6 +172,48 @@ function DeepLinkListener() {
   }, [navigate]);
 
   return null;
+}
+
+function ShareGlobalContainer() {
+  const navigate = useNavigate();
+  const [shared, setShared] = useState<{ type: ShareType; id: string } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shareType = params.get("shareType") as ShareType | null;
+    const shareId = params.get("shareId");
+
+    if (shareType && shareId) {
+      setShared({ type: shareType, id: shareId });
+    }
+  }, []);
+
+  const handleClose = () => {
+    setShared(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("shareType");
+    url.searchParams.delete("shareId");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  };
+
+  const handleOpenChat = (recipientId?: string, jobTitle?: string) => {
+    if (recipientId) {
+      navigate(`/chat?recipientId=${recipientId}&jobTitle=${encodeURIComponent(jobTitle || 'Shared Trade')}`);
+    } else {
+      navigate('/chat');
+    }
+  };
+
+  if (!shared) return null;
+
+  return (
+    <ShareViewModal
+      shareType={shared.type}
+      shareId={shared.id}
+      onClose={handleClose}
+      onOpenChat={handleOpenChat}
+    />
+  );
 }
 
 export default function App() {
@@ -292,6 +337,7 @@ export default function App() {
       <BrowserRouter>
         <AppUpdateModal platformConfig={platformConfig} />
         <DeepLinkListener />
+        <ShareGlobalContainer />
         <ReferralTracker />
         <PortalProvider>
           <PlatformSwitcher />
@@ -302,6 +348,7 @@ export default function App() {
             <Route path="/ref/:code" element={<RefRedirect />} />
             <Route path="/ad-report/:id" element={<AdReport />} />
             <Route path="/ad-studio" element={<TraderAdStudio />} />
+            <Route path="/tenant-report" element={<TenantReportPortal />} />
           {!user ? (
             <>
               <Route path="/profile/:id" element={<PublicProfile />} />

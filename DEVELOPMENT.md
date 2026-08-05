@@ -1,5 +1,93 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🚀 Unified 5-Point Trust Checkmarks & Verified Document Proof Engine (Completed August 5, 2026)
+*   **5-Point Unified Trust Checkmarks System & Very Slow Scrollable Carousel (`trustBadges.ts`, `SlowTrustBadgesCarousel.tsx` & `TraderDocumentViewerModal.tsx`)**:
+    *   Unified, live-updated trust checkmarks displayed on every tradesperson profile card across search feeds (`FindTrades.tsx`) and public bio profiles (`PublicProfile.tsx`).
+    *   **Compact Square Badge Pills with 40% Reduced Height**:
+        *   Redesigned verification checkmark badges into compact squarish pills with rounded edges (`py-0.5 px-2 rounded-md border-black`) and ~40% reduced height for maximum visual efficiency.
+        *   Features a **very slow, continuous smooth auto-scrolling motion** (~16px/sec) that automatically pauses on touch or hover, guaranteeing 100% text legibility without awkward truncation.
+        *   Subtle left & right gradient masks offer a smooth fade transition.
+    *   **Compact Profile Cards & Inline Bold Postcode**:
+        *   Postcode moved inline into the metadata row directly adjacent to `RECMD BY`, preserving bold styling (`font-black text-slate-900`) while saving vertical space.
+        *   Streamlined vertical padding, avatar dimensions (`w-14 h-14` / `w-16 h-16`), meta spacing, and availability/pricing bars to eliminate empty whitespace and keep search cards tight and easy to scan vertically.
+    *   **5 Pillar Verification Vectors**:
+        1.  **🛡️ Public Liability Insurance** (£1M - £5M cover, policy number, insurer verification).
+        2.  **🔥 Category Regulated Trade License** (Gas Safe Register ID, NICEIC Electrical, FSA 5-Star Food Hygiene, Enhanced DBS Child Safety, DEFRA Pet Welfare, COSHH Safety, CSCS Master Builder, IMI Master Tech).
+        3.  **🪪 Verified ID & DBS** (DVLA Driving License / UK Passport & Criminal Record Clearance).
+        4.  **📹 Video Selfie Credential** (15-30s live camera biometric selfie recording with +35 match points).
+        5.  **🏦 AnyTrader £1,000 Guarantee & Bank** (Verified UK Business Bank via Stripe Connect & £1,000 Defect Workmanship Guarantee Cover).
+*   **Live Expiry & Expiration Engine**:
+    *   Evaluates `expiryDate` in `trader.verificationDocs` in real time.
+    *   Dynamically shifts checkmarks to red alert warnings (`EXPIRED CERTIFICATE`) if a document passes its expiration date, notifying the trader to re-upload proof.
+*   **Search Category Filtering Fix & Backdrop Clarity (`FindTrades.tsx`)**:
+    *   Resolved issue where selecting a category from the auto-complete suggestions dropdown would show the toast count (e.g., "2 traders found for Plumbing") but display unrelated traders.
+    *   Updated `onFocus` and `onClick` handlers on the search text box input so that selecting or tapping into the search box automatically resets the category tab filter back to `"All"`.
+    *   Adjusted the search overlay backdrop (`bg-slate-900/15 backdrop-blur-[0.5px]`) to significantly reduce blurriness and dimming, allowing users to clearly read background profile cards while browsing search suggestions.
+*   **Flipped Profile Card Performance Badges & Achievements (`FindTrades.tsx`)**:
+    *   Integrated performance-based badges, milestone achievements, and professional accreditation tags at the very bottom on the backside of flipped search feed profile cards (unlocked via the "INFO" button).
+    *   **Performance Metrics Bar**: Displays live star rating, completed jobs count, and trust score in a compact summary card.
+    *   **Dynamic Badge Engine**: Evaluates `getTraderBadges(tp)` in real-time (Top Rated 4.8+, Fast Responder, 50+/100+ Jobs Milestones, Auditioned/Vetted Pro, £1,000 Platform Guarantee, Community Hero, Local Favorite) alongside professional accreditation tags (Gas Safe, NICEIC, FENSA, DBS, Master Builder) in a scrollable wrap container.
+    *   **Scroll Persistence & Swipe Fix**: Removed scroll-based auto-close handlers so users can swipe up and down freely to read all available pricing details, metrics, and achievement badges on mobile without the flipped view collapsing, while safely preserving the 15-second automatic idle close timer.
+    *   **Ultra-Compact View Toggle**: Scaled down the floating vertical `[List / Map]` view toggle switcher by 30% in both width (`w-8`) and height (`h-8` buttons) with resized high-definition micro-icons (`w-2.5 h-2.5`) to maximize screen readability and prevent touch overlap with background tradesperson search feed content.
+*   **Public Profile Layout & Mobile Responsiveness Refinement (`PublicProfile.tsx` & `SlowTrustBadgesCarousel.tsx`)**:
+    *   Fixed layout spacing and container overflow in tradesperson public profile pages.
+    *   Added container padding (`px-3 sm:px-4`) and overflow guards (`overflow-hidden`) to prevent card content, badges, and headers from breaking bounds or clipping text.
+    *   Replaced wrapping trade/postcode text lines with clean responsive pill tags (`bg-slate-50 rounded-full border border-black/10`).
+    *   Optimized rating and recommendation scorecards (`max-w-sm mx-auto`) to scale down seamlessly on mobile screens without truncation.
+    *   Updated `SlowTrustBadgesCarousel` edge gradient masks (`bgClass`) to match container backgrounds, removing white artifact blocks.
+    *   Shifted achievements grid (`grid-cols-1 sm:grid-cols-2`) and performance stats columns to responsive layouts for clear readability across all device sizes.
+*   **Interactive Document Proof Viewer Modal (`TraderDocumentViewerModal.tsx`)**:
+    *   Clicking any checkmark on a search profile card or bio profile opens an interactive document viewer modal.
+    *   Displays full document metadata, issuer/regulator details, policy numbers, auto-cross-reference logs, actual uploaded certificate/ID photo preview, and embedded HTML5 video selfie playback.
+
+## 🚀 B2B Enterprise & Housing Association Portal - "Gotham" Layer (Completed August 5, 2026)
+*   **Corporate & Housing Association Command Center (`CorporatePortal.tsx`)**:
+    *   Upgraded B2B Enterprise Command Center designed for social housing groups, estate trusts, and corporate landlords managing thousands of housing units (e.g. Clarion Housing Group, Peabody Trust, Pinnacle Property Management).
+    *   **Housing Stock & Block Management**: Portfolio-wide estate stock directory tracking CP12, EICR, EPC, and Awaab's Law Damp & Mould Risk Index per block with 1-tap bulk block inspection dispatch.
+    *   **SLA Repair Time & Auto-Dispatch Engine**: Real-time SLA countdown timers (Emergency 2h SLA, Urgent 24h SLA, Routine 5-day SLA), SLA risk indicators (`critical`, `warning`, `ontrack`), and 1-tap auto-dispatch matching accredited SLA contractors.
+    *   **Contractor Performance Matrix**: Multi-factor performance rating matrix evaluating SLA response rates, average resolution speed, tenant satisfaction, active capacity, and accreditation tier.
+    *   **Consolidated Enterprise Billing**: Monthly consolidated B2B statements, purchase order tracking, and Stripe B2B auto-invoicing integration.
+
+## 🚀 TradeOS & Property Passport Phase 1, 2 & 3 (Completed August 4, 2026)
+*   **AI Pre-Quote Price Guide (`PostJobWizard.tsx` & `geminiServer.ts`)**:
+    *   Enhances Step 5 of job creation with AI Pre-Quote Benchmark Price Guides, Postcode Surcharge Factors, Market Cost Trends, and Seasonal Cost Impact analysis.
+*   **40+ Signal Intelligent Matching Engine (`matchingEngine.ts` & `instantMatchWorker.ts`)**:
+    *   Multivariate matching engine evaluating Rating History (25%), Proximity (20%), Skill Tag Similarity (25%), Video/Credential Verification (15%), and Availability (15%).
+    *   Assigns composite match scores (0-100%) and rank tiers ("Top Match", "Great Match", "Good Match", "Moderate Match") to quotes and matching notifications.
+*   **Trader Video Credential Verification (`TraderVideoVerificationCard.tsx` & `Profile.tsx` & `PublicProfile.tsx`)**:
+    *   Live camera recorder and file uploader enabling tradespeople to record a 15-30s video selfie credential intro.
+    *   Adds +35 match points in the 40+ Signal Engine and renders a "🎥 Video Credential Selfie Verified" trust badge across public profiles and quote cards.
+*   **Multi-Property Landlord Portfolio Automation (`Portfolio.tsx` & `PropertyManager.tsx`)**:
+    *   Portfolio-wide compliance hub tracking CP12 (Gas Safety) & EICR (Electrical Inspection) certificate expiration dates across multi-property portfolios.
+    *   **⚡ Bulk Auto-Dispatch Compliance Jobs**: One-click scanner that detects all portfolio properties with expired or expiring compliance certificates and automatically posts individual jobs to the marketplace pre-loaded with property specs and access instructions.
+*   **Tenant Access & Issue Reporting Bridge (`TenantReportPortal.tsx`)**:
+    *   Restricted, public-accessible repair reporting link (`/tenant-report?propertyId=...`) allowing tenants to log maintenance repairs directly into the landlord's Property Passport.
+    *   In-app WhatsApp & direct link sharing inside `PropertyPassportModal.tsx` (`handleCopyTenantPortalLink`) to send custom tenant repair links.
+    *   Maintains a dedicated `tenant_issues` collection with fields `propertyId`, `tenantName`, `tenantPhone`, `urgency`, `category`, `title`, `description`, and `status`.
+*   **Automated Trade Booking via Passport Specs (`PropertyPassportModal.tsx`)**:
+    *   Added dedicated "Tenant Issues" tab displaying incoming tenant repair requests with ⚡ 1-Tap Trade Dispatch.
+    *   Added ⚡ 1-Tap Trade Dispatch buttons to Compliance (Gas CP12 & EICR) and AI Predictive Maintenance (Boiler Servicing & Roof Inspection) tabs.
+    *   Dispatches pre-filled trade jobs with boiler brand/model, roof condition, EPC grade, access instructions, and tenant contact info attached automatically (`passportSpecsAttached: true`).
+*   **Strategy 1 Privacy Share Bridge (`shareUtils.ts` & `ShareViewModal.tsx`)**:
+    *   Generates secure in-app privacy URLs for WhatsApp and web sharing of Jobs, Quotes, Invoices, and Property Passports.
+    *   Enforces Strategy 1: Link landing opens strictly inside the platform application, masking sensitive phone numbers and emails (`maskSensitiveInfo`) while enabling direct in-app chat bridging.
+    *   Global `ShareGlobalContainer` integrated in `App.tsx` for seamless link handling.
+*   **Materials Procurement & AI Sourcing Engine (`MaterialsTracker.tsx`)**:
+    *   Comprehensive line item materials tracking for trade jobs with status updates (`needed`, `ordered`, `purchased`, `delivered`).
+    *   AI Materials Sourcing helper utilizing Gemini to calculate required materials and UK market prices automatically based on job description and category.
+    *   Calculates total material expenses vs job estimates.
+*   **TradeOS Financials & Cash Flow Engine (`FinancialDashboardWidget.tsx`)**:
+    *   Embedded in `TradesDashboard.tsx` for real-time tracking of paid revenue, outstanding invoices, and UK Sole Trader Self-Assessment tax & NI reserves.
+    *   Instant trade invoice generator supporting 14-day payment terms, 20% UK VAT toggles, and direct Strategy 1 WhatsApp share links.
+*   **Property Passport Digital Twin (`PropertyPassportModal.tsx` & `PropertyManager.tsx`)**:
+    *   Digital twin record for Homeowners and Landlords storing EPC ratings, Gas Safety (CP12) and EICR certificate expiration dates with automated renewal alerts, Boiler specs, Roof condition, and Insurance details.
+    *   Full Maintenance History log tracking trade job investments and calculating estimated property value added (+ROI).
+    *   AI Predictive Maintenance Engine providing automated seasonal maintenance alerts.
+    *   One-click WhatsApp & Privacy Link sharing to allow landlords to share property specs with tradespeople, tenants, or buyers without exposing personal phone numbers.
+    *   **Live HomeHealth Auto-Sync (`HomeHealthWidget.tsx`)**: Real-time listener automatically extracts compliance certificate expiries (CP12, EICR), boiler maintenance schedules, and EPC upgrade alerts from Property Passport records and displays upcoming due tasks directly on the homeowner's AI Home Health & Seasonal Forecast widget.
+
+---
+
 ## Overview
 AnyTrader is a multi-portal ecosystem sharing a unified **Firestore Enterprise** backend and **Gemini AI** integration. It currently consists of:
 1.  **AnyTrader Home**: Home services, trade jobs, and community help.
@@ -754,3 +842,12 @@ The prefix is determined by the user's primary registration role:
   - **Dynamic Qualification Criteria & Fair Equal-Chance Rotation Engine (`FindTrades.tsx`)**: Expanded the Trending section limit from 5 to a maximum of 10 profile cards. Built a composite qualification scoring system that evaluates rating (>= 4.0 threshold), local postcode proximity, total recommendations, and verification status. Integrated a periodic rotation algorithm (seeded by candidate ID and time intervals) so all qualifying traders meeting the quality threshold get fair, equal visibility in the trending marquee.
   - **High-Contrast Jet Black Category Labels (`FindTrades.tsx`)**: Updated trade category titles (e.g. Builder, Electrical, Plumbing) on trending profile cards to jet black (`text-black font-semibold`), maximizing visibility and legibility against the white card background.
   - **Auto-Select "All" Category Tab on Search Input (`FindTrades.tsx`)**: Added `setSelectedCategory("All")` handlers to the `onFocus`, `onClick`, and `onChange` events of the main search input text field. Clicking or typing into the search box automatically resets category filter to "All", ensuring global search coverage across all trade types without category restriction.
+  - **Graceful Biometric Authentication & Network Error Handling (`Login.tsx`)**: Wrapped all biometric sign-in (`signInWithEmail`) calls in dedicated try/catch handlers and transformed raw Firebase exception codes (`auth/network-request-failed`, `auth/invalid-credential`) into user-friendly messages with actionable guidance.
+- 2026-08-05: Phase 5 — Financial Services & Property Risk Insights (`BnplFinancingModal.tsx`, `PropertyRiskAnalyticsWidget.tsx`, `QuoteComparisonModal.tsx`, `HomeHealthWidget.tsx`, `FinancialDashboardWidget.tsx`).
+  - **BNPL & Large Repair Financing (`BnplFinancingModal.tsx`)**: Integrated BNPL financing engine ("FlexiPay") for major homeowner repairs (£1,000+). Supports 3-12 month term options with 0% APR on 3-6 month plans, transparent monthly repayment breakdown, and 1-tap pre-approval simulation.
+  - **Property Risk Analytics (`PropertyRiskAnalyticsWidget.tsx`)**: Implemented aggregate property health and insurance risk scoring across 4 primary risk vectors (Roofing, Electrical, Plumbing, Damp/Mould). Calculates estimated insurance premium discounts (up to 15-20%) for high health scores and generates 5-year maintenance expenditure forecasts.
+  - **Quote & Dashboard Integration (`QuoteComparisonModal.tsx`, `HomeHealthWidget.tsx`, `FinancialDashboardWidget.tsx`)**: Integrated FlexiPay BNPL triggers on high-value quotes (≥ £1,000) inside quote comparison views, embedded Property Risk Analytics & BNPL FlexiPay controls into the Home Health widget, and added a dedicated BNPL FlexiPay card to the Financial/Cash Flow engine.
+  - **4-Column Equal-Width Responsive Grid with Mutual Tab Auto-Closing & Close Controls (`HomeHealthWidget.tsx`)**: Formatted action tabs into a 4-column equal-width grid (**[Passport] -> [Specs] -> [Risk] -> [FlexiPay]**). Implemented mutual tab auto-closing (opening one tab automatically closes any other active tab view) and provided dedicated `Close` buttons and `[X]` indicators on active tab buttons and expanded drawer headers.
+  - **Category Verification & Platform-Wide Fuzzy Search Matching Engine (`constants.ts`, `fuzzyMatch.ts`, `FindTrades.tsx`)**: Confirmed full service catalog support for **Carpentry & Joinery** (Joiners, Fitted Wardrobes, Kitchens, Doors, Decking, Stairs), **Childcare & Babysitting** (Occasional Babysitting, Nanny, Emergency Childcare, SEN Care), and **Pet Services** (In-Home Pet Sitting, Dog Boarding/Kennels, Cat Sitting, House Sitting, Dog Walking, Pet Taxi). Expanded `fuzzyMatch.ts` into a platform-wide search engine (`matchTraderWithSearchQuery`) indexing all 80+ categories, ~800 subcategories, synonyms (`CATEGORY_SYNONYMS`), keywords, tags, and skills. Implemented multi-token matching, category synonym expansion (e.g. "joiner" -> "Carpentry & Joinery", "babysitter" -> "Childcare & Babysitting", "pet sitter" -> "Pet Services", "mechanic" -> "Auto & Vehicle Repairs"), and Damerau-Levenshtein edit distance typo tolerance for query terms and trader profiles.
+  - **Word-Boundary Precision Search Filtering (`fuzzyMatch.ts`, `FindTrades.tsx`)**: Resolved root cause of false positives where Chloe Dupont (Baker) and Marcus Vance (Plumber) appeared when searching "Pet sitting". The issue was caused by short keyword matching (`'cat'` from pet care keywords `['dog', 'cat', 'boarding']`) matching as an unconstrained substring inside words like **cat**ering and certifi**cat**ion. Implemented strict regex word-boundary matching (`\bcat\b`) for short terms (<= 4 chars) across synonym keywords and multi-token search terms, preventing unrelated tradespeople from matching while accurately matching true pet sitters, cat sitters, and dog walkers.
+  - **10-Second Trader Instant Info Card Flip Duration (`FindTrades.tsx`)**: Increased the trader profile card flipped state ("INFO" corner badge) timeout from 5 seconds to **10 seconds** by default. Added an animated 10s top progress indicator bar (`Auto-closes in 10s`) and refined scroll detection threshold (>80px movement) to prevent accidental touch micro-scroll cancellations.

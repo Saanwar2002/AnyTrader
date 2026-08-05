@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, handleFirestoreError, OperationType, collection, query, where, onSnapshot, addDoc, doc, deleteDoc, updateDoc } from "@/src/firebase";
-import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store, Users, FileText } from "lucide-react";
+import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store, Users, FileText, Zap, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { PropertyPassportModal } from "./PropertyPassportModal";
+import { toast } from "sonner";
 
 export default function Portfolio() {
   const { user } = useAuth();
@@ -16,11 +18,85 @@ export default function Portfolio() {
   const [showAllProperties, setShowAllProperties] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
+  const [passportPropertyModal, setPassportPropertyModal] = useState<any | null>(null);
+  const [bulkDispatching, setBulkDispatching] = useState(false);
   
   const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
   const [propertyJobs, setPropertyJobs] = useState<any[]>([]);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const today = new Date().toISOString().split("T")[0];
+  const expiringCp12Count = properties.filter(p => !p.gasSafetyExpiry || p.gasSafetyExpiry <= today).length;
+  const expiringEicrCount = properties.filter(p => !p.eicrExpiry || p.eicrExpiry <= today).length;
+
+  const handleBulkComplianceDispatch = async () => {
+    if (!user || properties.length === 0) return;
+    setBulkDispatching(true);
+    let count = 0;
+
+    try {
+      for (const prop of properties) {
+        const needGas = !prop.gasSafetyExpiry || prop.gasSafetyExpiry <= today;
+        const needEicr = !prop.eicrExpiry || prop.eicrExpiry <= today;
+
+        if (needGas) {
+          await addDoc(collection(db, "jobs"), {
+            ownerId: user.uid,
+            userId: user.uid,
+            title: `CP12 Gas Safety Inspection (${prop.name || prop.address?.line1 || 'Property'})`,
+            category: "Heating & Gas",
+            description: `Bulk compliance dispatch: Annual Gas Safety CP12 Inspection required.\nProperty: ${prop.name || ''} - ${prop.address?.line1 || ''}\nBoiler Spec: ${prop.boilerInfo?.brand || 'Standard Boiler'} ${prop.boilerInfo?.model || ''}`,
+            budget: "110",
+            agreedAmount: "110",
+            status: "open",
+            urgency: "urgent",
+            propertyId: prop.id,
+            linkedPropertyId: prop.id,
+            propertyName: prop.name || "Property",
+            address: prop.address || { line1: prop.name || "UK Address" },
+            passportSpecsAttached: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          count++;
+        }
+
+        if (needEicr) {
+          await addDoc(collection(db, "jobs"), {
+            ownerId: user.uid,
+            userId: user.uid,
+            title: `EICR Electrical Inspection (${prop.name || prop.address?.line1 || 'Property'})`,
+            category: "Electrical",
+            description: `Bulk compliance dispatch: 5-Year EICR Electrical Safety Certificate Inspection required.\nProperty: ${prop.name || ''} - ${prop.address?.line1 || ''}`,
+            budget: "180",
+            agreedAmount: "180",
+            status: "open",
+            urgency: "urgent",
+            propertyId: prop.id,
+            linkedPropertyId: prop.id,
+            propertyName: prop.name || "Property",
+            address: prop.address || { line1: prop.name || "UK Address" },
+            passportSpecsAttached: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        toast.success(`⚡ Bulk Dispatch Success! Dispatched ${count} compliance trade jobs to verified local engineers.`);
+      } else {
+        toast.info("All properties in your portfolio are fully compliant!");
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, "jobs");
+      toast.error("Failed bulk compliance dispatch.");
+    } finally {
+      setBulkDispatching(false);
+    }
+  };
 
   const handleNext = () => {
     if (selectedPropertyIds.length === 0) return;
@@ -260,9 +336,79 @@ export default function Portfolio() {
 
       {!isAdding ? (
         <>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-            Portfolio
-          </h2>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-extrabold text-xs border border-black shadow-sm transition"
+              >
+                <ArrowLeft className="w-4 h-4 text-blue-600" />
+                Back to Dashboard
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tight">
+                  Landlord Portfolio Automation
+                </h2>
+                <p className="text-xs text-slate-500 font-semibold mt-1">
+                  Manage property passports, compliance certs, tenant issues, and 1-tap trade dispatches across your entire portfolio.
+                </p>
+              </div>
+              {properties.length > 0 && (
+                <button
+                  onClick={handleBulkComplianceDispatch}
+                  disabled={bulkDispatching}
+                  className="px-4 py-3 bg-gradient-to-r from-blue-700 to-indigo-900 hover:from-blue-800 hover:to-indigo-950 text-white font-black text-xs rounded-2xl border border-black shadow-lg flex items-center gap-2 transition shrink-0"
+                >
+                  <Zap className="w-4 h-4 text-amber-300 animate-bounce" />
+                  {bulkDispatching ? "Auto-Dispatching..." : "⚡ Bulk Auto-Dispatch Compliance Jobs"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Portfolio Compliance Summary Banner */}
+          {properties.length > 0 && (
+            <div className="p-4 bg-slate-900 text-white rounded-2xl border border-black shadow-md grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                <Building2 className="w-6 h-6 text-blue-400 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase text-slate-400">Total Portfolio Properties</p>
+                  <p className="text-lg font-black text-white">{properties.length} Properties</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                {expiringCp12Count > 0 ? (
+                  <ShieldAlert className="w-6 h-6 text-amber-400 shrink-0" />
+                ) : (
+                  <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
+                )}
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase text-slate-400">CP12 Gas Compliance</p>
+                  <p className="text-lg font-black text-white">
+                    {expiringCp12Count > 0 ? `${expiringCp12Count} Due / Expired` : "100% Compliant"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                {expiringEicrCount > 0 ? (
+                  <ShieldAlert className="w-6 h-6 text-amber-400 shrink-0" />
+                ) : (
+                  <ShieldCheck className="w-6 h-6 text-purple-400 shrink-0" />
+                )}
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase text-slate-400">EICR Electrical</p>
+                  <p className="text-lg font-black text-white">
+                    {expiringEicrCount > 0 ? `${expiringEicrCount} Due / Expired` : "100% Compliant"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="relative flex gap-3 items-center">
             <div className="relative flex-1">
@@ -324,41 +470,53 @@ export default function Portfolio() {
                       {isSelected && <div className="w-2 h-2 rounded-full bg-white shadow-[0_0_0_1px_black]" />}
                     </div>
                   </div>
-                  <div className="flex items-center justify-end mt-2 pt-2 border-t border-black/10 gap-2">
-                    <div className="relative">
-                      {deletingId === property.id && (
-                        <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-white/20 z-10" onClick={e => e.stopPropagation()}>
-                          <p className="mb-2">Delete property?</p>
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
-                              className="flex-1 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg transition"
-                            >
-                              No
-                            </button>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }}
-                              className="flex-1 py-1 bg-red-500 hover:bg-red-600 rounded-lg transition"
-                            >
-                              Yes
-                            </button>
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-black/10 gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPassportPropertyModal(property);
+                      }}
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-black uppercase tracking-wider border border-blue-200 flex items-center gap-1 transition"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> Passport
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        {deletingId === property.id && (
+                          <div className="absolute top-full mt-2 right-0 w-32 bg-slate-900 text-white text-[12px] p-2 rounded-xl text-center shadow-lg border border-white/20 z-10" onClick={e => e.stopPropagation()}>
+                            <p className="mb-2">Delete property?</p>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
+                                className="flex-1 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg transition"
+                              >
+                                No
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }}
+                                className="flex-1 py-1 bg-red-500 hover:bg-red-600 rounded-lg transition"
+                              >
+                                Yes
+                              </button>
+                            </div>
+                            <div className="absolute -top-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-t border-l border-white/20"></div>
                           </div>
-                          <div className="absolute -top-1 right-2 w-2 h-2 bg-slate-900 rotate-45 border-t border-l border-white/20"></div>
-                        </div>
-                      )}
+                        )}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setDeletingId(property.id); }}
+                          className="text-red-500 hover:bg-red-50 rounded p-1.5 transition flex items-center gap-1 text-[11px] font-bold uppercase"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <button 
-                        onClick={(e) => { e.stopPropagation(); setDeletingId(property.id); }}
-                        className="text-red-500 hover:bg-red-50 rounded p-1.5 transition flex items-center gap-1 text-[11px] font-bold uppercase"
+                        onClick={(e) => { e.stopPropagation(); handleEditClick(property); }}
+                        className="text-slate-500 hover:bg-slate-50 hover:text-blue-600 rounded p-1.5 transition flex items-center gap-1 text-[11px] font-bold uppercase"
                       >
-                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                        <Edit className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleEditClick(property); }}
-                      className="text-slate-500 hover:bg-slate-50 hover:text-blue-600 rounded p-1.5 transition flex items-center gap-1 text-[11px] font-bold uppercase"
-                    >
-                      <Edit className="w-3.5 h-3.5" /> Edit
-                    </button>
                   </div>
                 </div>
                 );
@@ -568,6 +726,13 @@ export default function Portfolio() {
 
           </div>
         </div>
+      )}
+
+      {passportPropertyModal && (
+        <PropertyPassportModal
+          property={passportPropertyModal}
+          onClose={() => setPassportPropertyModal(null)}
+        />
       )}
     </div>
   );

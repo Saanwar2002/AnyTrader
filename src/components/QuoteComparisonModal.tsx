@@ -1,8 +1,10 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Star, PoundSterling, Clock, MessageSquare, CheckCircle2, Sparkles, RefreshCw, Calendar, Zap } from "lucide-react";
+import { X, Star, PoundSterling, Clock, MessageSquare, CheckCircle2, Sparkles, RefreshCw, Calendar, Zap, CreditCard } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
+import { calculateTraderMatchScore } from "@/src/services/matchingEngine";
+import BnplFinancingModal from "./BnplFinancingModal";
 
 interface QuoteComparisonModalProps {
   isOpen: boolean;
@@ -20,6 +22,10 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
   const [revisionMessage, setRevisionMessage] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isAcceptingId, setIsAcceptingId] = React.useState<string | null>(null);
+
+  // BNPL Financing state
+  const [showBnplModal, setShowBnplModal] = React.useState(false);
+  const [selectedQuoteForBnpl, setSelectedQuoteForBnpl] = React.useState<any>(null);
 
   if (!isOpen) return null;
 
@@ -178,6 +184,41 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                       </div>
 
                       <div className="space-y-4 flex-1">
+                        {/* 3.2 40+ Signal AI Intelligent Match Score */}
+                        {(() => {
+                          const matchResult = tpProfile ? calculateTraderMatchScore(tpProfile, job) : null;
+                          const hasVideo = tpProfile?.videoVerificationStatus === "verified" || tpProfile?.videoVerificationUrl;
+
+                          return (
+                            <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-3.5 rounded-2xl border border-black space-y-2 mb-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-300 flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3 text-amber-300" />
+                                  40+ Signal AI Match
+                                </span>
+                                {matchResult && (
+                                  <span className="text-xs font-black text-amber-300">
+                                    {matchResult.compositeScore}% ({matchResult.rankTier})
+                                  </span>
+                                )}
+                              </div>
+
+                              {hasVideo && (
+                                <div className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-[10px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>🎥 Video Credential Selfie Verified</span>
+                                </div>
+                              )}
+
+                              {matchResult?.keyHighlights && matchResult.keyHighlights.length > 0 && (
+                                <p className="text-[10px] text-slate-300 font-medium leading-tight">
+                                  {matchResult.keyHighlights[0]}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         {/* AI Intelligence Section */}
                         {analysis && (
                           <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50 space-y-3">
@@ -203,12 +244,33 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
                           </div>
                         )}
 
-                        <div className="bg-slate-50 p-4 rounded-xl border border-black flex items-center justify-between">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quote Amount</p>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-black text-slate-900">£{quote.amount}</span>
-                            <span className="text-xs font-bold text-slate-400">total</span>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-black flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quote Amount</p>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-black text-slate-900">£{quote.amount}</span>
+                              <span className="text-xs font-bold text-slate-400">total</span>
+                            </div>
                           </div>
+
+                          {/* Section 5.1 BNPL & Large Repair Financing for £1,000+ */}
+                          {quote.amount >= 1000 && (
+                            <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                              <div className="text-[10px] text-indigo-700 font-extrabold flex items-center gap-1">
+                                <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Spread from £{Math.round(quote.amount / 12)}/mo (0% APR)</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedQuoteForBnpl(quote);
+                                  setShowBnplModal(true);
+                                }}
+                                className="text-[9px] font-black uppercase bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded-lg transition shadow-sm"
+                              >
+                                FlexiPay
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {quote.startDate && (
@@ -318,6 +380,19 @@ export default function QuoteComparisonModal({ isOpen, onClose, quotes, tradespe
             </div>
           </motion.div>
         </>
+      )}
+
+      {/* Section 5.1 BNPL Financing Modal */}
+      {showBnplModal && (
+        <BnplFinancingModal
+          isOpen={showBnplModal}
+          onClose={() => setShowBnplModal(false)}
+          initialAmount={selectedQuoteForBnpl?.amount || 2500}
+          jobTitle={job?.title || "Major Homeowner Repair"}
+          onSelectPlan={(plan) => {
+            console.log("Selected BNPL plan:", plan);
+          }}
+        />
       )}
     </AnimatePresence>
   );

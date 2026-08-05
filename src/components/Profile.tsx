@@ -18,6 +18,7 @@ import { usePWAInstall } from "@/src/hooks/usePWAInstall";
 import { usePortal } from "@/src/lib/PortalContext";
 import { CURRENT_APP_VERSION, checkUpdateNeeded, requestStoreReview } from "@/src/lib/version";
 import { AppUpdateModal } from "./common/AppUpdateModal";
+import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
 import { cn } from "@/src/lib/utils";
 import { 
   DndContext, 
@@ -2292,6 +2293,14 @@ export default function Profile() {
           </div>
         )}
       </div>
+
+      {/* Phase 1: Certifications/Achievements */}
+      {isBusinessProfile && (
+        <TraderVideoVerificationCard 
+          profile={profile} 
+          onUpdateProfile={(updates) => setEditData(prev => ({ ...prev, ...updates }))} 
+        />
+      )}
 
       {/* Phase 1: Certifications/Achievements */}
       {isBusinessProfile && (

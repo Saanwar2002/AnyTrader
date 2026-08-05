@@ -24,6 +24,7 @@ import PartnerPerks from "./PartnerPerks";
 import PartnerAdvertisement from "./shared/PartnerAdvertisement";
 import { getRegionalDemandData, RegionalDemand } from "@/src/services/demandHeatmapService";
 import { InstantMatchTraderAlert } from "./InstantMatchTraderAlert";
+import { FinancialDashboardWidget } from "./FinancialDashboardWidget";
 
 const iconMap: Record<string, any> = {
   Briefcase, Clock, MessageSquare, CheckCircle2, ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus, ImageIcon, VideoIcon
@@ -786,6 +787,9 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       
       {/* Auto-scrolling Advertisement Banner */}
       <PartnerAdvertisement />
+
+      {/* TradeOS Financials & Cash Flow Engine */}
+      <FinancialDashboardWidget />
 
       {/* AI Recommendations */}
       {profile?.role === "tradesperson" && (

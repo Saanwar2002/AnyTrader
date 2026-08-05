@@ -6,20 +6,28 @@
 - **DOCUMENTATION**: You **MUST** update `DEVELOPMENT.md` after completing your work to capture any architecture or schema changes for the next agent.
 
 ## Current Status
-- **Last Updated**: 2026-05-02
-- **Working State**: Application is fully functional with a live Driver Terminal, AnyRoller Master Admin, and robust Post-Ride Driver Review engine.
+- **Last Updated**: 2026-08-05
+- **Working State**: Application is fully functional with TradeOS Free Operating System tools, Property Passports, Multi-Property Portfolio Automation, Tenant Issue Portal, AI Pre-Quote Price Transparency, 40+ Signal Intelligent Matching Engine, Trader Video Credential Verification, B2B Enterprise & Housing Association Portal ("Gotham" Layer), Strategy 1 WhatsApp Privacy Bridge, Driver Terminal, AnyRoller Master Admin, and Post-Ride Driver Review engine.
 - **Key Features Implemented**:
+  - **BNPL & Large Repair Financing ("FlexiPay")**: Integrated BNPL financing options for major unexpected homeowner repairs (£1,000+) supporting 3-12 month terms, 0% APR on 3-6 months, and 1-tap pre-approval.
+  - **Property Risk Analytics**: Aggregate property health and insurance risk scoring across 4 vectors (Roofing, Electrical, Plumbing, Damp/Mould), insurance discount estimation (up to 20%), and 5-year maintenance expenditure forecasting.
+  - **B2B Enterprise & Housing Association Portal ("Gotham" Layer)**: High-capacity command center handling thousands of social housing units, real-time SLA repair time tracking (Emergency 2h SLA, Urgent 24h SLA, Routine 5-day SLA), Awaab's Law damp & mould compliance, 1-tap auto-dispatch, and contractor performance matrix.
+  - **AI Pre-Quote Price Guide**: Real-time benchmark price ranges, postcode surcharge analysis, seasonal impact forecasts, and material vs labor breakdown before posting jobs.
+  - **40+ Signal Intelligent Matching Engine**: Multivariate trader scoring system factoring rating history, location proximity, past job similarity, video verification, and schedule availability.
+  - **Trader Video Credential Verification**: Live camera recorder & file uploader enabling 15-30s video selfie credential intros with trust badges (+35 match points).
+  - **Multi-Property Landlord Portfolio Automation**: Bulk CP12 & EICR compliance tracking across property portfolios with ⚡ 1-click auto-dispatch to local verified engineers.
+  - **Tenant Access & Repair Reporting Bridge**: Dedicated tenant portal (`/tenant-report`) allowing tenants to log repairs directly into property passports with in-app WhatsApp & link sharing.
+  - **Automated Trade Booking via Passport Specs**: 1-Tap Trade Dispatch pre-loaded with boiler brand/model, roof condition, EPC ratings, access instructions, and tenant contact info.
+  - **Strategy 1 Privacy Share Bridge**: Secure in-app privacy URL generation for WhatsApp sharing of Jobs, Quotes, Invoices, and Property Passports without exposing personal phone numbers or emails.
+  - **Property Passport Digital Twin**: Landlord and Homeowner digital specs dashboard tracking EPC ratings, CP12 & EICR compliance expiration dates with automated alerts, maintenance history, ROI calculations, and AI predictive maintenance.
+  - **TradeOS Financials & Cash Flow Engine**: Real-time cashflow dashboard tracking paid earnings, outstanding invoices, and UK Sole Trader Self-Assessment tax & NI reserves.
+  - **Materials Procurement & AI Sourcing**: Material line item tracker with automated AI material list generation & trade market price estimator.
   - **Extensive Service Catalog**: 76 major categories and 797 subcategories.
-  - AnyTrader Rides Integration: Unified auth/role mapping.
   - **Live Driver Terminal**: High-accuracy GPS tracking, session lifecycle timers, and a persistent status HUD.
-  - **Direct-to-Driver QR Payments**: Fully integrated Stripe Connect split-payment system. Drivers represent a QR code for instant scan-to-pay transactions with automatic 12% platform commission deduction.
-  - **Mobile-Adaptive UI**: Collapsible privacy drawers and touch-optimized map controls.
-  - **AnyRoller Master Admin**: Complete portal for managing rides, drivers, financials, dispatch rules, and safety/compliance.
-  - **Post-Ride Reviews**: 5-star Rating system integrated with "cooling-off" period mechanisms, quick action tags, and live Master Admin escalations for poor safety ratings.
+  - **Direct-to-Driver QR Payments**: Fully integrated Stripe Connect split-payment system with automatic 12% commission deduction.
 
 ## Active Task
-- **Completed**: Phase D1-D5 (AI Pro Discovery, Availability Matching, Shortlists, Bidding, & Integration). 
-- **Ready for Next Phase**: The Project Bidding System has been fully integrated into the Consultancy/Agency Dashboard. Project roles can be requested, and pros are successfully matched, shortlisted, and invited. Bids are mapped to the calendar and project timeline automatically upon acceptance. Ready for further features or polish.
+- **Completed**: Phase 1, Phase 2, Phase 3, Phase 4 & Phase 5 (TradeOS Core, Property Passport, Multi-Property Portfolio Automation, Tenant Repair Portal, 1-Tap Specs Dispatch, AI Price Transparency, 40+ Signal Engine, Trader Video Verification, B2B Enterprise Portal "Gotham" Layer, BNPL FlexiPay Repair Financing, and Property Risk Analytics) fully implemented, verified, and compiled cleanly.
 
 ## Project Conventions
 - **Styling**: Tailwind CSS with a "Modern Professional" aesthetic.

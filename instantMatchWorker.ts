@@ -244,7 +244,12 @@ async function initiateNextAttempt(db: admin.firestore.Firestore, matchRef: admi
         score += matchedTags * 5;
       }
       
-      // Proximity (Postcode Matching API Mock)
+      // Video Credential Verification Signal Boost (+25 Points)
+      if (data.videoVerificationStatus === "verified" || data.videoVerificationUrl) {
+        score += 25;
+      }
+
+      // Proximity (Postcode Matching API)
       if (jobPostcode && data.postcode) {
         const tPost = data.postcode.trim().toUpperCase();
         const jPost = jobPostcode.trim().toUpperCase();

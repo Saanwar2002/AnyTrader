@@ -13,9 +13,13 @@ import { cn, getOutwardPostcode } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PROFESSIONAL_BADGES } from "@/src/constants";
 import { getTraderBadges } from "@/src/lib/badges";
+import { getTraderUnifiedTrustBadges } from "@/src/lib/trustBadges";
+import { TraderDocumentViewerModal } from "./TraderDocumentViewerModal";
+import { SlowTrustBadgesCarousel } from "./SlowTrustBadgesCarousel";
 import { format } from "date-fns";
 import { SEO } from "./SEO";
 import { Logo } from "./Logo";
+import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
 
 export default function PublicProfile() {
   const { id } = useParams();
@@ -32,6 +36,8 @@ export default function PublicProfile() {
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isServicesExpanded, setIsServicesExpanded] = useState(false);
   const [openFaqIds, setOpenFaqIds] = useState<string[]>([]);
+  const [isDocViewerOpen, setIsDocViewerOpen] = useState(false);
+  const [docViewerBadgeId, setDocViewerBadgeId] = useState<string>("liability_insurance");
 
   const toggleFaq = (faqId: string) => {
     setOpenFaqIds(prev => 
@@ -363,7 +369,7 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className={cn("max-w-2xl mx-auto pb-40", !currentUser && "pt-16")}>
+    <div className={cn("max-w-2xl mx-auto pb-40 px-3 sm:px-4", !currentUser && "pt-16")}>
       <SEO 
         title={`${profile.name} | Verified Trader`} 
         description={profile.bio || `View ${profile.name}'s profile on AnyTrader. See reviews, portfolio, and hire for your next project.`}
@@ -403,12 +409,12 @@ export default function PublicProfile() {
         </header>
       )}
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4 relative z-50">
-          <button onClick={() => { console.log("Back button clicked"); navigate(-1); }} className="p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group">
-            <ChevronLeft className="w-6 h-6 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
+      <div className="flex items-center justify-between mb-6 gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 relative z-50 min-w-0">
+          <button onClick={() => { console.log("Back button clicked"); navigate(-1); }} className="p-2 sm:p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0">
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
           </button>
-          <h1 className="text-2xl font-bold text-slate-900">Tradesperson Profile</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Tradesperson Profile</h1>
         </div>
         <button 
           onClick={async () => {
@@ -431,10 +437,10 @@ export default function PublicProfile() {
               console.error('Error sharing:', err);
             }
           }}
-          className="px-4 py-2 bg-white rounded-xl shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-2 text-slate-600 border border-black"
+          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white rounded-xl shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-1.5 sm:gap-2 text-slate-600 border border-black shrink-0 text-xs sm:text-sm font-bold"
         >
-          <Share2 className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-bold">Share Profile</span>
+          <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+          <span>Share Profile</span>
         </button>
       </div>
 
@@ -450,9 +456,9 @@ export default function PublicProfile() {
       )}
 
       {/* Profile Card */}
-      <div className="bg-white rounded-3xl border border-black shadow-sm p-8 mb-8 relative">
-        <div className="flex flex-col items-center">
-          <div className="w-28 h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-4xl font-bold overflow-hidden border-4 border-white/20 shadow-lg mb-4">
+      <div className="bg-white rounded-3xl border border-black shadow-sm p-4 sm:p-8 mb-8 relative w-full overflow-hidden">
+        <div className="flex flex-col items-center w-full">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold overflow-hidden border-4 border-white/20 shadow-lg mb-4 shrink-0">
             {profile.photoURL || profile.avatarUrl ? (
               <img src={profile.photoURL || profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
@@ -460,30 +466,28 @@ export default function PublicProfile() {
             )}
           </div>
           
-          <div className="text-center">
+          <div className="text-center w-full">
             {profile.memberId && (
-              <span className="text-[10px] font-black tracking-[0.2em] text-[#1e3a5f] bg-[#1e3a5f]/5 px-2 py-1 rounded-lg border border-[#1e3a5f]/10 mb-4 inline-block">
+              <span className="text-[10px] font-black tracking-[0.2em] text-[#1e3a5f] bg-[#1e3a5f]/5 px-2 py-1 rounded-lg border border-[#1e3a5f]/10 mb-3 inline-block">
                 {profile.memberId}
               </span>
             )}
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <h2 className="text-2xl font-bold text-slate-900">{profile.name}</h2>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mb-2 w-full">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">{profile.name}</h2>
               {profile.isAcceptingRequests === false && (
-                <div className="flex flex-col items-center gap-1.5">
-                  <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-700 flex items-center gap-1 shadow-sm">
-                    <AlertTriangle className="w-3 h-3" />
-                    Currently Unavailable
-                  </span>
-                </div>
+                <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-700 flex items-center gap-1 shadow-sm shrink-0">
+                  <AlertTriangle className="w-3 h-3" />
+                  Currently Unavailable
+                </span>
               )}
               {isBusyToday() && profile.isAcceptingRequests !== false && (
-                <div className="flex flex-col items-center gap-1.5">
-                  <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1">
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1 shrink-0">
                     <Clock className="w-3 h-3" />
                     Busy Today
                   </span>
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50/50 rounded-lg border border-blue-100/50">
-                    <HelpCircle className="w-3 h-3 text-blue-600" />
+                    <HelpCircle className="w-3 h-3 text-blue-600 shrink-0" />
                     <p className="text-[9px] text-blue-700 font-bold leading-none uppercase tracking-tighter">
                       Available for Messages & Quotes
                     </p>
@@ -491,64 +495,86 @@ export default function PublicProfile() {
                 </div>
               )}
               {profile.isDisabled && (
-                <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-200">
+                <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-200 shrink-0">
                   Suspended
                 </span>
               )}
               {(profile.recommendedCategories?.length > 0 || platformConfig?.feeTiers?.find((t: any) => t.name === (profile.tierId || "Basic"))?.includesRecommendation) && (
-                <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1">
+                <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1 shrink-0">
                   <Award className="w-3 h-3 fill-orange-500" />
                   Recommended
                 </span>
               )}
             </div>
-            <div className="flex flex-col items-center gap-3 mb-8">
-              <div className="flex items-stretch gap-3 bg-white p-2 rounded-[1.5rem] border border-black shadow-xl shadow-slate-200/50 w-full max-w-sm">
-                <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-slate-900 rounded-2xl shadow-lg">
-                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                  <div className="flex flex-col items-start">
-                    <span className="font-black text-white text-lg leading-none">{profile.rating?.toFixed(1) || "5.0"}</span>
-                    <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter mt-0.5">{profile.totalReviews || 0} reviews</span>
+
+            <div className="flex flex-col items-center gap-3 mb-6 w-full">
+              <div className="flex items-stretch gap-2 sm:gap-3 bg-white p-1.5 sm:p-2 rounded-[1.25rem] sm:rounded-[1.5rem] border border-black shadow-lg shadow-slate-200/50 w-full max-w-sm mx-auto">
+                <div className="flex-1 flex items-center justify-center gap-2 px-2.5 sm:px-3 py-2.5 sm:py-3 bg-slate-900 rounded-xl sm:rounded-2xl shadow-md">
+                  <Star className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 fill-yellow-400 shrink-0" />
+                  <div className="flex flex-col items-start min-w-0">
+                    <span className="font-black text-white text-base sm:text-lg leading-none">{profile.rating?.toFixed(1) || "5.0"}</span>
+                    <span className="text-slate-400 text-[8px] sm:text-[9px] font-black uppercase tracking-tighter mt-0.5 truncate">{profile.totalReviews || 0} reviews</span>
                   </div>
                 </div>
                 
-                <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-green-100/50 rounded-2xl border border-green-200/50">
-                  <div className="w-7 h-7 rounded-lg bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 shrink-0">
-                    <Users className="w-3.5 h-3.5 text-white" />
+                <div className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2.5 sm:py-3 bg-green-100/50 rounded-xl sm:rounded-2xl border border-green-200/50">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-green-500 flex items-center justify-center shadow-md shadow-green-500/20 shrink-0">
+                    <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
                   </div>
-                  <div className="flex flex-col items-start">
-                    <span className="text-[8px] font-black text-green-900 uppercase tracking-widest leading-none mb-0.5">Recmd By</span>
-                    <span className="text-lg font-black text-green-900 leading-none">{profile.totalRecommendations || 0}</span>
+                  <div className="flex flex-col items-start min-w-0">
+                    <span className="text-[7.5px] sm:text-[8px] font-black text-green-900 uppercase tracking-widest leading-none mb-0.5 truncate">Recmd By</span>
+                    <span className="text-base sm:text-lg font-black text-green-900 leading-none">{profile.totalRecommendations || 0}</span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-              <p className="text-slate-500 text-sm font-medium">{profile.trades?.[0] || "Professional Tradesperson"}</p>
-              <span className="text-slate-300">•</span>
-              <p className="text-slate-500 text-sm flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" />
-                {profile.postcode || profile.location || "Location not set"}
-              </p>
-              <span className="text-slate-300">•</span>
-              <p className="text-slate-500 text-sm font-medium flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" />
-                Member since {new Date(profile.createdAt?.seconds * 1000 || Date.now()).getFullYear()}
-              </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 my-4 max-w-full">
+              <span className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-full border border-black/10 text-xs font-semibold text-slate-700 shadow-2xs">
+                <Briefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span className="truncate max-w-[180px] sm:max-w-none">{profile.trades?.[0] || "Professional Tradesperson"}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-full border border-black/10 text-xs font-semibold text-slate-700 shadow-2xs">
+                <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                <span>{profile.postcode || profile.location || "Location not set"}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-full border border-black/10 text-xs font-semibold text-slate-700 shadow-2xs">
+                <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Member since {new Date(profile.createdAt?.seconds * 1000 || Date.now()).getFullYear()}</span>
+              </span>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-2 mb-8 max-w-2xl mx-auto">
+            <div className="flex flex-wrap justify-center gap-2 mb-5 max-w-2xl mx-auto">
               {profile.isAvailableForEmergency && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 rounded-lg border border-red-100 text-xs font-bold text-red-700 shadow-sm transition-all hover:shadow-md">
                   <Zap className="w-4 h-4 text-red-500" />
                   Accepting Emergency Jobs
                 </div>
               )}
+            </div>
+
+            {/* 5-Point Verified Compliance Slow Carousel */}
+            <div className="w-full max-w-2xl mx-auto mb-6 p-2.5 sm:p-3 bg-slate-50 rounded-2xl border-2 border-black overflow-hidden">
+              <SlowTrustBadgesCarousel
+                trader={profile}
+                bgClass="bg-slate-50"
+                onSelectBadge={(badgeId) => {
+                  setDocViewerBadgeId(badgeId);
+                  setIsDocViewerOpen(true);
+                }}
+                onOpenAllDocs={() => {
+                  setDocViewerBadgeId("liability_insurance");
+                  setIsDocViewerOpen(true);
+                }}
+              />
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2 mb-6 max-w-2xl mx-auto w-full">
               {getTraderBadges(profile).map((badge: any) => (
                 <div 
                   key={badge.id} 
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold shadow-sm transition-all hover:shadow-md",
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold shadow-sm transition-all hover:shadow-md",
                     badge.bgColor,
                     badge.color,
                     "border-current/10"
@@ -589,84 +615,89 @@ export default function PublicProfile() {
         </div>
 
         {/* Performance Stats */}
-        <div className="grid grid-cols-3 gap-4 mt-4 border-t border-black pt-8">
-          <div className="text-center">
-            <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-              <Briefcase className="w-5 h-5 text-slate-600" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-4 border-t border-black pt-6 sm:pt-8 w-full">
+          <div className="text-center min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-1.5">
+              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
             </div>
-            <p className="text-xl font-bold text-slate-900">{profile.totalJobsDone || 0}</p>
-            <p className="text-xs text-slate-500 font-medium">Jobs</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900 leading-tight">{profile.totalJobsDone || 0}</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-medium truncate">Jobs</p>
           </div>
-          <div className="text-center">
-            <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-              <Clock className="w-5 h-5 text-slate-600" />
+          <div className="text-center min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-1.5">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
             </div>
-            <p className="text-xl font-bold text-slate-900">{profile.acceptanceRate || 100}%</p>
-            <p className="text-xs text-slate-500 font-medium">Response</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900 leading-tight">{profile.acceptanceRate || 100}%</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-medium truncate">Response</p>
           </div>
-          <div className="text-center">
-            <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-              <Shield className="w-5 h-5 text-slate-600" />
+          <div className="text-center min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-1.5">
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
             </div>
-            <p className="text-xl font-bold text-slate-900">{profile.trustScore || 95}</p>
-            <p className="text-xs text-slate-500 font-medium">Trust</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900 leading-tight">{profile.trustScore || 95}</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-medium truncate">Trust</p>
           </div>
         </div>
       </div>
 
+      {/* Video Credential Verification Showcase */}
+      {profile?.videoVerificationUrl && (
+        <TraderVideoVerificationCard profile={profile} isReadOnly={true} />
+      )}
+
       {/* Achievements */}
-      <div className="bg-white rounded-3xl border border-black shadow-sm p-6 mb-8">
+      <div className="bg-white rounded-3xl border border-black shadow-sm p-4 sm:p-6 mb-8 overflow-hidden">
         <div 
           className="flex items-center justify-between cursor-pointer"
           onClick={() => setIsAchievementsExpanded(!isAchievementsExpanded)}
         >
-          <h3 className="text-xl font-bold text-slate-900">Achievements</h3>
+          <h3 className="text-lg sm:text-xl font-bold text-slate-900">Achievements</h3>
           <div className={cn(
-            "w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center transition-transform",
+            "w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-50 flex items-center justify-center transition-transform shrink-0",
             isAchievementsExpanded && "rotate-180"
           )}>
-            <ChevronDown className="w-6 h-6 text-slate-500" />
+            <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6 text-slate-500" />
           </div>
         </div>
         
         {isAchievementsExpanded && (
-          <div className="grid grid-cols-2 gap-4 pt-6">
-            <div className="bg-blue-50 p-4 rounded-2xl flex items-center gap-3 border border-blue-100">
-              <Shield className="w-8 h-8 text-blue-600" />
-              <div>
-                <p className="font-bold text-slate-900 text-lg">{profile.trustScore || 95} Trust Score</p>
-                <p className="text-xs text-slate-600">Highly reliable professional</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-6">
+            <div className="bg-blue-50 p-3.5 sm:p-4 rounded-2xl flex items-center gap-3 border border-blue-100">
+              <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 text-base sm:text-lg leading-tight">{profile.trustScore || 95} Trust Score</p>
+                <p className="text-xs text-slate-600 truncate">Highly reliable professional</p>
               </div>
             </div>
-            <div className="bg-orange-50 p-4 rounded-2xl flex items-center gap-3 border border-orange-100">
-              <Star className="w-8 h-8 text-orange-500 fill-orange-500" />
-              <div>
-                <p className="font-bold text-slate-900 text-lg">Top Rated</p>
-                <p className="text-xs text-slate-600">{profile.rating?.toFixed(1) || "5.0"} average rating</p>
+            <div className="bg-orange-50 p-3.5 sm:p-4 rounded-2xl flex items-center gap-3 border border-orange-100">
+              <Star className="w-7 h-7 sm:w-8 sm:h-8 text-orange-500 fill-orange-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 text-base sm:text-lg leading-tight">Top Rated</p>
+                <p className="text-xs text-slate-600 truncate">{profile.rating?.toFixed(1) || "5.0"} average rating</p>
               </div>
             </div>
-            <div className="bg-green-50 p-4 rounded-2xl flex items-center gap-3 border border-green-100">
-              {profile.verificationStatus === "auditioned" ? <Medal className="w-8 h-8 text-amber-600 fill-amber-500/20" /> :
-               profile.verificationStatus === "vetted" ? <ShieldCheck className="w-8 h-8 text-emerald-600 fill-emerald-500/20" /> :
-               <Shield className="w-8 h-8 text-blue-600" />}
-              <div>
-                <p className="font-bold text-slate-900 text-lg">
+            <div className="bg-green-50 p-3.5 sm:p-4 rounded-2xl flex items-center gap-3 border border-green-100">
+              {profile.verificationStatus === "auditioned" ? <Medal className="w-7 h-7 sm:w-8 sm:h-8 text-amber-600 fill-amber-500/20 shrink-0" /> :
+               profile.verificationStatus === "vetted" ? <ShieldCheck className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-600 fill-emerald-500/20 shrink-0" /> :
+               <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600 shrink-0" />}
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 text-base sm:text-lg leading-tight">
                   {profile.verificationStatus === "auditioned" ? "Auditioned Pro" :
                    profile.verificationStatus === "vetted" ? "Vetted Pro" : 
                    profile.verificationStatus === "verified" ? "Verified Pro" : "Unverified"}
                 </p>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-slate-600 truncate">
                   {profile.verificationStatus === "auditioned" ? "Physical work inspection passed" :
                    profile.verificationStatus === "vetted" ? "References & work reviewed" :
                    profile.verificationStatus === "verified" ? "Identity & Insurance checked" : "Onboarding in progress"}
                 </p>
               </div>
             </div>
-            <div className="bg-amber-50 p-4 rounded-2xl flex items-center gap-3 border border-amber-100">
-              <Zap className="w-8 h-8 text-amber-600" />
-              <div>
-                <p className="font-bold text-slate-900 text-lg">Responsive</p>
-                <p className="text-xs text-slate-600">100% response rate</p>
+            <div className="bg-amber-50 p-3.5 sm:p-4 rounded-2xl flex items-center gap-3 border border-amber-100">
+              <Zap className="w-7 h-7 sm:w-8 sm:h-8 text-amber-600 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 text-base sm:text-lg leading-tight">Responsive</p>
+                <p className="text-xs text-slate-600 truncate">100% response rate</p>
               </div>
             </div>
           </div>
@@ -675,12 +706,12 @@ export default function PublicProfile() {
 
       {/* Products and Services */}
       {profile.services && profile.services.length > 0 && (
-        <div className="bg-white rounded-3xl border border-black shadow-sm p-8 mb-8">
+        <div className="bg-white rounded-3xl border border-black shadow-sm p-4 sm:p-8 mb-8 overflow-hidden">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
               <Briefcase className="w-5 h-5" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900">Products and Services</h3>
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900">Products and Services</h3>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1185,6 +1216,14 @@ export default function PublicProfile() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Trader Document & Compliance Proof Viewer Modal */}
+      <TraderDocumentViewerModal
+        isOpen={isDocViewerOpen}
+        onClose={() => setIsDocViewerOpen(false)}
+        trader={profile}
+        initialBadgeId={docViewerBadgeId}
+      />
     </div>
   );
 }

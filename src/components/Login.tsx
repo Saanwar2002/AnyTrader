@@ -57,11 +57,24 @@ export default function Login() {
       if (success) {
         const credentials = BiometricService.getCredentials();
         if (credentials) {
-          setBiometricStatusText("Biometric authenticated securely! Singing in...");
+          setBiometricStatusText("Biometric authenticated securely! Signing in...");
           setEmail(credentials.email);
           setPassword(credentials.pass);
           setLoading(true);
-          await signInWithEmail(credentials.email, credentials.pass);
+          try {
+            await signInWithEmail(credentials.email, credentials.pass);
+          } catch (authErr: any) {
+            console.error("[Login] Biometric signInWithEmail error:", authErr);
+            const errCode = authErr?.code || "";
+            const errMsg = authErr?.message || String(authErr);
+            if (errCode === "auth/network-request-failed" || errMsg.includes("network-request-failed")) {
+              setError("Network connection issue while signing in. Please check your internet connection and try again.");
+            } else if (errCode === "auth/invalid-credential" || errCode === "auth/user-not-found" || errCode === "auth/wrong-password") {
+              setError("Stored biometric credentials are invalid or expired. Please sign in manually with your email and password.");
+            } else {
+              setError(errMsg.replace(/^Firebase:\s*/, "") || "Biometric sign-in failed. Please enter your credentials manually.");
+            }
+          }
         } else {
           setError("No stored biometric credentials found. Please sign in manually and enable biometrics in App Settings.");
         }
@@ -71,9 +84,16 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error("Biometric Login error:", err);
-      setError(err?.message || "Biometric authentication failed.");
+      const errCode = err?.code || "";
+      const errMsg = err?.message || String(err);
+      if (errCode === "auth/network-request-failed" || errMsg.includes("network-request-failed")) {
+        setError("Network connection issue while signing in. Please check your internet connection and try again.");
+      } else {
+        setError(errMsg.replace(/^Firebase:\s*/, "") || "Biometric authentication failed.");
+      }
     } finally {
       setShowBiometricOverlay(false);
+      setLoading(false);
     }
   };
 
@@ -591,7 +611,22 @@ export default function Login() {
                           setEmail(credentials.email);
                           setPassword(credentials.pass);
                           setLoading(true);
-                          await signInWithEmail(credentials.email, credentials.pass);
+                          try {
+                            await signInWithEmail(credentials.email, credentials.pass);
+                          } catch (authErr: any) {
+                            console.error("[Login] Biometric simulator signInWithEmail error:", authErr);
+                            const errCode = authErr?.code || "";
+                            const errMsg = authErr?.message || String(authErr);
+                            if (errCode === "auth/network-request-failed" || errMsg.includes("network-request-failed")) {
+                              setError("Network connection issue while signing in. Please check your internet connection and try again.");
+                            } else if (errCode === "auth/invalid-credential" || errCode === "auth/user-not-found" || errCode === "auth/wrong-password") {
+                              setError("Stored biometric credentials are invalid or expired. Please sign in manually with your email and password.");
+                            } else {
+                              setError(errMsg.replace(/^Firebase:\s*/, "") || "Biometric authentication failed.");
+                            }
+                          } finally {
+                            setLoading(false);
+                          }
                         } else {
                           setError("Simulator Alert: You haven't enrolled any credentials. Tick 'Enable Biometric Sign-In next time' below the password field, log in once with email/password, and on next logout you can log in instantly with one-click!");
                         }

@@ -3416,6 +3416,68 @@ export default function PostJobWizard() {
                         )}
                       </div>
 
+                      {/* 3.1 AI Pre-Quote Price Guide: Cost Breakdown & Seasonal Impact Insights */}
+                      {estimate.breakdown && (
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 space-y-3">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                            <PoundSterling className="w-3.5 h-3.5" />
+                            Benchmark Cost Breakdown
+                          </p>
+                          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                            <div className="bg-black/20 p-2.5 rounded-xl">
+                              <p className="text-[10px] text-cyan-200 uppercase font-semibold">Materials</p>
+                              <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.materials || "£30 - £80"}</p>
+                            </div>
+                            <div className="bg-black/20 p-2.5 rounded-xl">
+                              <p className="text-[10px] text-cyan-200 uppercase font-semibold">Labour Rate</p>
+                              <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.labour || "£45 - £65/hr"}</p>
+                            </div>
+                            <div className="bg-black/20 p-2.5 rounded-xl">
+                              <p className="text-[10px] text-cyan-200 uppercase font-semibold">Duration</p>
+                              <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.duration || "2 - 4 hours"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Seasonal Impact & Market Trends */}
+                      <div className="bg-amber-500/10 backdrop-blur-md rounded-2xl p-4 border border-amber-300/30 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-200 flex items-center gap-1.5">
+                            <CalendarClock className="w-3.5 h-3.5 text-amber-300" />
+                            Seasonal Cost & Market Impact
+                          </span>
+                          {estimate.pricingInsights?.marketTrend && (
+                            <span className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide",
+                              estimate.pricingInsights.marketTrend === "rising" ? "bg-red-500/80 text-white" :
+                              estimate.pricingInsights.marketTrend === "falling" ? "bg-emerald-500/80 text-white" :
+                              "bg-cyan-500/80 text-white"
+                            )}>
+                              {estimate.pricingInsights.marketTrend} trend
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-white/90 leading-relaxed">
+                          {estimate.pricingInsights?.seasonalImpact || `Peak demand season in ${formData.postcode || "your area"} may increase quotes by 5-10%. Booking 1-2 weeks in advance locks in baseline rates.`}
+                        </p>
+
+                        {estimate.pricingInsights?.costSavingTips && estimate.pricingInsights.costSavingTips.length > 0 && (
+                          <div className="pt-2 border-t border-white/10 space-y-1">
+                            <p className="text-[10px] font-bold text-amber-200 uppercase">Cost-Saving Tips:</p>
+                            <ul className="space-y-1 text-xs text-cyan-100">
+                              {estimate.pricingInsights.costSavingTips.map((tip, idx) => (
+                                <li key={idx} className="flex items-start gap-1">
+                                  <Sparkles className="w-3 h-3 text-amber-300 shrink-0 mt-0.5" />
+                                  <span>{tip}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="bg-white/10 rounded-xl p-4 mt-2 border border-black/20">
                         <p className="text-cyan-50 text-xs leading-relaxed">
                           <strong>Note:</strong> This is an AI estimate based on historical postcode records, not a guaranteed quote. Tradespeople will see this as your target budget, but actual quotes may vary based on specific site requirements.
