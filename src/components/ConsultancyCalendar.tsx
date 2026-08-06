@@ -3,7 +3,7 @@ import { useAuth } from "./AuthProvider";
 import { db, collection, query, where, onSnapshot } from "@/src/firebase";
 import { Calendar as CalendarIcon, Clock, Users, Video, RefreshCw, X, CalendarCheck } from "lucide-react";
 import { format, addDays, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
-import { isGoogleCalendarConnected, requestCalendarAccessToken, disconnectGoogleCalendar, syncSiteInspectionToGoogleCalendar } from "@/src/services/googleCalendarService";
+import { isGoogleCalendarConnected, requestCalendarAccessToken, disconnectGoogleCalendar, syncSiteInspectionToGoogleCalendar, openGoogleCalendarUrl } from "@/src/services/googleCalendarService";
 
 export function ConsultancyCalendar() {
   const { user } = useAuth();
@@ -49,10 +49,11 @@ export function ConsultancyCalendar() {
     });
 
     setSyncingEventId(null);
-    if (res.success) {
+    if (res && res.url) {
+      openGoogleCalendarUrl(res.url);
       setSyncedEventIds(prev => [...prev, evt.id]);
     } else {
-      setSyncError(res.error || "Could not sync to Google Calendar.");
+      setSyncError(res?.error || "Could not sync to Google Calendar.");
     }
   };
 

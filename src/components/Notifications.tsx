@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, deleteDoc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, MessageSquare, FileText, Info, Check, Trash2, Loader2, Clock, X } from "lucide-react";
+import { Bell, MessageSquare, FileText, Info, Check, Trash2, Loader2, Clock, X, Plus, Calendar } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 
@@ -67,6 +67,7 @@ export default function Notifications() {
       case "quote": return <FileText className="w-5 h-5 text-blue-600" />;
       case "message": return <MessageSquare className="w-5 h-5 text-green-600" />;
       case "status": return <Check className="w-5 h-5 text-amber-600" />;
+      case "scheduled_repair_reminder": return <Calendar className="w-5 h-5 text-blue-600" />;
       default: return <Info className="w-5 h-5 text-slate-600" />;
     }
   };
@@ -140,14 +141,15 @@ export default function Notifications() {
                   </div>
                   <p className="text-sm text-slate-500 line-clamp-2">{notification.message}</p>
                   
-                  <div className="flex items-center gap-4 pt-2">
-                    {notification.link && (
+                  <div className="flex items-center gap-3 pt-2.5 flex-wrap">
+                    {(notification.actionPath || notification.link) && (
                       <Link 
-                        to={notification.link}
+                        to={notification.actionPath || notification.link}
                         onClick={() => markAsRead(notification.id)}
-                        className="text-xs font-bold text-blue-600 hover:underline"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all hover:scale-[1.02] active:scale-95 cursor-pointer shrink-0"
                       >
-                        View Details
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>Request Quotes</span>
                       </Link>
                     )}
                     {!notification.read && (

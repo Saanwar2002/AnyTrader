@@ -217,6 +217,52 @@ export async function createCalendarEvent(
 }
 
 /**
+ * Builds a direct Google Calendar Web Event Template URL.
+ */
+export function generateGoogleCalendarUrl(params: {
+  title: string;
+  description?: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+}): string {
+  const summary = encodeURIComponent(params.title);
+  const details = encodeURIComponent(params.description || "");
+  const location = encodeURIComponent(params.location || "");
+
+  let startIso = params.startDate ? new Date(params.startDate) : new Date();
+  if (isNaN(startIso.getTime())) {
+    startIso = new Date();
+  }
+  let endIso = params.endDate ? new Date(params.endDate) : new Date(startIso.getTime() + 60 * 60 * 1000);
+  if (isNaN(endIso.getTime())) {
+    endIso = new Date(startIso.getTime() + 60 * 60 * 1000);
+  }
+
+  const formatDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, "");
+  const dates = `${formatDate(startIso)}/${formatDate(endIso)}`;
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${summary}&details=${details}&location=${location}&dates=${dates}`;
+}
+
+/**
+ * Safely opens Google Calendar URL in a new window/tab, falling back to location navigation if popups are blocked.
+ */
+export function openGoogleCalendarUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win || win.closed || typeof win.closed === "undefined") {
+      window.location.href = url;
+    }
+    return true;
+  } catch (err) {
+    window.location.href = url;
+    return true;
+  }
+}
+
+/**
  * Quick helper to sync a scheduled trade job into Google Calendar.
  */
 export async function syncJobToGoogleCalendar(job: {
@@ -227,20 +273,36 @@ export async function syncJobToGoogleCalendar(job: {
   startDate?: string;
   description?: string;
   clientEmail?: string;
-}) {
-  const startTime = job.startDate ? new Date(job.startDate).toISOString() : new Date().toISOString();
-  const summary = `[AnyTrader Job] ${job.title}`;
-  const location = [job.address, job.postcode].filter(Boolean).join(", ");
-  const description = `Job Category: ${job.category || "Trade Services"}\nDetails: ${job.description || "N/A"}\n\nManaged via AnyTrader Ecosystem`;
+}): Promise<{ success: boolean; url: string; method: "api" | "web"; error?: string }> {
+  const startDateStr = job.startDate ? new Date(job.startDate).toISOString() : new Date().toISOString();
+  const summary = `[AnyTrader Task] ${job.title}`;
+  const location = [job.address, job.postcode].filter(Boolean).join(", ") || "Home";
+  const description = `Job Category: ${job.category || "General Maintenance"}\nDetails: ${job.description || "N/A"}\n\nManaged via AnyTrader Ecosystem`;
 
-  return createCalendarEvent({
-    summary,
+  const webUrl = generateGoogleCalendarUrl({
+    title: summary,
     description,
     location,
-    startTime,
-    attendees: job.clientEmail ? [job.clientEmail] : undefined,
-    remindersMinutesBefore: [30, 120, 1440], // 30m, 2h, 24h
+    startDate: startDateStr,
   });
+
+  const storedToken = getStoredAccessToken();
+  if (storedToken) {
+    const apiResult = await createCalendarEvent({
+      summary,
+      description,
+      location,
+      startTime: startDateStr,
+      attendees: job.clientEmail ? [job.clientEmail] : undefined,
+      remindersMinutesBefore: [30, 120, 1440],
+    }, storedToken);
+
+    if (apiResult.success) {
+      return { success: true, url: apiResult.htmlLink || webUrl, method: "api" };
+    }
+  }
+
+  return { success: true, url: webUrl, method: "web" };
 }
 
 /**
@@ -252,18 +314,34 @@ export async function syncRideToGoogleCalendar(ride: {
   pickupTime: string;
   driverName?: string;
   fareEstimate?: number | string;
-}) {
-  const startTime = new Date(ride.pickupTime).toISOString();
+}): Promise<{ success: boolean; url: string; method: "api" | "web"; error?: string }> {
+  const startDateStr = new Date(ride.pickupTime).toISOString();
   const summary = `[AnyRoller Ride] Taxi to ${ride.destination}`;
   const description = `Pickup Location: ${ride.pickup}\nDestination: ${ride.destination}\nDriver: ${ride.driverName || "Assigned Driver"}\nEstimated Fare: £${ride.fareEstimate || "0.00"}\n\nBooked via AnyRoller Taxi Ecosystem`;
 
-  return createCalendarEvent({
-    summary,
+  const webUrl = generateGoogleCalendarUrl({
+    title: summary,
     description,
     location: ride.pickup,
-    startTime,
-    remindersMinutesBefore: [15, 60], // 15m and 1h reminders
+    startDate: startDateStr,
   });
+
+  const storedToken = getStoredAccessToken();
+  if (storedToken) {
+    const apiResult = await createCalendarEvent({
+      summary,
+      description,
+      location: ride.pickup,
+      startTime: startDateStr,
+      remindersMinutesBefore: [15, 60],
+    }, storedToken);
+
+    if (apiResult.success) {
+      return { success: true, url: apiResult.htmlLink || webUrl, method: "api" };
+    }
+  }
+
+  return { success: true, url: webUrl, method: "web" };
 }
 
 /**
@@ -275,18 +353,34 @@ export async function syncSiteInspectionToGoogleCalendar(inspection: {
   address?: string;
   scheduledTime: string;
   notes?: string;
-}) {
-  const startTime = new Date(inspection.scheduledTime).toISOString();
+}): Promise<{ success: boolean; url: string; method: "api" | "web"; error?: string }> {
+  const startDateStr = new Date(inspection.scheduledTime).toISOString();
   const summary = `[Site Inspection] ${inspection.projectName}`;
   const description = `Client: ${inspection.clientName || "Property Owner"}\nInspection Notes: ${inspection.notes || "Site visit & quote assessment"}\n\nScheduled via AnyTrader Agency Portal`;
 
-  return createCalendarEvent({
-    summary,
+  const webUrl = generateGoogleCalendarUrl({
+    title: summary,
     description,
     location: inspection.address || "",
-    startTime,
-    remindersMinutesBefore: [30, 120],
+    startDate: startDateStr,
   });
+
+  const storedToken = getStoredAccessToken();
+  if (storedToken) {
+    const apiResult = await createCalendarEvent({
+      summary,
+      description,
+      location: inspection.address || "",
+      startTime: startDateStr,
+      remindersMinutesBefore: [30, 120],
+    }, storedToken);
+
+    if (apiResult.success) {
+      return { success: true, url: apiResult.htmlLink || webUrl, method: "api" };
+    }
+  }
+
+  return { success: true, url: webUrl, method: "web" };
 }
 
 /**

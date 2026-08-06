@@ -6,7 +6,7 @@ import { CalendarIcon, ChevronDown, ChevronUp, MapPin, Clock, CalendarCheck, Ref
 import { cn } from '@/src/lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthProvider';
-import { syncJobToGoogleCalendar } from '@/src/services/googleCalendarService';
+import { syncJobToGoogleCalendar, openGoogleCalendarUrl } from '@/src/services/googleCalendarService';
 
 export function TraderUpcomingAppointments() {
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -73,7 +73,8 @@ export function TraderUpcomingAppointments() {
       description: apt.notes || apt.description || "Scheduled via AnyTrader",
     });
     setSyncingId(null);
-    if (res.success) {
+    if (res && res.url) {
+      openGoogleCalendarUrl(res.url);
       setSyncedIds(prev => [...prev, apt.id]);
     }
   };

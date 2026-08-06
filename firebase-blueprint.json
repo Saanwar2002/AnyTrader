@@ -3658,9 +3658,40 @@
         "status",
         "createdAt"
       ]
+    },
+    "ScheduledRepairTask": {
+      "title": "ScheduledRepairTask",
+      "description": "User planned and scheduled property repair task.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "targetDate": { "type": "string", "format": "date" },
+        "reminderOffset": { "type": "string" },
+        "estimatedBudget": { "type": "string" },
+        "urgency": { "type": "string" },
+        "notes": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "propertyName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "targetDate",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
+    "/scheduledRepairs/{taskId}": {
+      "schema": "ScheduledRepairTask",
+      "description": "User planned and scheduled property repair tasks."
+    },
     "/appointments/{appointmentId}": {
       "schema": "Appointment",
       "description": "Appointment requests and bookings."

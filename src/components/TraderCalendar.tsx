@@ -4,7 +4,7 @@ import { db, collection, query, where, onSnapshot, updateDoc, doc, handleFiresto
 import { differenceInDays, format, addDays, subDays, isSameDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addMonths, getDaysInMonth, isWithinInterval } from "date-fns";
 import { Calendar as CalendarIcon, Clock, MapPin, Search, Sparkles, BrainCircuit, ArrowRight, Zap, X, CalendarClock, CalendarDays, Check, XCircle, ChevronLeft, ChevronRight, ChevronDown, CalendarCheck, RefreshCw } from "lucide-react";
 import { cn } from "@/src/lib/utils";
-import { isGoogleCalendarConnected, requestCalendarAccessToken, disconnectGoogleCalendar, syncJobToGoogleCalendar } from "@/src/services/googleCalendarService";
+import { isGoogleCalendarConnected, requestCalendarAccessToken, disconnectGoogleCalendar, syncJobToGoogleCalendar, openGoogleCalendarUrl } from "@/src/services/googleCalendarService";
 
 export default function TraderCalendar() {
   const { user } = useAuth();
@@ -56,10 +56,11 @@ export default function TraderCalendar() {
     });
 
     setSyncingJobId(null);
-    if (res.success) {
+    if (res && res.url) {
+      openGoogleCalendarUrl(res.url);
       setSyncedJobIds(prev => [...prev, item.id]);
     } else {
-      setSyncError(res.error || "Could not sync event to Google Calendar.");
+      setSyncError(res?.error || "Could not sync event to Google Calendar.");
     }
   };
 
