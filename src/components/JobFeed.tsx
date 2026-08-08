@@ -1,3 +1,4 @@
+import { textContainsTokenMatch } from "@/src/lib/fuzzyMatch";
 import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, limit, getDocs, onSnapshot, type FirebaseUser, handleFirestoreError, OperationType, updateDoc, doc } from "@/src/firebase";
 import { parseNaturalLanguageSearch } from "@/src/services/gemini";
@@ -395,9 +396,10 @@ export default function JobFeed() {
     const normalizedSearch = searchLower.replace(/[^a-z0-9]/g, '');
     const jobNoNormalized = job.jobNo?.toLowerCase().replace(/[^a-z0-9]/g, '') || "";
 
-    const matchesSearch = job.title.toLowerCase().includes(searchLower) || 
-                         job.description.toLowerCase().includes(searchLower) ||
-                         (normalizedSearch !== "" && jobNoNormalized.includes(normalizedSearch));
+    const matchesSearch = !searchTerm.trim() ||
+                         textContainsTokenMatch(job.title, searchTerm) || 
+                         textContainsTokenMatch(job.description, searchTerm) ||
+                         (normalizedSearch !== "" && jobNoNormalized.startsWith(normalizedSearch));
     const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(job.category);
     
     // Base filters that always apply

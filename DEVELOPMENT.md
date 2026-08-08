@@ -1,5 +1,15 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 📦 On-Demand Delivery, Bulky Goods, Mobile Bin Cleaning & Refined Tokenized Fuzzy Search (Completed August 7, 2026)
+*   **Refined Tokenized Keyword Prefix Search Logic (`fuzzyMatch.ts`)**:
+    *   **Enforced Strict Word-Boundary Prefix Matching**: Updated `tokenMatches` and `textContainsTokenMatch` to enforce that search query tokens only match the **start (prefix)** of words/tags/skills/profile fields (e.g., searching `"pet"` matches `"Pet Services"`, `"Pet Sitting"`, `"Petting"`, but strictly **does NOT match** `"Carpet Cleaning"` or `"Carpet Repair"`).
+    *   **Eliminated Substring Middle/End Noise**: Replaced simple `.includes()` checks with tokenized boundary matching across `matchTraderWithSearchQuery`, `findFuzzySuggestion`, `FindTrades.tsx` (Ad filtering), `PostJobWizard.tsx` (Category selection), `EmergencyJobWizard.tsx`, and `JobFeed.tsx`.
+    *   **Typo Tolerance with Front-of-Word Prefix Constraint**: Typo matching (via Damerau-Levenshtein distance) requires sharing the same initial 3-4 front-of-word characters, preventing spurious fuzzy matches across unrelated words.
+*   **On-Demand Delivery & Bulky Appliance Courier Service (`constants.ts` & `fuzzyMatch.ts`)**:
+    *   **Dedicated Major Category 84 (`Courier, Parcel & Express Delivery`)**: Added a dedicated category with subcategories for `ASAP Express Parcel Delivery`, `Bulky Item & Heavy Appliance Transport (Washing Machines, Fridges, Dishwashers)`, `Washing Machine Delivery & Disconnect/Reconnect`, `Fridge / Freezer Transport & Delivery`, `Dishwasher Delivery & Transport`, `White Goods & Furniture Delivery`, `On-Demand Van Delivery`, and `Marketplace & Store Pickup (eBay, Facebook, B&Q, Currys)`.
+    *   **Mobile Wheelie Bin & Refuse Cleaning (`constants.ts` & `fuzzyMatch.ts`)**: Confirmed and indexed `Wheelie Bin Cleaning` under `Specialist Cleaning` and `Bin Store / Refuse Area Cleaning` under `Industrial & Commercial Cleaning`.
+    *   **Intelligent Fuzzy Search Vocabulary Expansion**: Added full search synonyms, candidate mappings, and keywords for terms like `parcel delivery`, `courier`, `washing machine delivery`, `fridge delivery`, `dishwasher delivery`, `appliance delivery`, `bulky item delivery`, `on demand delivery`, `man and van`, `wheelie bin cleaning`, and `bin store cleaning`. Any trader with a suitable vehicle (van, flatbed, car) can register under these categories for instant client matching.
+
 ## 🚀 Plan Ahead Manual Task Planning & Scheduled Notification Engine (Completed August 6, 2026)
 *   **Manual Repair Task Planning & Scheduling System (`HomeHealthWidget.tsx`)**:
     *   Fully integrated a manual task planning and scheduling engine directly inside the "AI Home Health & Seasonal Forecast" widget.
@@ -21,8 +31,10 @@
     *   Unified, live-updated trust checkmarks displayed on every tradesperson profile card across search feeds (`FindTrades.tsx`) and public bio profiles (`PublicProfile.tsx`).
     *   **Compact Square Badge Pills with 40% Reduced Height**:
         *   Redesigned verification checkmark badges into compact squarish pills with rounded edges (`py-0.5 px-2 rounded-md border-black`) and ~40% reduced height for maximum visual efficiency.
-        *   Features a **very slow, continuous smooth auto-scrolling motion** (~16px/sec) that automatically pauses on touch or hover, guaranteeing 100% text legibility without awkward truncation.
+        *   Features a **very slow, continuous smooth auto-scrolling motion** (~20px/sec) with a duplicated seamless infinite loop (`firstSetWidth` modulo offset) that eliminates stop-and-start stuttering, and automatically pauses on touch or hover, guaranteeing 100% text legibility without awkward truncation.
         *   Subtle left & right gradient masks offer a smooth fade transition.
+    *   **High-Contrast Flipped Profile Card ("Instant Info")**:
+        *   Strengthened all text labels, call-out prices, extra info quotes, performance metrics, and badge pill typography to deep blacks/navies (`text-slate-900`, `text-slate-950`, `text-[#002b5c]`, `font-black`) with vibrant blue card borders (`border-[#2563eb]`) so pricing, rating, and badges are instantly legible during the 15-second card inspection window.
     *   **Compact Profile Cards & Inline Bold Postcode**:
         *   Postcode moved inline into the metadata row directly adjacent to `RECMD BY`, preserving bold styling (`font-black text-slate-900`) while saving vertical space.
         *   Streamlined vertical padding, avatar dimensions (`w-14 h-14` / `w-16 h-16`), meta spacing, and availability/pricing bars to eliminate empty whitespace and keep search cards tight and easy to scan vertically.

@@ -4,7 +4,7 @@ import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { db, collection, query, where, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
-import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
+import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, textContainsTokenMatch, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
 import { cn } from "@/src/lib/utils";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
@@ -860,12 +860,11 @@ export default function FindTrades() {
         const tpMatches = matchTraderWithSearchQuery(tp, searchQuery, candidateDictionary);
         
         const adMatches = 
-          ad.title?.toLowerCase().includes(queryLower) ||
-          ad.tagline?.toLowerCase().includes(queryLower) ||
+          (ad.title && textContainsTokenMatch(ad.title, searchQuery)) ||
+          (ad.tagline && textContainsTokenMatch(ad.tagline, searchQuery)) ||
           ad.targetCategories?.some((cat: string) => {
-            const catLower = cat.toLowerCase();
-            if (catLower === "all") return false;
-            return catLower.includes(queryLower) || queryLower.includes(catLower);
+            if (!cat || cat.toLowerCase() === "all") return false;
+            return textContainsTokenMatch(cat, searchQuery);
           });
 
         if (!tpMatches && !adMatches) return false;
@@ -2322,38 +2321,38 @@ export default function FindTrades() {
 
                   <button 
                     onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(null); }}
-                    className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors flex items-center justify-center z-20"
+                    className="absolute top-4 right-4 p-2 bg-slate-200 hover:bg-slate-300 rounded-full transition-colors flex items-center justify-center z-20"
                     title="Close Info"
                   >
-                    <X className="w-4 h-4 text-slate-400 font-bold" />
+                    <X className="w-4 h-4 text-slate-700 font-bold" />
                   </button>
                   
                   <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 bg-[#0066cc] rounded-full flex items-center justify-center text-white shrink-0 shadow-sm">
+                    <div className="w-12 h-12 bg-[#004080] rounded-full flex items-center justify-center text-white shrink-0 shadow-sm">
                       <span className="font-serif font-bold text-2xl italic">i</span>
                     </div>
                     <div>
-                      <h3 className="font-bold text-[#0066cc] text-xl tracking-tight leading-tight">Instant Info</h3>
-                      <p className="text-xs text-slate-400 font-medium">Pricing & Details • Auto-closes in 15s</p>
+                      <h3 className="font-black text-[#002b5c] text-xl tracking-tight leading-tight">Instant Info</h3>
+                      <p className="text-xs text-slate-700 font-bold">Pricing & Details • Auto-closes in 15s</p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white rounded-2xl py-2 border-2 border-[#81c3f8] text-center shadow-sm">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">CALL-OUT FEE</p>
-                        <p className="text-xl font-black text-[#0066cc]">£{tp.miniProfileSettings?.callOutFee || 0}</p>
+                      <div className="bg-white rounded-2xl py-2 border-2 border-[#2563eb] text-center shadow-sm">
+                        <p className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider mb-1">CALL-OUT FEE</p>
+                        <p className="text-2xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.callOutFee || 0}</p>
                       </div>
-                      <div className="bg-white rounded-2xl py-2 border-2 border-[#81c3f8] text-center shadow-sm">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">HOURLY RATE</p>
-                        <p className="text-xl font-black text-[#0066cc]">£{tp.miniProfileSettings?.hourlyRate || 0}</p>
+                      <div className="bg-white rounded-2xl py-2 border-2 border-[#2563eb] text-center shadow-sm">
+                        <p className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider mb-1">HOURLY RATE</p>
+                        <p className="text-2xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.hourlyRate || 0}</p>
                       </div>
                     </div>
 
                     {tp.miniProfileSettings?.extraInfo && (
-                      <div className="bg-white rounded-2xl p-3 border-2 border-[#81c3f8] text-center shadow-sm">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">EXTRA INFO</p>
-                        <p className="text-sm font-medium text-[#0066cc] leading-tight break-words whitespace-pre-wrap">
+                      <div className="bg-white rounded-2xl p-3 border-2 border-[#2563eb] text-center shadow-sm">
+                        <p className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider mb-1">EXTRA INFO</p>
+                        <p className="text-sm font-bold text-slate-900 leading-tight break-words whitespace-pre-wrap">
                           "{tp.miniProfileSettings.extraInfo.length > 120 ? tp.miniProfileSettings.extraInfo.substring(0, 120) + '...' : tp.miniProfileSettings.extraInfo}"
                         </p>
                       </div>
@@ -2361,27 +2360,27 @@ export default function FindTrades() {
                   </div>
 
                   {/* Performance Badges & Achievements Section (At Very Bottom) */}
-                  <div className="border-t border-slate-200 pt-3 mt-3 w-full">
+                  <div className="border-t border-slate-300 pt-3 mt-3 w-full">
                     {/* Performance Metrics Bar */}
-                    <div className="grid grid-cols-3 gap-1.5 text-center mb-2.5 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <div className="grid grid-cols-3 gap-1.5 text-center mb-2.5 bg-slate-100 p-2 rounded-xl border border-slate-300">
                       <div>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Rating</p>
-                        <p className="text-xs font-black text-slate-900 flex items-center justify-center gap-0.5">
-                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                        <p className="text-[8.5px] font-black text-slate-700 uppercase tracking-wider">Rating</p>
+                        <p className="text-sm font-black text-slate-950 flex items-center justify-center gap-0.5">
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                           {tp.rating?.toFixed(1) || "5.0"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Jobs Done</p>
-                        <p className="text-xs font-black text-slate-900 flex items-center justify-center gap-0.5">
-                          <Trophy className="w-3 h-3 text-purple-600" />
+                        <p className="text-[8.5px] font-black text-slate-700 uppercase tracking-wider">Jobs Done</p>
+                        <p className="text-sm font-black text-slate-950 flex items-center justify-center gap-0.5">
+                          <Trophy className="w-3.5 h-3.5 text-purple-700" />
                           {tp.totalJobsDone || 0}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Trust Score</p>
-                        <p className="text-xs font-black text-slate-900 flex items-center justify-center gap-0.5">
-                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        <p className="text-[8.5px] font-black text-slate-700 uppercase tracking-wider">Trust Score</p>
+                        <p className="text-sm font-black text-slate-950 flex items-center justify-center gap-0.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
                           {tp.trustScore || 95}
                         </p>
                       </div>
@@ -2390,10 +2389,10 @@ export default function FindTrades() {
                     {/* All Earned Badges & Achievements */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">
+                        <span className="text-[9.5px] font-black text-slate-900 uppercase tracking-wider">
                           Badges & Achievements
                         </span>
-                        <span className="text-[8px] text-slate-400 font-bold">
+                        <span className="text-[8.5px] text-slate-700 font-black">
                           {getTraderBadges(tp).length + (Array.from(new Set([...(tp.badges || []), ...(tp.searchFeedBadges || [])])).filter(id => !getTraderBadges(tp).some(b => b.id === id)).length)} Badges
                         </span>
                       </div>
@@ -2404,15 +2403,15 @@ export default function FindTrades() {
                           <span 
                             key={`dynamic-${badge.id}`} 
                             className={cn(
-                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold border shadow-2xs",
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black border shadow-2xs text-slate-950",
                               badge.bgColor,
                               badge.color,
-                              "border-current/20"
+                              "border-slate-400/50"
                             )}
                             title={badge.description}
                           >
                             {badge.icon}
-                            <span>{badge.label}</span>
+                            <span className="text-slate-950 font-black">{badge.label}</span>
                           </span>
                         ))}
 
@@ -2424,9 +2423,9 @@ export default function FindTrades() {
                           return (
                             <span 
                               key={`prof-${badge.id}`} 
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-slate-100 text-slate-950 border border-slate-400"
                             >
-                              <Award className="w-2.5 h-2.5 text-blue-600" />
+                              <Award className="w-2.5 h-2.5 text-blue-700" />
                               <span>{badge.label}</span>
                             </span>
                           );
@@ -2434,8 +2433,8 @@ export default function FindTrades() {
 
                         {/* Fallback if no badges exist */}
                         {getTraderBadges(tp).length === 0 && (!tp.badges || tp.badges.length === 0) && (!tp.searchFeedBadges || tp.searchFeedBadges.length === 0) && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-50 text-slate-600 border border-slate-200">
-                            <ShieldCheck className="w-2.5 h-2.5 text-blue-500" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-slate-100 text-slate-950 border border-slate-300">
+                            <ShieldCheck className="w-2.5 h-2.5 text-blue-700" />
                             <span>Verified AnyTrader Member</span>
                           </span>
                         )}

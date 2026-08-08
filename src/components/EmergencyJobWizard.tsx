@@ -1,3 +1,4 @@
+import { textContainsTokenMatch } from "@/src/lib/fuzzyMatch";
 import React, { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2, ShieldCheck, Tag, ExternalLink } from "lucide-react";
@@ -180,7 +181,7 @@ export default function EmergencyJobWizard() {
   }, [user]);
 
   const filteredCategories = TRADE_CATEGORIES.filter(cat => {
-    const matchesSearch = cat.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery.trim() || textContainsTokenMatch(cat.name, searchQuery);
     const matchesTargetTrades = targetTrades && Array.isArray(targetTrades) && targetTrades.length > 0
       ? targetTrades.includes(cat.name)
       : true;

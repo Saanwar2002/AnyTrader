@@ -1496,6 +1496,31 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "Pet-Friendly Transport",
       "Long Distance"
     ]
+  },
+  {
+    id: 85,
+    name: "Courier, Parcel & Express Delivery",
+    icon: "📦",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "Same-Day Express Courier": ["Goods in Transit / Courier Insurance"],
+      "Bulky Item & Appliance Transport": ["Goods in Transit / Courier Insurance"],
+      "Man & Van On-Demand Delivery": ["Goods in Transit / Courier Insurance", "Hire & Reward Insurance"]
+    },
+    subcategories: [
+      "ASAP Express Parcel Delivery",
+      "Same-Day Courier & Package Dispatch",
+      "Bulky Item & Heavy Appliance Transport (Washing Machines, Fridges, Dishwashers)",
+      "Washing Machine Delivery & Disconnect/Reconnect",
+      "Fridge / Freezer Transport & Delivery",
+      "Dishwasher Delivery & Transport",
+      "White Goods & Furniture Delivery",
+      "On-Demand Van Delivery (Single / Large Vehicle)",
+      "Marketplace & Store Pickup (eBay, Facebook, B&Q, Currys)",
+      "Local Express Parcel Dispatch",
+      "Document & Confidential Legal Delivery",
+      "Pallet & Freight Transport"
+    ]
   }
 ];
 

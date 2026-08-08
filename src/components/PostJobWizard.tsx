@@ -1,3 +1,4 @@
+import { textContainsTokenMatch } from "@/src/lib/fuzzyMatch";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -928,10 +929,11 @@ export default function PostJobWizard() {
     }
   };
 
-  const safeSearchQuery = searchQuery.trim().toLowerCase();
+  const safeSearchQuery = searchQuery.trim();
   const filteredCategories = categories.filter(cat => {
-    const matchesSearch = cat.name.toLowerCase().includes(safeSearchQuery) ||
-      (cat.subcategories && cat.subcategories.some(sub => sub.toLowerCase().includes(safeSearchQuery)));
+    const matchesSearch = !safeSearchQuery || 
+      textContainsTokenMatch(cat.name, safeSearchQuery) ||
+      (cat.subcategories && cat.subcategories.some(sub => textContainsTokenMatch(sub, safeSearchQuery)));
     
     // If we have a specific target tradesperson, only show categories they cover
     const matchesTargetTrades = targetTrades && Array.isArray(targetTrades) && targetTrades.length > 0 

@@ -15,6 +15,14 @@ export interface FuzzyMatchResult {
   originalQuery: string;
 }
 
+export function tokenize(text: string): string[] {
+  if (!text) return [];
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((t) => t.length > 0);
+}
+
 /**
  * Calculates Damerau-Levenshtein distance (handles insertions, deletions, substitutions, and transpositions).
  */
@@ -76,6 +84,61 @@ export function getSimilarityScore(str1: string, str2: string): number {
 }
 
 /**
+ * Checks if a query word token (qTok) matches a target word token (tTok).
+ * CRITICAL RULE: Matching MUST occur at the START (prefix) of target tokens.
+ * A query token like "pet" will NEVER match "carpet" because "carpet" does not start with "pet".
+ */
+export function tokenMatches(qTok: string, tTok: string): boolean {
+  if (!qTok || !tTok) return false;
+  const q = qTok.toLowerCase().trim();
+  const t = tTok.toLowerCase().trim();
+
+  // Exact token match
+  if (q === t) return true;
+
+  // Very short query tokens (1-2 chars e.g. "ev", "tv")
+  if (q.length <= 2) {
+    return t === q || (t.startsWith(q) && t.length <= 3);
+  }
+
+  // Prefix match: Target token starts with query token (e.g., q="pet" matches t="pet", "pets", "petting")
+  if (t.startsWith(q)) return true;
+
+  // Query token starts with target token if query is longer (e.g. q="plumber", t="plum")
+  if (q.length >= 4 && q.startsWith(t) && t.length >= 3) return true;
+
+  // Prefix-constrained fuzzy match for typos (e.g. "plumbin" vs "plumbing", "electrcian" vs "electrician")
+  // MUST share at least the first 3 or 4 letters at the VERY START of the word token!
+  if (q.length >= 4 && t.length >= 4) {
+    const prefixLen = Math.min(4, q.length, t.length);
+    if (q.slice(0, prefixLen) === t.slice(0, prefixLen)) {
+      const dist = damerauLevenshteinDistance(q, t);
+      const maxDist = Math.max(q.length, t.length) <= 6 ? 1 : 2;
+      if (dist <= maxDist) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Checks if targetText contains any word token that matches query token(s).
+ * Supports multi-token query where EVERY query token must find a tokenized match in targetText.
+ */
+export function textContainsTokenMatch(targetText: string, searchQuery: string): boolean {
+  if (!targetText || !searchQuery) return false;
+  const targetTokens = tokenize(targetText);
+  const queryTokens = tokenize(searchQuery);
+
+  if (targetTokens.length === 0 || queryTokens.length === 0) return false;
+
+  // All query tokens must match a target token in targetText
+  return queryTokens.every((qTok) =>
+    targetTokens.some((tTok) => tokenMatches(qTok, tTok))
+  );
+}
+
+/**
  * Rich platform-wide synonym and keyword mappings across all 80+ trade categories.
  */
 export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitle?: string; keywords: string[] }> = {
@@ -131,7 +194,10 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
   "locksmith": { categoryName: "Locksmith & Security", tradeTitle: "Locksmith", keywords: ["lock", "key", "unlock", "door", "intercom", "cctv"] },
 
   // Cleaning
-  "cleaner": { categoryName: "Cleaning Services", tradeTitle: "Cleaner", keywords: ["cleaning", "house", "deep clean", "end of tenancy", "carpet"] },
+  "cleaner": { categoryName: "Home Cleaning", tradeTitle: "Cleaner", keywords: ["cleaning", "house", "deep clean", "end of tenancy", "carpet"] },
+  "bin cleaning": { categoryName: "Specialist Cleaning", tradeTitle: "Wheelie Bin Cleaner", keywords: ["wheelie bin", "mobile bin wash", "bin cleaning", "bin store", "domestic bin wash"] },
+  "wheelie bin cleaning": { categoryName: "Specialist Cleaning", tradeTitle: "Wheelie Bin Cleaner", keywords: ["bin wash", "domestic bin cleaning", "wheelie bin", "mobile bin cleaning"] },
+  "bin store cleaning": { categoryName: "Industrial & Commercial Cleaning", tradeTitle: "Commercial Bin Store Cleaner", keywords: ["bin store", "refuse area", "commercial bin", "refuse store"] },
 
   // Handyman
   "handyman": { categoryName: "Handyman & Property Maintenance", tradeTitle: "Handyman", keywords: ["flat pack", "tv mounting", "shelving", "odd jobs", "repairs"] },
@@ -153,7 +219,19 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
 
   // Legal & Accounting
   "accountant": { categoryName: "Accounting & Financial", tradeTitle: "Accountant", keywords: ["tax", "self assessment", "bookkeeping", "vat", "payroll"] },
-  "solicitor": { categoryName: "Legal Services (Solicitors)", tradeTitle: "Solicitor", keywords: ["conveyancing", "wills", "probate", "lawyer"] }
+  "solicitor": { categoryName: "Legal Services (Solicitors)", tradeTitle: "Solicitor", keywords: ["conveyancing", "wills", "probate", "lawyer"] },
+
+  // Courier, Parcel & Bulky Delivery
+  "parcel delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Express Courier", keywords: ["parcel", "package", "courier", "delivery", "post", "asap", "same day", "on demand"] },
+  "courier": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Courier & Delivery Driver", keywords: ["parcel", "dispatch", "express", "urgent", "same day", "van delivery"] },
+  "delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Delivery Driver / Courier", keywords: ["parcel", "bulky item", "washing machine", "fridge", "dishwasher", "courier"] },
+  "bulky item delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Bulky Goods Carrier", keywords: ["washing machine", "fridge", "dishwasher", "appliance", "furniture", "heavy item", "sofa"] },
+  "washing machine delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Appliance Courier", keywords: ["washing machine", "white goods", "appliance transport", "plumb in", "bulky delivery"] },
+  "fridge delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Appliance Courier", keywords: ["fridge", "freezer", "american fridge freezer", "white goods", "bulky delivery"] },
+  "dishwasher delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Appliance Courier", keywords: ["dishwasher", "kitchen appliance", "white goods", "bulky delivery"] },
+  "appliance delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "White Goods Transport Specialist", keywords: ["washing machine", "fridge", "dishwasher", "cooker", "tumble dryer", "bulky delivery"] },
+  "on demand delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "On-Demand Courier", keywords: ["asap delivery", "instant courier", "same day van", "express pickup", "fast courier"] },
+  "man and van": { categoryName: "Removals", tradeTitle: "Man & Van Driver", keywords: ["van delivery", "bulky items", "furniture", "appliance transport", "pickup", "moving"] }
 };
 
 /**
@@ -247,7 +325,21 @@ export const COMMON_TRADE_VOCABULARY: CandidateItem[] = [
   { label: "Dog Walking", type: "subcategory", categoryName: "Pet Services" },
   { label: "Dog Walker", type: "trade", categoryName: "Pet Services" },
   { label: "House Sitting", type: "subcategory", categoryName: "Pet Services" },
-  { label: "Holiday Pet Care", type: "subcategory", categoryName: "Pet Services" }
+  { label: "Holiday Pet Care", type: "subcategory", categoryName: "Pet Services" },
+
+  // Courier, Parcel & Express Delivery
+  { label: "Courier, Parcel & Express Delivery", type: "category", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Parcel Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Express Courier", type: "trade", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "ASAP Express Parcel Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Bulky Item & Heavy Appliance Transport", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Washing Machine Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Fridge / Freezer Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Dishwasher Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "White Goods & Furniture Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "On-Demand Van Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Marketplace & Store Pickup", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
+  { label: "Same-Day Courier", type: "trade", categoryName: "Courier, Parcel & Express Delivery" }
 ];
 
 /**
@@ -361,11 +453,10 @@ export function buildCandidateDictionary(
 
 /**
  * Platform-wide Trader & Service Matching Engine.
- * Matches a trader against a search query using:
- * - Direct substring matches (Name, Business, Trades, Services, Tags, Skills, Bio, Location)
- * - Category Synonym Expansion (e.g., "joiner" -> "Carpentry & Joinery")
- * - Multi-word token matching
- * - Fuzzy Levenshtein Distance (handles typos in query, trades, services, tags, and skills)
+ * Matches a trader against a search query using tokenized prefix matching:
+ * - Prevents partial word substring matches in the middle/end of words (e.g. "pet" won't match "carpet")
+ * - Enforces front-of-word prefix matching for query tokens against trader fields, trades, services, tags, & skills
+ * - Supports synonym expansion (e.g. "joiner" -> "Carpentry & Joinery", "sparks" -> "Electrical")
  */
 export function matchTraderWithSearchQuery(
   tp: any,
@@ -374,10 +465,11 @@ export function matchTraderWithSearchQuery(
 ): boolean {
   if (!rawSearchQuery || !rawSearchQuery.trim()) return true;
 
-  const query = rawSearchQuery.trim().toLowerCase();
+  const queryTokens = tokenize(rawSearchQuery);
+  if (queryTokens.length === 0) return true;
 
-  // 1. Direct substring matches across scalar fields
-  const directFields: (string | undefined)[] = [
+  // Extract all scalar text fields from trader profile
+  const directFields: string[] = [
     tp.name,
     tp.businessName,
     tp.postcode,
@@ -385,140 +477,50 @@ export function matchTraderWithSearchQuery(
     tp.bio,
     tp.description,
     tp.tagline,
-  ];
+  ].filter((f): f is string => typeof f === "string" && f.trim().length > 0);
 
-  for (const field of directFields) {
-    if (field && field.toLowerCase().includes(query)) {
-      return true;
-    }
-  }
-
-  // Array fields (Trades, Services, Tags, Skills, Recommended Categories)
+  // Extract all array fields from trader profile
   const arrayFields: string[] = [
     ...(tp.trades || []),
     ...(tp.services || []),
     ...(tp.tags || []),
     ...(tp.skills || []),
     ...(tp.recommendedCategories || []),
-  ];
+  ].filter((f): f is string => typeof f === "string" && f.trim().length > 0);
 
-  for (const item of arrayFields) {
-    if (typeof item === "string" && item.toLowerCase().includes(query)) {
-      return true;
+  const allTraderFields = [...directFields, ...arrayFields];
+
+  const rawQueryLower = rawSearchQuery.trim().toLowerCase();
+  const mainSynonym = CATEGORY_SYNONYMS[rawQueryLower];
+
+  // Every token in queryTokens must find a valid front-of-word token match
+  return queryTokens.every((qTok) => {
+    // 1. Direct token match across any field on the trader profile
+    const directMatch = allTraderFields.some((field) => textContainsTokenMatch(field, qTok));
+    if (directMatch) return true;
+
+    // 2. Token synonym expansion (e.g., qTok = "joiner" -> category "Carpentry & Joinery", tradeTitle "Carpenter & Joiner")
+    const tokenSynonym = CATEGORY_SYNONYMS[qTok] || (qTok === rawQueryLower ? mainSynonym : undefined);
+    if (tokenSynonym) {
+      const targetCategory = tokenSynonym.categoryName;
+      const targetTitle = tokenSynonym.tradeTitle;
+      const keywords = tokenSynonym.keywords || [];
+
+      const synonymMatch = allTraderFields.some((field) => {
+        if (targetCategory && textContainsTokenMatch(field, targetCategory)) return true;
+        if (targetTitle && textContainsTokenMatch(field, targetTitle)) return true;
+        return keywords.some((kw) => textContainsTokenMatch(field, kw));
+      });
+
+      if (synonymMatch) return true;
     }
-  }
 
-  // 2. Synonym Mappings (e.g., "joiner", "babysitter", "mechanic", "roofer")
-  const synonymMeta = CATEGORY_SYNONYMS[query];
-  if (synonymMeta) {
-    const targetCategory = synonymMeta.categoryName.toLowerCase();
-    const targetTitle = synonymMeta.tradeTitle?.toLowerCase();
-    const keywords = synonymMeta.keywords || [];
-
-    const matchesCategory = arrayFields.some((item) => {
-      if (typeof item !== "string") return false;
-      const lower = item.toLowerCase();
-      const matchesCat = lower === targetCategory || (targetCategory.length > 4 && lower.includes(targetCategory));
-      const matchesTitle = targetTitle ? (lower === targetTitle || (targetTitle.length > 4 && lower.includes(targetTitle))) : false;
-      const matchesKw = keywords.some((k) => {
-        if (k.length <= 4) {
-          const escaped = k.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-          return new RegExp(`\\b${escaped}\\b`, "i").test(lower);
-        }
-        return lower.includes(k);
-      });
-      return matchesCat || matchesTitle || matchesKw;
-    });
-
-    if (matchesCategory) return true;
-  }
-
-  // 3. Multi-word Token Matching (e.g., "emergency plumber london", "kitchen fitting joiner")
-  const tokens = query.split(/\s+/).filter((t) => t.length >= 2);
-
-  if (tokens.length > 1) {
-    const allTokensMatch = tokens.every((token) => {
-      // Check direct scalar fields
-      const matchesDirect = directFields.some((f) => {
-        if (!f) return false;
-        const lower = f.toLowerCase();
-        if (token.length <= 3) {
-          const escaped = token.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-          return new RegExp(`\\b${escaped}\\b`, "i").test(lower);
-        }
-        return lower.includes(token);
-      });
-      if (matchesDirect) return true;
-
-      // Check array fields
-      const matchesArray = arrayFields.some((item) => {
-        if (typeof item !== "string") return false;
-        const lower = item.toLowerCase();
-        if (token.length <= 3) {
-          const escaped = token.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-          return new RegExp(`\\b${escaped}\\b`, "i").test(lower);
-        }
-        return lower.includes(token);
-      });
-      if (matchesArray) return true;
-
-      // Check token synonym
-      const tokenSynonym = CATEGORY_SYNONYMS[token];
-      if (tokenSynonym) {
-        const catLower = tokenSynonym.categoryName.toLowerCase();
-        return arrayFields.some(
-          (item) => typeof item === "string" && item.toLowerCase().includes(catLower)
-        );
-      }
-
-      // Check fuzzy token match
-      if (token.length >= 4) {
-        return arrayFields.some((item) => {
-          if (typeof item !== "string") return false;
-          const score = getSimilarityScore(token, item);
-          const dist = damerauLevenshteinDistance(token, item.toLowerCase());
-          return score >= 0.72 || (dist <= 1 && token.length >= 5);
-        });
-      }
-
-      return false;
-    });
-
-    if (allTokensMatch) return true;
-  }
-
-  // 4. Single-token Fuzzy Match (handles typos like "carpntry", "plumbin", "electrcian", "rofing", "babysiter")
-  if (!query.includes(" ") && query.length >= 4) {
-    for (const item of arrayFields) {
-      if (typeof item === "string") {
-        const itemLower = item.toLowerCase();
-        const score = getSimilarityScore(query, itemLower);
-        const dist = damerauLevenshteinDistance(query, itemLower);
-
-        if (score >= 0.75 || (dist <= 1 && query.length >= 5)) {
-          return true;
-        }
-
-        // Tokenized check inside multi-word trade/service item (e.g. "Carpentry & Joinery")
-        const itemTokens = itemLower.split(/[\s&,/]+/);
-        for (const iTok of itemTokens) {
-          if (iTok.length >= 4) {
-            const tokScore = getSimilarityScore(query, iTok);
-            const tokDist = damerauLevenshteinDistance(query, iTok);
-            if (tokScore >= 0.75 || (tokDist <= 1 && query.length >= 5)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return false;
+    return false;
+  });
 }
 
 /**
- * Finds the best fuzzy match suggestion for a user's search query.
+ * Finds the best fuzzy match suggestion for a user's search query based on tokenized prefix matching.
  */
 export function findFuzzySuggestion(
   rawQuery: string,
@@ -527,64 +529,59 @@ export function findFuzzySuggestion(
   if (!rawQuery) return null;
 
   const query = rawQuery.trim().toLowerCase();
-
-  // Too short for meaningful spell checking
   if (query.length < 3) return null;
 
-  // Check if query is an EXACT match or substring match for an existing candidate label
-  const exactOrSubstringMatch = candidates.some((c) => {
-    const labelLower = c.label.toLowerCase();
-    return labelLower === query;
+  const queryTokens = tokenize(query);
+  if (queryTokens.length === 0) return null;
+
+  // Check if query is ALREADY a token match for an existing candidate label
+  const exactOrTokenMatch = candidates.some((c) => {
+    return textContainsTokenMatch(c.label, query);
   });
 
-  // If user typed an exact valid category/trade/trader, no suggestion needed
-  if (exactOrSubstringMatch) return null;
+  if (exactOrTokenMatch) return null;
 
   let bestMatch: CandidateItem | null = null;
   let highestScore = 0;
 
   for (const candidate of candidates) {
-    const labelLower = candidate.label.toLowerCase();
+    const labelTokens = tokenize(candidate.label);
 
-    // 1. Full string similarity
-    const score = getSimilarityScore(query, labelLower);
+    let matchedTokenCount = 0;
+    let tokenScoreSum = 0;
 
-    // 2. Word-by-word token comparison (for multi-word queries or multi-word candidates)
-    const queryTokens = query.split(/\s+/);
-    const labelTokens = labelLower.split(/\s+/);
-
-    let tokenBestScore = 0;
     queryTokens.forEach((qTok) => {
-      if (qTok.length >= 3) {
-        labelTokens.forEach((lTok) => {
-          if (lTok.length >= 3) {
-            const tokScore = getSimilarityScore(qTok, lTok);
-            if (tokScore > tokenBestScore) {
-              tokenBestScore = tokScore;
+      let maxTokScore = 0;
+      labelTokens.forEach((cTok) => {
+        if (tokenMatches(qTok, cTok)) {
+          maxTokScore = 1.0;
+        } else if (qTok.length >= 4 && cTok.length >= 4) {
+          const prefixLen = Math.min(3, qTok.length, cTok.length);
+          if (qTok.slice(0, prefixLen) === cTok.slice(0, prefixLen)) {
+            const tokScore = getSimilarityScore(qTok, cTok);
+            if (tokScore > maxTokScore) {
+              maxTokScore = tokScore;
             }
           }
-        });
+        }
+      });
+
+      if (maxTokScore > 0) {
+        matchedTokenCount++;
+        tokenScoreSum += maxTokScore;
       }
     });
 
-    const finalCandidateScore = Math.max(score, tokenBestScore);
-
-    // Filter thresholds based on length:
-    const distance = damerauLevenshteinDistance(query, labelLower);
-    const maxAllowedDistance = query.length <= 5 ? 2 : 3;
-
-    if (
-      finalCandidateScore > highestScore &&
-      finalCandidateScore >= 0.62 &&
-      distance <= maxAllowedDistance &&
-      labelLower !== query
-    ) {
-      highestScore = finalCandidateScore;
-      bestMatch = candidate;
+    if (matchedTokenCount > 0) {
+      const avgScore = tokenScoreSum / queryTokens.length;
+      if (avgScore > highestScore && avgScore >= 0.65) {
+        highestScore = avgScore;
+        bestMatch = candidate;
+      }
     }
   }
 
-  if (bestMatch && highestScore >= 0.62) {
+  if (bestMatch && highestScore >= 0.65) {
     return {
       suggestion: bestMatch.label,
       type: bestMatch.type,
