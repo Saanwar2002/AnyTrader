@@ -2327,13 +2327,26 @@ export default function FindTrades() {
                     <X className="w-4 h-4 text-slate-700 font-bold" />
                   </button>
                   
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 bg-[#004080] rounded-full flex items-center justify-center text-white shrink-0 shadow-sm">
-                      <span className="font-serif font-bold text-2xl italic">i</span>
+                  <div className="flex items-center gap-3 mb-4 pr-10">
+                    <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center text-white font-black text-lg relative shrink-0 overflow-hidden shadow-sm border border-black/20">
+                      {tp.avatarUrl ? (
+                        <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        tp.name.charAt(0)
+                      )}
                     </div>
-                    <div>
-                      <h3 className="font-black text-[#002b5c] text-xl tracking-tight leading-tight">Instant Info</h3>
-                      <p className="text-xs text-slate-700 font-bold">Pricing & Details • Auto-closes in 15s</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <h3 className="font-black text-[#002b5c] text-lg sm:text-xl tracking-tight leading-tight truncate">
+                          {tp.name}
+                        </h3>
+                        {tp.verificationStatus === "verified" && (
+                          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-700 font-bold truncate">
+                        {tp.trades?.[0] || 'Professional'}
+                      </p>
                     </div>
                   </div>
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from 'qrcode.react';
-import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, arrayUnion, increment, writeBatch, addDoc, runTransaction } from "@/src/firebase";
+import { db, doc, getDoc, getDocs, collection, query, where, or, and, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification, deleteField, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, arrayUnion, increment, writeBatch, addDoc, runTransaction } from "@/src/firebase";
 import { generateQuoteDraft, getReviewSummary, getMaterialList, getDisputeResolution, analyzeQuote, QuoteAnalysis, getRejectionFeedback, generateMarketingPost, getEquipmentRecommendations } from "@/src/services/gemini";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { useAuth } from "./AuthProvider";
@@ -30,6 +30,7 @@ import {
   getStripeOnboardingLink, 
   type PayoutBreakdown 
 } from "@/src/services/stripeIntegrationService";
+import { createOrGetJobInvoice, downloadInvoicePDF } from "@/src/services/invoiceService";
 import { RECURRING_CATEGORIES } from "@/src/constants";
 import { format, addHours, parseISO } from 'date-fns';
 import { TrustPulse } from "./TrustPulse";
@@ -119,6 +120,41 @@ export default function JobDetails() {
   const [estimatedTimeline, setEstimatedTimeline] = useState("");
   const [paymentPreference, setPaymentPreference] = useState("fixed_price");
   const [quoteScope, setQuoteScope] = useState("complete_package");
+  
+  // 4 Part 1 Improvements: Line Items, Deposit Terms, Guarantee & Warranty
+  const [useLineItems, setUseLineItems] = useState(false);
+  const [lineItems, setLineItems] = useState<{ id: string; description: string; amount: string }[]>([
+    { id: "1", description: "Labor & Installation", amount: "" }
+  ]);
+  const [depositTerm, setDepositTerm] = useState("0_percent_completion");
+  const [guaranteeTerm, setGuaranteeTerm] = useState("1_year_workmanship");
+  const [partsWarranty, setPartsWarranty] = useState("standard_parts");
+
+  const handleAddLineItem = () => {
+    setLineItems(prev => [...prev, { id: Date.now().toString(), description: "", amount: "" }]);
+  };
+
+  const handleUpdateLineItem = (id: string, field: "description" | "amount", value: string) => {
+    setLineItems(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, [field]: value } : item);
+      const total = updated.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+      if (total > 0) {
+        setQuoteAmount(total.toString());
+      }
+      return updated;
+    });
+  };
+
+  const handleRemoveLineItem = (id: string) => {
+    setLineItems(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      const total = updated.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+      if (total > 0) {
+        setQuoteAmount(total.toString());
+      }
+      return updated;
+    });
+  };
   const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -566,6 +602,10 @@ const libraries: any[] = ['places', 'geometry'];
           estimatedTimeline,
           paymentPreference,
           quoteScope,
+          lineItems: useLineItems ? lineItems.filter(item => item.description && item.amount) : [],
+          depositTerm,
+          guaranteeTerm,
+          partsWarranty,
           status: "pending",
           updatedAt: serverTimestamp(),
           requoteMessage: deleteField(),
@@ -597,6 +637,10 @@ const libraries: any[] = ['places', 'geometry'];
           estimatedTimeline,
           paymentPreference,
           quoteScope,
+          lineItems: useLineItems ? lineItems.filter(item => item.description && item.amount) : [],
+          depositTerm,
+          guaranteeTerm,
+          partsWarranty,
           status: "pending",
           createdAt: serverTimestamp(),
         };
@@ -1092,6 +1136,14 @@ const libraries: any[] = ['places', 'geometry'];
         } catch (tpErr) {
           console.error("Error updating tradesperson profile:", tpErr);
         }
+
+        // Automated Free & Pro Invoicing System
+        try {
+          const tpProf = tradespersonProfiles[acceptedQuote.tradespersonId] || profile;
+          await createOrGetJobInvoice(job, acceptedQuote, tpProf, homeownerProfile);
+        } catch (invErr) {
+          console.error("Error generating automated job invoice:", invErr);
+        }
       }
 
       if (otherUserId) {
@@ -1318,9 +1370,7 @@ const libraries: any[] = ['places', 'geometry'];
     try {
       const photoUrls: string[] = [];
       for (const file of disputePhotos) {
-        const storageRef = ref(storage, `disputes/${id}/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
-        const url = await getDownloadURL(snapshot.ref);
+        const url = await uploadStorageFile(file, `disputes/${id}/${Date.now()}_${file.name}`, { contentType: file.type });
         photoUrls.push(url);
       }
 
@@ -1844,9 +1894,7 @@ const libraries: any[] = ['places', 'geometry'];
       const urls: string[] = [];
       
       for (const file of files) {
-        const fileRef = ref(storage, `jobs/${id}/before_photos/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(fileRef, await file.arrayBuffer(), { contentType: file.type });
-        const url = await getDownloadURL(snapshot.ref);
+        const url = await uploadStorageFile(file, `jobs/${id}/before_photos/${Date.now()}_${file.name}`, { contentType: file.type });
         urls.push(url);
       }
       
@@ -1919,10 +1967,17 @@ const libraries: any[] = ['places', 'geometry'];
 
   useEffect(() => {
     if (needsRequote && myQuote) {
-      setQuoteAmount(myQuote.amount.toString());
-      setQuoteMessage(myQuote.message);
+      setQuoteAmount(myQuote.amount?.toString() || "");
+      setQuoteMessage(myQuote.message || "");
       setPaymentPreference(myQuote.paymentPreference || "fixed_price");
       setQuoteScope(myQuote.quoteScope || "complete_package");
+      if (myQuote.lineItems && myQuote.lineItems.length > 0) {
+        setLineItems(myQuote.lineItems);
+        setUseLineItems(true);
+      }
+      if (myQuote.depositTerm) setDepositTerm(myQuote.depositTerm);
+      if (myQuote.guaranteeTerm) setGuaranteeTerm(myQuote.guaranteeTerm);
+      if (myQuote.partsWarranty) setPartsWarranty(myQuote.partsWarranty);
     }
   }, [needsRequote, myQuote]);
 
@@ -1973,123 +2028,22 @@ const libraries: any[] = ['places', 'geometry'];
     }
   };
 
-  const handleDownloadInvoice = () => {
+  const handleDownloadInvoice = async () => {
     const activeQuote = myQuote || quotes.find(q => q.status === "accepted");
-    if (!job || !activeQuote) return;
+    if (!job || !activeQuote) {
+      toast.error("No accepted quote found to generate invoice.");
+      return;
+    }
     
-    const tpProfile = tradespersonProfiles[activeQuote.tradespersonId] || profile;
-
-    const invoiceWindow = window.open('', '_blank');
-    if (!invoiceWindow) return;
-
-    const isPaid = job.paymentStatus === 'paid' || job.paymentStatus === 'handshake_complete' || job.isPaid;
-    const documentType = isPaid ? 'RECEIPT' : 'INVOICE';
-    
-    const baseAmount = activeQuote.amount;
-    const vatAmount = baseAmount * 0.20;
-    const totalAmount = baseAmount + vatAmount;
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>${documentType} - ${job.title}</title>
-        <style>
-          body { font-family: system-ui, -apple-system, sans-serif; color: #333; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-          .title { font-size: 24px; font-weight: bold; color: #1e3a5f; margin: 0; }
-          .invoice-details { text-align: right; }
-          .section { margin-bottom: 30px; }
-          .section-title { font-size: 14px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-          table { border-collapse: collapse; margin-top: 20px; width: 100%; }
-          th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-          th { background-color: #f8fafc; font-weight: bold; color: #64748b; }
-          .total-row { font-weight: bold; font-size: 18px; }
-          .footer { margin-top: 60px; text-align: center; color: #666; font-size: 14px; border-top: 1px solid #eee; padding-top: 20px; }
-          @media print { body { padding: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <h1 class="title">${documentType}</h1>
-            <p style="margin-top: 5px; color: #666;">Job No: ${job.jobNo || job.id.substring(0, 8).toUpperCase()}</p>
-          </div>
-          <div class="invoice-details">
-            <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-            <p><strong>Status:</strong> ${isPaid ? 'Paid / Completed' : 'Pending Payment'}</p>
-          </div>
-        </div>
-
-        <div class="grid section">
-          <div>
-            <div class="section-title">From (Tradesperson)</div>
-            <p><strong>${tpProfile?.name || 'Tradesperson'}</strong></p>
-            <p>${tpProfile?.trades?.join(', ') || 'Professional Tradesperson'}</p>
-            <p>${tpProfile?.email || ''}</p>
-          </div>
-          <div>
-            <div class="section-title">To (Customer)</div>
-            <p><strong>${job.homeownerName || 'Customer'}</strong></p>
-            <p>${job.postcode || ''}</p>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">Job Details</div>
-          <p><strong>${job.title}</strong></p>
-          <p style="color: #666;">${job.description}</p>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th style="text-align: right;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>
-                Agreed Quote for Services
-                <br>
-                <small style="color: #666;">Scope: ${activeQuote.quoteScope === 'labour_only' ? 'Labour Only' : 'Complete Package (Labour & Materials)'}</small>
-              </td>
-              <td style="text-align: right;">£${baseAmount.toFixed(2)}</td>
-            </tr>
-            ${activeQuote.revisionCount && activeQuote.revisionCount > 0 ? `
-            <tr>
-              <td>Agreed Revisions / Scope Changes</td>
-              <td style="text-align: right;">Included</td>
-            </tr>
-            ` : ''}
-            <tr>
-              <td>VAT (20%)</td>
-              <td style="text-align: right;">£${vatAmount.toFixed(2)}</td>
-            </tr>
-            <tr class="total-row">
-              <td style="text-align: right; padding-top: 20px;">Total Due:</td>
-              <td style="text-align: right; padding-top: 20px;">£${totalAmount.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="footer">
-          <p>Thank you for your business!</p>
-          <p>Generated via AnyTrader</p>
-        </div>
-        <script>
-          window.onload = () => {
-            window.print();
-          };
-        </script>
-      </body>
-      </html>
-    `;
-    
-    invoiceWindow.document.write(html);
-    invoiceWindow.document.close();
+    try {
+      const tpProfile = tradespersonProfiles[activeQuote.tradespersonId] || profile;
+      const invoiceData = await createOrGetJobInvoice(job, activeQuote, tpProfile, homeownerProfile);
+      downloadInvoicePDF(invoiceData);
+      toast.success(`Downloaded ${invoiceData.isBrandedPro ? "Pro Branded" : "Standard"} Invoice PDF (${invoiceData.invoiceNumber})`);
+    } catch (err) {
+      console.error("Error downloading PDF invoice:", err);
+      toast.error("Failed to generate PDF invoice.");
+    }
   };
 
   if (loading) return <div className="py-12 flex justify-center"><Loader2 className="animate-spin" /></div>;
@@ -4566,6 +4520,86 @@ const libraries: any[] = ['places', 'geometry'];
                     </select>
                   </div>
                 </div>
+
+                {/* Deposit & Stripe Connect Payment Terms Selector */}
+                <div className="space-y-2 bg-slate-50 p-3.5 rounded-2xl border border-black">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
+                      <CreditCard className="w-4 h-4 text-blue-600" />
+                      Deposit & Payment Structure
+                    </label>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Stripe Connect Direct
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: "0_percent_completion", label: "0% Deposit", sub: "100% On Completion" },
+                      { id: "25_percent_upfront", label: "25% Deposit", sub: "For Materials" },
+                      { id: "50_percent_milestone", label: "50/50 Split", sub: "Milestone Payout" }
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setDepositTerm(opt.id)}
+                        className={cn(
+                          "p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between",
+                          depositTerm === opt.id 
+                            ? "bg-slate-900 text-white border-slate-900 shadow-2xs" 
+                            : "bg-white text-slate-800 border-black hover:border-blue-400"
+                        )}
+                      >
+                        <span className="text-xs font-black">{opt.label}</span>
+                        <span className={cn("text-[9px] font-bold mt-0.5", depositTerm === opt.id ? "text-blue-200" : "text-slate-500")}>
+                          {opt.sub}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium leading-tight flex items-center gap-1 pt-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span><strong>Non-Custodial Payouts:</strong> Direct Stripe Connect transfer. TradeOS does not hold user funds.</span>
+                  </p>
+                </div>
+
+                {/* Guarantee & Warranty Toggles */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5 text-amber-500" />
+                      Workmanship Guarantee
+                    </label>
+                    <select
+                      className="w-full p-2.5 rounded-xl border border-black text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                      value={guaranteeTerm}
+                      onChange={(e) => setGuaranteeTerm(e.target.value)}
+                    >
+                      <option value="1_year_workmanship">1 Year Guarantee (Standard)</option>
+                      <option value="2_year_workmanship">2 Year Guarantee</option>
+                      <option value="3_year_workmanship">3 Year Guarantee</option>
+                      <option value="5_year_workmanship">5 Year Guarantee (Premium)</option>
+                      <option value="no_guarantee">No Guarantee (As-Is)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
+                      Parts / Materials Warranty
+                    </label>
+                    <select
+                      className="w-full p-2.5 rounded-xl border border-black text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      value={partsWarranty}
+                      onChange={(e) => setPartsWarranty(e.target.value)}
+                    >
+                      <option value="standard_parts">Manufacturer Standard Warranty</option>
+                      <option value="10_year_parts">10 Year Extended Warranty</option>
+                      <option value="no_parts_warranty">No Parts Warranty</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Willing Start Date */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-500 uppercase">Willing Start Date</label>
@@ -4585,7 +4619,7 @@ const libraries: any[] = ['places', 'geometry'];
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
                         type="date" 
-                        className="w-full p-3 pl-9 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
+                        className="w-full p-3 pl-9 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm bg-white"
                         value={quoteStartDate}
                         min={new Date().toISOString().split('T')[0]}
                         onChange={(e) => setQuoteStartDate(e.target.value)}
@@ -4593,66 +4627,129 @@ const libraries: any[] = ['places', 'geometry'];
                     </div>
                   )}
                 </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase">Estimated Timeline</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {["Half day", "1 day", "2 days", "3-5 days", "1-2 weeks", "2-4 weeks"].map((time) => (
+
+                {/* Estimated Job Completion Duration Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Estimated Job Duration</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["1-2 Hours", "Half day (3-4h)", "1 Full day (8h)", "2-3 Days", "1-2 Weeks", "2+ Weeks"].map((time) => (
+                      <button
+                        key={time}
+                        onClick={() => setEstimatedTimeline(time)}
+                        className={cn(
+                          "py-2 px-1 text-[10px] font-bold rounded-xl border transition-all text-center",
+                          estimatedTimeline === time 
+                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs" 
+                            : "bg-white text-slate-700 border-black hover:border-blue-300"
+                        )}
+                      >
+                        {time}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Itemized Line-Item Calculator & Total Amount */}
+                <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-black">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
+                      <PoundSterling className="w-4 h-4 text-emerald-600" />
+                      Total Quote Amount
+                    </label>
                     <button
-                      key={time}
-                      onClick={() => setEstimatedTimeline(time)}
-                      className={cn(
-                        "py-2 text-[10px] font-bold rounded-xl border transition-all",
-                        estimatedTimeline === time 
-                          ? "bg-blue-600 text-white border-blue-600 shadow-sm" 
-                          : "bg-white text-slate-600 border-black hover:border-blue-300"
-                      )}
+                      type="button"
+                      onClick={() => setUseLineItems(!useLineItems)}
+                      className="text-[10px] font-black text-blue-700 hover:text-blue-900 bg-white border border-black px-2.5 py-1 rounded-lg flex items-center gap-1"
                     >
-                      {time}
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      {useLineItems ? "Hide Line Items" : "+ Itemized Calculator"}
                     </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Amount (£)</label>
-                <div className="relative">
-                  <PoundSterling className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input 
-                    type="number" 
-                    className="w-full p-3 pl-9 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
-                    value={quoteAmount}
-                    onChange={(e) => setQuoteAmount(e.target.value)}
-                  />
-                </div>
-                {payoutSummary && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-4 bg-slate-50 rounded-xl border border-black flex flex-col gap-2"
-                  >
-                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
-                      <span>Platform Fee ({(profile?.tier === 'pro' ? '10%' : profile?.tier === 'premium' ? '5%' : '15%')})</span>
-                      <span>-£{payoutSummary.platformCommission.toFixed(2)}</span>
+                  </div>
+
+                  {useLineItems ? (
+                    <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-300 animate-in fade-in">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Itemized Breakdown</p>
+                      {lineItems.map((item) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="e.g. Labor / Parts / Callout"
+                            className="flex-1 p-2 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500 font-medium"
+                            value={item.description}
+                            onChange={(e) => handleUpdateLineItem(item.id, "description", e.target.value)}
+                          />
+                          <div className="relative w-28">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">£</span>
+                            <input
+                              type="number"
+                              placeholder="Amount"
+                              className="w-full p-2 pl-6 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500 font-black text-right"
+                              value={item.amount}
+                              onChange={(e) => handleUpdateLineItem(item.id, "amount", e.target.value)}
+                            />
+                          </div>
+                          {lineItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLineItem(item.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 rounded-md"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={handleAddLineItem}
+                        className="text-[10px] font-black text-blue-600 hover:underline pt-1 flex items-center gap-1"
+                      >
+                        + Add Line Item
+                      </button>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
-                      <span>Stripe Fee ({payoutSummary.paymentRail === 'bank_transfer' ? 'Open Banking' : 'Card Rail'})</span>
-                      <span>-£{payoutSummary.stripeFee.toFixed(2)}</span>
-                    </div>
-                    <div className="h-px bg-slate-200 my-1" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-700">Estimated Net Payout</span>
-                      <span className="text-sm font-black text-green-600">£{payoutSummary.netPayout.toFixed(2)}</span>
-                    </div>
-                    {payoutSummary.paymentRail === 'bank_transfer' && (
-                      <div className="mt-2 flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                        <TrendingDown className="w-3 h-3 text-blue-600" />
-                        <p className="text-[9px] font-bold text-blue-700 leading-tight">
-                          Large job detected. Fee capped via secure Bank Transfer to maximize your profit.
-                        </p>
+                  ) : null}
+
+                  <div className="relative">
+                    <PoundSterling className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input 
+                      type="number" 
+                      placeholder="Total amount e.g. 250"
+                      className="w-full p-3 pl-9 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-base font-black bg-white"
+                      value={quoteAmount}
+                      onChange={(e) => setQuoteAmount(e.target.value)}
+                    />
+                  </div>
+
+                  {payoutSummary && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 bg-white rounded-xl border border-slate-200 flex flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                        <span>Platform Fee ({(profile?.tier === 'pro' ? '10%' : profile?.tier === 'premium' ? '5%' : '15%')})</span>
+                        <span>-£{payoutSummary.platformCommission.toFixed(2)}</span>
                       </div>
-                    )}
-                  </motion.div>
-                )}
-              </div>
+                      <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                        <span>Stripe Fee ({payoutSummary.paymentRail === 'bank_transfer' ? 'Open Banking' : 'Card Rail'})</span>
+                        <span>-£{payoutSummary.stripeFee.toFixed(2)}</span>
+                      </div>
+                      <div className="h-px bg-slate-200 my-1" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-700">Estimated Net Direct Payout</span>
+                        <span className="text-sm font-black text-green-600">£{payoutSummary.netPayout.toFixed(2)}</span>
+                      </div>
+                      {payoutSummary.paymentRail === 'bank_transfer' && (
+                        <div className="mt-2 flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                          <TrendingDown className="w-3 h-3 text-blue-600" />
+                          <p className="text-[9px] font-bold text-blue-700 leading-tight">
+                            Large job detected. Fee capped via secure Bank Transfer to maximize your profit.
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-500 uppercase">Message</label>
@@ -4882,11 +4979,23 @@ const libraries: any[] = ['places', 'geometry'];
           </div>
         )}
 
-        {isHomeowner && job.status === "completed" && (
+        {job.status === "completed" && (
           <div className="space-y-4 mb-4">
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-black space-y-4">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-bold text-[#1e3a8a] text-[19px]">Financial Summary</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-[#1e3a8a] text-[19px]">Official Invoice & Tax Receipt</h3>
+                  {(() => {
+                    const accQ = quotes.find(q => q.status === "accepted");
+                    const tpP = accQ ? tradespersonProfiles[accQ.tradespersonId] : null;
+                    const isPro = tpP?.tier === "gold" || tpP?.tier === "platinum" || tpP?.hasVerifiedVideoProSubscription;
+                    return (
+                      <span className={cn("text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-black", isPro ? "bg-amber-400 text-slate-950" : "bg-slate-100 text-slate-700")}>
+                        {isPro ? "⚡ Pro Branded Invoice" : "Free Standard Invoice"}
+                      </span>
+                    );
+                  })()}
+                </div>
                 {(job.paymentStatus === "pending" || job.paymentStatus === "unpaid") ? (
                   <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5" /> Payment Pending
@@ -4897,14 +5006,18 @@ const libraries: any[] = ['places', 'geometry'];
                   </div>
                 )}
               </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center bg-white">
-                   <span className="text-slate-600 font-medium text-[15px]">Job Total:</span>
-                   <span className="text-slate-900 font-medium text-[15px]">£{(quotes.find(q => q.status === "accepted")?.amount || 0).toFixed(2)}</span>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center">
+                   <span className="text-slate-600 font-medium">Trade Works Labour:</span>
+                   <span className="text-slate-900 font-medium">£{(quotes.find(q => q.status === "accepted")?.amount || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                   <span className="text-[#1e3a8a] font-medium text-[15px]">VAT (20%):</span>
-                   <span className="text-slate-900 font-medium text-[15px]">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.20).toFixed(2)}</span>
+                   <span className="text-slate-600 font-medium">Estimated Materials:</span>
+                   <span className="text-slate-900 font-medium">£{(job.materialsCost || quotes.find(q => q.status === "accepted")?.materialsCost || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                   <span className="text-[#1e3a8a] font-medium">VAT (20%):</span>
+                   <span className="text-slate-900 font-medium">£{((quotes.find(q => q.status === "accepted")?.amount || 0) * 0.20).toFixed(2)}</span>
                 </div>
                 <div className="h-px bg-slate-100 w-full my-1 border-b-2 border-dashed border-black"></div>
                 <div className="flex justify-between items-center pt-1">
@@ -4914,9 +5027,9 @@ const libraries: any[] = ['places', 'geometry'];
               </div>
               <button 
                 onClick={handleDownloadInvoice}
-                className="w-full mt-2 bg-slate-100 text-[#1e3a8a] hover:bg-slate-200 py-3 rounded-[1rem] font-bold text-[15px] transition-colors flex items-center justify-center gap-2"
+                className="w-full mt-2 bg-slate-900 text-white hover:bg-black py-3.5 rounded-[1rem] font-bold text-[15px] transition-colors flex items-center justify-center gap-2 border border-black shadow-sm"
               >
-                <Download className="w-4 h-4" /> Download PDF Receipt
+                <Download className="w-4 h-4 text-amber-400" /> Download PDF Invoice & Receipt
               </button>
             </div>
           </div>

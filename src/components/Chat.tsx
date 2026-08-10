@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { db, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, handleFirestoreError, OperationType, updateDoc, doc, getDoc, sendNotification, storage, ref, uploadBytes, getDownloadURL, arrayUnion } from "@/src/firebase";
+import { db, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, handleFirestoreError, OperationType, updateDoc, doc, getDoc, sendNotification, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, ChevronLeft, Loader2, User as UserIcon, Briefcase, Image as ImageIcon, X, Mic, Square, Play, Pause, MousePointer2, Trash2 } from "lucide-react";
@@ -263,9 +263,7 @@ export default function Chat() {
 
     setIsUploading(true);
     try {
-      const storageRef = ref(storage, `chats/${conversationId}/${Date.now()}_voice.webm`);
-      const snapshot = await uploadBytes(storageRef, await blob.arrayBuffer(), { contentType: blob.type });
-      const url = await getDownloadURL(snapshot.ref);
+      const url = await uploadStorageFile(blob, `chats/${conversationId}/${Date.now()}_voice.webm`, { contentType: blob.type || "audio/webm" });
 
       await addDoc(collection(db, "conversations", conversationId, "messages"), {
         senderId: user.uid,

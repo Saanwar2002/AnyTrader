@@ -547,6 +547,82 @@ export const writeBatch = (firestore: any) => {
   return batch;
 };
 
+export const uploadStorageFile = async (
+  fileOrBlob: File | Blob,
+  storagePath: string,
+  options?: { contentType?: string; maxImageWidth?: number }
+): Promise<string> => {
+  const fileType = options?.contentType || fileOrBlob.type || "image/jpeg";
+  
+  // 1. Try Firebase Storage upload first with a safe timeout
+  try {
+    const storageRef = ref(storage, storagePath);
+    const arrayBuffer = await fileOrBlob.arrayBuffer();
+    
+    const uploadPromise = uploadBytes(storageRef, arrayBuffer, { contentType: fileType }).then(
+      async (snapshot) => await getDownloadURL(snapshot.ref)
+    );
+    
+    // Timeout after 7 seconds if storage retries or hangs
+    const timeoutPromise = new Promise<string>((_, reject) => {
+      setTimeout(() => reject(new Error("Firebase Storage upload timed out")), 7000);
+    });
+
+    return await Promise.race([uploadPromise, timeoutPromise]);
+  } catch (err: any) {
+    console.warn(`[Storage Upload Fallback] Firebase Storage upload failed (${err?.message || err}). Converting to local Data URL fallback...`);
+
+    // 2. Resilient Fallback: Convert to base64 Data URL (compressing image if > 200KB)
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (!result) {
+          resolve("https://placehold.co/400x300?text=Uploaded+File");
+          return;
+        }
+
+        if (fileType.startsWith("image/") && result.length > 200000) {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const maxDim = options?.maxImageWidth || 1024;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.7);
+              resolve(compressedDataUrl);
+              return;
+            }
+            resolve(result);
+          };
+          img.onerror = () => resolve(result);
+          img.src = result;
+        } else {
+          resolve(result);
+        }
+      };
+      reader.onerror = () => resolve("https://placehold.co/400x300?text=Uploaded+File");
+      reader.readAsDataURL(fileOrBlob);
+    });
+  }
+};
+
 export { 
   collection, collectionGroup, doc, getDoc, getDocs, query, where, or, and, orderBy, limit, onAuthStateChanged, type FirebaseUser, serverTimestamp, deleteField, arrayUnion, arrayRemove, increment,
   ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, signInWithEmailAndPassword

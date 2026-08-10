@@ -155,6 +155,16 @@ export default function BusinessDashboard() {
               <h3 className="font-bold text-[15px] mb-1 leading-tight">Post New Project</h3>
               <p className="text-blue-100 text-[11px] leading-tight">Add a job to your portfolio.</p>
             </Link>
+
+            <Link to="/social-housing" className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-xl border border-black p-3 flex items-center gap-2 shadow-sm hover:from-slate-800 hover:to-indigo-900 transition col-span-1">
+              <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 font-bold">
+                <Building2 className="w-4 h-4 text-slate-950" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-[12px] text-white leading-tight mb-0.5">Gotham Housing B2B</h4>
+                <p className="text-[10px] text-indigo-200 leading-tight">Social housing & per-door SaaS.</p>
+              </div>
+            </Link>
             
             <Link to="/analytics" className="bg-white rounded-xl border border-black p-3 flex items-center gap-2 shadow-sm hover:bg-slate-50 transition">
               <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
@@ -165,16 +175,6 @@ export default function BusinessDashboard() {
                 <p className="text-[10px] text-slate-500 leading-tight">Track spend and performance.</p>
               </div>
             </Link>
-
-            <button onClick={() => setIsTradeBotOpen(true)} className="bg-purple-50 rounded-xl border border-black p-3 flex items-center gap-2 shadow-sm hover:bg-purple-100 transition text-left">
-              <div className="w-8 h-8 rounded-lg bg-purple-200 flex items-center justify-center shrink-0">
-                <Bot className="w-4 h-4 text-purple-700" />
-              </div>
-              <div>
-                <h4 className="font-bold text-[12px] text-purple-900 leading-tight mb-0.5">AI Project Planner</h4>
-                <p className="text-[10px] text-purple-600 leading-tight">Get professional scope advice.</p>
-              </div>
-            </button>
           </div>
 
           {/* Active Portfolio Section (Removed) */}

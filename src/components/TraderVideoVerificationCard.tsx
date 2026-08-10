@@ -1,9 +1,10 @@
 import React, { useState, useRef } from "react";
-import { Video, Camera, StopCircle, Upload, CheckCircle2, ShieldCheck, Play, Loader2, Trash2, Sparkles, AlertCircle } from "lucide-react";
-import { db, doc, updateDoc, storage, ref, uploadBytes, getDownloadURL } from "@/src/firebase";
+import { Video, Camera, StopCircle, Upload, CheckCircle2, ShieldCheck, Play, Loader2, Trash2, Sparkles, AlertCircle, Award, Zap, Check } from "lucide-react";
+import { db, doc, updateDoc, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile } from "@/src/firebase";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { cn } from "@/src/lib/utils";
+import { calculateVerifiedVideoProSubscription } from "@/src/services/stripeIntegrationService";
 
 interface TraderVideoVerificationCardProps {
   profile: any;
@@ -18,6 +19,41 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const plan = calculateVerifiedVideoProSubscription("monthly");
+  const isVideoProSubscriber = Boolean(profile?.hasVerifiedVideoProSubscription);
+
+  const handleSubscribeVideoPro = async () => {
+    if (!profile?.uid) {
+      toast.error("Please log in to manage your subscription");
+      return;
+    }
+
+    setIsSubscribing(true);
+    try {
+      const newStatus = !isVideoProSubscriber;
+      const updates = {
+        hasVerifiedVideoProSubscription: newStatus,
+        videoProSubscribedAt: newStatus ? new Date().toISOString() : null,
+        videoVerificationStatus: newStatus ? "verified" : (profile?.videoVerificationUrl ? "verified" : "none")
+      };
+
+      await updateDoc(doc(db, "users", profile.uid), updates);
+      if (onUpdateProfile) onUpdateProfile(updates);
+
+      if (newStatus) {
+        toast.success("⚡ Verified Video Pro Active! Granted +35 AI Match Score points and Priority Quote Placement (£15/mo).");
+      } else {
+        toast.info("Verified Video Pro subscription paused.");
+      }
+    } catch (err) {
+      console.error("Subscription update error:", err);
+      toast.error("Failed to update subscription");
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<any>(null);
@@ -106,9 +142,7 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
     setIsUploading(true);
     try {
       const fileName = `users/${profile.uid}/video_verification_${Date.now()}.mp4`;
-      const storageRef = ref(storage, fileName);
-      const snapshot = await uploadBytes(storageRef, recordedBlob, { contentType: "video/mp4" });
-      const downloadUrl = await getDownloadURL(snapshot.ref);
+      const downloadUrl = await uploadStorageFile(recordedBlob, fileName, { contentType: "video/mp4" });
 
       const updates = {
         videoVerificationUrl: downloadUrl,
@@ -269,6 +303,69 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
                 >
                   Retake
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Verified Video Pro (£15/mo) Subscription Card */}
+          {!isReadOnly && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl border border-black shadow-md space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shrink-0">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-white text-xs">Verified Video Pro Badge Subscription</h4>
+                      <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">
+                        £15.00 / month
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-indigo-200">Unlock priority quote placement, +35 AI match points, and gold trust badges.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSubscribeVideoPro}
+                  disabled={isSubscribing}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl font-extrabold text-xs border border-black shadow-sm flex items-center justify-center gap-2 transition active:scale-98 shrink-0",
+                    isVideoProSubscriber
+                      ? "bg-amber-400 hover:bg-amber-500 text-slate-950"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  )}
+                >
+                  {isSubscribing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isVideoProSubscriber ? (
+                    <>
+                      <Check className="w-4 h-4 text-slate-950" />
+                      <span>Subscribed (£15/mo)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 text-amber-300" />
+                      <span>Upgrade for £15/mo</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] pt-1">
+                <div className="p-2 bg-white/10 rounded-xl border border-white/10">
+                  <p className="text-[9px] font-extrabold uppercase text-indigo-300">Matching Bonus</p>
+                  <p className="font-extrabold text-amber-300 text-xs mt-0.5">+35 Signal Points</p>
+                </div>
+                <div className="p-2 bg-white/10 rounded-xl border border-white/10">
+                  <p className="text-[9px] font-extrabold uppercase text-indigo-300">Quote Positioning</p>
+                  <p className="font-extrabold text-emerald-300 text-xs mt-0.5">Priority Top Slot</p>
+                </div>
+                <div className="p-2 bg-white/10 rounded-xl border border-white/10">
+                  <p className="text-[9px] font-extrabold uppercase text-indigo-300">Profile Trust Badge</p>
+                  <p className="font-extrabold text-white text-xs mt-0.5">Verified Video Pro</p>
+                </div>
               </div>
             </div>
           )}

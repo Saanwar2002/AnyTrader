@@ -15,7 +15,7 @@ import {
   Settings, Settings2, BarChart3, PieChart, DollarSign, Percent, Clock, MapPin, CreditCard,
   AlertCircle, Zap, Sparkles, ShieldAlert, ShieldCheck, RefreshCw, Medal,
   Plus, Edit2, Calendar, Award, Info, Key, Building2, Globe, Database, Download,
-  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag, Car, Cpu, Link as LinkIcon
+  Command, ChevronRightSquare, MousePointer2, Ghost, ArrowRight, ShoppingBag, Car, Cpu, Link as LinkIcon, Bot
 } from "lucide-react";
 import { CURRENT_APP_VERSION } from "@/src/lib/version";
 import { AppUpdateModal } from "./common/AppUpdateModal";
@@ -24,6 +24,7 @@ import AdminTierManager from "./AdminTierManager";
 import GuestJobs from "./GuestJobs";
 import AdminAdvertsTab from "./AdminAdvertsTab";
 import AffiliatesManager from "./AffiliatesManager";
+import AdminAiAgentsTab from "./AdminAiAgentsTab";
 import {  
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
@@ -39,12 +40,12 @@ export default function AnyTraderAdmin() {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const tabFromUrl = searchParams.get("tab") as any;
-  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "advertising"].includes(tabFromUrl) ? tabFromUrl : "users";
+  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "advertising", "affiliates", "ai_agents"].includes(tabFromUrl) ? tabFromUrl : "users";
   
-  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "advertising">(initialTab as any);
+  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "advertising" | "affiliates" | "ai_agents">(initialTab as any);
   
   useEffect(() => {
-    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "advertising"].includes(tabFromUrl) ? tabFromUrl : "users";
+    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "advertising", "affiliates", "ai_agents"].includes(tabFromUrl) ? tabFromUrl : "users";
     if (validTab !== activeTab) {
       setActiveTab(validTab);
       setFilter(validTab === "jobs" ? "emergency" : "all");
@@ -1697,6 +1698,7 @@ export default function AnyTraderAdmin() {
           {/* Navigation Tabs - Moved below search as per screenshot context */}
           <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 rounded-[28px] border border-black shadow-xl shadow-slate-100/50 overflow-x-auto no-scrollbar snap-x touch-pan-x max-w-full">
             <div className="flex items-center gap-2 pr-4">
+              <TabButton active={activeTab === "ai_agents"} onClick={() => handleTabChange("ai_agents")} icon={<Bot className="w-4 h-4 text-indigo-500" />} label="AI Agents" />
               <TabButton active={activeTab === "users"} onClick={() => handleTabChange("users")} icon={<Users className="w-4 h-4" />} label="Users" />
               <TabButton active={activeTab === "jobs"} onClick={() => handleTabChange("jobs")} icon={<Briefcase className="w-4 h-4" />} label="Jobs" />
               <TabButton active={activeTab === "disputes"} onClick={() => handleTabChange("disputes")} icon={<AlertTriangle className="w-4 h-4" />} label="Disputes" />
@@ -3319,6 +3321,12 @@ export default function AnyTraderAdmin() {
           </div>
         )}
         
+        {activeTab === "ai_agents" && (
+          <div className="p-6">
+            <AdminAiAgentsTab users={users} jobs={jobs} reviews={reviews} logs={logs} />
+          </div>
+        )}
+
         {activeTab === "advertising" && (
           <div className="p-6">
             <AdminAdvertsTab />

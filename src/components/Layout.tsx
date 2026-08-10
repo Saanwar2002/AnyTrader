@@ -16,6 +16,7 @@ import { getShopRecommendations } from "@/src/services/gemini";
 
 import RoleTabBar from "./shared/RoleTabBar";
 import { useBusinessTab } from "@/src/store/businessTabStore";
+import { TermsAcceptancePrompt } from "./TermsAcceptancePrompt";
 
 const getIconComponent = (iconName: string) => {
   const icons: any = { Wrench, Hammer, HardHat, Shield, Zap, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, Briefcase, PenTool, Box };
@@ -1198,6 +1199,7 @@ export default function Layout() {
       </AnimatePresence>
 
       <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
+      <TermsAcceptancePrompt />
 
       {/* Bottom Navigation (Mobile) */}
       {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && !location.pathname.startsWith('/profile') && (

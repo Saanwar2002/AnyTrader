@@ -1,5 +1,116 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## ⚖️ Master Legal Terms & Conditions Framework & Agreement Flow (`/src/components/TermsModal.tsx`, `TermsAcceptancePrompt.tsx`, & `Profile.tsx`) (Completed August 9, 2026)
+*   **Concept & Liability Exemption Framework**: Comprehensive legal protection covering all AnyTrader platform portals (Homeowner TradeOS, B2B Gotham Housing, AnyRoller Taxi/Rides, On-Demand Courier/Delivery, Food Safety, Pet Care, and Specialist Care).
+*   **Key Protection Principles**:
+    1.  **Software Intermediary Status**: AnyTrader acts purely as a technology venue connecting independent service providers with customers. Total liability exemption for contractor negligence, work defects, transport delays, or property damage.
+    2.  **Unilateral Pricing Rights**: Platform reserves the right to modify commission rates (e.g. 12% default), subscription tier fees, Gotham per-door SaaS pricing (£4.50–£2.50/door), and paid features without prior notice.
+    3.  **Data Usage, Marketing & Partner Sharing**: Explicit consent provisions for platform communications, promotional marketing, cross-selling, and sharing service request data with partner merchants and material suppliers (Screwfix, Travis Perkins, etc.).
+    4.  **Multi-Vertical Coverage**: Specific clauses for TradeOS, Gotham Housing, AnyRoller Taxi, Delivery/Courier, Food Safety, Pet Care, and Specialist Home Care.
+*   **Compulsory Account Acceptance Flow (`TermsAcceptancePrompt.tsx`)**:
+    *   **Blocking Overlay Modal**: Triggers automatically on login/dashboard view for any user whose `termsAcceptedVersion` does not match `CURRENT_TERMS_VERSION` (`v2026.1`).
+    *   **Compulsory Checkbox & Options**: Requires a mandatory tick on "I have read, understood, and agree to the Master Platform Terms & Conditions" before entering the platform. Optional checkboxes provided for Marketing & Cross-Selling and Partner Data Sharing.
+    *   **Audit Trail & Firestore Persistence**: Saves `termsAcceptedAt` (ISO timestamp), `termsAcceptedVersion` (`v2026.1`), `marketingOptIn`, and `partnerDataSharingOptIn` directly to `users/{uid}` in Firestore.
+*   **In-Profile Legal Hub (`TermsModal.tsx`)**:
+    *   Accessible anytime from user settings under **Privacy & Legal Compliance** (`#terms`).
+    *   Includes category filtering, instant search across legal clauses, and print/download capability.
+
+## 🤖 Autonomous AI Operations & Marketing Ecosystem (`/src/services/aiAgentEcosystemService.ts` & `AdminAiAgentsTab.tsx`) (Completed August 9, 2026)
+*   **Concept & Value Proposition**: An integrated suite of 8 self-taught AI agents designed to protect, optimize, self-heal, market, mediate, enforce compliance, and manage platform finances for AnyTrader.
+*   **Default State (Off at Launch)**: Controlled via persistent Firestore settings (`platform_settings/ai_agent_ecosystem`). All agents default to **OFF (Dormant)** at launch to ensure £0.00 daily overhead during early bootstrap phase, and can be switched ON individually with 1-tap in Master Admin (`AnyTraderAdmin.tsx` -> "AI Agents").
+*   **8 Specialized Agent Modules**:
+    1.  **🛡️ Sentinel Guard Agent**: Scans user registrations in real time for duplicate profiles, matching phone numbers/IP clusters, disposable temporary emails (`@tempmail.com`, etc.), bot rate-limit abuses, and fake review rings.
+    2.  **📢 Social Growth & AI Campaign Engine**: Analyzes real-time platform data (active job spikes in specific postcodes, top customer reviews) and uses Gemini 2.5 Flash to automatically generate tailored social media posts, ad headlines, and image prompts for Facebook/Meta, LinkedIn, Twitter/X, and Instagram. Supports Webhooks (Zapier, Buffer, Make, Meta Graph API) with 1-Tap Admin Approval (Human-in-the-loop).
+    3.  **⚡ Platform Diagnostics & Self-Healing Agent**: Detects regional trade supply gaps (e.g. active jobs in outcode regions with <2 verified plumbers) and recommends localized targeted recruitment campaigns.
+    4.  **🏢 B2B Gotham Lead Scout**: Generates tailored social housing and landlord portfolio proposals highlighting AnyTrader Gotham per-door SaaS licensing (£4.50 to £2.50/door).
+    5.  **💰 Financial Intelligence & Treasury Agent**: Audits all AnyTrader trade incomings (PAYG & Pro subscriptions, Gotham B2B SaaS doors, 12% job commissions, FlexiPay BNPL yields) against platform running costs (Cloud Run container uptime, Firestore multi-portal DB queries, Gemini AI API tokens, Stripe gateway fees, SMS verifications). Features a timeframe selector (Daily, Weekly, Monthly, Yearly), 30-day cashflow forecast, and Gemini AI efficiency & cost-optimization recommendations. Scope strictly isolates AnyTrader Trade operations (excluding Taxi portal).
+    6.  **⚖️ AI Dispute Mediator & Guarantee Arbitrator**: Evaluates contested jobs, photos, videos, and chat transcripts against UK building codes (BS 5385, IET Wiring, Gas Safe) to generate neutral 1st-stage settlement proposals (payout vs refund breakdown) to protect the AnyTrader Guarantee fund.
+    7.  **📜 Compliance & Certification Guardian**: Audits Gas Safe, EICR, and PLI credentials for tradespeople and enforces statutory Awaab's Law damp/mould investigation windows (24h/14d SLAs) across Gotham landlord doors with automated SMS reminders and auto-dispatches.
+    8.  **✨ AI Customer Concierge & Lead Pre-Qualifier**: Interactively prompts homeowners upon job posting, captures appliance models, error codes, and photos/videos, and attaches pre-qualified Property Passport specs to maximize quote conversions.
+    9.  **🤝 Trader Outreach & Prospecting Agent (`TraderOutreachAgent.tsx`)**: Sourced from directory listings (Yellow Pages, Yell.com, Google Maps, Checkatrade). Uses Gemini 2.5 Flash to parse unstructured directory text into clean CRM datasheet records, and generates tailored 4-part outreach packs (Personalized Email Pitch, WhatsApp/SMS message, 60s Cold Call Phone Script with objection rebuttals, and Strategy 1 referral link) with 1-tap WhatsApp Web launching and onboarding conversion tracking. Includes **🛡️ Platform Scope Compliance Guardrail Verification** verifying 0 out-of-scope violations against AnyTrader terms.
+    10. **⚡ Autopilot Autonomous Mode (`TraderOutreachAgent.tsx`)**: Enables full independent background operation. When Autopilot is ON, the AI agent continuously scans imported directory leads, auto-generates AI Outreach Packs via Gemini, auto-drafts WhatsApp & Email campaigns, schedules 48-hour follow-up reminders, advances sequence statuses, and records a live timestamped audit feed without requiring manual clicks on every lead.
+    11. **🏡 Homeowner & Public Onboarding Campaign Hub (`TraderOutreachAgent.tsx` & `generateHomeownerOutreachPack`)**: Dedicated B2C public outreach module operating under strict UK PECR & GDPR privacy regulations. Generates hyper-local Nextdoor/Facebook community group posts, Property Digital Twin passport invitations for landlords/homeowners, £20 voucher neighbor referral links for WhatsApp sharing, and 2-sided door-to-door print flyer copy for targeted postcodes. Features a **Fair Multi-Service Ecosystem Mix** highlighting all 76+ platform categories (Pet Care, Academic Tutoring, Babysitting & Childcare, Mobile Car Detailing, On-Demand Delivery & Trades).
+    12. **📍 Admin Scheduled Targeted Campaign Settings (`TraderOutreachAgent.tsx`)**: Admin control panel enabling targeted autonomous outreach restricted to specific UK postcode districts (e.g. `M1`, `M2`, `SE1`, `B1`) for a set period of time (Start & Expiry Date picker, quick presets +7/+14/+30/+60 days). Autopilot continuously evaluates campaign window status (Active, Scheduled, Expired) and skips leads outside active target postcodes with audit feed notifications.
+
+## 🧾 Automated Free & Pro Invoicing System (`/src/services/invoiceService.ts`) (Completed August 8, 2026)
+*   **Concept & Value Proposition**: An automated invoicing engine triggering instantly when any trade job is marked as `completed` in `JobDetails.tsx`. Creates a structured invoice record in the `invoices` Firestore collection and provides on-demand PDF generation with tier-specific branding.
+*   **Dual-Tier Invoicing Structure**:
+    *   **Free Standard Invoicing**:
+        *   Automatically logs transaction details, job scope, labour vs materials breakdown, and 20% UK VAT breakdown.
+        *   Generates a clean standard AnyTrader PDF receipt & tax invoice via `jsPDF` (`downloadInvoicePDF`).
+        *   Triggers automated in-app and push/email notifications with a shareable invoice link (`/job/:id`).
+    *   **⚡ Pro Branded Invoicing** (Gold, Platinum & Verified Video Pro Subscribers):
+        *   **Custom Business Branding**: Incorporates tradesperson's custom logo, trading name, HMRC VAT registration number, and company details.
+        *   **Direct Bank Transfer Payment Instructions**: Displays custom bank sort code, account number, and payment terms (14-day default).
+        *   **Making Tax Digital (MTD) Auto-Sync**: Automatically exports completed invoices to Google Sheets / MTD accounting ledgers (`exportInvoicesToSheets`).
+        *   **Premium Visual Styling**: Feature dark slate header, gold accent stripes, custom footer notes, and "⚡ Verified AnyTrader Pro Trader" watermark.
+
+## 🛡️ Strategic Backlog ("Do It Later" List): Instant Guarantee & Workmanship Protection Add-On (£9.99–£19.99/job)
+*   **Concept & Value Proposition**: An optional homeowner add-on at quote acceptance providing 12-month workmanship protection (£9.99 for jobs under £1,000; £19.99 for jobs up to £5,000).
+*   **Target Implementation Phase**: Phase 13 (Post-Launch / Scale Phase).
+*   **Execution Strategy**:
+    *   **Phase A (Bootstrap / Early Stage)**: Partner as an insurance broker/MGA with an FCA-regulated insurer (e.g. AXA, Hiscox, or Markel) earning a 15%–25% referral commission per policy sold with zero platform balance sheet liability.
+    *   **Phase B (Volume Scale)**: Transition to a self-insured platform claims reserve pool backed by 3-stage resolution escalation (Stage 1: Mandatory trader fix; Stage 2: Peer trader re-fulfillment; Stage 3: Direct financial refund).
+
+## 🎥 Verified Trader Credential & Video Badge Subscriptions (£15/mo) (Completed August 8, 2026)
+*   **Verified Video Pro Subscription Engine (`calculateVerifiedVideoProSubscription` in `stripeIntegrationService.ts`)**:
+    *   **Concept & Value Proposition**: An optional **£15.00/month** (or £144.00/year with 20% annual discount) SaaS trust badge subscription for verified tradespeople wanting to maximize homeowner quote conversion and search visibility.
+    *   **Core Subscription Benefits**:
+        *   ⚡ **+35 Signal Points** added to the trader's composite score in the 40+ Signal Intelligent Matching Engine (`matchingEngine.ts`).
+        *   🚀 **Priority Quote Positioning**: Quotes from Verified Video Pro subscribers automatically rank at the top of homeowner comparison lists right after accepted quotes (`QuoteComparisonModal.tsx`).
+        *   📹 **HD Video Selfie & Credential Hosting**: Built-in live camera recorder and file uploader for 15-60s video intros and trade qualification showcases (`TraderVideoVerificationCard.tsx`).
+        *   🏅 **Gold "⚡ Verified Video Pro" Trust Badge**: Displayed prominently on quotes, public profiles (`PublicProfile.tsx`), and search results (`FindTrades.tsx`).
+    *   **Cross-Feature Synergy & Optimization**:
+        *   Works alongside existing provider tiers (PAYG, Silver Professional, Gold Elite, Platinum Enterprise) as an incremental recurring SaaS add-on.
+        *   Integrated into `FinancialDashboardWidget.tsx` and `TraderVideoVerificationCard.tsx` with 1-tap subscription activation and real-time status management.
+
+## 📦 Materials Sourcing & Merchant Affiliate Commission (3% - 5%) (Completed August 8, 2026)
+*   **Materials Merchant Affiliate Commission Engine (`calculateMaterialMerchantAffiliateCommission` in `stripeIntegrationService.ts`)**:
+    *   **Concept & Value Proposition**: When tradespeople use the built-in TradeOS Materials Procurement tool (`MaterialsTracker.tsx`) to source, list, and order parts from leading UK trade merchants (Screwfix Trade, Travis Perkins, B&Q TradePoint, Toolstation, Jewson, Selco, Wickes Trade), TradeOS collects a **3.0% – 5.0% Affiliate Referral Fee** on all fulfilled material orders.
+    *   **Merchant Affiliate Tier Matrix**:
+        *   **Travis Perkins & Jewson**: **5.0% Affiliate Referral Fee** (Heavy building & timber materials).
+        *   **Toolstation & Selco**: **4.5% Affiliate Referral Fee** (Plumbing, electrical & janitorial supplies).
+        *   **Screwfix Trade**: **4.0% Affiliate Referral Fee** (Standard fixtures, fittings & power tool accessories).
+        *   **B&Q TradePoint & Wickes Trade**: **3.5% Affiliate Referral Fee** (General DIY & decor materials).
+    *   **Trader Exclusive Benefit**: Automatically applies an exclusive **5% Trade Discount Code** (e.g. `TRADEOS-SCREWFIX-5OFF`, `TRADEOS-TRAVISPE-5OFF`) on every order, incentivizing traders to fulfill orders directly through the platform.
+    *   **UI Integration**:
+        *   **`MaterialsTracker.tsx`**: Interactive merchant partner selector, real-time affiliate commission breakdown, 5% trader discount voucher badge, and 1-tap cart fulfillment button (`handleFulfillViaMerchantAffiliate`) with instant referral logging and toast notifications.
+        *   **`FinancialDashboardWidget.tsx`**: Features the 3.0%–5.0% Materials Sourcing Merchant Referral Revenue stream within the TradeOS Cash Flow & Invoicing engine.
+
+## 📦 FlexiPay BNPL Repair Financing B2B Merchant Origination Fee (Completed August 8, 2026)
+*   **FlexiPay BNPL B2B Merchant Fee Engine (`calculateFlexiPayMerchantFee` in `stripeIntegrationService.ts`)**:
+    *   **Concept & Value Proposition**: On high-ticket homeowner repair jobs (£1,000 – £25,000) like boiler replacements, full re-roofs, electrical rewires, and damp remediation, TradeOS charges the financing partner (Klarna, Novuna Personal Finance, Clearpay, TradeOS Flexi) a **1.5% – 2.5% B2B Merchant Origination Fee** directly upon loan origination.
+    *   **Tiered Merchant Origination Fee Matrix**:
+        *   **Short-Term Promotional (3 – 6 Months, 0% APR)**: **2.5% Merchant Origination Fee** paid by Klarna / TradeOS 0% Flexi to TradeOS.
+        *   **Standard Term (12 Months)**: **2.0% Merchant Origination Fee** paid by Novuna / Clearpay to TradeOS.
+        *   **Heavy Structural Repairs (24 – 36 Months)**: **1.5% Merchant Origination Fee** paid by Novuna Heavy Repair to TradeOS.
+    *   **Triple-Win Economic Alignment**:
+        *   **Platform Monetization**: Earns an immediate £15.00 – £625.00 B2B origination fee per financed job on top of standard platform commissions.
+        *   **Tradesperson Risk Guarantee**: Receives 100% upfront guaranteed payment upon milestone sign-off, completely eliminating non-payment and default risk on high-value jobs.
+        *   **Homeowner Flexibility**: Enables homeowners to spread unexpected multi-thousand pound repair bills into budget-friendly monthly installments (£50–£200/mo) with soft-check pre-approvals.
+    *   **UI & Financial Engine Enhancements**:
+        *   **`BnplFinancingModal.tsx`**: Displays real-time B2B origination fee breakdown, partner attribution, and 100% trader payout guarantee.
+        *   **`FinancialDashboardWidget.tsx`**: Prominently features the 1.5%–2.5% B2B Origination Fee model inside the TradeOS Financials & Cash Flow engine.
+
+## 📦 Portal Separation: AnyRoller Corporate Taxi Portal & AnyTrader Gotham Housing Portal (Completed August 8, 2026)
+*   **Architectural Separation of Business Portals**:
+    *   **AnyRoller Corporate Taxi & Transport Portal (`src/components/anyroller/CorporatePortal.tsx` @ `/corporate`)**:
+        *   **Purpose**: Dedicated corporate travel management for AnyRoller passenger taxi & fleet accounts.
+        *   **Key Features**:
+            *   **Corporate Fleet Dispatch Engine**: Book Executive Sedans (Mercedes E-Class), VIP Luxury (Mercedes S-Class), Zero-Emission Electric Cabs, or MPV 7-Seater Vans for staff and clients.
+            *   **Department Travel Caps & Roster Management**: Assign cost centers (e.g. `CC-402`, `CC-901`), manage enrolled employee lists, and enforce monthly ride allowances per department.
+            *   **Employee Commute & Travel Vouchers**: Single-use and recurring passes for late-night office safety, VIP airport transfers with flight number tracking, and green EV commute passes.
+            *   **Active Corporate Rides HUD**: Real-time GPS passenger tracking, driver ratings (4.95+ vetted drivers), ETA countdowns, and flight-synced pickup monitoring.
+            *   **Stripe B2B Consolidated Monthly Invoicing**: Net-30 monthly ride billing with itemized cost center receipts, VAT tax breakdown, and automated monthly debits.
+    *   **AnyTrader Social Housing & Portfolio Portal ("Gotham" B2B SaaS Layer) (`src/components/anytrader/GothamHousingPortal.tsx` @ `/social-housing` & `/gotham-portal`)**:
+        *   **Purpose**: Dedicated B2B SaaS platform for Housing Associations, Local Councils, and Private Landlord Portfolio Managers on the AnyTrader side.
+        *   **Key Features**:
+            *   **Per-Door Monthly SaaS Licensing Engine (`calculateGothamSaaSPlan`)**: Volume-tiered pricing (£4.50/door for Starter 1-100 doors, £3.50/door for Growth 101-1,000 doors, £2.50/door for Enterprise 1,000+ doors) with 15% annual billing discounts.
+            *   **Interactive Gotham SaaS Pricing & ROI Calculator Modal**: Interactive slider (10 to 50,000 doors) calculating per-door rates, monthly SaaS fees, annual discount savings, admin hours saved, and Awaab's Law regulatory fine mitigation values with 1-tap Stripe invoicing sync.
+            *   **Housing Estate & SLA Repair Command Center**: Real-time SLA repair time tracking (Emergency 2h SLA, Urgent 24h SLA, Routine 5-day SLA), Awaab's Law 24-hour damp & mould compliance alerts, CP12 Gas Safety & EICR certification tracking, 1-tap auto-dispatch with Property Passport specs, and approved trade contractor performance matrix.
+            *   **Consolidated B2B Financial Outlays**: Clear accounting separation between monthly Gotham platform SaaS licensing fees and pass-through contractor repair purchase orders.
+            *   **Direct Dashboard Link**: Integrated quick action link on the AnyTrader `BusinessDashboard.tsx` linking directly to the Gotham Housing Portal.
+
 ## 📦 On-Demand Delivery, Bulky Goods, Mobile Bin Cleaning & Refined Tokenized Fuzzy Search (Completed August 7, 2026)
 *   **Refined Tokenized Keyword Prefix Search Logic (`fuzzyMatch.ts`)**:
     *   **Enforced Strict Word-Boundary Prefix Matching**: Updated `tokenMatches` and `textContainsTokenMatch` to enforce that search query tokens only match the **start (prefix)** of words/tags/skills/profile fields (e.g., searching `"pet"` matches `"Pet Services"`, `"Pet Sitting"`, `"Petting"`, but strictly **does NOT match** `"Carpet Cleaning"` or `"Carpet Repair"`).
@@ -35,6 +146,22 @@
         *   Subtle left & right gradient masks offer a smooth fade transition.
     *   **High-Contrast Flipped Profile Card ("Instant Info")**:
         *   Strengthened all text labels, call-out prices, extra info quotes, performance metrics, and badge pill typography to deep blacks/navies (`text-slate-900`, `text-slate-950`, `text-[#002b5c]`, `font-black`) with vibrant blue card borders (`border-[#2563eb]`) so pricing, rating, and badges are instantly legible during the 15-second card inspection window.
+    *   **Enhanced Job Card Presentation & Timing Formatting (`MyJobs.tsx`)**:
+        *   Fixed raw enum strings (e.g. `SPECIFIC_DATE`) into polished, localized strings (`Date: 15 Aug 2026`, `Flexible Timing`, `ASAP / Urgent`).
+        *   Elevated job card top headers with dark high-contrast standard job badges (`STANDARD JOB`) and gradient emergency dispatch headers (`EMERGENCY DISPATCH`).
+        *   Added direct action-oriented **Quote Review CTA buttons** directly on job cards (`Review Quotes (5) ->`) so homeowners are seamlessly guided to compare offers when quote limits are reached.
+    *   **6-Point Homeowner Quote Comparison Ecosystem (`QuoteComparisonModal.tsx`)**:
+        *   **Dual View Mode Toggle**: Added persistent `Cards View` vs `Comparison Matrix` toggle in the modal top header.
+        *   **Matrix View Table**: Comprehensive side-by-side comparative table ranking prices, trust scores, start dates, duration timelines, scope options, AI value percentiles, deposit terms, workmanship guarantees, and 1-tap accept CTAs.
+        *   **Itemized Cost & Scope Breakdown**: Expandable breakdown card detailing Scope Coverage, Deposit Structure, Workmanship Guarantee, Parts Warranty, and Itemized Line Items.
+        *   **Prominent Badges & AI Value**: Highlighting `BEST VALUE`, `LOWEST PRICE`, `TOP RATED`, `FASTEST START`, and `VIDEO VERIFIED` badges.
+        *   **Actionable Re-quote Flow with Quick Chips**: Quick action chips (`🏷️ Price Revision`, `📦 Include Materials`, `📅 Earlier Start Date`, `🛡️ Clarify Warranty`) that allow homeowners to request quote modifications in 1 tap with custom instructions.
+        *   **Trader Video Selfie Credential Modal**: In-modal video player allowing homeowners to watch trader video introductions directly while comparing quotes.
+    *   **4 Part 1 Improvements to Trader Quote Submission Form (`JobDetails.tsx`)**:
+        1.  **Interactive Itemized Line-Item Calculator**: Option to expand itemized cost lines (Labor, Materials, Callout) with automatic sum calculation populating the total quote amount.
+        2.  **Deposit & Non-Custodial Direct Milestone Selector**: 3 deposit tiers (`0% Deposit`, `25% Upfront Deposit`, `50/50 Milestone Split`) accompanied by a non-custodial Stripe Connect disclosure clarifying direct account transfers.
+        3.  **Preset Guarantee & Warranty Toggles**: Standardized Workmanship Guarantee options (1-5 Years) and Parts Warranty selectors (Standard, 10-Year Extended, None) with automatic comparison matrix sync.
+        4.  **Estimated Job Completion Duration Selector**: Quick-select duration chips (`1-2 Hours`, `Half day`, `1 Full day`, `2-3 Days`, `1-2 Weeks`, `2+ Weeks`) replacing open text fields for consistent comparison.
     *   **Compact Profile Cards & Inline Bold Postcode**:
         *   Postcode moved inline into the metadata row directly adjacent to `RECMD BY`, preserving bold styling (`font-black text-slate-900`) while saving vertical space.
         *   Streamlined vertical padding, avatar dimensions (`w-14 h-14` / `w-16 h-16`), meta spacing, and availability/pricing bars to eliminate empty whitespace and keep search cards tight and easy to scan vertically.

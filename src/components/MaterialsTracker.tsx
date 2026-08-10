@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Wrench, Sparkles, CheckCircle2, ShoppingBag, DollarSign, ExternalLink, Loader2 } from "lucide-react";
+import { Plus, Trash2, Wrench, Sparkles, CheckCircle2, ShoppingBag, DollarSign, ExternalLink, Loader2, Store, Tag, ShieldCheck, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
+import { calculateMaterialMerchantAffiliateCommission } from "@/src/services/stripeIntegrationService";
 
 export interface MaterialItem {
   id: string;
@@ -33,7 +34,31 @@ export function MaterialsTracker({
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemCost, setNewItemCost] = useState("");
   const [newItemSupplier, setNewItemSupplier] = useState("");
+  const [selectedMerchant, setSelectedMerchant] = useState("Screwfix Trade");
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const totalMaterialsCost = materials.reduce((sum, m) => sum + (m.totalCost || m.quantity * m.unitCost), 0);
+  
+  // Calculate 3% - 5% Merchant Affiliate Commission Breakdown
+  const merchantAffiliate = calculateMaterialMerchantAffiliateCommission(
+    totalMaterialsCost,
+    selectedMerchant,
+    materials.length
+  );
+
+  const handleFulfillViaMerchantAffiliate = () => {
+    if (materials.length === 0) {
+      toast.error("Add materials to your cart before ordering via merchant");
+      return;
+    }
+
+    const updated = materials.map(m => m.status === "needed" ? { ...m, status: "ordered" as const, supplier: selectedMerchant } : m);
+    onUpdateMaterials(updated);
+
+    toast.success(
+      `🛒 Order dispatched to ${selectedMerchant}! TradeOS 5% discount code (${merchantAffiliate.traderDiscountCode}) applied. Platform affiliate fee (+£${merchantAffiliate.affiliateCommissionAmount.toFixed(2)}) logged.`
+    );
+  };
 
   const handleAddItem = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -164,6 +189,71 @@ export function MaterialsTracker({
           <p className="text-sm font-black text-blue-600">{materials.length} Items</p>
         </div>
       </div>
+
+      {/* Merchant Partner Procurement & 3%-5% Affiliate Commission Card */}
+      {!readOnly && (
+        <div className="p-4 bg-gradient-to-r from-amber-50 via-amber-100/50 to-orange-50 border border-black rounded-2xl space-y-3 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-amber-500 text-slate-950 rounded-xl font-bold">
+                <Store className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h5 className="font-black text-slate-900 text-xs">TradeOS Merchant Partner Sourcing</h5>
+                  <span className="bg-amber-300 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">
+                    3.0% – 5.0% Affiliate Fee
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-600">Fulfill material lists with local trade merchants and earn platform referral commissions.</p>
+              </div>
+            </div>
+
+            <select
+              value={selectedMerchant}
+              onChange={(e) => setSelectedMerchant(e.target.value)}
+              className="p-2 rounded-xl border border-black text-xs font-bold bg-white text-slate-900 shadow-xs cursor-pointer"
+            >
+              <option value="Screwfix Trade">Screwfix Trade (4.0% Fee)</option>
+              <option value="Travis Perkins">Travis Perkins (5.0% Fee)</option>
+              <option value="B&Q TradePoint">B&Q TradePoint (3.5% Fee)</option>
+              <option value="Toolstation">Toolstation (4.5% Fee)</option>
+              <option value="Jewson">Jewson (5.0% Fee)</option>
+              <option value="Selco Hygiene">Selco (4.5% Fee)</option>
+              <option value="Wickes Trade">Wickes Trade (3.5% Fee)</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+            <div className="p-2.5 bg-white rounded-xl border border-black">
+              <p className="text-[9px] font-extrabold uppercase text-slate-400">Selected Merchant</p>
+              <p className="font-extrabold text-slate-900 text-xs mt-0.5">{merchantAffiliate.merchantName}</p>
+            </div>
+            <div className="p-2.5 bg-white rounded-xl border border-black">
+              <p className="text-[9px] font-extrabold uppercase text-slate-400">Trader Trade Perk</p>
+              <p className="font-extrabold text-emerald-700 text-xs mt-0.5">
+                5% Trade Off <span className="text-[9px] text-slate-500 font-mono">({merchantAffiliate.traderDiscountCode})</span>
+              </p>
+            </div>
+            <div className="p-2.5 bg-white rounded-xl border border-black">
+              <p className="text-[9px] font-extrabold uppercase text-slate-400">TradeOS Affiliate Share</p>
+              <p className="font-extrabold text-amber-700 text-xs mt-0.5">
+                +£{merchantAffiliate.affiliateCommissionAmount.toFixed(2)} <span className="text-[9px] text-slate-500">({(merchantAffiliate.affiliateRate * 100).toFixed(1)}%)</span>
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleFulfillViaMerchantAffiliate}
+            className="w-full py-2.5 bg-slate-900 hover:bg-black text-amber-300 font-extrabold text-xs rounded-xl border border-black shadow-sm flex items-center justify-center gap-2 transition active:scale-98"
+          >
+            <ShoppingBag className="w-4 h-4 text-amber-400" />
+            <span>Fulfill Cart via {merchantAffiliate.merchantName} (Collect +£{merchantAffiliate.affiliateCommissionAmount.toFixed(2)} Affiliate Fee)</span>
+            <ArrowUpRight className="w-4 h-4 text-amber-400" />
+          </button>
+        </div>
+      )}
 
       {/* Add New Material Form */}
       {!readOnly && (

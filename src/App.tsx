@@ -69,6 +69,7 @@ const DriverEarnings = lazyWithRetry(() => import("./components/driver/DriverEar
 const DriverInbox = lazyWithRetry(() => import("./components/driver/DriverInbox"));
 const PlatformFeeSuccess = lazyWithRetry(() => import("./components/driver/PlatformFeeSuccess"));
 const CorporatePortal = lazyWithRetry(() => import("./components/anyroller/CorporatePortal"));
+const GothamHousingPortal = lazyWithRetry(() => import("./components/anytrader/GothamHousingPortal"));
 const EcosystemAdmin = lazyWithRetry(() => import("./components/EcosystemAdmin"));
 const MasterAdminLayout = lazyWithRetry(() => import("./components/MasterAdminLayout"));
 const ReferralTracker = lazyWithRetry(() => import("./components/shared/ReferralTracker"));
@@ -390,6 +391,8 @@ export default function App() {
                 <Route path="admin" element={<MasterAdminLayout />} />
                 <Route path="ecosystem" element={<EcosystemAdmin />} />
                 <Route path="corporate" element={<CorporatePortal />} />
+                <Route path="social-housing" element={<GothamHousingPortal />} />
+                <Route path="gotham-portal" element={<GothamHousingPortal />} />
                 <Route path="job/:id" element={<JobDetails />} />
                 <Route path="job/:id/timeline" element={<JobTimeline />} />
                 

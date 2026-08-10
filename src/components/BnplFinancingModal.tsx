@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CreditCard, ShieldCheck, Zap, Sparkles, CheckCircle2,
-  Calendar, PoundSterling, Clock, ArrowRight, Info, AlertCircle, X, Sliders
+  Calendar, PoundSterling, Clock, ArrowRight, Info, AlertCircle, X, Sliders, DollarSign, Building2
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
+import { calculateFlexiPayMerchantFee } from "@/src/services/stripeIntegrationService";
 
 interface BnplFinancingModalProps {
   isOpen: boolean;
@@ -53,6 +54,13 @@ export default function BnplFinancingModal({
   const totalRepayable = monthlyPayment * selectedTerm + depositAmount;
   const totalInterest = totalRepayable - repairAmount;
 
+  // B2B Financing Partner Merchant Fee (1.5% - 2.5%)
+  const merchantFeeBreakdown = calculateFlexiPayMerchantFee(
+    financedAmount,
+    selectedTerm,
+    selectedTerm <= 6 ? "Klarna / TradeOS 0% Flexi" : "Novuna Personal Finance"
+  );
+
   const handleSimulatePreApproval = () => {
     setIsCheckingEligibility(true);
     setTimeout(() => {
@@ -71,7 +79,9 @@ export default function BnplFinancingModal({
       monthlyPayment: Math.round(monthlyPayment * 100) / 100,
       apr,
       totalRepayable: Math.round(totalRepayable * 100) / 100,
-      provider: selectedTerm <= 6 ? "Klarna / TradeOS 0% Flexi" : "Novuna Personal Finance"
+      provider: merchantFeeBreakdown.provider,
+      merchantFeeRate: merchantFeeBreakdown.merchantFeeRate,
+      merchantFeeAmount: merchantFeeBreakdown.merchantFeeAmount
     };
     if (onSelectPlan) onSelectPlan(plan);
     toast.success(`💳 BNPL Financing Plan selected: £${Math.round(monthlyPayment)}/mo over ${selectedTerm} months!`);
@@ -231,6 +241,40 @@ export default function BnplFinancingModal({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* B2B Merchant Origination Fee & Platform Economics Card */}
+          <div className="bg-slate-50 border border-black p-4 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between text-xs font-black text-slate-900">
+              <div className="flex items-center gap-1.5 text-indigo-900">
+                <Building2 className="w-4 h-4 text-indigo-600" />
+                <span>B2B Merchant Origination Economics:</span>
+              </div>
+              <span className="bg-indigo-100 text-indigo-900 px-2 py-0.5 rounded border border-indigo-300 text-[10px] font-black">
+                {(merchantFeeBreakdown.merchantFeeRate * 100).toFixed(1)}% Origination Fee
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] pt-1">
+              <div className="bg-white p-2.5 rounded-xl border border-black">
+                <p className="text-[9px] font-extrabold uppercase text-slate-400">Financing Partner</p>
+                <p className="font-extrabold text-slate-900 text-xs mt-0.5">{merchantFeeBreakdown.provider}</p>
+              </div>
+              <div className="bg-white p-2.5 rounded-xl border border-black">
+                <p className="text-[9px] font-extrabold uppercase text-slate-400">Platform Merchant Fee</p>
+                <p className="font-extrabold text-indigo-700 text-xs mt-0.5">
+                  +£{merchantFeeBreakdown.merchantFeeAmount.toFixed(2)} <span className="text-[9px] text-slate-500 font-normal">({(merchantFeeBreakdown.merchantFeeRate * 100).toFixed(1)}%)</span>
+                </p>
+              </div>
+              <div className="bg-white p-2.5 rounded-xl border border-black">
+                <p className="text-[9px] font-extrabold uppercase text-slate-400">Trader Payout Guarantee</p>
+                <p className="font-extrabold text-emerald-700 text-xs mt-0.5">
+                  100% Upfront Payout
+                </p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 leading-tight">
+              * The <strong>{(merchantFeeBreakdown.merchantFeeRate * 100).toFixed(1)}% merchant origination fee (£{merchantFeeBreakdown.merchantFeeAmount.toFixed(2)})</strong> is paid directly by {merchantFeeBreakdown.provider} to TradeOS upon loan origination. The tradesperson receives 100% upfront payment upon job completion with zero default risk.
+            </p>
           </div>
 
           {/* Partner Financing Logos */}

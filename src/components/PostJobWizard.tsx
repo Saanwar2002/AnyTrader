@@ -39,7 +39,8 @@ import {
   Star,
   PenTool,
   MessageSquare,
-  Calendar
+  Calendar,
+  PoundSterling
 } from "lucide-react";
 import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
@@ -47,7 +48,7 @@ import { useCategories } from "../lib/CategoryProvider";
 import { ConfidenceGauge } from "./common/ConfidenceGauge";
 import { lookupPostcode, reverseLookupPostcode } from "@/src/services/postcodeService";
 import { getJobEstimate, analyzeJobPhoto, getClarifyingQuestions, improveJobDescription, checkSafetyAndPII, processVoiceTranscript, transcribeVoiceAudio, processVoiceAudio, type AIEstimate } from "@/src/services/gemini";
-import { db, doc, setDoc, updateDoc, collection, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, addDoc, sendNotification, getDoc, getDocs, query, where, onSnapshot } from "@/src/firebase";
+import { db, doc, setDoc, updateDoc, collection, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, uploadString, uploadStorageFile, addDoc, sendNotification, getDoc, getDocs, query, where, onSnapshot } from "@/src/firebase";
 import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -1122,86 +1123,10 @@ export default function PostJobWizard() {
       console.log("Blob Details:", { size: blob.size, type: blob.type });
       
       const fileName = `jobs/${user.uid}/${Date.now()}.jpg`;
-      const storageRef = ref(storage, fileName);
-      
-      // Attempt 1: uploadBytes (Fastest, simplest, and highly robust)
-      console.log("Attempt 1: uploadBytes (robust standard)...");
-      try {
-        const arrayBuffer = await blob.arrayBuffer();
-        setUploadProgress(10);
-        const snapshot = await uploadBytes(storageRef, arrayBuffer, { contentType: blob.type });
-        setUploadProgress(100);
-        const url = await getDownloadURL(snapshot.ref);
-        
-        setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
-        handleStopCamera();
-        return;
-      } catch (err: any) {
-        console.error("Attempt 1 (uploadBytes) failed, trying Attempt 2 (uploadBytesResumable) fallback:", err);
-      }
-
-      // Attempt 2: uploadBytesResumable (Fallback)
-      console.log("Attempt 2: uploadBytesResumable...");
-      try {
-        const url = await new Promise<string>((resolve, reject) => {
-          blob!.arrayBuffer().then((arrayBuffer) => {
-            const uploadTask = uploadBytesResumable(storageRef, arrayBuffer, { contentType: blob!.type });
-            
-            const timeout = setTimeout(() => {
-              console.warn("Resumable upload timed out at 0% (20s)");
-              uploadTask.cancel();
-              reject(new Error("TIMEOUT_0"));
-            }, 20000);
-
-            uploadTask.on('state_changed', 
-              (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-                if (progress > 0) {
-                  clearTimeout(timeout);
-                }
-              }, 
-              (error) => {
-                clearTimeout(timeout);
-                reject(error);
-              }, 
-              async () => {
-                clearTimeout(timeout);
-                const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve(downloadUrl);
-              }
-            );
-          }).catch(reject);
-        });
-        
-        setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
-        handleStopCamera();
-        return;
-      } catch (err: any) {
-        console.error("Simple upload fallback failed:", err.message || err);
-        if (err.code === 'storage/unauthorized') {
-          console.error("STORAGE_PERMISSION_DENIED: Check your Firebase Storage rules.");
-        }
-      }
-
-      // Attempt 3: uploadString (Base64 fallback - most resilient)
-      console.log("Attempt 3: uploadString fallback...");
-      try {
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.3);
-        const uploadPromise = uploadString(storageRef, dataUrl, 'data_url');
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("TIMEOUT_STRING")), 45000)
-        );
-
-        await Promise.race([uploadPromise, timeoutPromise]);
-        const url = await getDownloadURL(storageRef);
-        setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
-        handleStopCamera();
-        return; 
-      } catch (err: any) {
-        console.error("All upload methods failed:", err.message || err);
-        throw new Error("Upload failed. This is usually due to slow network, restricted Storage rules, or CORS being blocked. Please ensure rules allow writes: 'allow write: if request.auth != null;'. If you remixed this app, re-run 'Firebase Setup' in settings. You may also need to configure CORS for your bucket (see: https://firebase.google.com/docs/storage/web/download-files#cors_configuration).");
-      }
+      const url = await uploadStorageFile(blob, fileName, { contentType: "image/jpeg" });
+      setFormData(prev => ({ ...prev, photos: [...prev.photos, url] }));
+      handleStopCamera();
+      return;
 
     } catch (err) {
       console.error("Final Upload Error:", err);

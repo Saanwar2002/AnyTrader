@@ -377,34 +377,35 @@ export default function MyJobs() {
                     Instant Match
                   </div>
                 ) : job.urgency === 'emergency' ? (
-                  <div className="bg-red-600 text-center py-2 text-white font-black text-xl tracking-wide uppercase border-b border-red-700">
-                    Emergency
+                  <div className="bg-gradient-to-r from-red-600 to-rose-600 text-center py-2 text-white font-black text-xs tracking-widest uppercase border-b border-red-700 flex items-center justify-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    Emergency Dispatch
                   </div>
                 ) : (
-                  <div className="bg-blue-500 text-center py-2 text-white font-black text-xl tracking-wide uppercase border-b border-blue-600">
-                    Normal Job
+                  <div className="bg-slate-900 text-center py-1.5 text-white font-black text-[11px] tracking-widest uppercase border-b border-slate-800">
+                    Standard Job
                   </div>
                 )}
                 <div className={cn(
-                  "p-8 space-y-4",
-                  job.urgency === "emergency" ? "bg-red-50/30" : ""
+                  "p-6 sm:p-8 space-y-4",
+                  job.urgency === "emergency" ? "bg-red-50/20" : ""
                 )}>
                   {/* Header: Category and Badges */}
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     {/* Category & Subcategory */}
                     <div className="flex items-center gap-2">
                       <div className={cn(
-                        "w-5 h-5 rounded-lg flex items-center justify-center",
-                        job.urgency === "emergency" ? "bg-red-100" : "bg-orange-50"
+                        "w-6 h-6 rounded-lg flex items-center justify-center shrink-0",
+                        job.urgency === "emergency" ? "bg-red-100" : "bg-orange-100"
                       )}>
                         <Briefcase className={cn(
-                          "w-3 h-3",
-                          job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
+                          "w-3.5 h-3.5",
+                          job.urgency === "emergency" ? "text-red-600" : "text-orange-600"
                         )} />
                       </div>
                       <p className={cn(
-                        "text-[10px] font-black uppercase tracking-widest",
-                        job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
+                        "text-[11px] font-black uppercase tracking-wider",
+                        job.urgency === "emergency" ? "text-red-600" : "text-orange-600"
                       )}>
                         {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
                       </p>
@@ -413,32 +414,32 @@ export default function MyJobs() {
                     {/* Status Badges */}
                     <div className="flex items-center gap-2">
                       {job.jobNo && (
-                        <span className="bg-slate-900 text-white px-3 py-1 rounded-full text-[10px] font-black shadow-sm uppercase tracking-widest">
+                        <span className="bg-slate-900 text-white px-2.5 py-0.5 rounded-md text-[10px] font-black shadow-2xs uppercase tracking-widest">
                           #{job.jobNo}
                         </span>
                       )}
                       {job.urgency === 'emergency' && (
-                        <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1">
+                        <span className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 border border-red-200">
                           <AlertCircle className="w-3 h-3" />
                           Emergency
                         </span>
                       )}
                       {job.status === 'completed' ? (
-                        <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm mr-2 mt-2 whitespace-pre-line text-center">
+                        <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm whitespace-pre-line text-center">
                           COMPLETED{job.completedAt ? ` ON\n${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
                         </span>
                       ) : (
                         <span className={cn(
-                          "px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
-                          job.status === "posted" ? ((quoteCounts[job.id] || 0) >= 5 ? "bg-yellow-50 text-yellow-700 border border-black" : "bg-blue-50 text-blue-600") : 
-                          job.status === "accepted" ? "bg-green-50 text-green-600" :
-                          "bg-red-50 text-red-600"
+                          "px-3 py-1 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider",
+                          job.status === "posted" ? ((quoteCounts[job.id] || 0) >= 5 ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-blue-100 text-blue-800 border border-blue-200") : 
+                          job.status === "accepted" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" :
+                          "bg-red-100 text-red-800 border border-red-200"
                         )}>
                           {job.status === 'posted' ? ((quoteCounts[job.id] || 0) >= 5 ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace(/_/g, " ")}
                         </span>
                       )}
                       {job.status === "posted" && job.boostTier === "instant_match" && (
-                        <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1 animate-pulse border border-amber-200">
+                        <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 animate-pulse border border-amber-300">
                           <Zap className="w-3 h-3" />
                           Finding Pro
                         </span>
@@ -457,44 +458,55 @@ export default function MyJobs() {
                     <h3 className="text-2xl font-black text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
                       {job.title}
                     </h3>
-                    <p className="text-slate-500 font-medium line-clamp-2 text-sm leading-relaxed">
+                    <p className="text-slate-600 font-medium line-clamp-2 text-sm leading-relaxed">
                       {job.description}
                     </p>
                   </div>
 
                   {/* Location & Time */}
-                  <div className="flex flex-wrap items-center gap-4 pt-2">
-                    <div className="flex items-center gap-1.5 text-slate-400">
-                      <MapPin className="w-4 h-4" />
-                      <span className="text-xs font-bold uppercase tracking-wide">
+                  <div className="flex flex-wrap items-center gap-4 pt-1">
+                    <div className="flex items-center gap-1.5 text-slate-600 font-bold text-xs">
+                      <MapPin className="w-4 h-4 text-slate-400" />
+                      <span className="uppercase tracking-wide">
                         {getOutwardPostcode(job.postcode)} • {job.city || "Area Hidden"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-slate-400">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-xs font-bold uppercase tracking-wide">
+                    <div className="flex items-center gap-1.5 text-slate-600 font-bold text-xs">
+                      <Clock className="w-4 h-4 text-slate-400" />
+                      <span className="uppercase tracking-wide">
                         {formatRelativeTime(job.createdAt)}
                       </span>
                     </div>
                   </div>
 
-                  <div className="h-px bg-slate-50 my-4" />
+                  <div className="h-px bg-slate-200 my-3" />
 
-                  {/* Footer: Urgency & Quotes */}
-                  <div className="flex items-center justify-between">
+                  {/* Footer: Urgency & Quotes CTA */}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       {job.urgency === "emergency" ? (
                         <div className="text-[10px]">
                           <EmergencyTimer postedDate={job.createdAt?.seconds ? new Date(job.createdAt.seconds * 1000) : job.createdAt} />
                         </div>
                       ) : (
-                        <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider">
-                          {job.urgency === "specific_date" && job.jobDate ? `Date: ${new Date(job.jobDate).toLocaleDateString()}` : job.urgency || "Flexible"}
+                        <span className="bg-blue-50 text-blue-800 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider border border-blue-200">
+                          {(() => {
+                            if (job.urgency === "specific_date" || job.urgency === "SPECIFIC_DATE") {
+                              if (job.jobDate) {
+                                const d = job.jobDate?.seconds ? new Date(job.jobDate.seconds * 1000) : new Date(job.jobDate);
+                                if (!isNaN(d.getTime())) return `Date: ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+                              }
+                              return "Specific Date";
+                            }
+                            if (job.urgency === "asap" || job.urgency === "ASAP") return "ASAP / Urgent";
+                            if (job.urgency === "flexible" || job.urgency === "FLEXIBLE") return "Flexible Timing";
+                            return (job.urgency || "Flexible").replace(/_/g, " ").toUpperCase();
+                          })()}
                         </span>
                       )}
                       {job.estimatedCompletionTime && (
-                        <span className="bg-green-50 text-green-600 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
+                        <span className="bg-emerald-50 text-emerald-800 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider flex items-center gap-1 border border-emerald-200">
+                          <Clock className="w-3 h-3 text-emerald-600" />
                           {job.estimatedCompletionTime} {job.estimatedCompletionTimeUnit}
                         </span>
                       )}
@@ -505,7 +517,7 @@ export default function MyJobs() {
                             e.stopPropagation();
                             setSelectedJobMedia(job);
                           }}
-                          className="bg-orange-50 text-orange-600 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider flex items-center gap-1 hover:bg-orange-100 transition-colors"
+                          className="bg-orange-50 text-orange-700 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider flex items-center gap-1 hover:bg-orange-100 transition-colors border border-orange-200"
                         >
                           {job.photos?.length > 0 ? <ImageIcon className="w-3 h-3" /> : <VideoIcon className="w-3 h-3" />}
                           { (job.photos?.length || 0) + (job.videos?.length || 0) } Media
@@ -513,15 +525,23 @@ export default function MyJobs() {
                       )}
                     </div>
                     
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 ml-auto">
                       <Link 
                         to={`/job/${job.id}#quote-form-section`}
                         onClick={(e) => e.stopPropagation()}
-                        className="hover:opacity-80 transition-opacity"
+                        className="hover:opacity-90 transition-opacity"
                       >
-                        <p className="text-orange-500 font-black text-sm">
-                          {quoteCounts[job.id] || 0} quotes
-                        </p>
+                        <span className={cn(
+                          "px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-2xs transition-all",
+                          (quoteCounts[job.id] || 0) >= 5
+                            ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
+                            : (quoteCounts[job.id] || 0) > 0
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300"
+                        )}>
+                          <span>{(quoteCounts[job.id] || 0)} Quotes</span>
+                          {(quoteCounts[job.id] || 0) > 0 && <ChevronRight className="w-3.5 h-3.5" />}
+                        </span>
                       </Link>
                       
                       <div className="relative flex items-center gap-1">

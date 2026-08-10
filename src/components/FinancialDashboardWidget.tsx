@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db, collection, query, where, onSnapshot, addDoc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { shareToWhatsApp, copyPrivacyShareLink } from "@/src/utils/shareUtils";
-import { PoundSterling, TrendingUp, FileText, Plus, Share2, CheckCircle2, Clock, Calculator, ShieldCheck, Download, AlertCircle, CreditCard } from "lucide-react";
+import { PoundSterling, TrendingUp, FileText, Plus, Share2, CheckCircle2, Clock, Calculator, ShieldCheck, Download, AlertCircle, CreditCard, ShoppingBag, Video, Award } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import BnplFinancingModal from "./BnplFinancingModal";
@@ -157,15 +157,48 @@ export function FinancialDashboardWidget() {
         {/* Section 5.1 BNPL Financing Card */}
         <div 
           onClick={() => setShowBnplModal(true)}
-          className="p-4 bg-indigo-900 text-white rounded-3xl border border-black shadow-sm flex items-center justify-between cursor-pointer hover:bg-indigo-950 transition group"
+          className="p-4 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white rounded-3xl border border-black shadow-sm flex items-center justify-between cursor-pointer hover:from-slate-900 hover:to-indigo-950 transition group"
         >
           <div>
-            <p className="text-[10px] font-extrabold uppercase text-indigo-300">BNPL FlexiPay (£1k+)</p>
-            <p className="text-xl font-black text-amber-300 mt-1">0% APR Plans</p>
-            <p className="text-[9px] text-indigo-200 font-medium">Spread major repair costs</p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-extrabold uppercase text-indigo-300">BNPL FlexiPay (£1k+)</span>
+              <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">1.5%–2.5% B2B Fee</span>
+            </div>
+            <p className="text-xl font-black text-amber-300 mt-1">0% APR Repair Financing</p>
+            <p className="text-[9px] text-indigo-200 font-medium">Financing partner pays 1.5–2.5% origination fee • 100% upfront trader payout</p>
           </div>
-          <div className="p-3 bg-indigo-800 text-amber-300 rounded-2xl border border-indigo-700 group-hover:scale-105 transition">
+          <div className="p-3 bg-indigo-800 text-amber-300 rounded-2xl border border-indigo-700 group-hover:scale-105 transition shrink-0 ml-2">
             <CreditCard className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* Section 5.2 Materials Sourcing Merchant Affiliate Commission Card */}
+        <div className="p-4 bg-gradient-to-r from-amber-950 via-slate-900 to-amber-900 text-white rounded-3xl border border-black shadow-sm flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-extrabold uppercase text-amber-300">Materials Sourcing & Procurement</span>
+              <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">3.0%–5.0% Affiliate Fee</span>
+            </div>
+            <p className="text-xl font-black text-amber-300 mt-1">Merchant Referral Commissions</p>
+            <p className="text-[9px] text-amber-100 font-medium">Earn 3%–5% on fulfilled Screwfix, Travis Perkins & B&Q materials • 5% trader trade discount</p>
+          </div>
+          <div className="p-3 bg-amber-800/80 text-amber-300 rounded-2xl border border-amber-600 shrink-0 ml-2">
+            <ShoppingBag className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* Section 5.3 Verified Trader Credential & Video Badge Subscription (£15/mo) */}
+        <div className="p-4 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white rounded-3xl border border-black shadow-sm flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-extrabold uppercase text-amber-300">Trader SaaS Subscriptions</span>
+              <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">£15.00 / month</span>
+            </div>
+            <p className="text-xl font-black text-amber-300 mt-1">Verified Video Pro Subscriptions</p>
+            <p className="text-[9px] text-indigo-100 font-medium">Grants traders +35 match score points • Priority quote positioning • HD video hosting</p>
+          </div>
+          <div className="p-3 bg-purple-800/80 text-amber-300 rounded-2xl border border-purple-600 shrink-0 ml-2">
+            <Video className="w-6 h-6" />
           </div>
         </div>
       </div>

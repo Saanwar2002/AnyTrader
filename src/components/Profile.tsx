@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { BiometricService } from "@/src/services/biometricService";
 import { Fingerprint, ScanFace } from "lucide-react";
-import { auth, logout, db, doc, updateDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
+import { auth, logout, db, doc, updateDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
 import { 
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
@@ -40,6 +40,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { TRADE_CATEGORIES, PROFESSIONAL_BADGES } from "@/src/constants";
+import { TermsModal } from "./TermsModal";
+import { CURRENT_TERMS_VERSION } from "../constants/termsAndPrivacy";
 import { getTraderBadges, BadgeOverlay } from "@/src/lib/badges";
 import { lookupPostcode } from "@/src/services/postcodeService";
 import { performInitialPublicRecordCheck } from "../services/verificationService";
@@ -540,6 +542,7 @@ export default function Profile() {
   const [showBioInfo, setShowBioInfo] = useState(false);
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
   const [showUserGuide, setShowUserGuide] = useState(false);
+  const [showProfileTermsModal, setShowProfileTermsModal] = useState(false);
   const [isTradeBotOpen, setIsTradeBotOpen] = useState(false);
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isVerificationExpanded, setIsVerificationExpanded] = useState(false);
@@ -949,9 +952,7 @@ export default function Profile() {
         await new Promise(resolve => setTimeout(resolve, 1000));
         downloadUrl = `https://placehold.co/200x200?text=Guest+Avatar`;
       } else {
-        const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
-        downloadUrl = await getDownloadURL(storageRef);
+        downloadUrl = await uploadStorageFile(file, `avatars/${user.uid}/${Date.now()}_${file.name}`, { contentType: file.type });
       }
       
       await updateDoc(doc(db, "users", user.uid), {
@@ -980,9 +981,7 @@ export default function Profile() {
         await new Promise(resolve => setTimeout(resolve, 1000));
         downloadUrl = `https://placehold.co/600x400?text=Portfolio+Item`;
       } else {
-        const storageRef = ref(storage, `portfolio/${user.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
-        downloadUrl = await getDownloadURL(storageRef);
+        downloadUrl = await uploadStorageFile(file, `portfolio/${user.uid}/${Date.now()}_${file.name}`, { contentType: file.type });
       }
       
       const newPortfolio = [...(profile.portfolio || []), downloadUrl];
@@ -1043,11 +1042,11 @@ export default function Profile() {
         await new Promise(resolve => setTimeout(resolve, 1500)); // Artificial delay
         downloadUrlFinal = `https://placehold.co/600x400?text=${certType.replace(/\s/g, '+')}+Verified`;
       } else {
-        const storageRef = ref(storage, `verifications/${user.uid}/${certType.replace(/\s/g, '_')}_${Date.now()}_${file.name}`);
-        console.log("Uploading to:", storageRef.fullPath);
-        
-        const uploadResult = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
-        downloadUrlFinal = await getDownloadURL(uploadResult.ref);
+        downloadUrlFinal = await uploadStorageFile(
+          file, 
+          `verifications/${user.uid}/${certType.replace(/\s/g, '_')}_${Date.now()}_${file.name}`, 
+          { contentType: file.type }
+        );
       }
 
       console.log("Upload successful, URL:", downloadUrlFinal);
@@ -1377,7 +1376,7 @@ export default function Profile() {
         { icon: Fingerprint, label: "Enable Biometric Quick-Login", path: "#biometrics" },
         { icon: Smartphone, label: "Classic / Mobile Friendly", path: "#uimode" },
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
-        { icon: Shield, label: "Privacy & Security", path: "#privacy" },
+        { icon: Shield, label: "Privacy & Legal Compliance", path: "#terms" },
       ]
     },
     {
@@ -1401,7 +1400,7 @@ export default function Profile() {
       items: [
         { icon: Bell, label: "Notifications", path: "/notifications" },
         { icon: HelpCircle, label: "Help & Support", path: "/profile" },
-        { icon: FileText, label: "Terms & Conditions", path: "/profile" },
+        { icon: FileText, label: "Terms & Conditions", path: "#terms" },
       ]
     }
   ];
@@ -1449,7 +1448,7 @@ export default function Profile() {
         { icon: Repeat, label: "Switch to AnyTrader", path: "#switch_portal" },
         { icon: Bell, label: "Notifications", path: "/notifications" },
         { icon: Settings, label: "App Settings", path: "#settings" },
-        { icon: Shield, label: "Legal & Privacy", path: "#privacy" },
+        { icon: Shield, label: "Legal & Privacy", path: "#terms" },
       ]
     }
   ];
@@ -1464,7 +1463,7 @@ export default function Profile() {
         { icon: Bell, label: "Notification Preferences", path: "#notifications" },
         { icon: CreditCard, label: "Payment Methods", path: "#payments" },
         { icon: PoundSterling, label: "Billing & Pricing Tiers", path: "/billing" },
-        { icon: Shield, label: "Privacy & Security", path: "#privacy" },
+        { icon: Shield, label: "Privacy & Legal Compliance", path: "#terms" },
       ]
     },
     {
@@ -1494,7 +1493,7 @@ export default function Profile() {
       items: [
         { icon: Bell, label: "Notifications", path: "/notifications" },
         { icon: HelpCircle, label: "Help & Support", path: "/profile" },
-        { icon: FileText, label: "Terms & Conditions", path: "/profile" },
+        { icon: FileText, label: "Terms & Conditions", path: "#terms" },
       ]
     }
   ];
@@ -3028,6 +3027,25 @@ export default function Profile() {
                             <ChevronRight className="w-5 h-5 text-black group-hover:text-black transition-colors shrink-0" />
                           </button>
                         );
+                      } else if (item.path === "#terms") {
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => setShowProfileTermsModal(true)}
+                            className="w-full flex items-center gap-3 p-3 border-b border border-black last:border-0 hover:bg-slate-50 transition-all group text-left"
+                          >
+                            <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-emerald-50 rounded-[10px] flex items-center justify-center text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+                              <item.icon className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
+                            </div>
+                            <span className="flex-1 font-bold text-black group-hover:text-black transition-colors text-xs md:text-[15px] leading-tight flex items-center justify-between pr-2">
+                              <span>{item.label}</span>
+                              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200">
+                                Agreed v{profile?.termsAcceptedVersion || CURRENT_TERMS_VERSION}
+                              </span>
+                            </span>
+                            <ChevronRight className="w-5 h-5 text-black group-hover:text-black transition-colors shrink-0" />
+                          </button>
+                        );
                       } else if (item.path === "#switch_portal") {
                         return (
                           <button
@@ -3143,7 +3161,7 @@ export default function Profile() {
                                                      </div>
                                                      <div>
                                                        <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• {card.last4}</h4>
-                                                       <p className="text-xs text-slate-500">Expires {card.expMonth}/{card.expYear}</p>
+                                                       <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">Expires {card.expMonth}/{card.expYear} • <span className="text-indigo-600 font-bold flex items-center gap-0.5"><Lock className="w-3 h-3 inline" /> Stripe Vaulted</span></p>
                                                      </div>
                                                    </div>
                                                    <button 
@@ -3163,20 +3181,53 @@ export default function Profile() {
                                                </button>
                                              </div>
                                           ) : (
-                                             <div className="bg-white rounded-2xl border border-black p-6 text-center">
-                                               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-black">
-                                                 <CreditCard className="w-5 h-5 text-slate-400" />
+                                             <div className="bg-white rounded-2xl border border-black p-6 md:p-8 text-center shadow-sm relative overflow-hidden">
+                                               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-[11px] font-bold text-indigo-700 mb-4">
+                                                 <Lock className="w-3.5 h-3.5 text-indigo-600" />
+                                                 <span>Secured & Processed directly by Stripe</span>
                                                </div>
-                                               <h3 className="text-sm font-bold text-slate-900 mb-1">No payment method added</h3>
-                                               <p className="text-xs text-slate-500 mb-4">Add a credit or debit card securely via Stripe.</p>
-                                               
+
+                                               <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-md border border-indigo-700">
+                                                 <CreditCard className="w-7 h-7" />
+                                               </div>
+
+                                               <h3 className="text-base font-black text-slate-900 mb-1">Link Payment Card via Stripe</h3>
+                                               <p className="text-xs text-slate-600 max-w-md mx-auto mb-4 font-medium leading-relaxed">
+                                                 You will be redirected securely to <strong>Stripe's PCI-DSS Level 1 Vault</strong> to link your credit or debit card. AnyTrader <strong>never sees, handles, or stores</strong> your payment card numbers.
+                                               </p>
+
+                                               <div className="bg-slate-50 border border-black rounded-xl p-3.5 mb-5 max-w-md mx-auto text-left space-y-2">
+                                                 <div className="flex items-start gap-2 text-xs text-slate-700 font-medium">
+                                                   <Lock className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                                   <span><strong>Direct Stripe Vaulting:</strong> Card details are encrypted directly inside Stripe's bank-grade vault.</span>
+                                                 </div>
+                                                 <div className="flex items-start gap-2 text-xs text-slate-700 font-medium">
+                                                   <Shield className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                                                   <span><strong>Zero Local Storage:</strong> AnyTrader holds £0 card data — only a secure token to charge for pre-approved jobs.</span>
+                                                 </div>
+                                               </div>
+
                                                <button 
                                                  onClick={handleAddPaymentMethod}
                                                  disabled={isProcessingSetup}
-                                                 className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all disabled:opacity-50"
+                                                 className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-7 py-3 rounded-xl text-sm font-black shadow-md active:scale-95 transition-all disabled:opacity-50 inline-flex items-center justify-center gap-2 border border-black cursor-pointer"
                                                >
-                                                 {isProcessingSetup ? "Processing..." : "Add Credit or Debit Card"}
+                                                 {isProcessingSetup ? (
+                                                   <>
+                                                     <Loader2 className="w-4 h-4 animate-spin" />
+                                                     <span>Connecting to Stripe...</span>
+                                                   </>
+                                                 ) : (
+                                                   <>
+                                                     <Lock className="w-4 h-4" />
+                                                     <span>Link Card via Stripe (PCI-1 Secure)</span>
+                                                   </>
+                                                 )}
                                                </button>
+
+                                               <p className="text-[11px] text-slate-400 font-medium mt-3">
+                                                 Supports Visa, Mastercard, American Express & Apple Pay
+                                               </p>
                                              </div>
                                           )}
                                         </div>
@@ -3223,7 +3274,7 @@ export default function Profile() {
                                                 </div>
                                                 <div>
                                                   <h4 className="text-sm font-bold text-slate-900">•••• •••• •••• {card.last4}</h4>
-                                                  <p className="text-xs text-slate-500">Expires {card.expMonth}/{card.expYear}</p>
+                                                  <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">Expires {card.expMonth}/{card.expYear} • <span className="text-indigo-600 font-bold flex items-center gap-0.5"><Lock className="w-3 h-3 inline" /> Stripe Vaulted</span></p>
                                                 </div>
                                               </div>
                                               <button 
@@ -3244,20 +3295,53 @@ export default function Profile() {
                                         </div>
                                       ) : (
                                         <div className="space-y-4">
-                                          <div className="bg-white rounded-2xl border border-black p-6 text-center">
-                                            <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-black">
-                                              <CreditCard className="w-5 h-5 text-slate-400" />
+                                          <div className="bg-white rounded-2xl border border-black p-6 md:p-8 text-center shadow-sm relative overflow-hidden">
+                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-[11px] font-bold text-indigo-700 mb-4">
+                                              <Lock className="w-3.5 h-3.5 text-indigo-600" />
+                                              <span>Secured & Processed directly by Stripe</span>
                                             </div>
-                                            <h3 className="text-sm font-bold text-slate-900 mb-1">No payment method added</h3>
-                                            <p className="text-xs text-slate-500 mb-4">Add a card to quickly and securely pay for home repairs or taxi rides.</p>
-                                            
+
+                                            <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-md border border-indigo-700">
+                                              <CreditCard className="w-7 h-7" />
+                                            </div>
+
+                                            <h3 className="text-base font-black text-slate-900 mb-1">Link Payment Card via Stripe</h3>
+                                            <p className="text-xs text-slate-600 max-w-md mx-auto mb-4 font-medium leading-relaxed">
+                                              Add a card to quickly and securely pay for home repairs or AnyRoller taxi rides. You will link your card directly inside <strong>Stripe's PCI-DSS Level 1 Vault</strong> — AnyTrader <strong>never sees or stores your card details</strong>.
+                                            </p>
+
+                                            <div className="bg-slate-50 border border-black rounded-xl p-3.5 mb-5 max-w-md mx-auto text-left space-y-2">
+                                              <div className="flex items-start gap-2 text-xs text-slate-700 font-medium">
+                                                <Lock className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                                <span><strong>Direct Stripe Vaulting:</strong> Card details are transmitted and encrypted directly by Stripe.</span>
+                                              </div>
+                                              <div className="flex items-start gap-2 text-xs text-slate-700 font-medium">
+                                                <Shield className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                                                <span><strong>Zero Local Storage:</strong> We store zero card numbers on AnyTrader servers.</span>
+                                              </div>
+                                            </div>
+
                                             <button 
                                               onClick={handleAddPaymentMethod}
                                               disabled={isProcessingSetup}
-                                              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 active:scale-95 transition-all disabled:opacity-50"
+                                              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-7 py-3 rounded-xl text-sm font-black shadow-md active:scale-95 transition-all disabled:opacity-50 inline-flex items-center justify-center gap-2 border border-black cursor-pointer"
                                             >
-                                              {isProcessingSetup ? "Processing..." : "Add Credit or Debit Card"}
+                                              {isProcessingSetup ? (
+                                                <>
+                                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                                  <span>Connecting to Stripe...</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Lock className="w-4 h-4" />
+                                                  <span>Link Card via Stripe (PCI-1 Secure)</span>
+                                                </>
+                                              )}
                                             </button>
+
+                                            <p className="text-[11px] text-slate-400 font-medium mt-3">
+                                              Supports Visa, Mastercard, American Express & Apple Pay
+                                            </p>
                                           </div>
                                         </div>
                                       )}
@@ -4808,6 +4892,12 @@ export default function Profile() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Master Platform Terms & Legal Modal */}
+      <TermsModal 
+        isOpen={showProfileTermsModal} 
+        onClose={() => setShowProfileTermsModal(false)} 
+      />
     </div>
   );
 }

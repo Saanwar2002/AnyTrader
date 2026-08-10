@@ -252,9 +252,9 @@ export default function EmergencyJobWizard() {
         const storageRef = ref(storage, fileName);
         console.log("Attempting upload to:", storageRef.fullPath, "Bucket:", storage.app.options.storageBucket);
 
-        // Define a 25-second timeout for the file upload
+        // Define a 7-second timeout for the file upload
         const timeoutPromise = new Promise<null>((_, reject) => {
-          setTimeout(() => reject(new Error("UPLOAD_TIMEOUT")), 25000);
+          setTimeout(() => reject(new Error("UPLOAD_TIMEOUT")), 7000);
         });
 
         const uploadOperationPromise = (async () => {
