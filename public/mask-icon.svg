@@ -1,4 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="128" fill="#2563eb"/>
-  <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Inter, sans-serif" font-weight="bold" font-size="300" fill="white">T</text>
+  <defs>
+    <linearGradient id="navyBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#002B5C"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="goldAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#navyBg)"/>
+  <g transform="translate(106, 96)">
+    <!-- Stylized A emblem -->
+    <path d="M150 40 L250 250 H195 L150 145 L105 250 H50 Z" fill="url(#goldAccent)"/>
+    <!-- Crossbar -->
+    <rect x="90" y="180" width="120" height="30" rx="8" fill="#2563EB"/>
+    <!-- Center Wrench / Shield Detail -->
+    <circle cx="150" cy="115" r="22" fill="#F59E0B"/>
+  </g>
 </svg>

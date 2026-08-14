@@ -2,14 +2,15 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { 
   db, doc, getDoc, collection, query, where, orderBy, onSnapshot, 
-  handleFirestoreError, OperationType, addDoc, serverTimestamp, sendNotification, getDocs 
+  handleFirestoreError, OperationType, addDoc, updateDoc, serverTimestamp, sendNotification, getDocs 
 } from "@/src/firebase";
+import { arrayUnion } from "firebase/firestore";
 import { useAuth } from "./AuthProvider";
 import { 
   Star, MapPin, Calendar, Shield, Check, Briefcase, Clock, Zap, MessageSquare, ChevronLeft, Loader2, Image as ImageIcon, Users, ChevronDown,
   ShieldCheck, CheckCircle, Heart, FileText, AlertTriangle, X, Send, ChevronRight, Award, Share2, UserPlus, HelpCircle, Medal, CalendarClock, Pencil
 } from "lucide-react";
-import { cn, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, getOutwardPostcode, getDealPricing } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PROFESSIONAL_BADGES } from "@/src/constants";
 import { getTraderBadges } from "@/src/lib/badges";
@@ -20,6 +21,9 @@ import { format } from "date-fns";
 import { SEO } from "./SEO";
 import { Logo } from "./Logo";
 import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
+import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
+import { DealCountdownBadge, shareDeal } from "./FindTrades";
+import { isDealSoldOut, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
 
 export default function PublicProfile() {
   const { id } = useParams();
@@ -38,6 +42,27 @@ export default function PublicProfile() {
   const [openFaqIds, setOpenFaqIds] = useState<string[]>([]);
   const [isDocViewerOpen, setIsDocViewerOpen] = useState(false);
   const [docViewerBadgeId, setDocViewerBadgeId] = useState<string>("liability_insurance");
+  const [activeDeals, setActiveDeals] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    const q = query(
+      collection(db, "flash_deals"),
+      where("traderId", "==", id),
+      where("status", "==", "active")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dbDeals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const mockMatches = INITIAL_MOCK_FLASH_DEALS.filter(m => m.traderId === id);
+      const existingIds = new Set(dbDeals.map(d => d.id));
+      const merged = [...dbDeals, ...mockMatches.filter(m => !existingIds.has(m.id))];
+      setActiveDeals(merged);
+    }, (error) => {
+      console.error("Error fetching trader flash deals:", error);
+      setActiveDeals(INITIAL_MOCK_FLASH_DEALS.filter(m => m.traderId === id));
+    });
+    return () => unsubscribe();
+  }, [id]);
 
   const toggleFaq = (faqId: string) => {
     setOpenFaqIds(prev => 
@@ -49,10 +74,33 @@ export default function PublicProfile() {
 
   // Quote Request State
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [selectedDealForQuote, setSelectedDealForQuote] = useState<any>(location.state?.activeDeal || null);
   const [userJobs, setUserJobs] = useState<any[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state?.activeDeal) {
+      setSelectedDealForQuote(location.state.activeDeal);
+    }
+    if (location.state?.autoOpenQuoteModal && location.state?.activeDeal) {
+      openQuoteModal(location.state.activeDeal);
+    }
+  }, [location.state]);
+
+  // Smooth scroll to Active Deals when navigated from search deal pill
+  useEffect(() => {
+    if (location.hash === "#active-deals" || location.state?.scrollToDeals) {
+      const timer = setTimeout(() => {
+        const dealsElement = document.getElementById("active-deals");
+        if (dealsElement) {
+          dealsElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash, location.state, activeDeals]);
 
   // Booking Appointments
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -258,10 +306,13 @@ export default function PublicProfile() {
     }
   };
 
-  const openQuoteModal = async () => {
+  const openQuoteModal = async (dealToClaim?: any) => {
     if (!currentUser) {
-      navigate("/login");
+      navigate("/login", { state: { redirectTo: `/profile/${id}`, activeDeal: dealToClaim || selectedDealForQuote, autoOpenQuoteModal: true } });
       return;
+    }
+    if (dealToClaim) {
+      setSelectedDealForQuote(dealToClaim);
     }
     setIsQuoteModalOpen(true);
     setLoadingJobs(true);
@@ -303,16 +354,30 @@ export default function PublicProfile() {
       const snapshot = await getDocs(q);
       const existingConv = snapshot.docs.find(doc => doc.data().participants.includes(id));
 
+      const dealNote = selectedDealForQuote
+        ? `\n\n⚡ CLAIMED FLASH DEAL (${selectedDealForQuote.discountPercentage}% OFF):\n• Service: ${selectedDealForQuote.service}\n• Off-Peak Rate: £${selectedDealForQuote.discountedPrice || selectedDealForQuote.price}`
+        : "";
+
       let convId;
       if (existingConv) {
         convId = existingConv.id;
+        await addDoc(collection(db, "conversations", convId, "messages"), {
+          senderId: currentUser.uid,
+          text: `Hi ${profile.name}, I'd like to invite you to quote for my job: "${job.title}".${dealNote} Please review and confirm the quote with the Flash Deal discount!`,
+          createdAt: serverTimestamp()
+        });
+        await updateDoc(doc(db, "conversations", convId), {
+          lastMessage: `Invitation to quote for: ${job.title}${selectedDealForQuote ? ` (${selectedDealForQuote.discountPercentage}% OFF Deal)` : ''}`,
+          lastMessageAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
       } else {
         // Create new conversation
         const convRef = await addDoc(collection(db, "conversations"), {
           participants: [currentUser.uid, id],
           jobId: job.id,
           jobTitle: job.title,
-          lastMessage: `Invitation to quote for: ${job.title}`,
+          lastMessage: `Invitation to quote for: ${job.title}${selectedDealForQuote ? ` (${selectedDealForQuote.discountPercentage}% OFF Deal)` : ''}`,
           lastMessageAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           createdAt: serverTimestamp()
@@ -322,16 +387,28 @@ export default function PublicProfile() {
         // Add initial invitation message
         await addDoc(collection(db, "conversations", convId, "messages"), {
           senderId: currentUser.uid,
-          text: `Hi ${profile.name}, I'd like to invite you to quote for my job: "${job.title}". Please take a look at the details and let me know if you're interested!`,
+          text: `Hi ${profile.name}, I'd like to invite you to quote for my job: "${job.title}".${dealNote} Please review and confirm the quote with the Flash Deal discount!`,
           createdAt: serverTimestamp()
         });
+      }
+
+      // Update job document with invited trader ID
+      try {
+        await updateDoc(doc(db, "jobs", job.id), {
+          invitedTraderIds: arrayUnion(id),
+          targetTradespersonId: job.targetTradespersonId || id,
+          targetTradespersonName: job.targetTradespersonName || profile.name,
+          updatedAt: serverTimestamp()
+        });
+      } catch (jobErr) {
+        console.warn("Could not update job invitedTraderIds:", jobErr);
       }
 
       // 2. Send notification
       await sendNotification(
         id,
         "New Quote Request! 📝",
-        `${currentUserProfile?.name || 'A homeowner'} invited you to quote for "${job.title}"`,
+        `${currentUserProfile?.name || 'A homeowner'} invited you to quote for "${job.title}"${selectedDealForQuote ? ` (${selectedDealForQuote.discountPercentage}% OFF Flash Deal)` : ''}`,
         "quote",
         `/job/${job.id}`
       );
@@ -639,6 +716,171 @@ export default function PublicProfile() {
           </div>
         </div>
       </div>
+
+      {/* Active Off-Peak Weekdays Flash Deals */}
+      {activeDeals.length > 0 && (
+        <div id="active-deals" className="bg-gradient-to-br from-emerald-50 to-teal-50 p-6 rounded-3xl border border-black shadow-sm space-y-4 mb-8 scroll-mt-24">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🍂</span>
+            <div>
+              <h3 className="text-lg font-black text-slate-900 leading-tight">Active Quiet Period Off-Peak Deals</h3>
+              <p className="text-xs text-slate-500 font-medium">Book one of these services for the off-peak weekday to claim the discount on your quote!</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {activeDeals.map(deal => {
+              const { origPrice, discPrice, discountPct, savings } = getDealPricing(deal);
+              const cap = getDealCapacityInfo(deal);
+              const soldOut = cap.isSoldOut;
+              const isHighlighted = location.state?.highlightDealId === deal.id || location.state?.activeDeal?.id === deal.id;
+
+              return (
+                <div
+                  key={deal.id}
+                  id={`deal-${deal.id}`}
+                  className={cn(
+                    "border rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-xs transition-all",
+                    soldOut ? "bg-slate-100/90 border-slate-300 opacity-80" : "bg-white border-black",
+                    isHighlighted && "ring-3 ring-emerald-500 shadow-md animate-[pulse_2s_ease-in-out_3]"
+                  )}
+                >
+                  {/* Compact Share Button in Top Right Corner */}
+                  <button
+                    type="button"
+                    onClick={(e) => shareDeal(e, { ...deal, traderName: profile?.name || deal.traderName })}
+                    title="Share offer via WhatsApp or Social Apps"
+                    className="absolute top-2 right-2 z-20 w-4 h-4 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-90 shrink-0"
+                  >
+                    <Share2 className="w-2.5 h-2.5 text-white stroke-[2.5]" />
+                  </button>
+
+                  <div className="space-y-2 pr-6">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {soldOut ? (
+                        <span className="bg-slate-700 text-white font-black text-[10px] px-2.5 py-0.5 uppercase rounded-full shadow-2xs">
+                          🔴 Sold Out
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-600 text-white font-black text-xs px-2.5 py-0.5 uppercase rounded-full shadow-2xs">
+                          {discountPct || deal.discountPercentage}% OFF
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 text-[9.5px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full font-black uppercase">
+                        ⚡ Off-Peak {deal.dayOfWeek}
+                      </span>
+                      {/* Prominent Booking Limit Pill in Header */}
+                      {cap.isSoldOut ? (
+                        <span className="text-[9.5px] font-black text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full">
+                          🔴 0 of {cap.max} Left
+                        </span>
+                      ) : cap.isUnlimited ? (
+                        <span className="text-[9.5px] font-black text-blue-800 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
+                          ⚡ Unlimited Slots
+                        </span>
+                      ) : (
+                        <span className="text-[9.5px] font-black text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full shadow-2xs flex items-center gap-1">
+                          🔥 {cap.remaining} of {cap.max} Left
+                        </span>
+                      )}
+                      <DealCountdownBadge deal={deal} className="text-[9.5px] px-2.5 py-0.5 rounded-full" />
+                    </div>
+                    <h4 className={cn("font-extrabold text-sm sm:text-base", soldOut ? "text-slate-700" : "text-slate-900")}>
+                      {deal.service}
+                    </h4>
+                    <p className="text-xs text-slate-500 line-clamp-3 leading-snug">{deal.description}</p>
+
+                    {/* Prominent Daily Booking Limit & Capacity Bar */}
+                    <div className="bg-slate-50 border border-black/20 rounded-xl p-2 mt-2 space-y-1">
+                      <div className="flex items-center justify-between text-xs font-black">
+                        <span className="text-slate-800 flex items-center gap-1">
+                          <Shield className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Daily Booking Limit:</span>
+                        </span>
+                        {cap.isUnlimited ? (
+                          <span className="text-emerald-700 font-black">Unlimited Deals</span>
+                        ) : cap.isSoldOut ? (
+                          <span className="text-amber-800 font-black bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                            🔴 Sold Out ({cap.max}/{cap.max} Booked)
+                          </span>
+                        ) : (
+                          <span className="text-emerald-800 font-black bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                            🔥 {cap.remaining} of {cap.max} Left Today
+                          </span>
+                        )}
+                      </div>
+                      {!cap.isUnlimited && (
+                        <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all duration-300",
+                              cap.isSoldOut ? "bg-amber-500" : "bg-emerald-500"
+                            )}
+                            style={{ width: `${cap.progressPct}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Clear Unambiguous Price Breakdown Box */}
+                  <div className={cn(
+                    "border rounded-xl p-2.5 mt-3 flex items-center justify-between gap-2",
+                    soldOut ? "bg-slate-200/70 border-slate-300" : "bg-emerald-50/80 border-emerald-200/90"
+                  )}>
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      {origPrice && origPrice > discPrice && (
+                        <span className="text-xs font-extrabold text-slate-400 line-through">
+                          Was £{origPrice}
+                        </span>
+                      )}
+                      <div className="flex items-baseline gap-1">
+                        <span className={cn("text-base font-black", soldOut ? "text-slate-700" : "text-emerald-700")}>
+                          £{discPrice}
+                        </span>
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded",
+                          soldOut ? "bg-slate-300 text-slate-700" : "bg-emerald-200/60 text-emerald-800"
+                        )}>
+                          Deal Rate
+                        </span>
+                      </div>
+                    </div>
+                    {savings > 0 && !soldOut && (
+                      <span className="text-xs font-black text-emerald-700 bg-white border border-emerald-300 px-2 py-0.5 rounded-md shadow-2xs shrink-0">
+                        Save £{savings}
+                      </span>
+                    )}
+                    {soldOut && (
+                      <span className="text-xs font-black text-slate-600 bg-white border border-slate-300 px-2 py-0.5 rounded-md shadow-2xs shrink-0">
+                        Capacity Filled
+                      </span>
+                    )}
+                  </div>
+
+                  {soldOut ? (
+                    <button
+                      type="button"
+                      onClick={() => openQuoteModal(null)}
+                      className="w-full mt-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs sm:text-sm py-2.5 px-3 rounded-xl border border-slate-300 transition-all flex items-center justify-center gap-1.5 active:scale-98 cursor-pointer"
+                    >
+                      <span>Deal Sold Out • Request Standard Quote</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openQuoteModal(deal)}
+                      className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm py-2.5 px-3 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-98 cursor-pointer"
+                    >
+                      <Zap className="w-4 h-4 fill-white shrink-0" />
+                      <span>Claim Deal & Request Quote ({discountPct || deal.discountPercentage}% OFF)</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Video Credential Verification Showcase */}
       {profile?.videoVerificationUrl && (
@@ -981,7 +1223,22 @@ export default function PublicProfile() {
             </div>
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto space-y-3">
+          <div className="max-w-2xl mx-auto space-y-2">
+            {selectedDealForQuote && (
+              <div className="bg-emerald-600 text-white px-3.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold shadow-sm">
+                <div className="flex items-center gap-1.5 truncate">
+                  <Zap className="w-3.5 h-3.5 fill-white shrink-0" />
+                  <span className="truncate">Claiming <strong>{selectedDealForQuote.discountPercentage}% OFF</strong> for {selectedDealForQuote.service}</span>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setSelectedDealForQuote(null)} 
+                  className="text-[11px] underline text-emerald-100 hover:text-white shrink-0 ml-2"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             <div className="flex gap-3">
               <button 
                 onClick={handleMessage}
@@ -992,12 +1249,17 @@ export default function PublicProfile() {
                 Message
               </button>
               <button 
-                onClick={openQuoteModal}
+                onClick={() => openQuoteModal(selectedDealForQuote)}
                 disabled={isProcessing}
-                className="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                className={cn(
+                  "flex-1 py-3.5 rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50",
+                  selectedDealForQuote
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"
+                    : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200"
+                )}
               >
-                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
-                Request Quote
+                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedDealForQuote ? <Zap className="w-5 h-5 fill-white shrink-0" /> : <FileText className="w-5 h-5" />)}
+                <span>{selectedDealForQuote ? `Request Quote (${selectedDealForQuote.discountPercentage}% OFF)` : 'Request Quote'}</span>
               </button>
             </div>
             {profile.appointmentSettings?.enabled && (
@@ -1143,28 +1405,88 @@ export default function PublicProfile() {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl"
+              className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[92vh] flex flex-col"
             >
-              <div className="p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-slate-900">Request a Quote</h2>
-                  <button onClick={() => setIsQuoteModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full">
-                    <X className="w-6 h-6 text-slate-400" />
-                  </button>
+              {/* Pinned Top Header with Close Button */}
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                <h2 className="text-xl font-extrabold text-slate-900">Request a Quote</h2>
+                <button 
+                  onClick={() => setIsQuoteModalOpen(false)} 
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                  aria-label="Close"
+                  title="Close modal"
+                >
+                  <X className="w-6 h-6 text-slate-400 hover:text-slate-600 transition-colors" />
+                </button>
+              </div>
+
+              {/* Scrollable Modal Content */}
+              <div className="p-6 overflow-y-auto flex-1 no-scrollbar space-y-5">
+                <div className="bg-slate-50 border border-black rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center font-black text-blue-700 text-sm shrink-0">
+                      {profile.name ? profile.name.charAt(0).toUpperCase() : 'T'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Target Tradesperson</p>
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        <h4 className="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate">{profile.name}</h4>
+                        {(profile.primaryCategory || profile.trade || (Array.isArray(profile.trades) && profile.trades.length > 0)) && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black bg-blue-600 text-white px-2.5 py-0.5 rounded-full shadow-2xs">
+                            <Briefcase className="w-3 h-3 text-white shrink-0" />
+                            <span>{profile.primaryCategory || profile.trade || (Array.isArray(profile.trades) ? profile.trades.slice(0, 2).join(" • ") : profile.trades)}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <p className="text-slate-500 mb-8 text-sm">
-                  Select a job to invite <span className="font-bold text-slate-900">{profile.name}</span> to quote for.
+                <p className="text-slate-500 text-xs sm:text-sm font-medium">
+                  Select an existing job below to invite <strong className="text-slate-900">{profile.name}</strong>, or post a new job targeted directly to them.
                 </p>
 
+                {selectedDealForQuote && (() => {
+                  const { origPrice, discPrice, discountPct, savings } = getDealPricing(selectedDealForQuote);
+                  return (
+                    <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-2xl shadow-sm flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-black text-sm shrink-0">
+                          ⚡
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded-md">
+                              {discountPct}% OFF
+                            </span>
+                            <span className="text-xs font-extrabold text-emerald-100">
+                              {selectedDealForQuote.dayOfWeek ? `Off-Peak ${selectedDealForQuote.dayOfWeek}` : 'Flash Deal'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-white truncate mt-0.5">
+                            {selectedDealForQuote.service} • Deal Rate: £{discPrice} {origPrice && origPrice > discPrice ? `(Was £${origPrice})` : ''} {savings > 0 ? `• Save £${savings}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDealForQuote(null)}
+                        className="text-xs font-extrabold text-white/80 hover:text-white underline shrink-0 cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 {error && (
-                  <div className="bg-red-50 border border-red-100 text-red-700 p-4 rounded-2xl mb-6 text-sm font-bold flex items-center gap-2">
+                  <div className="bg-red-50 border border-red-100 text-red-700 p-4 rounded-2xl text-sm font-bold flex items-center gap-2">
                     <AlertTriangle className="w-5 h-5" />
                     {error}
                   </div>
                 )}
 
-                <div className="space-y-4 max-h-[50vh] overflow-y-auto no-scrollbar mb-8">
+                <div className="space-y-4">
                   {loadingJobs ? (
                     <div className="flex justify-center py-12">
                       <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -1174,7 +1496,7 @@ export default function PublicProfile() {
                       <button
                         key={job.id}
                         onClick={() => handleInviteToJob(job)}
-                        className="w-full p-5 rounded-2xl border-2 border-black hover:border-blue-600 hover:bg-blue-50 transition-all text-left flex items-center justify-between group"
+                        className="w-full p-5 rounded-2xl border border-black hover:border-blue-600 hover:bg-blue-50 transition-all text-left flex items-center justify-between group cursor-pointer"
                       >
                         <div>
                           <h4 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{job.title}</h4>
@@ -1184,15 +1506,28 @@ export default function PublicProfile() {
                       </button>
                     ))
                   ) : (
-                    <div className="text-center py-12 bg-slate-50 rounded-3xl border-2 border-dashed border-black">
+                    <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-black">
                       <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                       <p className="text-slate-500 font-medium mb-6">You don't have any active jobs yet.</p>
                       <Link 
                         to="/post-job"
-                        state={{ targetTradespersonId: id, targetTradespersonName: profile.name, targetTrades: profile.trades, isB2B, linkedPropertyId, linkedPropertyName }}
-                        className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                        state={{ 
+                          targetTradespersonId: id, 
+                          targetTradespersonName: profile.name, 
+                          targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
+                          isB2B, 
+                          linkedPropertyId, 
+                          linkedPropertyName,
+                          claimedDeal: selectedDealForQuote,
+                          title: selectedDealForQuote ? selectedDealForQuote.service : undefined,
+                          description: selectedDealForQuote ? selectedDealForQuote.description : undefined,
+                          budget: selectedDealForQuote ? (selectedDealForQuote.discountedPrice || selectedDealForQuote.price) : undefined,
+                          category: selectedDealForQuote ? selectedDealForQuote.category : undefined
+                        }}
+                        className="inline-flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
                       >
-                        Post a Job Now
+                        <Zap className="w-4 h-4 fill-white" />
+                        <span>{selectedDealForQuote ? `Post Job with ${selectedDealForQuote.discountPercentage}% OFF` : 'Post a Job Now'}</span>
                       </Link>
                     </div>
                   )}
@@ -1203,15 +1538,33 @@ export default function PublicProfile() {
                     <p className="text-center text-xs text-slate-400 mb-4">Need to post a new job?</p>
                     <Link 
                       to="/post-job"
-                      state={{ targetTradespersonId: id, targetTradespersonName: profile.name, targetTrades: profile.trades, isB2B, linkedPropertyId, linkedPropertyName }}
-                      className="w-full py-4 rounded-2xl border-2 border-black text-slate-600 font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
+                      state={{ 
+                        targetTradespersonId: id, 
+                        targetTradespersonName: profile.name, 
+                        targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
+                        isB2B, 
+                        linkedPropertyId, 
+                        linkedPropertyName,
+                        claimedDeal: selectedDealForQuote,
+                        title: selectedDealForQuote ? selectedDealForQuote.service : undefined,
+                        description: selectedDealForQuote ? selectedDealForQuote.description : undefined,
+                        budget: selectedDealForQuote ? (selectedDealForQuote.discountedPrice || selectedDealForQuote.price) : undefined,
+                        category: selectedDealForQuote ? selectedDealForQuote.category : undefined
+                      }}
+                      className={cn(
+                        "w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer",
+                        selectedDealForQuote
+                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                          : "border border-black text-slate-600 hover:bg-slate-50"
+                      )}
                     >
-                      Post New Job
+                      <Zap className={cn("w-4 h-4", selectedDealForQuote ? "fill-white" : "text-amber-500")} />
+                      <span>{selectedDealForQuote ? `Post New Job with ${selectedDealForQuote.discountPercentage}% OFF` : 'Post New Job'}</span>
                     </Link>
                   </div>
                 )}
               </div>
-              <div className="h-6 bg-white sm:hidden" />
+              <div className="h-4 bg-white shrink-0 sm:hidden" />
             </motion.div>
           </div>
         )}

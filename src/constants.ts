@@ -1521,6 +1521,27 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "Document & Confidential Legal Delivery",
       "Pallet & Freight Transport"
     ]
+  },
+  {
+    id: 86,
+    name: "General Labour, Trade Mates & Site Helpers",
+    icon: "🛠️",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "CSCS Site Helper": ["CSCS Card (Optional)"],
+      "Demolition & Heavy Strip-Out Helper": ["Asbestos Awareness (Optional)"]
+    },
+    subcategories: [
+      "Garden Digging, Trenching & Groundwork Assistance",
+      "Trade Mate & Apprentice Helper (Plumber, Electrician, Builder, Roofer Mate)",
+      "General Site Labourer & Heavy Lifting",
+      "Demolition & Non-Structural Wall Strip-Out Helper",
+      "Material Offloading, Plasterboard, Bricks & Timber Carrying",
+      "Skip Loading, Rubble Bagging & Waste Clearance Helper",
+      "Post-Renovation Site Cleanup & Tool Helper",
+      "Outdoor Landscaping Labour & Turf Laying Helper",
+      "Urgent Same-Day On-Demand Site Helper & Extra Hands"
+    ]
   }
 ];
 

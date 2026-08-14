@@ -372,7 +372,29 @@ export default function MyJobs() {
                 key={job.id}
                 className="bg-white rounded-[2.5rem] border border-black shadow-sm hover:shadow-md transition-all overflow-hidden relative group"
               >
-                {(job.boostTier === 'instant_match' || job.isInstantMatch) ? (
+                {job.claimedDeal ? (
+                  <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 font-black text-xs sm:text-sm tracking-wide uppercase py-2.5 px-4 sm:px-6 flex items-center justify-between border-b border-amber-600 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-slate-950 text-amber-400 p-1 rounded-md">
+                        <Zap className="w-3.5 h-3.5 fill-current" />
+                      </span>
+                      <span>Flash Deal • Quote Request</span>
+                    </div>
+                    <span className="bg-slate-950 text-amber-300 text-[10px] sm:text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
+                      Targeted: {job.targetTradespersonName || job.claimedDeal.traderName || "Individual Trader"}
+                    </span>
+                  </div>
+                ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
+                  <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white font-black text-xs sm:text-sm tracking-wide uppercase py-2.5 px-4 sm:px-6 flex items-center justify-between border-b border-indigo-950 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">🎯</span>
+                      <span>Direct Trader Quote Request</span>
+                    </div>
+                    <span className="bg-white/20 text-white text-[10px] sm:text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider border border-white/20">
+                      Sent to: {job.targetTradespersonName || "Individual Trader"}
+                    </span>
+                  </div>
+                ) : (job.boostTier === 'instant_match' || job.isInstantMatch) ? (
                   <div className="bg-[#E6A020] text-center py-2 text-slate-900 font-black text-3xl tracking-wide uppercase border-b border-[#D4921E]">
                     Instant Match
                   </div>
@@ -462,6 +484,64 @@ export default function MyJobs() {
                       {job.description}
                     </p>
                   </div>
+
+                  {/* Flash Deal / Direct Quote Request Information Box */}
+                  {job.claimedDeal ? (
+                    <div className="bg-gradient-to-r from-amber-50 to-orange-50/60 border-2 border-amber-300 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-start sm:items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <Zap className="w-5 h-5 fill-current" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                              Pre-Agreed Flash Deal
+                            </span>
+                            <span className="bg-amber-200 text-amber-950 text-[10px] font-black px-2 py-0.5 rounded-md uppercase border border-amber-300">
+                              {job.claimedDeal.discountPercentage || 0}% OFF
+                            </span>
+                            {job.claimedDeal.dealTitle && (
+                              <span className="text-xs font-bold text-slate-600 truncate max-w-[200px]">
+                                • {job.claimedDeal.dealTitle}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
+                            Individual Trader: <span className="text-amber-900 font-black">{job.targetTradespersonName || job.claimedDeal.traderName || "Selected Specialist"}</span>
+                          </p>
+                        </div>
+                      </div>
+                      {(job.claimedDeal.targetRate || job.claimedDeal.discountedPrice) && (
+                        <div className="flex items-center justify-between sm:flex-col sm:items-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-amber-200">
+                          <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">Guaranteed Deal Price</span>
+                          <span className="text-lg sm:text-xl font-black text-slate-900">
+                            £{job.claimedDeal.targetRate || job.claimedDeal.discountedPrice}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 border-2 border-blue-200 rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm font-black text-sm">
+                          🎯
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-blue-950 uppercase tracking-wider">
+                              Direct 1-on-1 Quote Request
+                            </span>
+                            <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-md uppercase border border-blue-200">
+                              Private
+                            </span>
+                          </div>
+                          <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
+                            Sent Exclusively To: <span className="text-blue-900 font-black">{job.targetTradespersonName || "Individual Trader"}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {/* Location & Time */}
                   <div className="flex flex-wrap items-center gap-4 pt-1">

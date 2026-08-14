@@ -10,7 +10,7 @@ import { motion } from "motion/react";
 import { 
   Briefcase, Clock, MessageSquare, CheckCircle2, 
   ChevronRight, Plus, Loader2, AlertCircle, Star,
-  Search, BarChart3, Zap as EmergencyIcon, Bot, Bell,
+  Search, BarChart3, Zap as EmergencyIcon, Zap, Bot, Bell,
   MapPin, Image as ImageIcon, Video as VideoIcon,
   ShieldCheck, Activity, Calendar as CalendarIcon, Car
 } from "lucide-react";
@@ -356,8 +356,36 @@ export default function Dashboard() {
                     job.urgency === "emergency" ? "border-red-500 bg-red-50/30" : "border-black"
                   )}
                 >
+                  {/* Top Bar for Flash Deal / Direct Request */}
+                  {job.claimedDeal ? (
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs uppercase py-2 px-5 flex items-center justify-between border-b border-amber-600 shadow-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="bg-slate-950 text-amber-400 p-0.5 rounded">
+                          <Zap className="w-3 h-3 fill-current" />
+                        </span>
+                        <span>Flash Deal Quote Request</span>
+                      </div>
+                      <span className="bg-slate-950 text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                        {job.targetTradespersonName || job.claimedDeal.traderName || "Individual Trader"}
+                      </span>
+                    </div>
+                  ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
+                    <div className="bg-gradient-to-r from-indigo-900 to-blue-900 text-white font-black text-xs uppercase py-2 px-5 flex items-center justify-between border-b border-indigo-950 shadow-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span>🎯</span>
+                        <span>Direct 1-on-1 Quote Request</span>
+                      </div>
+                      <span className="bg-white/20 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-white/20">
+                        {job.targetTradespersonName || "Individual Trader"}
+                      </span>
+                    </div>
+                  ) : null}
+
                   {/* Status Badge */}
-                  <div className="absolute top-6 right-6 z-10 flex items-center gap-2">
+                  <div className={cn(
+                    "absolute right-6 z-10 flex items-center gap-2",
+                    job.claimedDeal || job.targetTradespersonName || job.targetTradespersonId ? "top-14" : "top-6"
+                  )}>
                     {job.urgency === 'emergency' && (
                       <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[9px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1">
                         <AlertCircle className="w-2.5 h-2.5" />
@@ -419,6 +447,45 @@ export default function Dashboard() {
                         {job.description}
                       </p>
                     </div>
+
+                    {/* Flash Deal Callout box in Dashboard */}
+                    {job.claimedDeal ? (
+                      <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs">
+                            <Zap className="w-3.5 h-3.5 fill-current" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">
+                              Flash Deal • {job.claimedDeal.discountPercentage}% OFF
+                            </span>
+                            <span className="text-xs font-bold text-slate-800">
+                              To: <span className="text-amber-950 font-black">{job.targetTradespersonName || job.claimedDeal.traderName || "Individual Specialist"}</span>
+                            </span>
+                          </div>
+                        </div>
+                        {(job.claimedDeal.targetRate || job.claimedDeal.discountedPrice) && (
+                          <div className="text-right shrink-0">
+                            <span className="text-[9px] font-bold text-amber-800 uppercase block">Locked Price</span>
+                            <span className="text-sm font-black text-slate-900">£{job.claimedDeal.targetRate || job.claimedDeal.discountedPrice}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 flex items-center gap-2 shadow-2xs">
+                        <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px]">
+                          🎯
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider block">
+                            Direct 1-on-1 Request
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">
+                            Exclusive to: <span className="text-blue-950 font-black">{job.targetTradespersonName || "Individual Trader"}</span>
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {/* Location & Time */}
                     <div className="flex flex-wrap items-center gap-3 pt-1">

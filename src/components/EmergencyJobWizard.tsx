@@ -1,7 +1,7 @@
-import { textContainsTokenMatch } from "@/src/lib/fuzzyMatch";
+import { textContainsTokenMatch, tokenize, tokenMatches, categoryMatchesSearch } from "@/src/lib/fuzzyMatch";
 import React, { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2, ShieldCheck, Tag, ExternalLink } from "lucide-react";
+import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2, ShieldCheck, Tag, ExternalLink, Briefcase } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { lookupPostcode } from "@/src/services/postcodeService";
@@ -181,10 +181,40 @@ export default function EmergencyJobWizard() {
   }, [user]);
 
   const filteredCategories = TRADE_CATEGORIES.filter(cat => {
-    const matchesSearch = !searchQuery.trim() || textContainsTokenMatch(cat.name, searchQuery);
-    const matchesTargetTrades = targetTrades && Array.isArray(targetTrades) && targetTrades.length > 0
-      ? targetTrades.includes(cat.name)
+    const matchesSearch = categoryMatchesSearch(cat, searchQuery);
+    
+    // Normalize targetTrades to an array of strings
+    const tradesArray = Array.isArray(targetTrades) 
+      ? targetTrades 
+      : targetTrades 
+        ? [targetTrades] 
+        : [];
+
+    // If we have a specific target tradesperson, check for token-level overlap
+    const matchesTargetTrades = tradesArray.length > 0 
+      ? (() => {
+          const stopWords = new Set(["and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", "at", "by", "on", "a", "an", "n", "private", "maker", "services", "general", "domestic", "commercial", "home", "indoor", "outdoor", "installation", "installations", "repair", "repairs", "maintenance", "service", "specialist", "management", "coordination", "planner", "planning", "delivery", "transport", "about"]);
+          const traderTokens = tradesArray.flatMap(trade => tokenize(trade)).filter(tok => !stopWords.has(tok.toLowerCase()));
+          
+          const catTokens = tokenize(cat.name);
+          const subcategoryTokens = (cat.subcategories || []).flatMap(sub => tokenize(sub));
+          const allCatTokens = [...catTokens, ...subcategoryTokens].filter(tok => !stopWords.has(tok.toLowerCase()));
+
+          // Return true if ANY trader trade token overlaps with ANY category or subcategory token
+          return traderTokens.some(traderTok => 
+            allCatTokens.some(catTok => {
+              const tVal = catTok.toLowerCase();
+              const qVal = traderTok.toLowerCase();
+              if (tVal === qVal) return true;
+              if (qVal.startsWith(tVal) && tVal.length >= 4) return true;
+              if (tVal.startsWith(qVal) && qVal.length >= 4) return true;
+              if (qVal + "s" === tVal || tVal + "s" === qVal) return true;
+              return false;
+            })
+          );
+        })()
       : true;
+      
     return matchesSearch && matchesTargetTrades;
   });
 
@@ -509,16 +539,24 @@ export default function EmergencyJobWizard() {
 
       {/* Target Tradesperson Indicator */}
       {targetTradespersonId && (
-        <div className="bg-blue-600 text-white px-4 py-2 mb-4 rounded-xl flex items-center justify-between text-xs font-bold">
-          <div className="flex items-center gap-2">
-            <span className="w-4 h-4 flex items-center justify-center shrink-0">👤</span>
-            <span>Requesting emergency quote from: {targetTradespersonName}</span>
+        <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white px-4 py-2.5 mb-4 rounded-xl flex items-center justify-between text-xs font-bold shadow-md">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center shrink-0">👤</span>
+            <span className="font-medium text-blue-100">Requesting emergency quote from:</span>
+            <span className="font-black text-white text-sm tracking-tight">{targetTradespersonName}</span>
+            {targetTrades && (
+              <span className="inline-flex items-center gap-1 bg-amber-400 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-full shadow-2xs">
+                <Briefcase className="w-3 h-3 text-slate-950 shrink-0" />
+                <span>{Array.isArray(targetTrades) ? targetTrades.slice(0, 2).join(" • ") : targetTrades}</span>
+              </span>
+            )}
           </div>
           <button 
             onClick={() => navigate(location.pathname, { state: { ...location.state, targetTradespersonId: null, targetTradespersonName: null, targetTrades: null } })}
-            className="hover:bg-white/10 p-1 rounded transition-colors"
+            className="hover:bg-white/20 p-1 rounded-lg transition-colors shrink-0 ml-2 text-white/80 hover:text-white"
+            title="Remove targeted trader"
           >
-            <X className="w-3 h-3" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}

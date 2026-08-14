@@ -66,3 +66,28 @@ export function calculateDistanceMiles(lat1: number, lon1: number, lat2: number,
   return Math.round(R * c * 10) / 10;
 }
 
+/**
+ * Normalizes deal pricing to return both original price and discounted price with savings.
+ */
+export function getDealPricing(deal: any) {
+  if (!deal) {
+    return { origPrice: null, discPrice: 0, discountPct: 0, savings: 0 };
+  }
+  const discPrice = Math.round(Number(deal.discountedPrice || deal.price || deal.discountedRate || 0));
+  let origPrice = Math.round(Number(deal.originalPrice || deal.normalPrice || 0));
+  const discountPct = Math.round(Number(deal.discountPercentage || 0));
+
+  if (!origPrice && discPrice > 0 && discountPct > 0 && discountPct < 100) {
+    origPrice = Math.round(discPrice / (1 - discountPct / 100));
+  }
+
+  const savings = origPrice > discPrice ? origPrice - discPrice : 0;
+
+  return {
+    origPrice: origPrice > discPrice ? origPrice : null,
+    discPrice,
+    discountPct,
+    savings
+  };
+}
+

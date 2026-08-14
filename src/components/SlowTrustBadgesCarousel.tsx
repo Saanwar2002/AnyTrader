@@ -85,7 +85,7 @@ export const SlowTrustBadgesCarousel: React.FC<SlowTrustBadgesCarouselProps> = (
           onSelectBadge(badge.id);
         }}
         className={cn(
-          "py-0.5 px-2 rounded-md text-center flex items-center gap-1.5 border transition-all cursor-pointer shrink-0 shadow-2xs hover:scale-102 select-none",
+          "py-0.5 px-1.5 rounded text-center flex items-center gap-1 border transition-all cursor-pointer shrink-0 shadow-2xs hover:scale-102 select-none",
           isApproved
             ? "bg-emerald-50 border-black text-emerald-950 hover:bg-emerald-100"
             : isExpired
@@ -94,20 +94,20 @@ export const SlowTrustBadgesCarousel: React.FC<SlowTrustBadgesCarouselProps> = (
         )}
       >
         {isApproved ? (
-          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
         ) : isExpired ? (
-          <AlertTriangle className="w-3 h-3 text-red-600 shrink-0" />
+          <AlertTriangle className="w-2.5 h-2.5 text-red-600 shrink-0" />
         ) : (
-          <Shield className="w-3 h-3 text-slate-400 shrink-0" />
+          <Shield className="w-2.5 h-2.5 text-slate-400 shrink-0" />
         )}
 
-        <span className="text-[9.5px] font-black leading-none whitespace-nowrap text-slate-900">
+        <span className="text-[8.5px] font-black leading-none whitespace-nowrap text-slate-900">
           {fullLabel}
         </span>
 
         <span
           className={cn(
-            "text-[7.5px] font-black uppercase tracking-wider px-1 py-0.2 rounded-sm",
+            "text-[7px] font-black uppercase tracking-wider px-1 py-0.2 rounded-xs",
             isApproved
               ? "bg-emerald-200/80 text-emerald-950"
               : isExpired
@@ -122,10 +122,10 @@ export const SlowTrustBadgesCarousel: React.FC<SlowTrustBadgesCarouselProps> = (
   };
 
   return (
-    <div className="w-full my-1">
-      <div className="flex items-center justify-between mb-1 px-0.5">
-        <span className="text-[9px] font-black text-slate-900 uppercase tracking-wider flex items-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-blue-600" /> Verified Credentials
+    <div className="w-full my-0.5">
+      <div className="flex items-center justify-between mb-0.5 px-0.5">
+        <span className="text-[8.5px] font-black text-slate-900 uppercase tracking-wider flex items-center gap-1">
+          <ShieldCheck className="w-3 h-3 text-blue-600" /> Verified Credentials
         </span>
         <button
           type="button"
@@ -134,7 +134,7 @@ export const SlowTrustBadgesCarousel: React.FC<SlowTrustBadgesCarouselProps> = (
             if (onOpenAllDocs) onOpenAllDocs();
             else onSelectBadge("liability_insurance");
           }}
-          className="text-[9px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer shrink-0 z-10"
+          className="text-[8.5px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer shrink-0 z-10"
         >
           View Docs <ChevronRight className="w-2.5 h-2.5" />
         </button>

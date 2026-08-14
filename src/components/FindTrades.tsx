@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, ChevronDown, Trophy } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, ChevronDown, Trophy, Play, Pause, Share2 } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react-google-maps/api";
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { db, collection, query, where, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
 import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, textContainsTokenMatch, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
-import { cn } from "@/src/lib/utils";
+import { cn, getDealPricing } from "@/src/lib/utils";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import { useCategories } from "../lib/CategoryProvider";
@@ -16,7 +16,8 @@ import { getTraderUnifiedTrustBadges } from "@/src/lib/trustBadges";
 import { TraderDocumentViewerModal } from "./TraderDocumentViewerModal";
 import { SlowTrustBadgesCarousel } from "./SlowTrustBadgesCarousel";
 import { SEO } from "./SEO";
-import { seedMockTraders, INITIAL_MOCK_TRADERS } from "@/src/services/seedService";
+import { seedMockTraders, INITIAL_MOCK_TRADERS, INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
+import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
 import { Capacitor } from '@capacitor/core';
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import { toast } from "sonner";
@@ -158,6 +159,91 @@ const COMPARE_THEMES = [
   },
 ];
 
+export async function shareDeal(e: React.MouseEvent | React.TouchEvent, deal: any) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const traderName = deal.traderName || "Verified Trader";
+  const service = deal.service || "Flash Discount";
+  const discount = deal.discountPercentage || 15;
+  const dealUrl = `${window.location.origin}/profile/${deal.traderId}`;
+
+  const title = `⚡ ${discount}% OFF ${service} on AnyTrader`;
+  const text = `🔥 Check out this ${discount}% OFF Flash Deal on AnyTrader!\n\n🛠️ Service: ${service}\n👤 Trader: ${traderName}\n${deal.description ? `💬 "${deal.description}"\n` : ""}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title,
+        text,
+        url: dealUrl,
+      });
+      toast.success("Deal shared successfully!");
+      return;
+    } catch (err: any) {
+      if (err.name === "AbortError") return; // User cancelled
+    }
+  }
+
+  // Fallback: Copy to clipboard
+  try {
+    await navigator.clipboard.writeText(`${text}\n👉 Claim discount: ${dealUrl}`);
+    toast.success("Deal link copied to clipboard!");
+  } catch (err) {
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`${text}\n👉 Claim discount: ${dealUrl}`)}`, '_blank');
+  }
+}
+
+export function DealCountdownBadge({ deal, className }: { deal: any; className?: string }) {
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    const calculateTime = () => {
+      let targetMs: number;
+      if (deal.expiresAt) {
+        targetMs = typeof deal.expiresAt === "string" ? new Date(deal.expiresAt).getTime() : Number(deal.expiresAt);
+      } else {
+        let hash = 0;
+        const key = deal.id || deal.service || "deal";
+        for (let i = 0; i < key.length; i++) {
+          hash = (hash << 5) - hash + key.charCodeAt(i);
+          hash |= 0;
+        }
+        const baseOffsetMs = (75 + (Math.abs(hash) % 270)) * 60 * 1000;
+        const now = Date.now();
+        const cycleLength = 8 * 3600 * 1000;
+        const cycleStart = Math.floor(now / cycleLength) * cycleLength;
+        targetMs = cycleStart + baseOffsetMs;
+        if (targetMs <= now) {
+          targetMs = now + baseOffsetMs;
+        }
+      }
+
+      const diff = Math.max(0, targetMs - Date.now());
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+      if (hours > 0) {
+        setTimeLeft(`${hours}h ${minutes}m`);
+      } else {
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${minutes}m ${seconds}s`);
+      }
+    };
+
+    calculateTime();
+    const interval = setInterval(calculateTime, 1000);
+    return () => clearInterval(interval);
+  }, [deal.id, deal.expiresAt]);
+
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[9px] sm:text-[9.5px] bg-amber-50 text-amber-900 border border-amber-300/80 px-2 py-0.5 rounded-md font-extrabold uppercase tracking-tight shrink-0 shadow-2xs", className)}>
+      <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0 animate-pulse" />
+      Ends in {timeLeft || "2h 15m"}
+    </span>
+  );
+}
+
 export default function FindTrades() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,6 +251,57 @@ export default function FindTrades() {
   const { user, profile } = useAuth();
   const [tradespeople, setTradespeople] = useState<Tradesperson[]>(INITIAL_MOCK_TRADERS as any[]);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [allDeals, setAllDeals] = useState<any[]>(INITIAL_MOCK_FLASH_DEALS);
+  const dealsContainerRef = React.useRef<HTMLDivElement>(null);
+  const [isDealsPlaying, setIsDealsPlaying] = useState(true);
+  const [isDealsHovered, setIsDealsHovered] = useState(false);
+
+  // Multiply deals 6 times so it loops infinitely without ever stopping or jumping
+  const displayDeals = useMemo(() => {
+    if (allDeals.length === 0) return [];
+    return [...allDeals, ...allDeals, ...allDeals, ...allDeals, ...allDeals, ...allDeals];
+  }, [allDeals]);
+
+  // Set initial scroll position to the 2nd set once loaded
+  useEffect(() => {
+    if (allDeals.length > 0 && dealsContainerRef.current) {
+      const container = dealsContainerRef.current;
+      const firstCard = container.firstElementChild as HTMLElement;
+      if (firstCard && container.scrollLeft === 0) {
+        const cardStep = firstCard.offsetWidth + 10;
+        container.style.scrollBehavior = 'auto';
+        container.scrollLeft = cardStep * allDeals.length * 2;
+      }
+    }
+  }, [allDeals.length]);
+
+  useEffect(() => {
+    if (!isDealsPlaying || isDealsHovered || allDeals.length === 0) return;
+    const interval = setInterval(() => {
+      const container = dealsContainerRef.current;
+      if (!container) return;
+      const firstCard = container.firstElementChild as HTMLElement;
+      if (!firstCard) return;
+      
+      const cardStep = firstCard.offsetWidth + 10;
+      const oneSetWidth = cardStep * allDeals.length;
+
+      // If we are near the end of the duplicated sets, instantly jump back 2 sets seamlessly
+      if (container.scrollLeft >= oneSetWidth * 4) {
+        container.style.scrollBehavior = 'auto';
+        container.scrollLeft = container.scrollLeft - oneSetWidth * 2;
+        void container.offsetHeight; // Force reflow
+      } else if (container.scrollLeft <= 10) {
+        container.style.scrollBehavior = 'auto';
+        container.scrollLeft = container.scrollLeft + oneSetWidth * 2;
+        void container.offsetHeight; // Force reflow
+      }
+
+      container.style.scrollBehavior = 'smooth';
+      container.scrollBy({ left: cardStep, behavior: 'smooth' });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isDealsPlaying, isDealsHovered, allDeals]);
   
   const isB2B = location.state?.isB2B;
   const [showSplash, setShowSplash] = useState(isB2B === true);
@@ -590,10 +727,10 @@ export default function FindTrades() {
   useEffect(() => {
     if (!selectedMiniProfile) return;
 
-    // Auto-close after 15 seconds
+    // Auto-close after 30 seconds
     const timeoutId = setTimeout(() => {
       setSelectedMiniProfile(null);
-    }, 15000);
+    }, 30000);
 
     return () => {
       clearTimeout(timeoutId);
@@ -757,11 +894,29 @@ export default function FindTrades() {
       });
     }
 
+    // Subscribe to active off-peak flash deals
+    const dealsQuery = query(collection(db, "flash_deals"), where("status", "==", "active"));
+    const unsubDeals = onSnapshot(dealsQuery, (snapshot) => {
+      const dbDeals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (dbDeals.length > 0) {
+        // Combine DB deals with initial mock deals ensuring no duplicate ids
+        const existingIds = new Set(dbDeals.map(d => d.id));
+        const merged = [...dbDeals, ...INITIAL_MOCK_FLASH_DEALS.filter(m => !existingIds.has(m.id))];
+        setAllDeals(merged);
+      } else {
+        setAllDeals(INITIAL_MOCK_FLASH_DEALS);
+      }
+    }, (err) => {
+      console.error("Error fetching active flash deals:", err);
+      setAllDeals(INITIAL_MOCK_FLASH_DEALS);
+    });
+
     return () => {
       unsubscribe();
       unsubConfig();
       unsubAds();
       unsubAssets();
+      unsubDeals();
     };
   }, []);
 
@@ -1924,6 +2079,215 @@ export default function FindTrades() {
             </motion.div>
           </div>
 
+          {/* Off-Peak Weekdays Flash Deals Feed */}
+          {allDeals.length > 0 && (
+            <div className="bg-gradient-to-br from-emerald-50/90 via-teal-50/50 to-emerald-50/30 p-3.5 sm:p-4 rounded-2xl border border-black shadow-2xs space-y-2.5">
+              <div className="flex items-center justify-between px-0.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <Zap className="w-3.5 h-3.5 fill-white" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-black text-slate-900 text-xs sm:text-sm flex items-center gap-1 leading-none">
+                      Flash Deals
+                    </h2>
+                    <p className="text-[9.5px] text-slate-500 font-semibold leading-none mt-0.5">Off-peak weekday discounts</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setIsDealsPlaying(!isDealsPlaying)}
+                    title={isDealsPlaying ? "Pause Auto-scroll" : "Play Auto-scroll"}
+                    className="w-6 h-6 rounded-full bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-black/30 flex items-center justify-center shrink-0 transition-all cursor-pointer shadow-2xs active:scale-95 p-0"
+                  >
+                    {isDealsPlaying ? (
+                      <Pause className="w-2.5 h-2.5 fill-slate-700 shrink-0" />
+                    ) : (
+                      <Play className="w-2.5 h-2.5 fill-emerald-600 text-emerald-600 ml-0.5 shrink-0" />
+                    )}
+                  </button>
+                  <span className="text-[8.5px] font-black uppercase bg-emerald-600 text-white px-2 py-0.5 rounded-full tracking-tight shrink-0">
+                    {allDeals.length} Live
+                  </span>
+                </div>
+              </div>
+              <div 
+                ref={dealsContainerRef}
+                onMouseEnter={() => setIsDealsHovered(true)}
+                onMouseLeave={() => setIsDealsHovered(false)}
+                onTouchStart={() => setIsDealsHovered(true)}
+                onTouchEnd={() => setIsDealsHovered(false)}
+                className="flex gap-2.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar snap-x snap-mandatory"
+              >
+                {displayDeals.map((deal, idx) => {
+                  const { origPrice, discPrice, discountPct, savings } = getDealPricing(deal);
+                  const cap = getDealCapacityInfo(deal);
+                  const soldOut = cap.isSoldOut;
+
+                  return (
+                    <Link
+                      key={`${deal.id}-loop-${idx}`}
+                      to={`/profile/${deal.traderId}`}
+                      state={{ activeDeal: deal, autoOpenQuoteModal: !soldOut }}
+                      className={cn(
+                        "flex-shrink-0 snap-start w-64 sm:w-68 p-3.5 rounded-2xl border transition-all flex flex-col justify-between group cursor-pointer relative overflow-hidden",
+                        soldOut
+                          ? "bg-slate-100/90 border-slate-300 opacity-80"
+                          : "bg-white border-black shadow-2xs hover:shadow-xs"
+                      )}
+                    >
+                      {/* Compact Share Button in Top Right Corner */}
+                      <button
+                        type="button"
+                        onClick={(e) => shareDeal(e, deal)}
+                        title="Share offer via WhatsApp or Social Apps"
+                        className="absolute top-2 right-2 z-20 w-4 h-4 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-90 shrink-0"
+                      >
+                        <Share2 className="w-2.5 h-2.5 text-white stroke-[2.5]" />
+                      </button>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap pr-6">
+                          {soldOut ? (
+                            <span className="bg-slate-700 text-white font-black text-[9.5px] px-2 py-0.5 uppercase rounded-md shadow-2xs">
+                              🔴 Sold Out
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-600 text-white font-black text-[10px] sm:text-xs px-2 py-0.5 uppercase rounded-md shadow-2xs">
+                              {discountPct || deal.discountPercentage}% OFF
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-0.5 text-[9px] sm:text-[9.5px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-extrabold uppercase">
+                            ⚡ {deal.dayOfWeek}
+                          </span>
+                          {/* Prominent Booking Limit Pill in Header */}
+                          {cap.isSoldOut ? (
+                            <span className="bg-amber-600 text-white font-black text-[9px] px-2 py-0.5 uppercase rounded-md shadow-2xs">
+                              🔴 0 of {cap.max} Left
+                            </span>
+                          ) : cap.isUnlimited ? (
+                            <span className="bg-blue-50 text-blue-800 border border-blue-200 font-black text-[9px] px-2 py-0.5 rounded-md uppercase">
+                              ⚡ Unlimited
+                            </span>
+                          ) : (
+                            <span className="bg-amber-100 text-amber-950 border border-amber-300 font-black text-[9px] sm:text-[9.5px] px-2 py-0.5 rounded-md uppercase shadow-2xs flex items-center gap-1">
+                              🔥 {cap.remaining} of {cap.max} Left
+                            </span>
+                          )}
+                          <DealCountdownBadge deal={deal} />
+                        </div>
+                        <h4 className={cn(
+                          "font-extrabold text-xs sm:text-sm line-clamp-1 transition-colors leading-tight",
+                          soldOut ? "text-slate-600" : "text-slate-900 group-hover:text-emerald-600"
+                        )}>
+                          {deal.service}
+                        </h4>
+                        <p className="text-[10px] sm:text-xs text-slate-500 line-clamp-1 leading-snug">{deal.description}</p>
+
+                        {/* Prominent Daily Booking Limit & Capacity Bar */}
+                        <div className="bg-slate-50 border border-black/20 rounded-xl p-1.5 px-2 mt-1.5 space-y-1">
+                          <div className="flex items-center justify-between text-[10px] font-black">
+                            <span className="text-slate-800 flex items-center gap-1">
+                              <Shield className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <span>Daily Limit:</span>
+                            </span>
+                            {cap.isUnlimited ? (
+                              <span className="text-emerald-700 font-black">Unlimited Deals</span>
+                            ) : cap.isSoldOut ? (
+                              <span className="text-amber-800 font-black bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300">
+                                🔴 Sold Out ({cap.max}/{cap.max} Booked)
+                              </span>
+                            ) : (
+                              <span className="text-emerald-800 font-black bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-300">
+                                🔥 {cap.remaining} of {cap.max} Left Today
+                              </span>
+                            )}
+                          </div>
+                          {!cap.isUnlimited && (
+                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-300",
+                                  cap.isSoldOut ? "bg-amber-500" : "bg-emerald-500"
+                                )}
+                                style={{ width: `${cap.progressPct}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Clear Unambiguous Price Comparison Box */}
+                        <div className={cn(
+                          "border rounded-xl p-2 mt-1.5 flex items-center justify-between gap-1",
+                          soldOut ? "bg-slate-200/70 border-slate-300" : "bg-emerald-50/80 border-emerald-200/90"
+                        )}>
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            {origPrice && origPrice > discPrice && (
+                              <span className="text-[10.5px] font-extrabold text-slate-400 line-through">
+                                Was £{origPrice}
+                              </span>
+                            )}
+                            <div className="flex items-baseline gap-1">
+                              <span className={cn(
+                                "text-xs sm:text-sm font-black",
+                                soldOut ? "text-slate-700" : "text-emerald-700"
+                              )}>
+                                £{discPrice}
+                              </span>
+                              <span className={cn(
+                                "text-[9px] font-black uppercase tracking-tight px-1 py-0.5 rounded",
+                                soldOut ? "bg-slate-300 text-slate-700" : "bg-emerald-200/60 text-emerald-800"
+                              )}>
+                                Deal Rate
+                              </span>
+                            </div>
+                          </div>
+                          {savings > 0 && !soldOut && (
+                            <span className="text-[9.5px] font-black text-emerald-700 bg-white border border-emerald-300 px-1.5 py-0.5 rounded-md shadow-2xs shrink-0">
+                              Save £{savings}
+                            </span>
+                          )}
+                          {soldOut && (
+                            <span className="text-[9px] font-black text-slate-600 bg-white border border-slate-300 px-1.5 py-0.5 rounded-md shadow-2xs shrink-0">
+                              Limit Reached
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-1.5 border-t border-slate-100 mt-2.5 pt-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-5 h-5 bg-slate-800 rounded-full flex items-center justify-center text-white font-bold text-[9px] overflow-hidden shrink-0 border border-slate-200">
+                            {deal.traderAvatarUrl ? (
+                              <img src={deal.traderAvatarUrl} alt={deal.traderName} className="w-full h-full object-cover" />
+                            ) : (
+                              deal.traderName.charAt(0)
+                            )}
+                          </div>
+                          <span className="text-[10px] font-extrabold text-slate-800 truncate">
+                            {deal.traderName}
+                          </span>
+                        </div>
+                        
+                        {soldOut ? (
+                          <span className="bg-slate-300 text-slate-700 font-extrabold text-[9.5px] px-2.5 py-1 rounded-lg flex items-center gap-1 shrink-0">
+                            Sold Out
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] px-2.5 py-1 rounded-lg shadow-2xs flex items-center gap-1 shrink-0 transition-colors">
+                            <Zap className="w-3 h-3 fill-white" />
+                            Claim Deal
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Recently Viewed */}
           {recentlyViewedTraders.length > 0 && (
             <div>
@@ -2308,27 +2672,27 @@ export default function FindTrades() {
                   animate={{ rotateY: 0, opacity: 1 }}
                   exit={{ rotateY: 90, opacity: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="bg-white p-6 relative w-full h-full flex flex-col justify-center min-h-[160px]"
+                  className="bg-white p-3.5 sm:p-4 relative w-full h-full flex flex-col justify-center min-h-[150px]"
                   style={{ transformStyle: 'preserve-3d' }}
                 >
-                  {/* 15s Auto-Close Visual Timer Bar */}
+                  {/* 30s Auto-Close Visual Timer Bar */}
                   <motion.div 
                     initial={{ width: "100%" }}
                     animate={{ width: "0%" }}
-                    transition={{ duration: 15, ease: "linear" }}
+                    transition={{ duration: 30, ease: "linear" }}
                     className="absolute top-0 left-0 h-1 bg-[#0066cc] rounded-t-3xl z-30"
                   />
 
                   <button 
                     onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(null); }}
-                    className="absolute top-4 right-4 p-2 bg-slate-200 hover:bg-slate-300 rounded-full transition-colors flex items-center justify-center z-20"
+                    className="absolute top-2.5 right-2.5 p-1.5 bg-slate-200 hover:bg-slate-300 rounded-full transition-colors flex items-center justify-center z-20"
                     title="Close Info"
                   >
-                    <X className="w-4 h-4 text-slate-700 font-bold" />
+                    <X className="w-3.5 h-3.5 text-slate-700 font-bold" />
                   </button>
                   
-                  <div className="flex items-center gap-3 mb-4 pr-10">
-                    <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center text-white font-black text-lg relative shrink-0 overflow-hidden shadow-sm border border-black/20">
+                  <div className="flex items-center gap-2.5 mb-2.5 pr-8">
+                    <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white font-black text-base relative shrink-0 overflow-hidden shadow-sm border border-black/20">
                       {tp.avatarUrl ? (
                         <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       ) : (
@@ -2337,35 +2701,35 @@ export default function FindTrades() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
-                        <h3 className="font-black text-[#002b5c] text-lg sm:text-xl tracking-tight leading-tight truncate">
+                        <h3 className="font-black text-[#002b5c] text-base sm:text-lg tracking-tight leading-tight truncate">
                           {tp.name}
                         </h3>
                         {tp.verificationStatus === "verified" && (
-                          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                          <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         )}
                       </div>
-                      <p className="text-xs text-slate-700 font-bold truncate">
+                      <p className="text-[11px] text-slate-700 font-bold truncate">
                         {tp.trades?.[0] || 'Professional'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white rounded-2xl py-2 border-2 border-[#2563eb] text-center shadow-sm">
-                        <p className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider mb-1">CALL-OUT FEE</p>
-                        <p className="text-2xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.callOutFee || 0}</p>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-white rounded-xl py-1.5 border border-[#2563eb] text-center shadow-xs">
+                        <p className="text-[8.5px] font-black text-slate-800 uppercase tracking-wider mb-0.5">CALL-OUT FEE</p>
+                        <p className="text-xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.callOutFee || 0}</p>
                       </div>
-                      <div className="bg-white rounded-2xl py-2 border-2 border-[#2563eb] text-center shadow-sm">
-                        <p className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider mb-1">HOURLY RATE</p>
-                        <p className="text-2xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.hourlyRate || 0}</p>
+                      <div className="bg-white rounded-xl py-1.5 border border-[#2563eb] text-center shadow-xs">
+                        <p className="text-[8.5px] font-black text-slate-800 uppercase tracking-wider mb-0.5">HOURLY RATE</p>
+                        <p className="text-xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.hourlyRate || 0}</p>
                       </div>
                     </div>
 
                     {tp.miniProfileSettings?.extraInfo && (
-                      <div className="bg-white rounded-2xl p-3 border-2 border-[#2563eb] text-center shadow-sm">
-                        <p className="text-[9.5px] font-black text-slate-800 uppercase tracking-wider mb-1">EXTRA INFO</p>
-                        <p className="text-sm font-bold text-slate-900 leading-tight break-words whitespace-pre-wrap">
+                      <div className="bg-white rounded-xl p-2 border border-[#2563eb] text-center shadow-xs">
+                        <p className="text-[8.5px] font-black text-slate-800 uppercase tracking-wider mb-0.5">EXTRA INFO</p>
+                        <p className="text-xs font-bold text-slate-900 leading-tight break-words whitespace-pre-wrap line-clamp-2">
                           "{tp.miniProfileSettings.extraInfo.length > 120 ? tp.miniProfileSettings.extraInfo.substring(0, 120) + '...' : tp.miniProfileSettings.extraInfo}"
                         </p>
                       </div>
@@ -2373,27 +2737,27 @@ export default function FindTrades() {
                   </div>
 
                   {/* Performance Badges & Achievements Section (At Very Bottom) */}
-                  <div className="border-t border-slate-300 pt-3 mt-3 w-full">
+                  <div className="border-t border-slate-300 pt-2 mt-2 w-full">
                     {/* Performance Metrics Bar */}
-                    <div className="grid grid-cols-3 gap-1.5 text-center mb-2.5 bg-slate-100 p-2 rounded-xl border border-slate-300">
+                    <div className="grid grid-cols-3 gap-1 text-center mb-2 bg-slate-100 p-1.5 rounded-lg border border-slate-300">
                       <div>
-                        <p className="text-[8.5px] font-black text-slate-700 uppercase tracking-wider">Rating</p>
-                        <p className="text-sm font-black text-slate-950 flex items-center justify-center gap-0.5">
-                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-wider">Rating</p>
+                        <p className="text-xs font-black text-slate-950 flex items-center justify-center gap-0.5">
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
                           {tp.rating?.toFixed(1) || "5.0"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[8.5px] font-black text-slate-700 uppercase tracking-wider">Jobs Done</p>
-                        <p className="text-sm font-black text-slate-950 flex items-center justify-center gap-0.5">
-                          <Trophy className="w-3.5 h-3.5 text-purple-700" />
+                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-wider">Jobs Done</p>
+                        <p className="text-xs font-black text-slate-950 flex items-center justify-center gap-0.5">
+                          <Trophy className="w-3 h-3 text-purple-700" />
                           {tp.totalJobsDone || 0}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[8.5px] font-black text-slate-700 uppercase tracking-wider">Trust Score</p>
-                        <p className="text-sm font-black text-slate-950 flex items-center justify-center gap-0.5">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-wider">Trust Score</p>
+                        <p className="text-xs font-black text-slate-950 flex items-center justify-center gap-0.5">
+                          <ShieldCheck className="w-3 h-3 text-emerald-700" />
                           {tp.trustScore || 95}
                         </p>
                       </div>
@@ -2401,22 +2765,22 @@ export default function FindTrades() {
 
                     {/* All Earned Badges & Achievements */}
                     <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[9.5px] font-black text-slate-900 uppercase tracking-wider">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] font-black text-slate-900 uppercase tracking-wider">
                           Badges & Achievements
                         </span>
-                        <span className="text-[8.5px] text-slate-700 font-black">
+                        <span className="text-[8px] text-slate-700 font-black">
                           {getTraderBadges(tp).length + (Array.from(new Set([...(tp.badges || []), ...(tp.searchFeedBadges || [])])).filter(id => !getTraderBadges(tp).some(b => b.id === id)).length)} Badges
                         </span>
                       </div>
                       
-                      <div className="flex flex-wrap gap-1 max-h-[85px] overflow-y-auto pr-0.5">
+                      <div className="flex flex-wrap gap-1 max-h-[75px] overflow-y-auto pr-0.5">
                         {/* 1. Dynamic Performance & Milestone Badges */}
                         {getTraderBadges(tp).map((badge) => (
                           <span 
                             key={`dynamic-${badge.id}`} 
                             className={cn(
-                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black border shadow-2xs text-slate-950",
+                              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-black border shadow-2xs text-slate-950",
                               badge.bgColor,
                               badge.color,
                               "border-slate-400/50"
@@ -2436,7 +2800,7 @@ export default function FindTrades() {
                           return (
                             <span 
                               key={`prof-${badge.id}`} 
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-slate-100 text-slate-950 border border-slate-400"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-black bg-slate-100 text-slate-950 border border-slate-400"
                             >
                               <Award className="w-2.5 h-2.5 text-blue-700" />
                               <span>{badge.label}</span>
@@ -2446,7 +2810,7 @@ export default function FindTrades() {
 
                         {/* Fallback if no badges exist */}
                         {getTraderBadges(tp).length === 0 && (!tp.badges || tp.badges.length === 0) && (!tp.searchFeedBadges || tp.searchFeedBadges.length === 0) && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-slate-100 text-slate-950 border border-slate-300">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-black bg-slate-100 text-slate-950 border border-slate-300">
                             <ShieldCheck className="w-2.5 h-2.5 text-blue-700" />
                             <span>Verified AnyTrader Member</span>
                           </span>
@@ -2464,52 +2828,83 @@ export default function FindTrades() {
                   transition={{ duration: 0.3 }}
                   style={{ transformStyle: 'preserve-3d' }}
                 >
-                  <div className="p-3 sm:p-3.5">
-                    <div className="flex gap-3 items-center">
+                  <div className="p-2 sm:p-2.5">
+                    <div className="flex gap-2.5 items-center">
                       {/* Photo: Compact & Left-Aligned */}
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-xl flex items-center justify-center text-white font-black text-xl relative shrink-0 overflow-hidden shadow-inner border border-black/20">
+                      <div className="w-13 h-13 sm:w-14 sm:h-14 bg-slate-800 rounded-xl flex items-center justify-center text-white font-black text-lg relative shrink-0 overflow-hidden shadow-inner border border-black/20">
                         {tp.avatarUrl ? (
                           <img src={tp.avatarUrl} alt={tp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         ) : (
                           tp.name.charAt(0)
                         )}
                         {tp.isAvailableForEmergency && (
-                          <div className="absolute bottom-0 left-0 right-0 bg-red-600 py-0.2 text-[7.5px] font-black tracking-widest text-white text-center uppercase">
+                          <div className="absolute bottom-0 left-0 right-0 bg-red-600 py-0.2 text-[7px] font-black tracking-widest text-white text-center uppercase">
                             24/7
                           </div>
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <h3 className="font-bold text-slate-900 text-base sm:text-lg truncate group-hover:text-blue-600 transition-colors leading-snug">
+                        <div className="flex items-center gap-1 mb-0">
+                          <h3 className="font-bold text-slate-900 text-sm sm:text-base truncate group-hover:text-blue-600 transition-colors leading-snug">
                             {tp.name}
                           </h3>
                           {tp.verificationStatus === "verified" && (
-                            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                            <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                           )}
                         </div>
                         
-                        <p className="text-[11px] text-slate-500 font-semibold truncate mb-1 leading-tight">
+                        <p className="text-[10.5px] text-slate-500 font-semibold truncate leading-tight">
                           {tp.trades?.[0] || 'Professional'}
                         </p>
 
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] font-bold text-slate-600 leading-none">
+                        {/* Active Flash Deal Leaf Label with Booking Limit - Exact same height & styling as the box below */}
+                        {(() => {
+                          const activeDeal = allDeals.find(deal => deal.traderId === tp.uid);
+                          if (!activeDeal) return null;
+                          const cap = getDealCapacityInfo(activeDeal);
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/profile/${tp.uid}#active-deals`, {
+                                  state: {
+                                    scrollToDeals: true,
+                                    activeDeal: activeDeal,
+                                    highlightDealId: activeDeal.id
+                                  }
+                                });
+                              }}
+                              title={`View active deals & claim discount on ${tp.name}'s profile`}
+                              className="inline-flex items-center gap-1.5 bg-emerald-400 hover:bg-emerald-300 text-black font-black text-[9.5px] p-1 px-2 rounded-lg border border-black shadow-2xs my-1 w-fit max-w-full cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] z-10 group/deal leading-tight"
+                            >
+                              <span className="text-[10px] leading-none shrink-0">🍁</span>
+                              <span className="underline decoration-black/40 underline-offset-1 leading-none whitespace-nowrap">{activeDeal.discountPercentage}% Off {activeDeal.dayOfWeek}s</span>
+                              <span className="bg-black text-white text-[8px] font-black px-1.5 py-0.5 rounded leading-none tracking-tight shrink-0 ml-0.5">
+                                {cap.isUnlimited ? "Unlimited" : cap.isSoldOut ? "🔴 Sold Out" : `🔥 ${cap.remaining} of ${cap.max} Left`}
+                              </span>
+                              <ChevronRight className="w-2.5 h-2.5 text-black stroke-[3] group-hover/deal:translate-x-0.5 transition-transform shrink-0" />
+                            </button>
+                          );
+                        })()}
+
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9.5px] font-bold text-slate-600 leading-none mt-0.5">
                           <div className="flex items-center gap-1">
-                            <Star className="w-3 h-3 text-orange-500 fill-orange-500" />
+                            <Star className="w-2.5 h-2.5 text-orange-500 fill-orange-500" />
                             <span className="text-slate-900 font-extrabold">{tp.rating?.toFixed(1) || '5.0'}</span>
                             <span className="text-slate-400 font-medium tracking-tight shrink-0">({testReviews})</span>
                           </div>
-                          <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded px-1 py-0.2 text-green-800 shrink-0">
-                            <Users className="w-2.5 h-2.5 text-green-700" />
-                            <span className="text-[8px] font-black uppercase tracking-widest text-green-900 shrink-0 whitespace-nowrap">Recmd By {testRecmd}</span>
+                          <div className="flex items-center gap-0.5 bg-green-50 border border-green-200 rounded px-1 py-0.2 text-green-800 shrink-0">
+                            <Users className="w-2 h-2 text-green-700" />
+                            <span className="text-[7.5px] font-black uppercase tracking-widest text-green-900 shrink-0 whitespace-nowrap">Recmd By {testRecmd}</span>
                           </div>
                           <div className="flex items-center gap-0.5 font-black text-slate-900 shrink-0">
-                            <MapPin className="w-3 h-3 text-slate-900" />
+                            <MapPin className="w-2.5 h-2.5 text-slate-900" />
                             <span className="font-black text-slate-900 tracking-tight">{tp.postcode?.split(' ')[0] || 'Local'}</span>
                           </div>
                           <div className="flex items-center gap-0.5 text-slate-500">
-                             <Clock className="w-2.5 h-2.5" />
+                             <Clock className="w-2 h-2" />
                              <span className="truncate">&lt; 1hr reply</span>
                           </div>
                         </div>
@@ -2517,16 +2912,16 @@ export default function FindTrades() {
                     </div>
 
                     {/* Availability & Price Bar */}
-                    <div className="mt-2 flex items-center justify-between gap-2 bg-slate-50 p-1.5 px-2.5 rounded-lg border border-black text-[10px]">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(34,197,94,0.6)]" />
+                    <div className="mt-1.5 flex items-center justify-between gap-1.5 bg-slate-50 p-1 px-2 rounded-lg border border-black text-[9.5px]">
+                      <div className="flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(34,197,94,0.6)]" />
                         <span className="font-bold text-slate-800">Available this week</span>
                       </div>
                       {typicalPriceHtml}
                     </div>
 
                     {/* 5 Unified Trust Checkmarks Very Slow Scrollable Carousel */}
-                    <div className="mt-1.5 pt-1 border-t border-slate-200">
+                    <div className="mt-1 pt-0.5 border-t border-slate-200">
                       <SlowTrustBadgesCarousel
                         trader={tp}
                         onSelectBadge={(badgeId) => {
@@ -2541,12 +2936,12 @@ export default function FindTrades() {
                     </div>
 
                     {/* Click Affordance & Compare Toggle */}
-                    <div className="mt-2 pt-1.5 border-t border-black flex items-center justify-between">
+                    <div className="mt-1.5 pt-1 border-t border-black flex items-center justify-between">
                       <button
                         type="button"
                         onClick={(e) => toggleCompareTrader(tp.uid, e)}
                         className={cn(
-                          "px-2 py-0.5 text-[9px] font-bold rounded border flex items-center gap-1 transition-all cursor-pointer z-10 shrink-0",
+                          "px-1.5 py-0.5 text-[8.5px] font-bold rounded border flex items-center gap-1 transition-all cursor-pointer z-10 shrink-0",
                           selectedCompareIds.includes(tp.uid)
                             ? "bg-blue-600 text-white border-black shadow-2xs"
                             : "bg-slate-100 text-slate-800 border-black hover:bg-slate-200"
@@ -2554,22 +2949,22 @@ export default function FindTrades() {
                       >
                         {selectedCompareIds.includes(tp.uid) ? (
                           <>
-                            <CheckSquare className="w-3 h-3 text-white shrink-0" /> Comparing
+                            <CheckSquare className="w-2.5 h-2.5 text-white shrink-0" /> Comparing
                           </>
                         ) : (
                           <>
-                            <Square className="w-3 h-3 text-slate-500 shrink-0" /> Compare
+                            <Square className="w-2.5 h-2.5 text-slate-500 shrink-0" /> Compare
                           </>
                         )}
                       </button>
 
-                      <span className="text-[11px] font-black text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                      <span className="text-[10.5px] font-black text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                         View Profile & Quotes <ChevronRight className="w-3 h-3" />
                       </span>
                     </div>
                   </div>
-            </motion.div>
-            )}
+                </motion.div>
+              )}
             </AnimatePresence>
           </motion.div>
           );
@@ -2789,6 +3184,7 @@ export default function FindTrades() {
                   { name: "Dave Collins", trades: ["Plumbing & Heating"], tags: ["Plumber", "Heating Engineer", "Leak Repair", "Bathroom Fitting"], postcode: "M3 4FH", rating: 4.8, totalReviews: 127, totalJobsDone: 143, completedJobsRevenue: 31460, responseRate: 92, trustScore: 94, badges: ["Gas Safe", "Verified"], bio: "Gas Safe registered plumber with 15 years experience.", isTopTradesperson: true, verificationStatus: "verified" },
                   { name: "Lisa Park", trades: ["Painting & Decorating"], tags: ["Painter", "Decorator", "Wallpapering", "Exterior Painting"], postcode: "M20 3LJ", rating: 4.7, totalReviews: 63, totalJobsDone: 78, completedJobsRevenue: 15600, responseRate: 95, trustScore: 82, badges: ["Verified"], bio: "Interior and exterior decorating. Fast, clean, and quality finish.", isEstablishedTradesperson: true, verificationStatus: "verified" },
                   { name: "Mike Walsh", trades: ["Plumbing & Heating"], tags: ["Heating Engineer", "Plumber", "Boiler Installation", "Radiator Repair"], postcode: "M2 5NA", rating: 4.6, totalReviews: 210, totalJobsDone: 240, completedJobsRevenue: 52800, responseRate: 90, trustScore: 88, badges: ["Gas Safe", "Verified"], bio: "Boiler installation specialist with 20+ years experience.", isTopTradesperson: true, verificationStatus: "verified" },
+                  { name: "Callum Evans", trades: ["General Labour, Trade Mates & Site Helpers"], tags: ["Labourer", "Trade Mate", "Garden Digging", "Heavy Lifting", "Site Helper"], postcode: "M1 4BT", rating: 4.9, totalReviews: 54, totalJobsDone: 82, completedJobsRevenue: 12300, responseRate: 98, trustScore: 95, badges: ["CSCS Card", "Verified"], bio: "Hardworking site helper & trade mate. CSCS card holder available for garden digging, material lifting & builder assistance.", isTopTradesperson: true, verificationStatus: "verified" },
                   { name: "Tom Briggs", trades: ["Plumbing & Heating"], tags: ["Plumber", "Drainage", "Tap Repair"], postcode: "SK1 3PL", rating: 4.3, totalReviews: 45, totalJobsDone: 58, completedJobsRevenue: 8700, responseRate: 85, trustScore: 72, badges: ["Gas Safe"], bio: "Family-run plumbing business with 10 years in the trade.", isEstablishedTradesperson: true, verificationStatus: "unverified" }
                 ];
                 

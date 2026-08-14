@@ -25,6 +25,8 @@ import PartnerAdvertisement from "./shared/PartnerAdvertisement";
 import { getRegionalDemandData, RegionalDemand } from "@/src/services/demandHeatmapService";
 import { InstantMatchTraderAlert } from "./InstantMatchTraderAlert";
 import { FinancialDashboardWidget } from "./FinancialDashboardWidget";
+import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
+import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
 
 const iconMap: Record<string, any> = {
   Briefcase, Clock, MessageSquare, CheckCircle2, ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus, ImageIcon, VideoIcon
@@ -100,6 +102,22 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
   const [showExclusiveModal, setShowExclusiveModal] = useState(false);
   const [isProcessingExclusive, setIsProcessingExclusive] = useState(false);
   const [exclusiveCheckoutError, setExclusiveCheckoutError] = useState<string | null>(null);
+
+  // Off-Peak Quiet Period Flash Deals State
+  const [myDeals, setMyDeals] = useState<any[]>([]);
+  const [directRequests, setDirectRequests] = useState<any[]>([]);
+  const [isCreatingDeal, setIsCreatingDeal] = useState(false);
+  const [dealService, setDealService] = useState("");
+  const [dealDiscount, setDealDiscount] = useState(20);
+  const [dealDay, setDealDay] = useState("Tuesday");
+  const [dealDesc, setDealDesc] = useState("");
+  const [dealOrigPrice, setDealOrigPrice] = useState("");
+  const [dealLimitType, setDealLimitType] = useState<"preset" | "custom" | "unlimited">("preset");
+  const [dealMaxClaims, setDealMaxClaims] = useState<number | null>(5);
+  const [customLimitInput, setCustomLimitInput] = useState("5");
+  const [editingDealLimitId, setEditingDealLimitId] = useState<string | null>(null);
+  const [editLimitNumber, setEditLimitNumber] = useState<number | string>(5);
+  const [isSavingDeal, setIsSavingDeal] = useState(false);
 
   const [sysConfig, setSysConfig] = useState<any>(null);
 
@@ -334,11 +352,44 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       handleFirestoreError(error, OperationType.LIST, "jobs");
     });
 
+    // Fetch my flash_deals
+    const dealsQuery = query(
+      collection(db, "flash_deals"),
+      where("traderId", "==", user.uid)
+    );
+
+    const unsubscribeDeals = onSnapshot(dealsQuery, (snapshot) => {
+      const dbDeals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const mockMatches = INITIAL_MOCK_FLASH_DEALS.filter(m => m.traderId === user.uid);
+      const existingIds = new Set(dbDeals.map(d => d.id));
+      const merged = [...dbDeals, ...mockMatches.filter(m => !existingIds.has(m.id))];
+      setMyDeals(merged);
+    }, (error) => {
+      console.error("Error fetching my flash deals:", error);
+      setMyDeals(INITIAL_MOCK_FLASH_DEALS.filter(m => m.traderId === user.uid));
+    });
+
+    // Fetch incoming direct quote requests and claimed flash deals
+    const directRequestsQuery = query(
+      collection(db, "jobs"),
+      where("targetTradespersonId", "==", user.uid),
+      where("status", "in", ["posted", "open"])
+    );
+
+    const unsubscribeDirectRequests = onSnapshot(directRequestsQuery, (snapshot) => {
+      const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setDirectRequests(requests);
+    }, (error) => {
+      console.error("Error fetching direct requests for tradesperson:", error);
+    });
+
     return () => {
       unsubscribeQuotes();
       unsubscribeJobs();
       unsubscribePendingPaymentJobs();
       unsubscribePostedJobs();
+      unsubscribeDeals();
+      unsubscribeDirectRequests();
     };
   }, [user, profile]);
 
@@ -791,6 +842,87 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       {/* TradeOS Financials & Cash Flow Engine */}
       <FinancialDashboardWidget />
 
+      {/* Incoming Direct Requests & Claimed Flash Deals */}
+      {directRequests.length > 0 && (
+        <div className="space-y-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 p-4 sm:p-5 rounded-3xl border border-emerald-300 shadow-sm animate-in fade-in">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-xs">
+                ⚡
+              </span>
+              <div>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                  Incoming Direct Requests & Claimed Deals
+                </h2>
+                <p className="text-[11px] sm:text-xs text-slate-600 font-medium">
+                  Homeowners who booked your Flash Deals or invited you directly to quote.
+                </p>
+              </div>
+            </div>
+            <span className="bg-emerald-600 text-white text-xs font-black px-2.5 py-1 rounded-full shadow-2xs">
+              {directRequests.length} Pending
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {directRequests.map(job => (
+              <div
+                key={job.id}
+                className="bg-white p-4 rounded-2xl border border-black shadow-xs flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group"
+              >
+                {job.claimedDeal ? (
+                  <div className="absolute top-0 right-0 bg-emerald-600 text-white font-black text-[9px] px-3 py-1 uppercase rounded-bl-xl flex items-center gap-1 shadow-2xs">
+                    <span>⚡ {job.claimedDeal.discountPercentage || 0}% OFF FLASH DEAL</span>
+                  </div>
+                ) : (
+                  <div className="absolute top-0 right-0 bg-blue-600 text-white font-black text-[9px] px-3 py-1 uppercase rounded-bl-xl flex items-center gap-1 shadow-2xs">
+                    <span>📝 1-ON-1 DIRECT INVITE</span>
+                  </div>
+                )}
+
+                <div className="space-y-1.5 pr-24">
+                  <span className="text-[10px] font-extrabold uppercase text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                    {job.category}
+                  </span>
+                  <h3 className="font-extrabold text-slate-900 text-sm line-clamp-1 group-hover:text-emerald-700 transition-colors">
+                    {job.title}
+                  </h3>
+                  <p className="text-xs text-slate-500 line-clamp-2 leading-snug">
+                    {job.description}
+                  </p>
+
+                  {job.claimedDeal && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2 mt-1.5 flex items-center justify-between text-xs">
+                      <span className="text-[10.5px] font-bold text-emerald-800">
+                        Pre-Agreed Flash Rate:
+                      </span>
+                      <span className="font-black text-emerald-700">
+                        £{job.claimedDeal.discountedPrice || job.claimedDeal.targetRate || job.claimedDeal.price}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-slate-100 mt-3 pt-3">
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase">
+                    <MapPin className="w-3 h-3" />
+                    <span>{getOutwardPostcode(job.postcode)}</span>
+                  </div>
+
+                  <Link
+                    to={`/job/${job.id}`}
+                    className="px-3.5 py-1.5 bg-black hover:bg-zinc-800 text-white text-xs font-black rounded-xl shadow-2xs flex items-center gap-1 transition-all"
+                  >
+                    <span>Review & Quote</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* AI Recommendations */}
       {profile?.role === "tradesperson" && (
         <div className="space-y-4">
@@ -1128,6 +1260,557 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
           </div>
         </div>
       )}
+
+      {/* Quiet Period Off-Peak Deals Section */}
+      <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-6 mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-display font-black text-slate-900 flex items-center gap-2">
+              <span className="text-2xl">🍂</span> Quiet Period Off-Peak Deals
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Increase your weekly bookings by offering off-peak weekday discounts. Showcased directly on the homeowner discovery feed!
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setIsCreatingDeal(!isCreatingDeal);
+              setDealService(profile?.trades?.[0] || "");
+              setDealDiscount(20);
+              setDealDay("Tuesday");
+              setDealOrigPrice("");
+              setDealDesc("");
+            }}
+            className="flex items-center justify-center gap-1.5 px-4 h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold transition-all text-xs active:scale-95 border border-black cursor-pointer shadow-sm shrink-0"
+          >
+            {isCreatingDeal ? "Cancel Builder" : "⚡ Create Flash Deal"}
+          </button>
+        </div>
+
+        {isCreatingDeal && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-slate-50 p-5 rounded-2xl border border-black space-y-4"
+          >
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">Flash Deal Builder</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Service / Trade Title</label>
+                <input
+                  type="text"
+                  value={dealService}
+                  onChange={e => setDealService(e.target.value)}
+                  placeholder="e.g. Boiler Servicing, Painting"
+                  className="w-full h-11 bg-white border border-black rounded-xl px-3 font-semibold text-xs text-slate-900 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Discount %</label>
+                <select
+                  value={dealDiscount}
+                  onChange={e => setDealDiscount(Number(e.target.value))}
+                  className="w-full h-11 bg-white border border-black rounded-xl px-3 font-semibold text-xs text-slate-900 focus:outline-none"
+                >
+                  <option value={10}>10% Off</option>
+                  <option value={15}>15% Off</option>
+                  <option value={20}>20% Off</option>
+                  <option value={25}>25% Off</option>
+                  <option value={30}>30% Off</option>
+                  <option value={40}>40% Off</option>
+                  <option value={50}>50% Off</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Quiet Weekday</label>
+                <select
+                  value={dealDay}
+                  onChange={e => setDealDay(e.target.value)}
+                  className="w-full h-11 bg-white border border-black rounded-xl px-3 font-semibold text-xs text-slate-900 focus:outline-none"
+                >
+                  <option value="Monday">Monday</option>
+                  <option value="Tuesday">Tuesday</option>
+                  <option value="Wednesday">Wednesday</option>
+                  <option value="Thursday">Thursday</option>
+                  <option value="Friday">Friday</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Typical Price (£ - Optional)</label>
+                <input
+                  type="number"
+                  value={dealOrigPrice}
+                  onChange={e => setDealOrigPrice(e.target.value)}
+                  placeholder="e.g. 100"
+                  className="w-full h-11 bg-white border border-black rounded-xl px-3 font-semibold text-xs text-slate-900 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Deal Booking Limit / Daily Quantity */}
+            <div className="bg-white p-4 rounded-xl border border-black/30 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <div>
+                  <label className="block text-xs font-black text-slate-800">
+                    Deal Booking Limit / Quantity for the Day 🛡️
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Control how many times this deal can be booked on the day so you never get overwhelmed. Once reached, the deal automatically shows as <strong>Sold Out</strong>.
+                  </p>
+                </div>
+                <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 w-fit">
+                  {dealLimitType === "unlimited" ? "Unlimited Bookings" : `${dealLimitType === "custom" ? customLimitInput : dealMaxClaims} Bookings Max`}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {[
+                  { label: "1 Booking (Exclusive)", value: 1, type: "preset" },
+                  { label: "3 Bookings", value: 3, type: "preset" },
+                  { label: "5 Bookings (Popular)", value: 5, type: "preset" },
+                  { label: "10 Bookings", value: 10, type: "preset" },
+                  { label: "Custom Number", value: "custom", type: "custom" },
+                  { label: "Unlimited", value: "unlimited", type: "unlimited" },
+                ].map((opt) => {
+                  const isSelected =
+                    opt.type === "preset"
+                      ? dealLimitType === "preset" && dealMaxClaims === opt.value
+                      : dealLimitType === opt.type;
+
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => {
+                        if (opt.type === "preset") {
+                          setDealLimitType("preset");
+                          setDealMaxClaims(opt.value as number);
+                        } else if (opt.type === "custom") {
+                          setDealLimitType("custom");
+                        } else {
+                          setDealLimitType("unlimited");
+                          setDealMaxClaims(null);
+                        }
+                      }}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer",
+                        isSelected
+                          ? "bg-black text-white border-black shadow-xs"
+                          : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-300"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {dealLimitType === "custom" && (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-xs font-bold text-slate-600">Set Max Bookings:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={customLimitInput}
+                    onChange={(e) => setCustomLimitInput(e.target.value)}
+                    className="w-24 h-9 bg-slate-50 border border-black rounded-lg px-2.5 font-bold text-xs text-slate-900 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-slate-500">deals max per day</span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Promo Message / Short Notes</label>
+              <textarea
+                value={dealDesc}
+                onChange={e => setDealDesc(e.target.value)}
+                placeholder="e.g. Free filter cleaning included. Valid for any residential boiler booked for this Tuesday."
+                rows={2}
+                className="w-full bg-white border border-black rounded-xl p-3 font-semibold text-xs text-slate-900 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[10px] text-slate-500 font-bold italic">
+                Preview: {dealDiscount}% off {dealService || 'Service'} on {dealDay}s ({dealLimitType === 'unlimited' ? 'Unlimited' : `Cap: ${dealLimitType === 'custom' ? customLimitInput : dealMaxClaims} claims`})
+              </span>
+              <button
+                type="button"
+                disabled={isSavingDeal || !dealService}
+                onClick={async () => {
+                  if (!user) return;
+                  setIsSavingDeal(true);
+                  try {
+                    const finalMaxClaims =
+                      dealLimitType === "unlimited"
+                        ? null
+                        : dealLimitType === "custom"
+                        ? Number(customLimitInput) || 5
+                        : Number(dealMaxClaims) || 5;
+
+                    const dealId = `deal-${Date.now()}`;
+                    const dealObj = {
+                      id: dealId,
+                      traderId: user.uid,
+                      traderName: profile?.name || "Verified Trader",
+                      traderBusinessName: profile?.businessName || profile?.name || "Verified Specialist",
+                      traderAvatarUrl: profile?.avatarUrl || "",
+                      service: dealService,
+                      category: profile?.primaryCategory || profile?.trade || (profile?.trades && profile?.trades[0]) || "General",
+                      discountPercentage: Number(dealDiscount),
+                      originalPrice: dealOrigPrice ? Number(dealOrigPrice) : null,
+                      discountedPrice: dealOrigPrice ? Number(dealOrigPrice) * (1 - Number(dealDiscount) / 100) : null,
+                      dayOfWeek: dealDay,
+                      description: dealDesc || `Special weekday discount for off-peak bookings.`,
+                      status: "active",
+                      maxClaims: finalMaxClaims,
+                      claimedCount: 0,
+                      createdAt: new Date().toISOString(),
+                      city: profile?.city || "",
+                      postcode: profile?.postcode || "",
+                      rating: profile?.rating || 5.0,
+                      totalReviews: profile?.totalReviews || 0
+                    };
+                    await setDoc(doc(db, "flash_deals", dealId), dealObj);
+                    setIsCreatingDeal(false);
+                    toast.success("Quiet Period Flash Deal published live with booking limit!");
+                  } catch (e) {
+                    console.error("Error creating flash deal:", e);
+                    toast.error("Failed to publish flash deal.");
+                  } finally {
+                    setIsSavingDeal(false);
+                  }
+                }}
+                className="px-5 h-11 bg-black hover:bg-zinc-800 text-white rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSavingDeal ? <Loader2 className="w-4 h-4 animate-spin" /> : "Publish Live Deal"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
+              My Active Flash Deals & Capacity Limits
+            </h3>
+            {myDeals.length > 0 && (
+              <span className="text-[11px] font-bold text-slate-500">
+                {myDeals.length} Deal{myDeals.length === 1 ? "" : "s"} Configured
+              </span>
+            )}
+          </div>
+
+          {myDeals.length === 0 ? (
+            <div className="border border-dashed border-black/30 bg-slate-50 p-6 rounded-2xl text-center">
+              <p className="text-slate-500 text-xs font-medium">You don't have any active off-peak deals currently.</p>
+              <p className="text-[10px] text-slate-400 mt-1">Create one above to show up in the Deals Feed with automated booking limit protection!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {myDeals.map(deal => {
+                const soldOut = isDealSoldOut(deal);
+                const paused = isDealPaused(deal);
+                const isUnlimited = deal.maxClaims === null || deal.maxClaims === undefined || deal.maxClaims <= 0;
+                const claims = Number(deal.claimedCount) || 0;
+                const max = Number(deal.maxClaims) || 0;
+                const remaining = isUnlimited ? null : Math.max(0, max - claims);
+                const progressPct = isUnlimited ? 0 : Math.min(100, Math.round((claims / (max || 1)) * 100));
+
+                return (
+                  <div
+                    key={deal.id}
+                    className={cn(
+                      "border rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden transition-all shadow-xs",
+                      soldOut
+                        ? "border-amber-400 bg-amber-50/40"
+                        : paused
+                        ? "border-slate-300 bg-slate-50/60"
+                        : "border-black bg-white"
+                    )}
+                  >
+                    {/* Top Status & Discount Badge */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 text-[9.5px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-black uppercase">
+                          ⚡ Off-Peak {deal.dayOfWeek}
+                        </span>
+                        <span className="bg-emerald-600 text-white font-black text-[9px] px-2.5 py-0.5 uppercase rounded-full shadow-2xs">
+                          🍁 {deal.discountPercentage}% OFF
+                        </span>
+                      </div>
+
+                      {paused ? (
+                        <span className="bg-slate-700 text-white font-black text-[9px] px-2.5 py-0.5 uppercase rounded-full shadow-2xs">
+                          ⏸️ Paused
+                        </span>
+                      ) : soldOut ? (
+                        <span className="bg-amber-600 text-white font-black text-[9px] px-2.5 py-0.5 uppercase rounded-full shadow-2xs animate-pulse">
+                          🔴 Sold Out (Limit Reached)
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-600 text-white font-black text-[9px] px-2.5 py-0.5 uppercase rounded-full shadow-2xs">
+                          ⚡ Active
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Deal Info */}
+                    <div className="space-y-1.5">
+                      <h4 className="font-extrabold text-slate-900 text-sm">{deal.service}</h4>
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-snug">{deal.description}</p>
+                      
+                      {deal.originalPrice && (
+                        <p className="text-xs font-extrabold text-slate-600">
+                          Price: <span className="line-through text-slate-400 mr-1.5">£{deal.originalPrice}</span> 
+                          <span className="text-emerald-600">£{deal.discountedPrice?.toFixed(0)}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Capacity & Claim Progress Tracker */}
+                    <div className="bg-slate-100/90 border border-slate-200 rounded-xl p-2.5 mt-3 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] font-extrabold">
+                        <span className="text-slate-700 flex items-center gap-1">
+                          <span>📊 Booking Capacity:</span>
+                        </span>
+                        {isUnlimited ? (
+                          <span className="text-emerald-700 font-black">
+                            Unlimited ({claims} booked)
+                          </span>
+                        ) : (
+                          <span className={cn("font-black", soldOut ? "text-amber-700" : "text-slate-800")}>
+                            {claims} of {max} Claimed ({progressPct}%)
+                          </span>
+                        )}
+                      </div>
+
+                      {!isUnlimited && (
+                        <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full transition-all duration-300 rounded-full",
+                              soldOut ? "bg-amber-500" : "bg-emerald-500"
+                            )}
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[10px] pt-0.5 font-bold">
+                        {soldOut ? (
+                          <span className="text-amber-800 font-extrabold flex items-center gap-1">
+                            ⚠️ Deal is grayed out for homeowners. Add slots below to reactivate.
+                          </span>
+                        ) : isUnlimited ? (
+                          <span className="text-slate-500">
+                            Homeowners can claim without booking caps.
+                          </span>
+                        ) : (
+                          <span className="text-emerald-700 font-black">
+                            🔥 {remaining} spot{remaining === 1 ? "" : "s"} remaining before auto-close.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Reactivation & Slot Adjustment Controls */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 mt-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
+                          Manage Deal Slots:
+                        </span>
+                        
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (editingDealLimitId === deal.id) {
+                              setEditingDealLimitId(null);
+                            } else {
+                              setEditingDealLimitId(deal.id);
+                              setEditLimitNumber(deal.maxClaims || 5);
+                            }
+                          }}
+                          className="text-[10.5px] font-extrabold text-blue-600 hover:text-blue-800 cursor-pointer"
+                        >
+                          {editingDealLimitId === deal.id ? "Close" : "⚙️ Edit Limit / Mode"}
+                        </button>
+                      </div>
+
+                      {/* Quick Reactivation Buttons when sold out or limited */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const newMax = (deal.maxClaims || 0) + 3;
+                              await updateDoc(doc(db, "flash_deals", deal.id), {
+                                maxClaims: newMax,
+                                status: "active",
+                                updatedAt: new Date().toISOString()
+                              });
+                              toast.success("Added +3 slots & reactivated deal!");
+                            } catch (e) {
+                              toast.error("Failed to update slots.");
+                            }
+                          }}
+                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black shadow-2xs cursor-pointer transition-all active:scale-95 flex items-center gap-0.5"
+                        >
+                          <span>⚡ +3 Slots</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const newMax = (deal.maxClaims || 0) + 5;
+                              await updateDoc(doc(db, "flash_deals", deal.id), {
+                                maxClaims: newMax,
+                                status: "active",
+                                updatedAt: new Date().toISOString()
+                              });
+                              toast.success("Added +5 slots & reactivated deal!");
+                            } catch (e) {
+                              toast.error("Failed to update slots.");
+                            }
+                          }}
+                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black shadow-2xs cursor-pointer transition-all active:scale-95 flex items-center gap-0.5"
+                        >
+                          <span>⚡ +5 Slots</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await updateDoc(doc(db, "flash_deals", deal.id), {
+                                claimedCount: 0,
+                                status: "active",
+                                updatedAt: new Date().toISOString()
+                              });
+                              toast.success("Reset claims to 0 & reactivated deal!");
+                            } catch (e) {
+                              toast.error("Failed to reset claims.");
+                            }
+                          }}
+                          title="Resets claims counter to 0 for a fresh batch of bookings"
+                          className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-[10px] font-bold shadow-2xs cursor-pointer transition-all active:scale-95"
+                        >
+                          <span>🔄 Reset Count</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const nextStatus = paused ? "active" : "paused";
+                              await updateDoc(doc(db, "flash_deals", deal.id), {
+                                status: nextStatus,
+                                updatedAt: new Date().toISOString()
+                              });
+                              toast.success(paused ? "Deal resumed & active!" : "Deal paused.");
+                            } catch (e) {
+                              toast.error("Failed to update status.");
+                            }
+                          }}
+                          className="px-2 py-1 bg-slate-800 hover:bg-black text-white rounded-lg text-[10px] font-bold shadow-2xs cursor-pointer transition-all active:scale-95 ml-auto"
+                        >
+                          {paused ? "▶️ Resume" : "⏸️ Pause"}
+                        </button>
+                      </div>
+
+                      {/* Expanded Inline Limit Editor */}
+                      {editingDealLimitId === deal.id && (
+                        <div className="bg-white p-3 rounded-lg border border-slate-300 space-y-2 mt-2">
+                          <p className="text-[11px] font-bold text-slate-800">Adjust Deal Capacity:</p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="1"
+                              max="200"
+                              value={editLimitNumber}
+                              onChange={(e) => setEditLimitNumber(e.target.value)}
+                              className="w-20 h-8 bg-slate-50 border border-black rounded-md px-2 font-bold text-xs text-slate-900"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const newL = Number(editLimitNumber) || 5;
+                                  const isNowSoldOut = (deal.claimedCount || 0) >= newL;
+                                  await updateDoc(doc(db, "flash_deals", deal.id), {
+                                    maxClaims: newL,
+                                    status: isNowSoldOut ? "sold_out" : "active",
+                                    updatedAt: new Date().toISOString()
+                                  });
+                                  setEditingDealLimitId(null);
+                                  toast.success(`Capacity updated to ${newL} bookings!`);
+                                } catch (e) {
+                                  toast.error("Failed to update capacity.");
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-black text-white text-[10px] font-black rounded-md hover:bg-zinc-800"
+                            >
+                              Save Limit
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, "flash_deals", deal.id), {
+                                    maxClaims: null,
+                                    status: "active",
+                                    updatedAt: new Date().toISOString()
+                                  });
+                                  setEditingDealLimitId(null);
+                                  toast.success("Set deal to unlimited capacity!");
+                                } catch (e) {
+                                  toast.error("Failed to update capacity.");
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-bold rounded-md hover:bg-emerald-100"
+                            >
+                              Set Unlimited
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer Date & Remove Action */}
+                    <div className="flex items-center justify-between border-t border-slate-100 mt-3 pt-2.5">
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        Published {new Date(deal.createdAt).toLocaleDateString()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!confirm("Are you sure you want to delete this deal?")) return;
+                          try {
+                            const { deleteDoc, doc } = await import("firebase/firestore");
+                            await deleteDoc(doc(db, "flash_deals", deal.id));
+                            toast.success("Deal deleted successfully.");
+                          } catch (e) {
+                            console.error("Error deleting deal:", e);
+                            toast.error("Failed to delete deal.");
+                          }
+                        }}
+                        className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors cursor-pointer"
+                      >
+                        Remove Deal
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Partner Perks Section */}
       <div className="mt-12">

@@ -1105,12 +1105,22 @@ export default function JobFeed() {
               to={`/job/${job.id}`}
               className={cn(
                 "bg-white rounded-[2rem] border shadow-md hover:shadow-xl transition-all overflow-hidden group relative",
-                job.isBoosted ? "border-red-500 shadow-red-500/20" : "border-black hover:border-blue-300"
+                job.isBoosted ? "border-red-500 shadow-red-500/20" : job.claimedDeal ? "border-amber-400" : "border-black hover:border-blue-300"
               )}
             >
-              {job.isBoosted && (
+              {job.claimedDeal ? (
+                <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 px-4 py-1.5 text-xs font-black uppercase flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    Flash Deal Claimed • {job.claimedDeal.discountPercentage}% OFF
+                  </span>
+                  <span className="bg-slate-950 text-amber-300 text-[10px] px-2 py-0.5 rounded-full">
+                    £{job.claimedDeal.targetRate || job.claimedDeal.discountedPrice} Fixed Rate
+                  </span>
+                </div>
+              ) : job.isBoosted ? (
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500" />
-              )}
+              ) : null}
               <div className="p-5 flex items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-2">
@@ -1167,12 +1177,25 @@ export default function JobFeed() {
                       </h4>
                     </div>
                     <div className="sm:text-right flex-shrink-0">
-                      <div className="text-lg font-black text-green-600">
-                        £{job.estimateMin} - £{job.estimateMax}
-                      </div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                        Estimated Budget
-                      </div>
+                      {job.claimedDeal ? (
+                        <div>
+                          <div className="text-lg font-black text-amber-600">
+                            £{job.claimedDeal.targetRate || job.claimedDeal.discountedPrice}
+                          </div>
+                          <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-0.5">
+                            Pre-Agreed Deal Rate
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-lg font-black text-green-600">
+                            £{job.estimateMin} - £{job.estimateMax}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                            Estimated Budget
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                   

@@ -105,7 +105,14 @@ export function tokenMatches(qTok: string, tTok: string): boolean {
   if (t.startsWith(q)) return true;
 
   // Query token starts with target token if query is longer (e.g. q="plumber", t="plum")
-  if (q.length >= 4 && q.startsWith(t) && t.length >= 3) return true;
+  // Exclude false-positive short prefixes like "cat" (unrelated to "catering"), "car" (unrelated to "carpenter"), "pet" (unrelated to "petrol"), etc.
+  if (q.length >= 4 && q.startsWith(t) && t.length >= 3) {
+    const tLower = t.toLowerCase();
+    const falsePrefixes = new Set(["cat", "car", "pet", "dec", "con", "man", "pan", "pin", "bin", "win", "cap", "bat", "rat", "hat"]);
+    if (!falsePrefixes.has(tLower)) {
+      return true;
+    }
+  }
 
   // Prefix-constrained fuzzy match for typos (e.g. "plumbin" vs "plumbing", "electrcian" vs "electrician")
   // MUST share at least the first 3 or 4 letters at the VERY START of the word token!
@@ -134,6 +141,76 @@ export function textContainsTokenMatch(targetText: string, searchQuery: string):
 
   // All query tokens must match a target token in targetText
   return queryTokens.every((qTok) =>
+    targetTokens.some((tTok) => tokenMatches(qTok, tTok))
+  );
+}
+
+/**
+ * Smart Category Matching Engine. Matches category based on name, subcategories,
+ * and high-fidelity synonyms, ignoring common action/problem "noise" words.
+ */
+export function categoryMatchesSearch(
+  cat: { name: string; subcategories?: string[] },
+  searchQuery: string
+): boolean {
+  if (!searchQuery || !searchQuery.trim()) return true;
+
+  const rawQueryTokens = tokenize(searchQuery);
+  if (rawQueryTokens.length === 0) return true;
+
+  // Identify "noise" or "action" problem-descriptor words
+  const noiseWords = new Set([
+    "my", "is", "are", "was", "were", "been", "will", "would", "should", "can", "could", "have", "has", "had", 
+    "do", "does", "did", "need", "needed", "needs", "want", "wants", "wanted", "fix", "fixing", "fixed", 
+    "repair", "repairing", "repairs", "repaired", "broken", "broke", "break", "leaking", "leaky", "leak", "leaks", 
+    "damaged", "damage", "damaging", "urgent", "emergency", "fast", "asap", "quick", "quickly", "help", "helping", 
+    "helped", "with", "the", "a", "an", "some", "of", "for", "to", "in", "on", "at", "by", "and", "or", 
+    "new", "old", "replace", "replacing", "replaced", "replacement", "install", "installing", "installed", 
+    "installation", "installations", "service", "servicing", "serviced", "maintenance", "problem", "problems", 
+    "issue", "issues", "trouble", "work", "worker", "job", "jobs", "hire", "hiring", "hired", "please", 
+    "thank", "thanks", "find", "finding", "get", "getting", "about"
+  ]);
+
+  // Filter query tokens to get significant tokens
+  let queryTokens = rawQueryTokens.filter((tok) => !noiseWords.has(tok.toLowerCase()));
+  
+  // If the query contains ONLY noise words (e.g. user just searched "repair" or "leaking"),
+  // then we fall back to searching all raw tokens.
+  if (queryTokens.length === 0) {
+    queryTokens = rawQueryTokens;
+  }
+
+  // Collect ALL target tokens for this category
+  const targetTokensSet = new Set<string>();
+
+  // A. Category Name
+  tokenize(cat.name).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+
+  // B. Subcategories
+  if (cat.subcategories && Array.isArray(cat.subcategories)) {
+    cat.subcategories.forEach((sub) => {
+      tokenize(sub).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+    });
+  }
+
+  // C. Synonyms mapping to this category name
+  Object.entries(CATEGORY_SYNONYMS).forEach(([term, meta]) => {
+    if (meta.categoryName.toLowerCase() === cat.name.toLowerCase()) {
+      // Add the synonym term itself (e.g., "plumber")
+      tokenize(term).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+      // Add synonym keywords (e.g., "pipe", "leak", "boiler")
+      if (meta.keywords && Array.isArray(meta.keywords)) {
+        meta.keywords.forEach((keyword) => {
+          tokenize(keyword).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+        });
+      }
+    }
+  });
+
+  const targetTokens = Array.from(targetTokensSet);
+
+  // Check if AT LEAST ONE significant query token matches a target token
+  return queryTokens.some((qTok) =>
     targetTokens.some((tTok) => tokenMatches(qTok, tTok))
   );
 }
@@ -231,7 +308,14 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
   "dishwasher delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Appliance Courier", keywords: ["dishwasher", "kitchen appliance", "white goods", "bulky delivery"] },
   "appliance delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "White Goods Transport Specialist", keywords: ["washing machine", "fridge", "dishwasher", "cooker", "tumble dryer", "bulky delivery"] },
   "on demand delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "On-Demand Courier", keywords: ["asap delivery", "instant courier", "same day van", "express pickup", "fast courier"] },
-  "man and van": { categoryName: "Removals", tradeTitle: "Man & Van Driver", keywords: ["van delivery", "bulky items", "furniture", "appliance transport", "pickup", "moving"] }
+  "man and van": { categoryName: "Removals", tradeTitle: "Man & Van Driver", keywords: ["van delivery", "bulky items", "furniture", "appliance transport", "pickup", "moving"] },
+
+  // General Labour, Trade Mates & Site Helpers
+  "labourer": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "General Labourer", keywords: ["digging", "trench", "garden", "heavy lifting", "site helper", "demolition", "clearing", "rubble", "skip", "carrying"] },
+  "trade mate": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "Trade Mate & Helper", keywords: ["plumber mate", "sparky mate", "builder mate", "apprentice", "helping hand", "site assistant", "extra hands"] },
+  "site helper": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "Site Helper", keywords: ["heavy lifting", "carrying", "plasterboard", "timber", "rubble bagging", "site cleanup", "digging"] },
+  "garden digging": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "Groundwork Labourer", keywords: ["trenching", "digging patio", "soil clearing", "turf laying", "garden helper", "manual labour"] },
+  "helping hand": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "General Labourer & Helper", keywords: ["helper", "mate", "extra hands", "lifting", "moving", "day rate", "on demand helper"] }
 };
 
 /**
@@ -339,7 +423,19 @@ export const COMMON_TRADE_VOCABULARY: CandidateItem[] = [
   { label: "White Goods & Furniture Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
   { label: "On-Demand Van Delivery", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
   { label: "Marketplace & Store Pickup", type: "subcategory", categoryName: "Courier, Parcel & Express Delivery" },
-  { label: "Same-Day Courier", type: "trade", categoryName: "Courier, Parcel & Express Delivery" }
+  { label: "Same-Day Courier", type: "trade", categoryName: "Courier, Parcel & Express Delivery" },
+
+  // General Labour, Trade Mates & Site Helpers
+  { label: "General Labour, Trade Mates & Site Helpers", type: "category", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "General Labourer", type: "trade", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "Trade Mate & Helper", type: "trade", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "Site Helper", type: "trade", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "Garden Digging, Trenching & Groundwork Assistance", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "General Site Labourer & Heavy Lifting", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "Demolition & Non-Structural Wall Strip-Out Helper", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "Material Offloading, Plasterboard, Bricks & Timber Carrying", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "Skip Loading, Rubble Bagging & Waste Clearance Helper", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
+  { label: "Urgent Same-Day On-Demand Site Helper & Extra Hands", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" }
 ];
 
 /**

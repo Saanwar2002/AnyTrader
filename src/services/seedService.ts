@@ -194,6 +194,99 @@ export const INITIAL_MOCK_TRADERS = [
   }
 ];
 
+export const INITIAL_MOCK_FLASH_DEALS = [
+  {
+    id: "deal-marcus-boiler",
+    traderId: "seed-promoted-plumber",
+    traderName: "Marcus Vance",
+    traderAvatarUrl: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&auto=format&fit=crop&q=80",
+    service: "Annual Boiler Servicing & Safety Check",
+    discountPercentage: 25,
+    originalPrice: 120,
+    discountedPrice: 90,
+    dayOfWeek: "Tuesday",
+    description: "Get 25% off annual gas boiler servicing and CP12 certificate when booked for off-peak Tuesdays.",
+    status: "active",
+    maxClaims: 5,
+    claimedCount: 2,
+    createdAt: new Date().toISOString(),
+    city: "London",
+    postcode: "SW1A 1AA"
+  },
+  {
+    id: "deal-sarah-eicr",
+    traderId: "seed-promoted-electrician",
+    traderName: "Sarah Jenkins",
+    traderAvatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80",
+    service: "EICR Safety Inspection & EV Charger",
+    discountPercentage: 20,
+    originalPrice: 250,
+    discountedPrice: 200,
+    dayOfWeek: "Wednesday",
+    description: "Special Wednesday off-peak rate for domestic landlord EICRs and home EV charge point installations.",
+    status: "active",
+    maxClaims: 3,
+    claimedCount: 1,
+    createdAt: new Date().toISOString(),
+    city: "London",
+    postcode: "E1 6SJ"
+  },
+  {
+    id: "deal-david-carpet",
+    traderId: "seed-promoted-cleaner",
+    traderName: "David O'Connor",
+    traderAvatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80",
+    service: "Eco Carpet Steam Clean & Wheelie Bin Wash",
+    discountPercentage: 30,
+    originalPrice: 100,
+    discountedPrice: 70,
+    dayOfWeek: "Thursday",
+    description: "30% off deep carpet steam extraction and high-pressure wheelie bin sanitising every Thursday.",
+    status: "active",
+    maxClaims: 5,
+    claimedCount: 3,
+    createdAt: new Date().toISOString(),
+    city: "London",
+    postcode: "NW1 8AL"
+  },
+  {
+    id: "deal-chloe-catering",
+    traderId: "seed-promoted-baker",
+    traderName: "Chloe Dupont",
+    traderAvatarUrl: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&auto=format&fit=crop&q=80",
+    service: "Corporate Buffet & Wedding Cake Tasting Box",
+    discountPercentage: 15,
+    originalPrice: 180,
+    discountedPrice: 153,
+    dayOfWeek: "Monday",
+    description: "Kick off your week with 15% off artisanal corporate catering platters and wedding cake sample boxes.",
+    status: "active",
+    maxClaims: 4,
+    claimedCount: 4,
+    createdAt: new Date().toISOString(),
+    city: "London",
+    postcode: "W1D 3QU"
+  },
+  {
+    id: "deal-liam-roof",
+    traderId: "seed-promoted-builder",
+    traderName: "Liam Gallagher",
+    traderAvatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80",
+    service: "Drone Roof Survey & Full Gutter Clearance",
+    discountPercentage: 20,
+    originalPrice: 200,
+    discountedPrice: 160,
+    dayOfWeek: "Friday",
+    description: "20% off high-reach drone roof condition survey and full gutter clearance every Friday.",
+    status: "active",
+    maxClaims: null,
+    claimedCount: 1,
+    createdAt: new Date().toISOString(),
+    city: "London",
+    postcode: "SE1 9SG"
+  }
+];
+
 export const seedMockTraders = async () => {
   const mockTraders = INITIAL_MOCK_TRADERS.map(t => ({
     ...t,
@@ -290,7 +383,10 @@ export const seedMockTraders = async () => {
     for (const ad of mockAds) {
       await setDoc(doc(db, "advertisements", ad.id), ad, { merge: true });
     }
-    console.log("5 Promoted & Paid Subscriber Profiles created in Plumbing, Electrical, Baking, Cleaning, and Building!");
+    for (const deal of INITIAL_MOCK_FLASH_DEALS) {
+      await setDoc(doc(db, "flash_deals", deal.id), deal, { merge: true });
+    }
+    console.log("5 Promoted & Paid Subscriber Profiles & Flash Deals created in Plumbing, Electrical, Baking, Cleaning, and Building!");
   } catch (error) {
     console.error("Error seeding mock traders & ads:", error);
     handleFirestoreError(error, OperationType.WRITE, "users");

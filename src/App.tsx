@@ -89,6 +89,8 @@ const AdReport = lazyWithRetry(() => import("./components/AdReport"));
 const TraderAdStudio = lazyWithRetry(() => import("./components/TraderAdStudio"));
 const TenantReportPortal = lazyWithRetry(() => import("./components/TenantReportPortal").then(m => ({ default: m.TenantReportPortal })));
 
+import SplashScreen from "./components/SplashScreen";
+
 const PageSkeleton = () => (
   <div className="flex h-[50vh] items-center justify-center">
     <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
@@ -336,6 +338,7 @@ export default function App() {
         style={{ marginTop: 'max(env(safe-area-inset-top), 48px)' }}
       />
       <BrowserRouter>
+        <SplashScreen />
         <AppUpdateModal platformConfig={platformConfig} />
         <DeepLinkListener />
         <ShareGlobalContainer />

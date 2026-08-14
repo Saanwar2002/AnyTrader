@@ -25,6 +25,7 @@ import { AnimatePresence } from "motion/react";
 import MediaGalleryModal from "./MediaGalleryModal";
 import QuoteComparisonModal from "./QuoteComparisonModal";
 import { SEO } from "./SEO";
+import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
 import { 
   calculatePayoutBreakdown, 
   getStripeOnboardingLink, 
@@ -129,6 +130,50 @@ export default function JobDetails() {
   const [depositTerm, setDepositTerm] = useState("0_percent_completion");
   const [guaranteeTerm, setGuaranteeTerm] = useState("1_year_workmanship");
   const [partsWarranty, setPartsWarranty] = useState("standard_parts");
+  const [myDeals, setMyDeals] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user || profile?.role !== 'tradesperson') return;
+    const q = query(
+      collection(db, "flash_deals"),
+      where("traderId", "==", user.uid),
+      where("status", "==", "active")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dbDeals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const mockMatches = INITIAL_MOCK_FLASH_DEALS.filter(m => m.traderId === user.uid);
+      const existingIds = new Set(dbDeals.map(d => d.id));
+      const merged = [...dbDeals, ...mockMatches.filter(m => !existingIds.has(m.id))];
+      setMyDeals(merged);
+    }, (error) => {
+      console.error("Error fetching my flash deals in JobDetails:", error);
+      setMyDeals(INITIAL_MOCK_FLASH_DEALS.filter(m => m.traderId === user.uid));
+    });
+    return () => unsubscribe();
+  }, [user, profile]);
+
+  const getMatchingDeal = () => {
+    if (job?.claimedDeal) {
+      return {
+        id: job.claimedDeal.id || "claimed_deal",
+        service: job.claimedDeal.service || job.claimedDeal.dealTitle || job.title,
+        discountPercentage: job.claimedDeal.discountPercentage || 0,
+        dayOfWeek: job.claimedDeal.dayOfWeek || "Claimed Deal",
+        ...job.claimedDeal
+      };
+    }
+    if (myDeals.length === 0) return null;
+    const dateStr = isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate;
+    if (!dateStr) return null;
+    
+    // Get weekday string in English (e.g., "Monday", "Tuesday")
+    const dateObj = new Date(dateStr);
+    const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const selectedDayOfWeek = weekdays[dateObj.getDay()];
+
+    // Find if we have an active deal matching this day of the week
+    return myDeals.find(deal => deal.dayOfWeek === selectedDayOfWeek);
+  };
 
   const handleAddLineItem = () => {
     setLineItems(prev => [...prev, { id: Date.now().toString(), description: "", amount: "" }]);
@@ -579,7 +624,22 @@ const libraries: any[] = ['places', 'geometry'];
         return;
       }
 
-      const payoutBreakdown = calculatePayoutBreakdown(parseFloat(quoteAmount), profile?.tier || 'payg');
+      const matchingDeal = getMatchingDeal();
+      const amountEntered = parseFloat(quoteAmount);
+      let finalAmount = amountEntered;
+      let originalAmountVal = amountEntered;
+      let isDiscountApplied = false;
+      let discountPercentageVal = 0;
+      let appliedFlashDealIdVal = "";
+
+      if (matchingDeal) {
+        isDiscountApplied = true;
+        discountPercentageVal = matchingDeal.discountPercentage;
+        appliedFlashDealIdVal = matchingDeal.id;
+        finalAmount = Math.round(amountEntered * (1 - discountPercentageVal / 100));
+      }
+
+      const payoutBreakdown = calculatePayoutBreakdown(finalAmount, profile?.tier || 'payg');
 
       if (existingQuote) {
         const updateData: any = {
@@ -591,7 +651,11 @@ const libraries: any[] = ['places', 'geometry'];
             timestamp: new Date().toISOString(),
             reason: "Manual Update"
           }),
-          amount: parseFloat(quoteAmount),
+          amount: finalAmount,
+          originalAmount: originalAmountVal,
+          isDiscountApplied,
+          discountPercentage: discountPercentageVal,
+          appliedFlashDealId: appliedFlashDealIdVal,
           netPayoutValue: payoutBreakdown.netPayout,
           stripeFeeAmount: payoutBreakdown.stripeFee,
           platformCommission: payoutBreakdown.platformCommission,
@@ -626,7 +690,11 @@ const libraries: any[] = ['places', 'geometry'];
           jobTitle: job.title || "",
           tradespersonId: user.uid,
           homeownerId: job.homeownerId,
-          amount: parseFloat(quoteAmount),
+          amount: finalAmount,
+          originalAmount: originalAmountVal,
+          isDiscountApplied,
+          discountPercentage: discountPercentageVal,
+          appliedFlashDealId: appliedFlashDealIdVal,
           netPayoutValue: payoutBreakdown.netPayout,
           stripeFeeAmount: payoutBreakdown.stripeFee,
           platformCommission: payoutBreakdown.platformCommission,
@@ -657,15 +725,14 @@ const libraries: any[] = ['places', 'geometry'];
       }
 
       
-      const amountValue = parseFloat(quoteAmount);
-      const isQuickTrack = amountValue < 400;
+      const isQuickTrack = finalAmount < 400;
       
       const defaultMilestones = !isQuickTrack ? [
-        { id: "m1", title: "Commencement & Materials", amount: Math.floor(amountValue * 0.3), status: "pending_funding" },
-        { id: "m2", title: "Mid-way Progress", amount: Math.floor(amountValue * 0.4), status: "pending_funding" },
-        { id: "m3", title: "Final Completion & Handover", amount: amountValue - Math.floor(amountValue * 0.3) - Math.floor(amountValue * 0.4), status: "pending_funding" }
+        { id: "m1", title: "Commencement & Materials", amount: Math.floor(finalAmount * 0.3), status: "pending_funding" },
+        { id: "m2", title: "Mid-way Progress", amount: Math.floor(finalAmount * 0.4), status: "pending_funding" },
+        { id: "m3", title: "Final Completion & Handover", amount: finalAmount - Math.floor(finalAmount * 0.3) - Math.floor(finalAmount * 0.4), status: "pending_funding" }
       ] : [
-        { id: "m1", title: "Service Delivery", amount: amountValue, status: "pending_funding" }
+        { id: "m1", title: "Service Delivery", amount: finalAmount, status: "pending_funding" }
       ];
 
       const quoteRef = existingQuote ? doc(db, "jobs", id, "quotes", existingQuote.id) : doc(collection(db, "jobs", id, "quotes"));
@@ -676,7 +743,11 @@ const libraries: any[] = ['places', 'geometry'];
           jobTitle: job.title || "",
           tradespersonId: user.uid,
           homeownerId: job.homeownerId,
-          amount: amountValue,
+          amount: finalAmount,
+          originalAmount: originalAmountVal,
+          isDiscountApplied,
+          discountPercentage: discountPercentageVal,
+          appliedFlashDealId: appliedFlashDealIdVal,
           message: quoteMessage,
           startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
           isImmediateStart,
@@ -3063,6 +3134,64 @@ const libraries: any[] = ['places', 'geometry'];
           </div>
         )}
 
+        {/* Flash Deal / Direct Quote Request Hero Card */}
+        {job.claimedDeal ? (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 p-5 sm:p-6 rounded-3xl shadow-lg border border-amber-600 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-xl shrink-0 shadow-md">
+                <Zap className="w-6 h-6 fill-current" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-black text-slate-950 text-lg uppercase tracking-wide">
+                    Claimed Flash Deal Quote Request
+                  </h3>
+                  <span className="bg-slate-950 text-amber-300 text-xs font-black px-2.5 py-0.5 rounded-full uppercase">
+                    {job.claimedDeal.discountPercentage || 0}% OFF Deal
+                  </span>
+                </div>
+                <p className="text-sm font-bold text-slate-900 mt-1">
+                  Requested from individual specialist: <span className="font-black underline decoration-slate-950">{job.targetTradespersonName || job.claimedDeal.traderName || "Selected Trader"}</span>
+                </p>
+                {job.claimedDeal.dealTitle && (
+                  <p className="text-xs font-medium text-slate-900/80 mt-0.5">
+                    Package: {job.claimedDeal.dealTitle}
+                  </p>
+                )}
+              </div>
+            </div>
+            {(job.claimedDeal.targetRate || job.claimedDeal.discountedPrice) && (
+              <div className="bg-slate-950/10 backdrop-blur-sm sm:bg-transparent p-3 sm:p-0 rounded-2xl sm:text-right shrink-0 border border-slate-950/10 sm:border-0">
+                <span className="text-[10px] font-bold text-slate-900 uppercase tracking-wider block">Pre-Agreed Rate</span>
+                <span className="text-2xl sm:text-3xl font-black text-slate-950">
+                  £{job.claimedDeal.targetRate || job.claimedDeal.discountedPrice}
+                </span>
+              </div>
+            )}
+          </div>
+        ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
+          <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white p-5 sm:p-6 rounded-3xl shadow-lg border border-indigo-950 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 text-white flex items-center justify-center font-black text-xl shrink-0 backdrop-blur-sm border border-white/20">
+                🎯
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-black text-white text-lg uppercase tracking-wide">
+                    Direct 1-on-1 Quote Request
+                  </h3>
+                  <span className="bg-white/20 text-blue-200 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase border border-white/20">
+                    Private Request
+                  </span>
+                </div>
+                <p className="text-sm text-blue-100 font-medium mt-1">
+                  Sent exclusively to: <strong className="text-white font-bold underline">{job.targetTradespersonName || "Individual Trader"}</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {/* Job Info Section */}
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -3422,8 +3551,41 @@ const libraries: any[] = ['places', 'geometry'];
               </div>
             )}
 
+            {/* Guaranteed Flash Deal Rate Card (When job is from a claimed flash deal) */}
+            {job.claimedDeal && (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50/80 rounded-3xl p-6 border-2 border-amber-300 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center">
+                      <Zap className="w-4 h-4 fill-current" />
+                    </div>
+                    <h3 className="text-xl font-bold text-amber-950">Guaranteed Flash Deal Rate</h3>
+                  </div>
+                  <span className="bg-amber-200 text-amber-950 text-xs font-black px-3 py-1 rounded-full uppercase border border-amber-300">
+                    {job.claimedDeal.discountPercentage || 0}% OFF
+                  </span>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-4xl font-black text-slate-900">
+                      £{job.claimedDeal.targetRate || job.claimedDeal.discountedPrice}
+                    </span>
+                    {job.claimedDeal.originalPrice && (
+                      <span className="text-lg text-slate-400 line-through font-bold">
+                        £{job.claimedDeal.originalPrice}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                    This job was pre-arranged through <strong>{job.targetTradespersonName || job.claimedDeal.traderName || "this specialist"}</strong>'s published Flash Deal. The trader has guaranteed this rate for the requested scope.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* AI Price Estimate Card */}
-            {job.estimateMin && job.estimateMax && (
+            {job.estimateMin && job.estimateMax && !job.claimedDeal && (
               <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -4069,7 +4231,19 @@ const libraries: any[] = ['places', 'geometry'];
                     )}
                   </div>
                   <div className="text-right space-y-2 flex-shrink-0">
-                    <p className="text-2xl font-black text-slate-900">£{quote.amount}</p>
+                    {quote.isDiscountApplied ? (
+                      <div className="space-y-0.5">
+                        <p className="text-2xl font-black text-emerald-600">£{quote.amount}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Original: <span className="line-through">£{quote.originalAmount || Math.round(quote.amount / (1 - (quote.discountPercentage || 20) / 100))}</span>
+                        </p>
+                        <p className="text-[10px] font-bold text-emerald-600 flex items-center justify-end gap-1 uppercase tracking-tight">
+                          <span>🍁</span> {quote.discountPercentage}% Off-Peak Deal
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-2xl font-black text-slate-900">£{quote.amount}</p>
+                    )}
                     <div className="flex flex-col items-end gap-1">
                       {quote.paymentPreference && (
                         <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase tracking-tight border border-purple-100">
@@ -4709,6 +4883,35 @@ const libraries: any[] = ['places', 'geometry'];
                     </div>
                   ) : null}
 
+                  {job?.claimedDeal && (
+                    <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 flex flex-col gap-1.5 animate-in fade-in">
+                      <div className="flex items-center justify-between flex-wrap gap-1">
+                        <span className="text-[11px] font-black text-emerald-900 uppercase tracking-tight flex items-center gap-1">
+                          ⚡ Claimed Flash Deal ({job.claimedDeal.discountPercentage || 0}% OFF)
+                        </span>
+                        <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200">
+                          Pre-Agreed Rate: £{job.claimedDeal.discountedPrice || job.claimedDeal.targetRate || job.claimedDeal.price}
+                        </span>
+                      </div>
+                      <p className="text-[10.5px] text-emerald-700 font-medium leading-snug">
+                        Homeowner booked via your Flash Deal for <strong>{job.claimedDeal.service || job.claimedDeal.dealTitle || "Service"}</strong>.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const dealPrice = job.claimedDeal.discountedPrice || job.claimedDeal.targetRate || job.claimedDeal.price;
+                          if (dealPrice) {
+                            setQuoteAmount(dealPrice.toString());
+                          }
+                        }}
+                        className="self-start mt-0.5 text-[10.5px] font-black bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Zap className="w-3 h-3 fill-white" />
+                        1-Click Apply Pre-Agreed Rate (£{job.claimedDeal.discountedPrice || job.claimedDeal.targetRate || job.claimedDeal.price})
+                      </button>
+                    </div>
+                  )}
+
                   <div className="relative">
                     <PoundSterling className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
@@ -4719,6 +4922,28 @@ const libraries: any[] = ['places', 'geometry'];
                       onChange={(e) => setQuoteAmount(e.target.value)}
                     />
                   </div>
+
+                  {(() => {
+                    const matchingDeal = getMatchingDeal();
+                    if (!matchingDeal || !quoteAmount) return null;
+                    return (
+                      <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-start gap-2 animate-in fade-in">
+                        <span className="text-base">🍁</span>
+                        <div className="flex-1">
+                          <h4 className="text-[11px] font-black text-emerald-800 uppercase leading-none">
+                            Quiet Period Off-Peak Discount Matches!
+                          </h4>
+                          <p className="text-[10px] text-emerald-700 leading-tight mt-1">
+                            A <strong>{matchingDeal.discountPercentage}% discount</strong> on <strong>{matchingDeal.service}</strong> is applied since the start date is on a <strong>{matchingDeal.dayOfWeek}</strong>.
+                          </p>
+                          <div className="mt-1.5 flex items-center gap-2 text-[10px]">
+                            <span className="text-slate-500">Original: <span className="line-through">£{parseFloat(quoteAmount) || 0}</span></span>
+                            <span className="font-bold text-emerald-600">Discounted Quote: £{Math.round((parseFloat(quoteAmount) || 0) * (1 - matchingDeal.discountPercentage / 100))}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {payoutSummary && (
                     <motion.div 

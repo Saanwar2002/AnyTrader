@@ -602,6 +602,7 @@ export default function TraderOutreachAgent() {
                   <option value="Babysitting & Childcare Services">👶 Babysitting & Childcare Services</option>
                   <option value="Mobile Car Detailing & Valeting">🚗 Mobile Car Detailing & Valeting</option>
                   <option value="On-Demand Courier & Bulky Goods Delivery">📦 On-Demand Courier & Bulky Goods Delivery</option>
+                  <option value="General Labour, Trade Mates & Site Helpers">🔨 General Labour, Trade Mates & Site Helpers</option>
                   <option value="Home Repairs & Property Passports">🛠️ Home Repairs & Property Passports</option>
                   <option value="Boiler Servicing & Gas Safety CP12">🔥 Boiler Servicing & Gas Safety CP12</option>
                   <option value="Emergency Electrical & Plumbing">⚡ Emergency Electrical & Plumbing</option>

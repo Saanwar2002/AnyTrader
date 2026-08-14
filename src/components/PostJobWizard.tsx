@@ -1,4 +1,4 @@
-import { textContainsTokenMatch } from "@/src/lib/fuzzyMatch";
+import { textContainsTokenMatch, tokenize, tokenMatches, categoryMatchesSearch } from "@/src/lib/fuzzyMatch";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -10,7 +10,7 @@ import {
   CheckCircle2, 
   Loader2,
   X,
-  Clock,
+  Clock, Briefcase,
   Droplets, Zap, Thermometer, Home, Layout, Palette, Wrench, Maximize, Grid, Leaf, Box, Sparkles, Lock,
   PlusCircle,
   Circle,
@@ -42,7 +42,7 @@ import {
   Calendar,
   PoundSterling
 } from "lucide-react";
-import { cn, generateJobNumber, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, generateJobNumber, getOutwardPostcode, getDealPricing } from "@/src/lib/utils";
 import { TRADE_CATEGORIES, URGENCY_LEVELS } from "@/src/constants";
 import { useCategories } from "../lib/CategoryProvider";
 import { ConfidenceGauge } from "./common/ConfidenceGauge";
@@ -153,8 +153,9 @@ export default function PostJobWizard() {
   const isPrefilledByAI = searchParams.get("prefilledByAI") === "true" || (location.state as any)?.prefilledByAI || Boolean(paramCategory && (paramTitle || paramDescription));
 
   const editJob = (location.state as any)?.editJob;
-  const targetTradespersonId = (location.state as any)?.targetTradespersonId;
-  const targetTradespersonName = (location.state as any)?.targetTradespersonName;
+  const claimedDeal = (location.state as any)?.claimedDeal;
+  const targetTradespersonId = (location.state as any)?.targetTradespersonId || claimedDeal?.traderId;
+  const targetTradespersonName = (location.state as any)?.targetTradespersonName || claimedDeal?.traderName || claimedDeal?.businessName;
   const targetTrades = (location.state as any)?.targetTrades;
   
   // Backwards compatibility for single property
@@ -170,27 +171,52 @@ export default function PostJobWizard() {
   const [isInitializing, setIsInitializing] = useState(!editJob && !isPrefilledByAI);
   
   const JobReminder = () => {
-    if (!formData.category && !formData.title) return null;
+    if (!formData.category && !formData.title && !claimedDeal) return null;
     return (
-      <div className="bg-white rounded-2xl p-4 border border-[#0084a5] shadow-sm flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-          <Sparkles className="w-5 h-5 text-blue-600" />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-bold text-slate-400 uppercase">
-            {formData.title ? "Job Title" : "Category"}
-          </p>
-          <p className="font-bold text-slate-900">{formData.title || formData.category}</p>
-          {formData.urgency === "emergency" && (
-            <p className="text-xs font-bold text-red-600 uppercase">Emergency</p>
-          )}
-        </div>
-        {formData.postcode && (
-          <div className="text-right border-l border-black pl-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location</p>
-            <p className="text-xs font-black text-slate-900 uppercase">
-              {getOutwardPostcode(formData.postcode)}
-            </p>
+      <div className="space-y-2 mb-4">
+        {claimedDeal && (() => {
+          const { origPrice, discPrice, discountPct, savings } = getDealPricing(claimedDeal);
+          return (
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Zap className="w-5 h-5 fill-white shrink-0" />
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-emerald-100">
+                    ⚡ Flash Deal Claimed ({discountPct || claimedDeal.discountPercentage}% OFF)
+                  </p>
+                  <p className="text-xs font-bold text-white mt-0.5">
+                    {claimedDeal.service} • Deal Rate: <span className="font-black">£{discPrice}</span> {origPrice && origPrice > discPrice ? `(Was £${origPrice})` : ''} {savings > 0 ? `• Save £${savings}` : ''}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-extrabold uppercase bg-amber-400 text-slate-950 px-2 py-0.5 rounded-md shrink-0">
+                Deal Applied
+              </span>
+            </div>
+          );
+        })()}
+        {(formData.category || formData.title) && (
+          <div className="bg-white rounded-2xl p-4 border border-[#0084a5] shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-slate-400 uppercase">
+                {formData.title ? "Job Title" : "Category"}
+              </p>
+              <p className="font-bold text-slate-900">{formData.title || formData.category}</p>
+              {formData.urgency === "emergency" && (
+                <p className="text-xs font-bold text-red-600 uppercase">Emergency</p>
+              )}
+            </div>
+            {formData.postcode && (
+              <div className="text-right border-l border-black pl-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location</p>
+                <p className="text-xs font-black text-slate-900 uppercase">
+                  {getOutwardPostcode(formData.postcode)}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -198,7 +224,7 @@ export default function PostJobWizard() {
   };
 
   // Step 0 is landing, 1 is category, 2 is subcategory, 3 is description/details
-  const initialStep = (editJob || isPrefilledByAI) ? 3 : 0;
+  const initialStep = (editJob || isPrefilledByAI || claimedDeal) ? 3 : 0;
   const [step, setStep] = useState(initialStep);
   const [formData, setFormData] = useState({
     category: editJob?.category || paramCategory || "",
@@ -269,6 +295,23 @@ export default function PostJobWizard() {
   const [addressSuggestionTimeout, setAddressSuggestionTimeout] = useState<any>(null);
 
   React.useEffect(() => {
+    if (claimedDeal) {
+      const dealCity = claimedDeal.city || "";
+      const dealPostcode = claimedDeal.postcode || "";
+      if (dealCity || dealPostcode) {
+        setUseRegisteredAddress(false);
+        const displayAddr = dealPostcode ? `${dealPostcode}${dealCity ? ', ' + dealCity : ''}` : dealCity;
+        setAddressInput(displayAddr);
+        setFormData(prev => ({
+          ...prev,
+          postcode: dealPostcode,
+          city: dealCity,
+          fullAddress: displayAddr
+        }));
+        return;
+      }
+    }
+
     if (profile?.postcode && !editJob) {
       setUseRegisteredAddress(true);
       setFormData(prev => ({
@@ -280,7 +323,7 @@ export default function PostJobWizard() {
         fullAddress: profile.postcode || ""
       }));
     }
-  }, [profile, editJob]);
+  }, [profile, editJob, claimedDeal]);
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -534,7 +577,8 @@ export default function PostJobWizard() {
     if (editJob) return;
     if (authLoading) return; // Wait for auth to be fully loaded
 
-    const hasPrefilledData = isPrefilledByAI || Boolean(formData.category && (formData.title || formData.description));
+    const hasPrefilledData = isPrefilledByAI || Boolean(claimedDeal) || Boolean(formData.category && (formData.title || formData.description));
+    const defaultStep = hasPrefilledData ? 3 : (targetTradespersonId ? 1 : 0);
 
     if (profile?.subscriptionType === "business" && user) {
       setLoadingAssets(true);
@@ -549,9 +593,9 @@ export default function PostJobWizard() {
             if (preselectedAssets.length > 0) {
               setFormData(prev => ({ ...prev, selectedAssets: preselectedAssets }));
             }
-            setStep(hasPrefilledData ? 3 : 0);
+            setStep(defaultStep);
           } else {
-            setStep(hasPrefilledData ? 3 : 0);
+            setStep(defaultStep);
           }
         })
         .finally(() => {
@@ -559,13 +603,136 @@ export default function PostJobWizard() {
           setIsInitializing(false);
         });
     } else {
-      setStep(hasPrefilledData ? 3 : 0);
-      if (hasPrefilledData) {
+      setStep(defaultStep);
+      if (hasPrefilledData && !claimedDeal) {
         toast.info("✨ AI pre-filled your job details based on your AI Home Health forecast!");
       }
       setIsInitializing(false);
     }
-  }, [user, profile, authLoading, editJob, isPrefilledByAI]);
+  }, [user, profile, authLoading, editJob, isPrefilledByAI, targetTradespersonId, claimedDeal]);
+
+  // Auto-detect and prefill Category and Subcategory for Flash Deals
+  useEffect(() => {
+    if (editJob || isPrefilledByAI) return;
+    if (categories.length === 0 || !claimedDeal) return;
+
+    const dealService = claimedDeal.service || "";
+    if (!dealService) return;
+
+    const stopWords = new Set(["and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", "at", "by", "on", "a", "an", "n", "private", "maker", "services", "general", "domestic", "commercial", "home", "indoor", "outdoor", "installation", "installations", "repair", "repairs", "maintenance", "service", "specialist", "management", "coordination", "planner", "planning", "delivery", "transport", "about"]);
+    const dealTokens = tokenize(dealService).filter(tok => !stopWords.has(tok.toLowerCase()));
+
+    let bestCategory = "";
+    let bestSubcategory = "";
+    let maxMatches = 0;
+
+    categories.forEach(cat => {
+      const catTokens = tokenize(cat.name).filter(tok => !stopWords.has(tok.toLowerCase()));
+      let catMatchCount = 0;
+      dealTokens.forEach(dTok => {
+        catTokens.forEach(cTok => {
+          if (tokenMatches(dTok, cTok) || tokenMatches(cTok, dTok)) {
+            catMatchCount += 2; // Category matches get extra weight
+          }
+        });
+      });
+
+      (cat.subcategories || []).forEach(sub => {
+        const subTokens = tokenize(sub).filter(tok => !stopWords.has(tok.toLowerCase()));
+        let subMatchCount = 0;
+        dealTokens.forEach(dTok => {
+          subTokens.forEach(sTok => {
+            if (tokenMatches(dTok, sTok) || tokenMatches(sTok, dTok)) {
+              subMatchCount += 1;
+            }
+          });
+        });
+
+        const totalMatches = catMatchCount + subMatchCount;
+        if (totalMatches > maxMatches) {
+          maxMatches = totalMatches;
+          bestCategory = cat.name;
+          bestSubcategory = sub;
+        }
+      });
+    });
+
+    if (!bestCategory && targetTrades) {
+      const tradesArray = Array.isArray(targetTrades) ? targetTrades : [targetTrades];
+      const traderTokens = tradesArray.flatMap(trade => tokenize(trade)).filter(tok => !stopWords.has(tok.toLowerCase()));
+
+      categories.forEach(cat => {
+        const catTokens = tokenize(cat.name);
+        const subcategoryTokens = (cat.subcategories || []).flatMap(sub => tokenize(sub));
+        const allCatTokens = [...catTokens, ...subcategoryTokens].filter(tok => !stopWords.has(tok.toLowerCase()));
+
+        const matches = traderTokens.some(traderTok => 
+          allCatTokens.some(catTok => tokenMatches(traderTok, catTok) || tokenMatches(catTok, traderTok))
+        );
+
+        if (matches) {
+          bestCategory = cat.name;
+          bestSubcategory = cat.subcategories?.[0] || "";
+        }
+      });
+    }
+
+    if (bestCategory) {
+      setFormData(prev => ({
+        ...prev,
+        category: bestCategory,
+        subcategory: bestSubcategory
+      }));
+      setStep(3); // Go straight to Step 3
+      toast.success(`⚡ Flash Deal Claimed! Auto-selected "${bestCategory} > ${bestSubcategory}".`);
+    }
+  }, [categories, claimedDeal, targetTrades, editJob, isPrefilledByAI]);
+
+  // Pre-select category when targetTrades is provided for direct trader quote
+  useEffect(() => {
+    if (editJob || isPrefilledByAI || claimedDeal) return;
+    if (categories.length === 0 || !targetTradespersonId || !targetTrades) return;
+
+    // Normalize targetTrades to an array of strings
+    const tradesArray = Array.isArray(targetTrades) 
+      ? targetTrades 
+      : targetTrades 
+        ? [targetTrades] 
+        : [];
+    if (tradesArray.length === 0) return;
+
+    const stopWords = new Set(["and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", "at", "by", "on", "a", "an", "n", "private", "maker", "services", "general", "domestic", "commercial", "home", "indoor", "outdoor", "installation", "installations", "repair", "repairs", "maintenance", "service", "specialist", "management", "coordination", "planner", "planning", "delivery", "transport", "about"]);
+    const traderTokens = tradesArray.flatMap(trade => tokenize(trade)).filter(tok => !stopWords.has(tok.toLowerCase()));
+
+    const matching = categories.filter(cat => {
+      const catTokens = tokenize(cat.name);
+      const subcategoryTokens = (cat.subcategories || []).flatMap(sub => tokenize(sub));
+      const allCatTokens = [...catTokens, ...subcategoryTokens].filter(tok => !stopWords.has(tok.toLowerCase()));
+
+      return traderTokens.some(traderTok => 
+        allCatTokens.some(catTok => {
+          const tVal = catTok.toLowerCase();
+          const qVal = traderTok.toLowerCase();
+          if (tVal === qVal) return true;
+          if (qVal.startsWith(tVal) && tVal.length >= 4) return true;
+          if (tVal.startsWith(qVal) && qVal.length >= 4) return true;
+          if (qVal + "s" === tVal || tVal + "s" === qVal) return true;
+          return false;
+        })
+      );
+    });
+
+    if (matching.length === 1) {
+      // Exactly one matching category - auto-select and skip to subcategory choice (Step 2)
+      setFormData(prev => ({ ...prev, category: matching[0].name }));
+      setStep(2);
+      toast.success(`Automatically selected "${matching[0].name}" to match ${targetTradespersonName}'s core skill!`);
+    } else if (matching.length > 1) {
+      // Pre-select the first match but keep them on Step 1 so they see all the matching options
+      setFormData(prev => ({ ...prev, category: matching[0].name }));
+      setStep(1);
+    }
+  }, [categories, targetTrades, targetTradespersonId, editJob, isPrefilledByAI]);
   
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -931,18 +1098,43 @@ export default function PostJobWizard() {
   };
 
   const safeSearchQuery = searchQuery.trim();
-  const filteredCategories = categories.filter(cat => {
-    const matchesSearch = !safeSearchQuery || 
-      textContainsTokenMatch(cat.name, safeSearchQuery) ||
-      (cat.subcategories && cat.subcategories.some(sub => textContainsTokenMatch(sub, safeSearchQuery)));
+
+  const traderRelatedCategories = React.useMemo(() => {
+    // Normalize targetTrades to an array of strings
+    const tradesArray = Array.isArray(targetTrades) 
+      ? targetTrades 
+      : targetTrades 
+        ? [targetTrades] 
+        : [];
+
+    if (tradesArray.length === 0) return categories;
+
+    const stopWords = new Set(["and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", "at", "by", "on", "a", "an", "n", "private", "maker", "services", "general", "domestic", "commercial", "home", "indoor", "outdoor", "installation", "installations", "repair", "repairs", "maintenance", "service", "specialist", "management", "coordination", "planner", "planning", "delivery", "transport", "about"]);
     
-    // If we have a specific target tradesperson, only show categories they cover
-    const matchesTargetTrades = targetTrades && Array.isArray(targetTrades) && targetTrades.length > 0 
-      ? targetTrades.includes(cat.name) 
-      : true;
+    return categories.filter(cat => {
+      const traderTokens = tradesArray.flatMap(trade => tokenize(trade)).filter(tok => !stopWords.has(tok.toLowerCase()));
       
-    return matchesSearch && matchesTargetTrades;
-  });
+      const catTokens = tokenize(cat.name);
+      const subcategoryTokens = (cat.subcategories || []).flatMap(sub => tokenize(sub));
+      const allCatTokens = [...catTokens, ...subcategoryTokens].filter(tok => !stopWords.has(tok.toLowerCase()));
+
+      return traderTokens.some(traderTok => 
+        allCatTokens.some(catTok => {
+          const tVal = catTok.toLowerCase();
+          const qVal = traderTok.toLowerCase();
+          if (tVal === qVal) return true;
+          if (qVal.startsWith(tVal) && tVal.length >= 4) return true;
+          if (tVal.startsWith(qVal) && qVal.length >= 4) return true;
+          if (qVal + "s" === tVal || tVal + "s" === qVal) return true;
+          return false;
+        })
+      );
+    });
+  }, [categories, targetTrades]);
+
+  const filteredCategories = React.useMemo(() => {
+    return traderRelatedCategories.filter(cat => categoryMatchesSearch(cat, safeSearchQuery));
+  }, [traderRelatedCategories, safeSearchQuery]);
 
   // ... rest of the existing logic (handleStartCamera, handleCapturePhoto, etc.) ...
 
@@ -1845,6 +2037,20 @@ export default function PostJobWizard() {
           assetId: asset?.id || null,
           assetName: asset?.name || null,
           linkedPropertyId: asset?.id || (location.state as any)?.linkedPropertyId || null,
+          targetTradespersonId: targetTradespersonId || claimedDeal?.traderId || null,
+          targetTradespersonName: targetTradespersonName || claimedDeal?.traderName || claimedDeal?.businessName || claimedDeal?.traderBusinessName || null,
+          invitedTraderIds: (targetTradespersonId || claimedDeal?.traderId) ? [targetTradespersonId || claimedDeal?.traderId] : [],
+          claimedDeal: claimedDeal ? {
+            dealId: claimedDeal.id || null,
+            discountPercentage: claimedDeal.discountPercentage || 0,
+            service: claimedDeal.service || null,
+            targetRate: claimedDeal.discountedPrice || claimedDeal.price || null,
+            originalPrice: claimedDeal.price || null,
+            traderId: claimedDeal.traderId || targetTradespersonId || null,
+            traderName: claimedDeal.traderName || claimedDeal.businessName || targetTradespersonName || null,
+            dealTitle: claimedDeal.title || claimedDeal.service || null,
+            dayOfWeek: claimedDeal.dayOfWeek || null
+          } : null,
           isBoosted,
           boostTier,
           boostExpiresAt,
@@ -1866,27 +2072,61 @@ export default function PostJobWizard() {
               const conversationId = `${currentJobRef.id}_${targetTradespersonId}`;
               const conversationRef = doc(db, "conversations", conversationId);
               
+              const dealNote = claimedDeal 
+                ? ` [⚡ Flash Deal Claimed: ${claimedDeal.discountPercentage || 0}% OFF - Pre-Agreed Rate £${claimedDeal.discountedPrice || claimedDeal.targetRate || claimedDeal.price}]`
+                : "";
+
               await setDoc(conversationRef, {
                 id: conversationId,
                 participants: [user.uid, targetTradespersonId],
                 jobId: currentJobRef.id,
                 jobTitle: formData.title,
-                lastMessage: `Invitation to quote for: ${formData.title}`,
+                lastMessage: claimedDeal 
+                  ? `⚡ Claimed Flash Deal for: ${formData.title}${dealNote}`
+                  : `Invitation to quote for: ${formData.title}`,
                 lastMessageAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 createdAt: serverTimestamp()
               });
 
+              const initialMessageText = claimedDeal
+                ? `Hi ${targetTradespersonName}, I've claimed your Flash Deal (${claimedDeal.discountPercentage || 0}% OFF - Pre-Agreed Rate: £${claimedDeal.discountedPrice || claimedDeal.targetRate || claimedDeal.price}) for my job: "${formData.title}". Please review the job specs and confirm our booking!`
+                : `Hi ${targetTradespersonName}, I'd like to invite you to quote for my new job: "${formData.title}". Please take a look at the details and let me know if you're interested!`;
+
               await addDoc(collection(db, "conversations", conversationId, "messages"), {
                 senderId: user.uid,
-                text: `Hi ${targetTradespersonName}, I'd like to invite you to quote for my new job: "${formData.title}". Please take a look at the details and let me know if you're interested!`,
+                text: initialMessageText,
                 createdAt: serverTimestamp()
               });
 
+              // If a flash deal was claimed, increment the deal claimedCount and check limit
+              if (claimedDeal?.id) {
+                try {
+                  const dealRef = doc(db, "flash_deals", claimedDeal.id);
+                  const dealSnap = await getDoc(dealRef);
+                  if (dealSnap.exists()) {
+                    const dData = dealSnap.data();
+                    const prevCount = Number(dData.claimedCount) || 0;
+                    const newCount = prevCount + 1;
+                    const maxL = typeof dData.maxClaims === "number" ? dData.maxClaims : null;
+                    const isSoldOut = maxL !== null && maxL > 0 && newCount >= maxL;
+                    await updateDoc(dealRef, {
+                      claimedCount: newCount,
+                      status: isSoldOut ? "sold_out" : (dData.status || "active"),
+                      updatedAt: new Date().toISOString()
+                    });
+                  }
+                } catch (dErr) {
+                  console.error("Error updating claimed flash deal count:", dErr);
+                }
+              }
+
               await sendNotification(
                 targetTradespersonId,
-                "New Quote Request! 📝",
-                `${profile?.name || 'A homeowner'} invited you to quote for "${formData.title}"`,
+                claimedDeal ? "⚡ Flash Deal Claimed! 🎉" : "New Quote Request! 📝",
+                claimedDeal
+                  ? `${profile?.name || 'A homeowner'} claimed your Flash Deal (${claimedDeal.discountPercentage || 0}% OFF) for "${formData.title}"`
+                  : `${profile?.name || 'A homeowner'} invited you to quote for "${formData.title}"`,
                 "quote",
                 `/job/${currentJobRef.id}`
               );
@@ -1981,16 +2221,26 @@ export default function PostJobWizard() {
     <div className="max-w-2xl mx-auto bg-white min-h-screen pb-20">
       {/* Target Tradesperson Indicator */}
       {targetTradespersonId && (
-        <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between text-xs font-bold">
-          <div className="flex items-center gap-2">
-            <UserIcon className="w-4 h-4" />
-            <span>Requesting quote from: {targetTradespersonName}</span>
+        <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white px-4 py-2.5 flex items-center justify-between text-xs font-bold shadow-md sticky top-0 z-30">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <UserIcon className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="font-medium text-blue-100">Requesting quote from:</span>
+            <span className="font-black text-white text-sm tracking-tight">{targetTradespersonName}</span>
+            {targetTrades && (
+              <span className="inline-flex items-center gap-1 bg-amber-400 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-full shadow-2xs">
+                <Briefcase className="w-3 h-3 text-slate-950 shrink-0" />
+                <span>{Array.isArray(targetTrades) ? targetTrades.slice(0, 2).join(" • ") : targetTrades}</span>
+              </span>
+            )}
           </div>
           <button 
             onClick={() => navigate(location.pathname, { state: { ...location.state, targetTradespersonId: null, targetTradespersonName: null, targetTrades: null } })}
-            className="hover:bg-white/10 p-1 rounded transition-colors"
+            className="hover:bg-white/20 p-1 rounded-lg transition-colors shrink-0 ml-2 text-white/80 hover:text-white"
+            title="Remove targeted trader"
           >
-            <X className="w-3 h-3" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -2258,9 +2508,13 @@ export default function PostJobWizard() {
 
               {/* Popular Categories */}
               <div className="space-y-4">
-                <h3 className="text-xl font-bold text-slate-900">Popular Categories</h3>
+                <h3 className="text-xl font-bold text-slate-900">
+                  {targetTradespersonId && traderRelatedCategories.length > 0 && traderRelatedCategories.length < categories.length 
+                    ? "Trader's Specialized Categories" 
+                    : "Popular Categories"}
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {categories.slice(0, 6).map((cat) => {
+                  {(targetTradespersonId && traderRelatedCategories.length > 0 ? traderRelatedCategories : categories).slice(0, 6).map((cat) => {
                     const Icon = iconMap[cat.icon];
                     return (
                       <button
@@ -3250,425 +3504,499 @@ export default function PostJobWizard() {
               className="space-y-4"
             >
               <JobReminder />
-              <div className="space-y-1">
-                <h2 className="text-xl font-bold text-slate-900">AI Price Guide</h2>
-                <p className="text-slate-500 text-sm">A rough estimate to help you set your budget.</p>
-              </div>               {isEstimating ? (
-                <div className="bg-white rounded-3xl p-12 border border-black shadow-sm flex flex-col items-center justify-center space-y-4">
-                  <Loader2 className="w-12 h-12 text-[#0084a5] animate-spin" />
-                  <p className="text-slate-500 font-bold animate-pulse">Calculating estimate...</p>
-                  <button 
-                    onClick={() => setIsEstimating(false)}
-                    className="pt-4 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all"
-                  >
-                    Skip AI
-                  </button>
-                </div>
-              ) : estimate ? (
-                <div className="space-y-6">
-                  {estimate.isAvailable === false ? (
-                    <div className="bg-orange-50 rounded-xl p-6 text-orange-900 border border-orange-200/50 shadow-sm">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="w-6 h-6 text-orange-500 shrink-0 mt-0.5" />
-                        <div>
-                          <h3 className="text-base font-extrabold mb-1">AI Estimate Unavailable</h3>
-                          <p className="text-orange-800 font-medium text-sm leading-relaxed">
-                            Your job category ('{formData.category}') is outside the scope of our AI pricing model. You will need to receive direct quotes from tradespeople for this request.
-                          </p>
+              {claimedDeal ? (() => {
+                const { origPrice, discPrice, discountPct, savings } = getDealPricing(claimedDeal);
+                return (
+                  <div className="space-y-6">
+                    <div className="space-y-1">
+                      <h2 className="text-xl font-black text-slate-900 tracking-tight">Review & Post Deal Request</h2>
+                      <p className="text-slate-500 text-sm">Verify the pre-agreed terms and complete your booking.</p>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-3xl p-8 space-y-6 shadow-xl border border-black relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <Zap className="w-40 h-40" />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-5 h-5 text-amber-300 fill-current" />
+                        <span className="font-extrabold text-xs tracking-wider uppercase bg-white/20 px-3 py-1 rounded-full text-white">
+                          ⚡ Guaranteed Deal Rate
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <h3 className="text-5xl font-black">£{discPrice}</h3>
+                        <p className="text-emerald-100 font-bold text-sm">
+                          Fixed Rate (Includes {discountPct || claimedDeal.discountPercentage}% discount)
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 border-t border-white/20 pt-5 text-sm">
+                        <div className="bg-black/10 p-4 rounded-2xl border border-white/10">
+                          <p className="text-[10px] text-emerald-200 uppercase font-extrabold tracking-wider">Regular Rate</p>
+                          <p className="font-black text-white text-lg mt-1">£{origPrice || discPrice + savings}</p>
+                        </div>
+                        <div className="bg-black/10 p-4 rounded-2xl border border-white/10">
+                          <p className="text-[10px] text-emerald-200 uppercase font-extrabold tracking-wider">Your Savings</p>
+                          <p className="font-black text-amber-300 text-lg mt-1">£{savings || 0}</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
+                        <p className="text-xs text-emerald-50 leading-relaxed font-semibold">
+                          This deal has been locked for you. When you post this job, we will automatically notify {targetTradespersonName || claimedDeal.traderName || "your selected trader"} of your booking. No other tradespeople will bid on this request.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-black rounded-3xl p-5 space-y-3 shadow-sm">
+                      <h4 className="font-bold text-slate-800 text-sm">Booking Overview</h4>
+                      <div className="space-y-2.5 text-xs">
+                        <div className="flex justify-between border-b border-slate-100 pb-2.5">
+                          <span className="text-slate-500 font-semibold">Service Name:</span>
+                          <span className="text-slate-800 font-bold text-right">{claimedDeal.service}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-2.5">
+                          <span className="text-slate-500 font-semibold">Category:</span>
+                          <span className="text-slate-800 font-bold text-right">{formData.category} &gt; {formData.subcategory}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-100 pb-2.5">
+                          <span className="text-slate-500 font-semibold">Location:</span>
+                          <span className="text-slate-800 font-bold text-right">{formData.city} ({formData.postcode})</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-semibold">Requested Urgency:</span>
+                          <span className="text-slate-800 font-bold capitalize text-right">{formData.urgency.replace('_', ' ')}</span>
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className={cn(
-                      "rounded-3xl p-8 space-y-4 shadow-xl relative overflow-hidden transition-all border-4",
-                      formData.selectedBudget === `£${estimate.min} - £${estimate.max}`
-                        ? "bg-[#0084a5] text-white border-cyan-300 shadow-cyan-900/40 scale-[1.02]"
-                        : "bg-[#0084a5] text-white border-transparent shadow-cyan-900/20"
-                    )}>
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-amber-300 fill-current" />
-                        <p className="font-bold text-lg">AI Suggested Budget Range</p>
-                      </div>
-                      <h3 className="text-4xl sm:text-5xl font-black">£{estimate.min} - £{estimate.max}</h3>
-                      
-                      {/* AI Confidence Score Badge & Postcode Analysis */}
-                      <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 mt-3 border border-white/30 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <ShieldCheck className="w-5 h-5 text-amber-300" />
-                            <span className="font-extrabold text-sm tracking-wide uppercase text-amber-200">
-                              Postcode Match Score
-                            </span>
+                  </div>
+                );
+              })() : (
+                <>
+                  <div className="space-y-1">
+                    <h2 className="text-xl font-bold text-slate-900">AI Price Guide</h2>
+                    <p className="text-slate-500 text-sm">A rough estimate to help you set your budget.</p>
+                  </div>
+                  {isEstimating ? (
+                    <div className="bg-white rounded-3xl p-12 border border-black shadow-sm flex flex-col items-center justify-center space-y-4">
+                      <Loader2 className="w-12 h-12 text-[#0084a5] animate-spin" />
+                      <p className="text-slate-500 font-bold animate-pulse">Calculating estimate...</p>
+                      <button 
+                        onClick={() => setIsEstimating(false)}
+                        className="pt-4 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all"
+                      >
+                        Skip AI
+                      </button>
+                    </div>
+                  ) : estimate ? (
+                    <div className="space-y-6">
+                      {estimate.isAvailable === false ? (
+                        <div className="bg-orange-50 rounded-xl p-6 text-orange-900 border border-orange-200/50 shadow-sm">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="w-6 h-6 text-orange-500 shrink-0 mt-0.5" />
+                            <div>
+                              <h3 className="text-base font-extrabold mb-1">AI Estimate Unavailable</h3>
+                              <p className="text-orange-800 font-medium text-sm leading-relaxed">
+                                Your job category ('{formData.category}') is outside the scope of our AI pricing model. You will need to receive direct quotes from tradespeople for this request.
+                              </p>
+                            </div>
                           </div>
-                          <ConfidenceGauge 
-                            score={estimate.confidence} 
-                            rating={estimate.confidenceRating} 
-                            size={44} 
-                            variant="dark" 
+                        </div>
+                      ) : (
+                        <div className={cn(
+                          "rounded-3xl p-8 space-y-4 shadow-xl relative overflow-hidden transition-all border-4",
+                          formData.selectedBudget === `£${estimate.min} - £${estimate.max}`
+                            ? "bg-[#0084a5] text-white border-cyan-300 shadow-cyan-900/40 scale-[1.02]"
+                            : "bg-[#0084a5] text-white border-transparent shadow-cyan-900/20"
+                        )}>
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-amber-300 fill-current" />
+                            <p className="font-bold text-lg">AI Suggested Budget Range</p>
+                          </div>
+                          <h3 className="text-4xl sm:text-5xl font-black">£{estimate.min} - £{estimate.max}</h3>
+                          
+                          {/* AI Confidence Score Badge & Postcode Analysis */}
+                          <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 mt-3 border border-white/30 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="w-5 h-5 text-amber-300" />
+                                <span className="font-extrabold text-sm tracking-wide uppercase text-amber-200">
+                                  Postcode Match Score
+                                </span>
+                              </div>
+                              <ConfidenceGauge 
+                                score={estimate.confidence} 
+                                rating={estimate.confidenceRating} 
+                                size={44} 
+                                variant="dark" 
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2 text-xs text-cyan-100 font-medium">
+                              <MapPin className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                              <span>
+                                Mapped to <strong>{estimate.postcodeArea || formData.postcode || 'local'}</strong> area ({estimate.historicalJobCount || 5} similar historical jobs analyzed)
+                              </span>
+                            </div>
+
+                            {estimate.historicalAvgPrice && estimate.historicalAvgPrice > 0 && (
+                              <div className="flex items-center justify-between bg-black/20 px-3 py-2 rounded-xl text-xs">
+                                <span className="text-cyan-200">Postcode Local Avg:</span>
+                                <span className="font-bold text-white">£{estimate.historicalAvgPrice} (Range: £{estimate.historicalMinPrice || Math.floor(estimate.min * 0.95)} - £{estimate.historicalMaxPrice || Math.ceil(estimate.max * 1.05)})</span>
+                              </div>
+                            )}
+
+                            {estimate.confidenceFactors && estimate.confidenceFactors.length > 0 && (
+                              <div className="pt-2 border-t border-white/20 space-y-1">
+                                <p className="text-[10px] font-bold uppercase text-cyan-200 tracking-wider">Confidence Score Drivers:</p>
+                                <ul className="space-y-1">
+                                  {estimate.confidenceFactors.map((factor, idx) => (
+                                    <li key={idx} className="flex items-start gap-1.5 text-xs text-white/90">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
+                                      <span>{factor}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {estimate.postcodeBenchmark && (
+                              <p className="text-[11px] text-cyan-100/80 italic leading-relaxed pt-1">
+                                "{estimate.postcodeBenchmark}"
+                              </p>
+                            )}
+                          </div>
+
+                          {/* 3.1 AI Pre-Quote Price Guide: Cost Breakdown & Seasonal Impact Insights */}
+                          {estimate.breakdown && (
+                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 space-y-3">
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                                <PoundSterling className="w-3.5 h-3.5" />
+                                Benchmark Cost Breakdown
+                              </p>
+                              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                <div className="bg-black/20 p-2.5 rounded-xl">
+                                  <p className="text-[10px] text-cyan-200 uppercase font-semibold">Materials</p>
+                                  <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.materials || "£30 - £80"}</p>
+                                </div>
+                                <div className="bg-black/20 p-2.5 rounded-xl">
+                                  <p className="text-[10px] text-cyan-200 uppercase font-semibold">Labour Rate</p>
+                                  <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.labour || "£45 - £65/hr"}</p>
+                                </div>
+                                <div className="bg-black/20 p-2.5 rounded-xl">
+                                  <p className="text-[10px] text-cyan-200 uppercase font-semibold">Duration</p>
+                                  <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.duration || "2 - 4 hours"}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Seasonal Impact & Market Trends */}
+                          <div className="bg-amber-500/10 backdrop-blur-md rounded-2xl p-4 border border-amber-300/30 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-200 flex items-center gap-1.5">
+                                <CalendarClock className="w-3.5 h-3.5 text-amber-300" />
+                                Seasonal Cost & Market Impact
+                              </span>
+                              {estimate.pricingInsights?.marketTrend && (
+                                <span className={cn(
+                                  "text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide",
+                                  estimate.pricingInsights.marketTrend === "rising" ? "bg-red-500/80 text-white" :
+                                  estimate.pricingInsights.marketTrend === "falling" ? "bg-emerald-500/80 text-white" :
+                                  "bg-cyan-500/80 text-white"
+                                )}>
+                                  {estimate.pricingInsights.marketTrend} trend
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-xs text-white/90 leading-relaxed">
+                              {estimate.pricingInsights?.seasonalImpact || `Peak demand season in ${formData.postcode || "your area"} may increase quotes by 5-10%. Booking 1-2 weeks in advance locks in baseline rates.`}
+                            </p>
+
+                            {estimate.pricingInsights?.costSavingTips && estimate.pricingInsights.costSavingTips.length > 0 && (
+                              <div className="pt-2 border-t border-white/10 space-y-1">
+                                <p className="text-[10px] font-bold text-amber-200 uppercase">Cost-Saving Tips:</p>
+                                <ul className="space-y-1 text-xs text-cyan-100">
+                                  {estimate.pricingInsights.costSavingTips.map((tip, idx) => (
+                                    <li key={idx} className="flex items-start gap-1">
+                                      <Sparkles className="w-3 h-3 text-amber-300 shrink-0 mt-0.5" />
+                                      <span>{tip}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="bg-white/10 rounded-xl p-4 mt-2 border border-black/20">
+                            <p className="text-cyan-50 text-xs leading-relaxed">
+                              <strong>Note:</strong> This is an AI estimate based on historical postcode records, not a guaranteed quote. Tradespeople will see this as your target budget, but actual quotes may vary based on specific site requirements.
+                            </p>
+                          </div>
+
+                          <button 
+                            onClick={() => {
+                              setFormData({...formData, selectedBudget: `£${estimate.min} - £${estimate.max}`});
+                              setTimeout(() => {
+                                const nextStepButton = document.getElementById('next-step-button');
+                                if (nextStepButton) {
+                                  nextStepButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                              }, 100);
+                            }}
+                            className={cn(
+                              "w-full mt-4 font-bold py-4 rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2",
+                              formData.selectedBudget === `£${estimate.min} - £${estimate.max}`
+                                ? "bg-white text-[#0084a5]"
+                                : "bg-white/20 hover:bg-white/30 text-white border border-black/30"
+                            )}
+                          >
+                            {formData.selectedBudget === `£${estimate.min} - £${estimate.max}` ? "Selected" : "Set as My Budget"}
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="space-y-3 pt-6 border-t border-black">
+                        <h3 className="font-extrabold text-black flex items-center justify-center -mt-2 bg-white px-4 mx-auto w-max text-sm relative -top-6">Custom budget</h3>
+                        <div className="relative">
+                          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 text-xl font-bold">£</span>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              const el = document.getElementById('custom-budget-input');
+                              if (el) el.blur();
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#114b78] hover:bg-[#0a3556] text-white rounded-lg text-sm font-bold shadow-sm active:scale-95 transition-all z-10"
+                          >
+                            Save
+                          </button>
+                          <input
+                            id="custom-budget-input"
+                            type="number"
+                            placeholder="0.00"
+                            onWheel={(e) => (e.target as HTMLElement).blur()}
+                            className="w-full py-4 pl-12 pr-24 rounded-xl border border-black bg-white font-bold text-xl text-center focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
+                            value={formData.selectedBudget && formData.selectedBudget !== `£${estimate?.min} - £${estimate?.max}` ? formData.selectedBudget : ""}
+                            onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
                           />
                         </div>
-
-                        <div className="flex items-center gap-2 text-xs text-cyan-100 font-medium">
-                          <MapPin className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
-                          <span>
-                            Mapped to <strong>{estimate.postcodeArea || formData.postcode || 'local'}</strong> area ({estimate.historicalJobCount || 5} similar historical jobs analyzed)
-                          </span>
-                        </div>
-
-                        {estimate.historicalAvgPrice && estimate.historicalAvgPrice > 0 && (
-                          <div className="flex items-center justify-between bg-black/20 px-3 py-2 rounded-xl text-xs">
-                            <span className="text-cyan-200">Postcode Local Avg:</span>
-                            <span className="font-bold text-white">£{estimate.historicalAvgPrice} (Range: £{estimate.historicalMinPrice || Math.floor(estimate.min * 0.95)} - £{estimate.historicalMaxPrice || Math.ceil(estimate.max * 1.05)})</span>
-                          </div>
-                        )}
-
-                        {estimate.confidenceFactors && estimate.confidenceFactors.length > 0 && (
-                          <div className="pt-2 border-t border-white/20 space-y-1">
-                            <p className="text-[10px] font-bold uppercase text-cyan-200 tracking-wider">Confidence Score Drivers:</p>
-                            <ul className="space-y-1">
-                              {estimate.confidenceFactors.map((factor, idx) => (
-                                <li key={idx} className="flex items-start gap-1.5 text-xs text-white/90">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
-                                  <span>{factor}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {estimate.postcodeBenchmark && (
-                          <p className="text-[11px] text-cyan-100/80 italic leading-relaxed pt-1">
-                            "{estimate.postcodeBenchmark}"
-                          </p>
-                        )}
                       </div>
 
-                      {/* 3.1 AI Pre-Quote Price Guide: Cost Breakdown & Seasonal Impact Insights */}
-                      {estimate.breakdown && (
-                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 space-y-3">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-                            <PoundSterling className="w-3.5 h-3.5" />
-                            Benchmark Cost Breakdown
-                          </p>
-                          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                            <div className="bg-black/20 p-2.5 rounded-xl">
-                              <p className="text-[10px] text-cyan-200 uppercase font-semibold">Materials</p>
-                              <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.materials || "£30 - £80"}</p>
+                      {estimate.isAvailable !== false && (
+                        <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
+                          <button 
+                            onClick={() => setShowEstimateDetails(!showEstimateDetails)}
+                            className="w-full p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                                <Sparkles className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <div className="text-left">
+                                <h4 className="font-bold text-slate-900">AI Reasoning</h4>
+                                <p className="text-xs text-slate-500">How we calculated this range</p>
+                              </div>
                             </div>
-                            <div className="bg-black/20 p-2.5 rounded-xl">
-                              <p className="text-[10px] text-cyan-200 uppercase font-semibold">Labour Rate</p>
-                              <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.labour || "£45 - £65/hr"}</p>
+                            {showEstimateDetails ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                          </button>
+
+                          <AnimatePresence>
+                            {showEstimateDetails && (
+                              <motion.div 
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="px-6 pb-6 space-y-4 overflow-hidden"
+                              >
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-black">
+                                  <p className="text-sm text-slate-600 leading-relaxed italic">
+                                    "{estimate.reasoning}"
+                                  </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3">
+                                  <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
+                                    <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
+                                      <Box className="w-4 h-4 text-orange-600" />
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Materials</p>
+                                      <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.materials}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                                      <Wrench className="w-4 h-4 text-blue-600" />
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Labour</p>
+                                      <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.labour}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
+                                    <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                                      <Clock className="w-4 h-4 text-green-600" />
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Duration</p>
+                                      <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.duration}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+
+                      {estimate?.pricingInsights && (
+                        <div className="rounded-2xl border border-black bg-white overflow-hidden shadow-sm">
+                          <div className="p-4 bg-slate-50/50 border-b border-black">
+                            <h3 className="font-extrabold text-slate-900">Dynamic Pricing Insights</h3>
+                          </div>
+                          <div className="divide-y divide-slate-100">
+                            <div className="p-4 flex gap-4">
+                              <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
+                                <Clock className="w-4 h-4 text-slate-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-sm text-slate-900 mb-0.5">Seasonal impact</h4>
+                                <p className="text-sm text-slate-600">{estimate.pricingInsights.seasonalImpact || "Prices may vary depending on the time of year and local demand."}</p>
+                              </div>
                             </div>
-                            <div className="bg-black/20 p-2.5 rounded-xl">
-                              <p className="text-[10px] text-cyan-200 uppercase font-semibold">Duration</p>
-                              <p className="font-extrabold text-white mt-0.5">{estimate.breakdown.duration || "2 - 4 hours"}</p>
+                            <div className="p-4 flex gap-4">
+                              <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
+                                <MapPin className="w-4 h-4 text-slate-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-sm text-slate-900 mb-0.5">Regional premium</h4>
+                                <p className="text-sm text-slate-600">{estimate.pricingInsights.regionalPremium || "Local rates in your area may be higher or lower than the national average."}</p>
+                              </div>
+                            </div>
+                            <div className="p-4 flex gap-4">
+                              <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
+                                <ZapIcon className="w-4 h-4 text-slate-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-sm text-slate-900 mb-1">Cost-saving tips</h4>
+                                <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
+                                  {estimate.pricingInsights.costSavingTips.length > 0 ? (
+                                    estimate.pricingInsights.costSavingTips.map((tip: string, i: number) => (
+                                      <li key={i}>{tip}</li>
+                                    ))
+                                  ) : (
+                                    <>
+                                      <li>Bundle multiple small jobs together.</li>
+                                      <li>Provide clear photos to get more accurate quotes.</li>
+                                      <li>Be flexible with your scheduling if possible.</li>
+                                    </>
+                                  )}
+                                </ul>
+                              </div>
                             </div>
                           </div>
                         </div>
                       )}
-
-                      {/* Seasonal Impact & Market Trends */}
-                      <div className="bg-amber-500/10 backdrop-blur-md rounded-2xl p-4 border border-amber-300/30 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-200 flex items-center gap-1.5">
-                            <CalendarClock className="w-3.5 h-3.5 text-amber-300" />
-                            Seasonal Cost & Market Impact
-                          </span>
-                          {estimate.pricingInsights?.marketTrend && (
-                            <span className={cn(
-                              "text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide",
-                              estimate.pricingInsights.marketTrend === "rising" ? "bg-red-500/80 text-white" :
-                              estimate.pricingInsights.marketTrend === "falling" ? "bg-emerald-500/80 text-white" :
-                              "bg-cyan-500/80 text-white"
-                            )}>
-                              {estimate.pricingInsights.marketTrend} trend
-                            </span>
-                          )}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-3xl p-8 border border-black shadow-sm space-y-6">
+                      <div className="flex flex-col items-center text-center space-y-2">
+                        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-2">
+                          <AlertTriangle className="w-8 h-8 text-slate-400" />
                         </div>
-
-                        <p className="text-xs text-white/90 leading-relaxed">
-                          {estimate.pricingInsights?.seasonalImpact || `Peak demand season in ${formData.postcode || "your area"} may increase quotes by 5-10%. Booking 1-2 weeks in advance locks in baseline rates.`}
-                        </p>
-
-                        {estimate.pricingInsights?.costSavingTips && estimate.pricingInsights.costSavingTips.length > 0 && (
-                          <div className="pt-2 border-t border-white/10 space-y-1">
-                            <p className="text-[10px] font-bold text-amber-200 uppercase">Cost-Saving Tips:</p>
-                            <ul className="space-y-1 text-xs text-cyan-100">
-                              {estimate.pricingInsights.costSavingTips.map((tip, idx) => (
-                                <li key={idx} className="flex items-start gap-1">
-                                  <Sparkles className="w-3 h-3 text-amber-300 shrink-0 mt-0.5" />
-                                  <span>{tip}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
+                        <h3 className="text-xl font-bold text-slate-900">Estimate Unavailable</h3>
+                        <p className="text-slate-500 text-sm">We couldn't generate an AI estimate right now. You can still set your budget manually.</p>
                       </div>
-
-                      <div className="bg-white/10 rounded-xl p-4 mt-2 border border-black/20">
-                        <p className="text-cyan-50 text-xs leading-relaxed">
-                          <strong>Note:</strong> This is an AI estimate based on historical postcode records, not a guaranteed quote. Tradespeople will see this as your target budget, but actual quotes may vary based on specific site requirements.
-                        </p>
+                      
+                      <div className="space-y-4 bg-slate-100/50 p-6 rounded-3xl border border-black">
+                        <h3 className="text-xl font-black text-slate-900">Enter custom amount</h3>
+                        <div className="relative">
+                          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-900 font-black text-xl">£</span>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            className="w-full p-5 pl-12 rounded-2xl border border-black bg-white font-black text-xl focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
+                            value={formData.selectedBudget || ""}
+                            onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
+                          />
+                        </div>
                       </div>
+                    </div>
+                  )}
 
-                      <button 
-                        onClick={() => {
-                          setFormData({...formData, selectedBudget: `£${estimate.min} - £${estimate.max}`});
-                          setTimeout(() => {
-                            const nextStepButton = document.getElementById('next-step-button');
-                            if (nextStepButton) {
-                              nextStepButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                          }, 100);
-                        }}
-                        className={cn(
-                          "w-full mt-4 font-bold py-4 rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2",
-                          formData.selectedBudget === `£${estimate.min} - £${estimate.max}`
-                            ? "bg-white text-[#0084a5]"
-                            : "bg-white/20 hover:bg-white/30 text-white border border-black/30"
-                        )}
+                  {platformConfig?.premiumJobUpgradesEnabled !== false && formData.urgency !== 'emergency' && (
+                    <div className="space-y-3 pt-6">
+                      <h3 className="text-sm font-extrabold text-slate-900 mb-2">Premium Job Upgrades (Optional)</h3>
+                      
+                      <div className={cn(
+                        "relative p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3",
+                        formData.isEmergencyBoost ? "border-[#e11d48] bg-rose-50" : "border-[#e11d48]/50 hover:border-[#e11d48] bg-white"
+                      )}
+                      onClick={() => setFormData({...formData, isEmergencyBoost: !formData.isEmergencyBoost})}
                       >
-                        {formData.selectedBudget === `£${estimate.min} - £${estimate.max}` ? "Selected" : "Set as My Budget"}
-                      </button>
-                    </div>
-                  )}
+                         <div className={cn(
+                          "w-5 h-5 rounded-full border-2 flex shrink-0 mt-0.5 transition-colors items-center justify-center",
+                          formData.isEmergencyBoost ? "border-slate-900" : "border-black"
+                        )}>
+                          {formData.isEmergencyBoost && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
+                        </div>
+                        <div className="flex-1 pr-6">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-base font-extrabold text-slate-900">Emergency Boost <span className="font-black ml-1">£5</span></h4>
+                          </div>
+                          <p className="text-sm text-slate-600 leading-snug">Emergency boost to elevate your job, help with reliability, and match your choices.</p>
+                        </div>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setShowBoostInfo('emergency'); }}
+                          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                          type="button"
+                        >
+                          <Info className="w-5 h-5" />
+                        </button>
+                      </div>
 
-                  <div className="space-y-3 pt-6 border-t border-black">
-                    <h3 className="font-extrabold text-black flex items-center justify-center -mt-2 bg-white px-4 mx-auto w-max text-sm relative -top-6">Custom budget</h3>
-                    <div className="relative">
-                      <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 text-xl font-bold">£</span>
-                      <button 
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          const el = document.getElementById('custom-budget-input');
-                          if (el) el.blur();
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#114b78] hover:bg-[#0a3556] text-white rounded-lg text-sm font-bold shadow-sm active:scale-95 transition-all z-10"
+                      <div className={cn(
+                        "relative p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3",
+                        formData.isInstantMatch ? "border-[#f59e0b] bg-amber-50" : "border-[#f59e0b]/50 hover:border-[#f59e0b] bg-white"
+                      )}
+                      onClick={() => setFormData({...formData, isInstantMatch: !formData.isInstantMatch})}
                       >
-                        Save
-                      </button>
-                      <input
-                        id="custom-budget-input"
-                        type="number"
-                        placeholder="0.00"
-                        onWheel={(e) => (e.target as HTMLElement).blur()}
-                        className="w-full py-4 pl-12 pr-24 rounded-xl border border-black bg-white font-bold text-xl text-center focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
-                        value={formData.selectedBudget && formData.selectedBudget !== `£${estimate?.min} - £${estimate?.max}` ? formData.selectedBudget : ""}
-                        onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
-                      />
-                    </div>
-                  </div>
-
-                  {estimate.isAvailable !== false && (
-                    <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
-                      <button 
-                        onClick={() => setShowEstimateDetails(!showEstimateDetails)}
-                        className="w-full p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                            <Sparkles className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div className="text-left">
-                            <h4 className="font-bold text-slate-900">AI Reasoning</h4>
-                            <p className="text-xs text-slate-500">How we calculated this range</p>
-                          </div>
+                         <div className={cn(
+                          "w-5 h-5 shrink-0 rounded-full border-2 flex mt-0.5 transition-colors items-center justify-center",
+                          formData.isInstantMatch ? "border-slate-900" : "border-black"
+                        )}>
+                          {formData.isInstantMatch && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
                         </div>
-                        {showEstimateDetails ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
-                      </button>
-
-                      <AnimatePresence>
-                        {showEstimateDetails && (
-                          <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="px-6 pb-6 space-y-4 overflow-hidden"
-                          >
-                            <div className="p-4 bg-slate-50 rounded-2xl border border-black">
-                              <p className="text-sm text-slate-600 leading-relaxed italic">
-                                "{estimate.reasoning}"
-                              </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-3">
-                              <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
-                                <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-                                  <Box className="w-4 h-4 text-orange-600" />
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Materials</p>
-                                  <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.materials}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
-                                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                                  <Wrench className="w-4 h-4 text-blue-600" />
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Labour</p>
-                                  <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.labour}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-start gap-3 p-3 rounded-xl border border-black bg-white">
-                                <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
-                                  <Clock className="w-4 h-4 text-green-600" />
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Duration</p>
-                                  <p className="text-xs text-slate-700 font-medium">{estimate.breakdown.duration}</p>
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-
-                  {estimate?.pricingInsights && (
-                    <div className="rounded-2xl border border-black bg-white overflow-hidden shadow-sm">
-                      <div className="p-4 bg-slate-50/50 border-b border-black">
-                        <h3 className="font-extrabold text-slate-900">Dynamic Pricing Insights</h3>
-                      </div>
-                      <div className="divide-y divide-slate-100">
-                        <div className="p-4 flex gap-4">
-                          <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
-                            <Clock className="w-4 h-4 text-slate-600" />
+                        <div className="flex-1 pr-6">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-base font-extrabold text-slate-900 tracking-tight">Instant Match <span className="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="font-black ml-0.5">From £{(instantMatchCopy?.price || 2.49).toFixed(2)}</span></h4>
                           </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-slate-900 mb-0.5">Seasonal impact</h4>
-                            <p className="text-sm text-slate-600">{estimate.pricingInsights.seasonalImpact || "Prices may vary depending on the time of year and local demand."}</p>
-                          </div>
+                          <p className="text-sm text-slate-600 leading-snug">
+                            Instant Match premium value gets you started and connects you to a record number of tradespeople.
+                          </p>
                         </div>
-                        <div className="p-4 flex gap-4">
-                          <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
-                            <MapPin className="w-4 h-4 text-slate-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-slate-900 mb-0.5">Regional premium</h4>
-                            <p className="text-sm text-slate-600">{estimate.pricingInsights.regionalPremium || "Local rates in your area may be higher or lower than the national average."}</p>
-                          </div>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setShowBoostInfo('instant'); }}
+                          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                          type="button"
+                        >
+                          <Info className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {(formData.isEmergencyBoost || formData.isInstantMatch) && (
+                        <div className="bg-slate-50 p-3 rounded-lg border border-black text-xs text-black flex items-start gap-2 shadow-sm font-semibold">
+                           <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                           <span>You have selected {(formData.isEmergencyBoost && formData.isInstantMatch) ? "both Premium Upgrades" : (formData.isEmergencyBoost ? "the Emergency Boost" : "the Instant Match")}. By continuing, you agree to pay the additional charges upon job posting.</span>
                         </div>
-                        <div className="p-4 flex gap-4">
-                          <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center shrink-0">
-                            <ZapIcon className="w-4 h-4 text-slate-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-slate-900 mb-1">Cost-saving tips</h4>
-                            <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
-                              {estimate.pricingInsights.costSavingTips.length > 0 ? (
-                                estimate.pricingInsights.costSavingTips.map((tip: string, i: number) => (
-                                  <li key={i}>{tip}</li>
-                                ))
-                              ) : (
-                                <>
-                                  <li>Bundle multiple small jobs together.</li>
-                                  <li>Provide clear photos to get more accurate quotes.</li>
-                                  <li>Be flexible with your scheduling if possible.</li>
-                                </>
-                              )}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className="bg-white rounded-3xl p-8 border border-black shadow-sm space-y-6">
-                  <div className="flex flex-col items-center text-center space-y-2">
-                    <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-2">
-                      <AlertTriangle className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900">Estimate Unavailable</h3>
-                    <p className="text-slate-500 text-sm">We couldn't generate an AI estimate right now. You can still set your budget manually.</p>
-                  </div>
-                  
-                  <div className="space-y-4 bg-slate-100/50 p-6 rounded-3xl border border-black">
-                    <h3 className="text-xl font-black text-slate-900">Enter custom amount</h3>
-                    <div className="relative">
-                      <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-900 font-black text-xl">£</span>
-                      <input
-                        type="number"
-                        placeholder="0.00"
-                        className="w-full p-5 pl-12 rounded-2xl border border-black bg-white font-black text-xl focus:outline-none focus:ring-4 focus:ring-[#0084a5]/10 focus:border-[#0084a5] transition-all"
-                        value={formData.selectedBudget || ""}
-                        onChange={(e) => setFormData({...formData, selectedBudget: e.target.value})}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {platformConfig?.premiumJobUpgradesEnabled !== false && formData.urgency !== 'emergency' && (
-                <div className="space-y-3 pt-6">
-                  <h3 className="text-sm font-extrabold text-slate-900 mb-2">Premium Job Upgrades (Optional)</h3>
-                  
-                  <div className={cn(
-                    "relative p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3",
-                    formData.isEmergencyBoost ? "border-[#e11d48] bg-rose-50" : "border-[#e11d48]/50 hover:border-[#e11d48] bg-white"
-                  )}
-                  onClick={() => setFormData({...formData, isEmergencyBoost: !formData.isEmergencyBoost})}
-                  >
-                     <div className={cn(
-                      "w-5 h-5 rounded-full border-2 flex shrink-0 mt-0.5 transition-colors items-center justify-center",
-                      formData.isEmergencyBoost ? "border-slate-900" : "border-black"
-                    )}>
-                      {formData.isEmergencyBoost && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
-                    </div>
-                    <div className="flex-1 pr-6">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-base font-extrabold text-slate-900">Emergency Boost <span className="font-black ml-1">£5</span></h4>
-                      </div>
-                      <p className="text-sm text-slate-600 leading-snug">Emergency boost to elevate your job, help with reliability, and match your choices.</p>
-                    </div>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setShowBoostInfo('emergency'); }}
-                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                      type="button"
-                    >
-                      <Info className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className={cn(
-                    "relative p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3",
-                    formData.isInstantMatch ? "border-[#f59e0b] bg-amber-50" : "border-[#f59e0b]/50 hover:border-[#f59e0b] bg-white"
-                  )}
-                  onClick={() => setFormData({...formData, isInstantMatch: !formData.isInstantMatch})}
-                  >
-                     <div className={cn(
-                      "w-5 h-5 shrink-0 rounded-full border-2 flex mt-0.5 transition-colors items-center justify-center",
-                      formData.isInstantMatch ? "border-slate-900" : "border-black"
-                    )}>
-                      {formData.isInstantMatch && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full" />}
-                    </div>
-                    <div className="flex-1 pr-6">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-base font-extrabold text-slate-900 tracking-tight">Instant Match <span className="text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-black ml-1 text-[10px] uppercase">Premium Value</span> <span className="font-black ml-0.5">From £{(instantMatchCopy?.price || 2.49).toFixed(2)}</span></h4>
-                      </div>
-                      <p className="text-sm text-slate-600 leading-snug">
-                        Instant Match premium value gets you started and connects you to a record number of tradespeople.
-                      </p>
-                    </div>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setShowBoostInfo('instant'); }}
-                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                      type="button"
-                    >
-                      <Info className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {(formData.isEmergencyBoost || formData.isInstantMatch) && (
-                    <div className="bg-slate-50 p-3 rounded-lg border border-black text-xs text-black flex items-start gap-2 shadow-sm font-semibold">
-                       <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
-                       <span>You have selected {(formData.isEmergencyBoost && formData.isInstantMatch) ? "both Premium Upgrades" : (formData.isEmergencyBoost ? "the Emergency Boost" : "the Instant Match")}. By continuing, you agree to pay the additional charges upon job posting.</span>
-                    </div>
-                  )}
-                </div>
+                </>
               )}
               </motion.div>
             )}
@@ -3752,7 +4080,15 @@ export default function PostJobWizard() {
           ) : step === 4 ? (
             <div className="flex-[3] flex gap-3">
               <button 
-                onClick={handleEstimate} 
+                onClick={() => {
+                  if (claimedDeal) {
+                    const { discPrice } = getDealPricing(claimedDeal);
+                    setFormData(prev => ({ ...prev, selectedBudget: `£${discPrice}` }));
+                    setStep(5);
+                  } else {
+                    handleEstimate();
+                  }
+                }} 
                 disabled={!formData.city || !formData.postcode || !!postcodeError || isUploading || isEstimating || (formData.urgency === "specific_date" && !formData.jobDate)}
                 id="wizard-next-step-4"
                 className={cn(
@@ -3762,7 +4098,13 @@ export default function PostJobWizard() {
                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
                 )}
               >
-                {isUploading || isEstimating ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Continue to Estimate <ChevronRight className="w-6 h-6" /></>}
+                {isUploading || isEstimating ? (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                ) : claimedDeal ? (
+                  <>Continue to Review <ChevronRight className="w-6 h-6" /></>
+                ) : (
+                  <>Continue to Estimate <ChevronRight className="w-6 h-6" /></>
+                )}
               </button>
             </div>
           ) : step === 5 ? (

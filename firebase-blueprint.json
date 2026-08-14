@@ -4004,6 +4004,31 @@
         "$ref": "#/entities/Enquiry"
       },
       "description": "Client enquiries"
+    },
+    "/flash_deals/{id}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "traderId": { "type": "string" },
+          "traderName": { "type": "string" },
+          "traderAvatarUrl": { "type": "string" },
+          "service": { "type": "string" },
+          "discountPercentage": { "type": "integer" },
+          "originalPrice": { "type": "number" },
+          "discountedPrice": { "type": "number" },
+          "dayOfWeek": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "type": "string" },
+          "maxClaims": { "type": "integer", "description": "Maximum number of bookings or claims allowed for this deal (null for unlimited)" },
+          "claimedCount": { "type": "integer", "description": "Number of times this deal has been claimed" },
+          "createdAt": { "type": "string" },
+          "expiresAt": { "type": "string" },
+          "city": { "type": "string" },
+          "postcode": { "type": "string" }
+        }
+      },
+      "description": "Quiet Period Off-Peak Trades Flash Deals"
     }
   }
 }

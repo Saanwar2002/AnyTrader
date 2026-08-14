@@ -43,22 +43,32 @@ service cloud.firestore {
     // --- User Profiles (Public/Private Split) ---
     match /advertisements/{adId} {
       allow read: if true;
-      allow write: if isSignedIn() && (resource == null || resource.data.advertiserUid == request.auth.uid || request.resource.data.advertiserUid == request.auth.uid || isAdmin() || adId.matches('^ad-.*$'));
+      allow write: if isSignedIn() && (
+        resource == null || 
+        resource.data.advertiserUid == request.auth.uid || 
+        request.resource.data.advertiserUid == request.auth.uid || 
+        isAdmin() || 
+        adId.matches('^ad-.*$') || 
+        adId.matches('^seed-.*$') || 
+        request.resource.data.advertiserUid.matches('^seed-.*$')
+      );
     }
 
     match /users/{userId} {
       allow read: if true; // Public read for profile discovery, both search list & get profile
-      allow create: if isOwner(userId) || isAdmin() || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$');
-      allow delete: if isOwner(userId) || isAdmin() || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$');
+      allow create: if isOwner(userId) || (isSignedIn() && (isAdmin() || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$') || userId.matches('^sample_.*$')));
+      allow delete: if isOwner(userId) || (isSignedIn() && (isAdmin() || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$') || userId.matches('^sample_.*$')));
       
-      // Prevent privilege escalation
+      // Prevent privilege escalation while allowing full profile management & seeding
       allow update: if (
         isSignedIn() && (
-          (isOwner(userId) && (resource == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified']))) || 
+          (isOwner(userId) && request.resource.data.get('isAdmin', false) == false && !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager'])) || 
           isAdmin() ||
-          (resource != null && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin', 'tierId', 'isFoundingMember', 'isVerified', 'uid', 'email', 'name', 'stripeAccountId', 'stripeOnboardingComplete', 'payoutsEnabled', 'subscriptionType', 'permissions', 'preferredDrivers', 'blockedDrivers', 'requirePasscode']))
+          userId.matches('^mock-trader-.*$') || 
+          userId.matches('^seed-.*$') || 
+          userId.matches('^sample_.*$')
         )
-      ) || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$');
+      ) || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$') || userId.matches('^sample_.*$');
     }
 
     // --- Rides Portal ---
@@ -419,6 +429,36 @@ service cloud.firestore {
       allow create: if isSignedIn() && (request.resource.data.get('customerId', '') == request.auth.uid || isAdmin());
       allow update: if isSignedIn() && (resource.data.get('customerId', '') == request.auth.uid || resource.data.get('traderId', '') == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
+    }
+
+    match /flash_deals/{dealId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (
+        request.resource.data.traderId == request.auth.uid || 
+        request.resource.data.traderId.matches('^seed-.*$') || 
+        request.resource.data.traderId.matches('^mock-trader-.*$') || 
+        request.resource.data.traderId.matches('^sample_.*$') || 
+        dealId.matches('^deal-.*$') || 
+        dealId.matches('^seed-.*$') || 
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.traderId == request.auth.uid || 
+        resource.data.traderId.matches('^seed-.*$') || 
+        resource.data.traderId.matches('^mock-trader-.*$') || 
+        dealId.matches('^deal-.*$') || 
+        dealId.matches('^seed-.*$') || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimedCount', 'status', 'updatedAt']) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.traderId == request.auth.uid || 
+        resource.data.traderId.matches('^seed-.*$') || 
+        resource.data.traderId.matches('^mock-trader-.*$') || 
+        dealId.matches('^deal-.*$') || 
+        dealId.matches('^seed-.*$') || 
+        isAdmin()
+      );
     }
   }
 }
