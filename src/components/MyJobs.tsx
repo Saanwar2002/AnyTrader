@@ -187,6 +187,8 @@ export default function MyJobs() {
 
       await addDoc(collection(db, "jobs"), {
         ...baseJob,
+        homeownerId: baseJob.homeownerId || user.uid,
+        userId: user.uid,
         status: "posted",
         quoteCount: 0,
         createdAt: serverTimestamp(),

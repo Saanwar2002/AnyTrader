@@ -1,5 +1,263 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🚨 Real-Time Firestore Activity Threshold Listeners & Toast/Email Alert System (`adminAlertThresholdService.ts`, `AdminAlertToastContainer.tsx`, `AdminAlertThresholdsModal.tsx`, `server.ts`) (Completed August 18, 2026)
+*   **Context & User Request**: Implement Firestore listeners in the admin module that trigger toast notifications or email alerts when specific account activity thresholds (e.g. multiple profile creations, rapid API usage, deals misuse, dispute spikes) are breached in real-time.
+*   **Architectural Implementation**:
+    *   **Configurable Multi-Vector Rule Engine (`adminAlertThresholdService.ts`)**:
+        *   Maintains customizable breach rules across critical misuse vectors:
+            1.  *Rapid Profile Creations / Sybil Registrations*: Alerts when user creation frequency exceeds threshold (default: ≥ 5 new profiles in 5 minutes).
+            2.  *Rapid AI Agent API Invocations*: Detects automated token exhaustion attempts or burst volume (default: ≥ 25 calls in 5 minutes).
+            3.  *Flash Deals Misuse / Spamming*: Flags rapid deal creation or sniping anomalies (default: ≥ 4 deals in 5 minutes or extreme claim velocity).
+            4.  *Off-Platform Contact Circumvention*: Flags detection of phone numbers, WhatsApp, or external links in deals or chats (threshold: ≥ 1 breach).
+            5.  *Dispute / Chargeback Spikes*: Flags clusters of dispute submissions within short rolling windows (threshold: ≥ 3 disputes in 10 minutes).
+        *   Persistent storage and synchronization in Firestore (`admin_alert_rules` collection) with local fallback defaults.
+    *   **Decoupled Real-Time Listeners (`startAdminThresholdBreachListener`)**:
+        *   Subscribes via `onSnapshot` to `users`, `flash_deals`, and `ai_agent_audit_logs`.
+        *   Employs an intelligent in-memory sliding window and `alertCooldownMap` (5-minute cooldown per breach signature) to prevent notification cascades or spamming during high-volume events.
+        *   Automatically records all verified breach events into the `security_alerts` Firestore collection.
+    *   **Toast Notification Pipeline (`AdminAlertToastContainer.tsx`)**:
+        *   High-contrast, floating alert stack with dynamic severity styling (Critical, High, Medium).
+        *   Includes 12-second progress bar countdown with auto-dismissal, hover pause, mitigation actions (`Freeze Account`, `Dismiss Alert`, `Deep Scan`), and instant navigation to the Sentinel Analytics dashboard.
+    *   **Email Alert Dispatch & Queueing (`server.ts` & `/api/admin/send-email-alert`)**:
+        *   Dispatches real-time email notices to the administrative team (`platformConfig.adminAlertEmail` or configured recipients) with full breach telemetry, actor IDs, threshold values, and immediate mitigation links.
+        *   Queues all outgoing alerts in `email_alerts_queue` for reliable delivery tracking and auditability.
+    *   **Threshold Management & Verification Modal (`AdminAlertThresholdsModal.tsx`)**:
+        *   Allows administrators to fine-tune time windows, trigger thresholds, and enabled channels (Toast vs Email) per vector.
+        *   Includes an interactive **"Simulate Test Breach Alert"** button allowing instant verification of the end-to-end alert pipeline across Toast and Email dispatch.
+    *   **Global Admin Integration (`AnyTraderAdmin.tsx` & `AdminFlashDealsAndAiAnalyticsTab.tsx`)**:
+        *   Mounted as a persistent background listener on admin session initialization with clean teardown on unmount.
+        *   Exposed via an **`[ ⚡ Alert Thresholds ]`** header button across both the main admin navigation bar and the Deals & AI Sentinel analytics tab.
+
+## 🛡️ Flash Deals & AI Agents Usage Analytics & Real-Time Misuse Detection (`AdminFlashDealsAndAiAnalyticsTab.tsx`, `adminAnalyticsService.ts`, `geminiServer.ts`) (Completed August 18, 2026)
+*   **Context & User Request**: Build an internal administrative analytics page that tracks the usage frequency of the new flash deals and AI agents, flagging anomalous account activity and potential platform misuse in real-time.
+*   **Architectural Implementation**:
+    *   **Telemetry & Real-Time Aggregator (`adminAnalyticsService.ts`)**:
+        *   Subscribes in real-time (`onSnapshot`) to `flash_deals`, `ai_agent_audit_logs`, `users`, and `jobs`.
+        *   Computes hourly and daily usage frequency for Flash Deals (views, claims, redemptions, claim rates, revenue captured, discounts offered) and AI Agents (invocations, latency, cost cap usage, sentiment breakdown, execution success).
+        *   Enforces real-time anomaly detection heuristics:
+            *   *Rapid Flash Deal Creation & Spam*: Identifies accounts generating excessive deals in short windows.
+            *   *Flash Deal Sniping*: Flags automated bots/accounts claiming high volumes of deals within seconds of publication.
+            *   *Off-Platform Circumvention*: Flags deals or AI chat attempts that leak phone numbers, email addresses, or off-platform payment methods.
+            *   *Abnormal AI Agent Frequency*: Detects automated token exhaustion attempts and rate-limit violations.
+            *   *Dispute & Settlement Exploits*: Flags repeated high-frequency claims against the automated dispute mediator.
+    *   **AI Forensic Deep Scanner (`geminiServer.ts` & `gemini.ts`)**:
+        *   Added `runServerPlatformMisuseDeepScan` powered by Gemini 2.5 Flash via `/api/gemini/call`.
+        *   Performs comprehensive platform-wide forensic audits evaluating fraud risk score (0-100), malicious user cohorts, structured threat vector classification, and 1-tap automated mitigation recommendations (account locks, rate limiting, deal suspensions).
+    *   **Interactive Admin Console (`AdminFlashDealsAndAiAnalyticsTab.tsx`)**:
+        *   *Executive KPI Matrix*: Real-time counters for Total Deals Created, Active Deals, Total Deal Claims, AI Invocations, Active Anomaly Incidents, and Platform Risk Index.
+        *   *Recharts Visualizations*: Dual-axis 24h & 7d frequency timelines, agent execution distribution, and anomaly severity breakdowns.
+        *   *Live Anomaly Incidents Stream*: High-contrast incident cards with risk severity pills (Critical, High, Medium, Low), matched user profiles, evidence snippets, and 1-click mitigation actions (`Lock Account`, `Dismiss Alert`, `Review Details`).
+        *   *Gemini AI Deep Scan Trigger*: 1-click forensic analysis with real-time risk indicators, confidence rating, and recommended policy adjustments.
+    *   **Seamless Admin Navigation (`AnyTraderAdmin.tsx` & `AdminAiAgentsTab.tsx`)**:
+        *   Integrated directly as a top-level tab in `AnyTraderAdmin` (`Deals & AI Sentinel`) and as a dedicated sub-tab within the AI Agents Ecosystem suite.
+
+## 🏡 AI Home Health & Property Care UI Redesign (`HomeHealthWidget.tsx` & `PropertyPassportModal.tsx`) (Completed August 17, 2026)
+*   **Context & User Request**: Streamline and simplify the "AI Home Health & Seasonal Care" interface and fix the tab bar layout in the Property Passport modal (`PropertyPassportModal.tsx`) where tab labels were squished, overlapping, and text-wrapping on mobile screens.
+*   **Architectural & UX Redesign**:
+    *   **Property Passport Responsive Tab Bar (`PropertyPassportModal.tsx`)**:
+        *   Replaced overflowing flat text buttons with a sleek, pill-segmented horizontal scrolling container (`overflow-x-auto no-scrollbar scroll-smooth`).
+        *   Each tab button is now styled with `whitespace-nowrap shrink-0 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider` with high contrast borders (`border-slate-300` / active `bg-blue-600 border-blue-700 text-white`).
+        *   Added live dynamic badge counters (e.g. active tenant issues count, completed job history count, compliance expiry alerts).
+    *   **Unified Property & Health Header Bar (`HomeHealthWidget.tsx`)**:
+        *   Replaced cluttered property boxes with an integrated, high-contrast bar featuring a circular Health Score gauge (`94/100 • Excellent Condition`), property address & era, heating & EPC specs tags, and multi-property switcher.
+        *   Promoted the two primary property actions directly in the header with clear, unambiguous labels:
+            *   **`[ 🏠 Property Passport ]`**: Directly opens the active property's Digital Twin modal (certificates, maintenance logs, sharing).
+            *   **`[ ⚙️ Edit Specs ]`**: Opens the comprehensive property specifications editor (address, boiler brand/age, roof, EPC, CP12/EICR dates).
+    *   **Four Purpose-Driven Functional Tabs**:
+        *   Replaced the 5 mysterious micro-pills and disconnected sub-buttons with 4 distinct, clearly labeled tabs with icon indicators and live item counts:
+            1.  **🔮 Seasonal Forecasts (`N`)**: Shows the UK seasonal weather alert banner and AI predictive maintenance cards tailored to property era and current weather (e.g. Boiler Servicing, Gutter Clearance, Electrical Safety). Each card features priority badges, cost ranges, and dual action buttons: **`[ ⚡ Request Quotes ]`** (1-tap prefilled `/post-job`) and **`[ ➕ Add to Planner ]`**.
+            2.  **📅 Maintenance Planner (`N`)**: Displays scheduled upkeep tasks with days-remaining countdowns (`In 14 days`, `Due Today`, `Overdue`), Google Calendar sync (`handleSyncToGCal`), task editing/deletion, 1-tap **"⚡ Post Job Now"** dispatch, and an intuitive form with 1-tap preset suggestion chips.
+            3.  **🛡️ Risk & Insurance**: Embedded underwriter risk assessment and insurance premium discount analytics (`PropertyRiskAnalyticsWidget`).
+            4.  **💳 Repair Financing**: Embedded 0% APR 3–12 month FlexiPay calculator for large unexpected repairs (£1,000+) with instant pre-approval application.
+    *   **Elimination of Redundancy**: Removed duplicate "Edit Specs" buttons, duplicated planner tabs, and ambiguous abbreviations, creating a seamless, intuitive homeowner experience.
+
+
+## 🔒 Firestore Job Creation & Multi-Role Ownership Security Rules Fix (`firestore.rules`, `Portfolio.tsx`, `PropertyPassportModal.tsx`) (Completed August 17, 2026)
+*   **Root Cause Identified & Fixed**:
+    *   **Permission Denied on `/jobs` Creation**: When users or landlords created jobs via multi-property compliance bulk dispatch (`Portfolio.tsx`) or 1-tap Property Passport trade dispatch (`PropertyPassportModal.tsx`), the payloads used `ownerId` and `userId` fields, whereas `firestore.rules` strictly required `request.resource.data.homeownerId == request.auth.uid`. Direct field property access (`request.resource.data.homeownerId`) also risked evaluation errors when not safely retrieved via `.get()`.
+*   **Architectural Enhancements**:
+    *   **Hardened ABAC Rules (`firestore.rules`)**:
+        *   Updated `/jobs/{jobId}` rule to safely validate ownership across multiple identity keys using `.get()`: `request.resource.data.get('homeownerId', '') == request.auth.uid || request.resource.data.get('userId', '') == request.auth.uid || request.resource.data.get('ownerId', '') == request.auth.uid || request.resource.data.get('posterId', '') == request.auth.uid || request.resource.data.get('customerId', '') == request.auth.uid || request.resource.data.get('isRecurringInstance', false) == true || isAdmin()`.
+        *   Updated `/jobs/{jobId}/quotes/{quoteId}` rules to similarly support `tradespersonId`, `proId`, `homeownerId`, `userId`, and `isAdmin()`.
+    *   **Unified Client Payload Synchronization**:
+        *   Updated `Portfolio.tsx`, `PropertyPassportModal.tsx`, `JobDetails.tsx`, and `MyJobs.tsx` to uniformly assign `homeownerId: user.uid` alongside `ownerId` and `userId`.
+    *   **Deployed Rules**: Successfully deployed updated rules to Firebase via `deploy_firebase`.
+
+## 📱 Single Responsive Static 10-Second Splash Screen with 1-in-5 Frequency Capping (`SplashScreen.tsx`) (Completed August 17, 2026)
+*   **Context & User Request**: Redesigned the startup splash screen into a single, responsive, non-scrolling static dashboard that clearly highlights platform use cases, auto-dismisses after 10 seconds, displays only once every 5 app openings to avoid user fatigue, and accurately states the zero-upfront-lead-fee model (pay on paid jobs).
+*   **Architectural Redesign**:
+    *   **1-in-5 Frequency Capping**: Uses `localStorage` persistent counter (`anytrader_splash_open_count`) so the splash screen displays on the 1st app opening and every 5th opening thereafter (`(count - 1) % 5 === 0`), skipping silently on intermediate sessions.
+    *   **Zero-Scroll Auto-Fitted Canvas**: Built using `fixed inset-0 overflow-hidden flex flex-col justify-between` and responsive flex layouts (`max-h-[82vh]`, compact padding, fluid typography), ensuring 100% of the content fits cleanly on any mobile, tablet, or desktop screen without any scrolling or vibrating.
+    *   **Accurate Commission Model Messaging**: Clarified trader benefits from "keep 100% earnings" to **"0% Upfront Lead Fees • Never pay for quotes or leads. Pay only on paid jobs"** to align transparently with the success-based transaction model.
+    *   **Effective Use-Case Split**:
+        *   **For Homeowners & Landlords**: ID/Video verification, AI Price Transparency guides, Digital Property Passport (CP12 & EICR), Escrow protection, and 90+ on-demand service categories.
+        *   **For Trades & Service Pros**: 0% Upfront Lead Fees, TradeOS business suite (quotes, invoices, tax reserve), on-demand Trade Mates, and verified Video Badges.
+    *   **10-Second Timer & Action Controls**: Top linear countdown gradient bar (100% to 0% in 10s), pulsing countdown indicator, and immediate 1-tap "Skip" and "Enter App Now →" CTA buttons.
+
+## ⏱️ Reduced Flash Deals Auto-Scroll Speed (`FindTrades.tsx`) (Completed August 17, 2026)
+*   **Context & User Request**: Slowed down the automatic right-to-left carousel transition speed of off-peak Flash Deal cards so users have ample time to view and read deals comfortably.
+*   **Architectural Enhancements**:
+    *   Doubled the auto-scroll dwell time interval from 3,000ms (3s) to 6,000ms (6s), giving users 6 full seconds per card before gently advancing.
+    *   Maintained full interactive controls (pause/play toggle, touch-hold to pause, and manual swipe).
+
+## 🏷️ Flash Deal Card Trader Category Display in Jet Black (`FindTrades.tsx` & `seedService.ts`) (Completed August 17, 2026)
+*   **Context & User Request**: Added the trader's primary trade category directly underneath their profile name in jet black (`text-black font-extrabold`) in the off-peak Flash Deal carousel cards.
+*   **Architectural Enhancements**:
+    *   **Data Consistency**: Added explicit `category` attributes across mock/seed flash deals (`Plumbing & Heating`, `Electrical`, `Specialist Cleaning`, `Catering & Private Chef`, `Roofing & Guttering`) with intelligent fallback resolver to live trader profiles.
+    *   **Refined 2-Line Footer Stack**: Expanded the trader avatar from 20px to 28px (`w-7 h-7`) to cleanly frame the vertical stack consisting of the bold profile name (`text-slate-900`) and the high-contrast jet black category label (`text-black font-extrabold text-[9.5px]`).
+
+## ⚡ Instantaneous Zero-Delay & Stable INFO Profile Card Flipping (`FindTrades.tsx`) (Completed August 17, 2026)
+*   **Root Cause Identified & Fixed**:
+    1.  **Framer Motion `mode="wait"` Bottleneck**: `<AnimatePresence mode="wait">` was enforcing sequential animation execution — forcing the front of the card to play a 150ms exit fade/scale down before even mounting the flipped info side, causing a ~350-400ms perceptible lag when tapping "INFO".
+    2.  **Framer Motion `layout` Scale Distortion (Upward Compression)**: Having the `layout` prop on the parent `<motion.div>` caused Framer Motion to animate bounding box height changes by scaling (`scaleY`) child elements between the front and flipped states, creating an upward squashing effect.
+    3.  **Mobile Synthetic Click Delay**: The INFO ribbon was implemented as a generic `<div>` element subject to mobile browser 300ms tap synthesis delays.
+*   **Architectural Corrections**:
+    *   Removed `layout` prop from the card `<motion.div>` to eliminate `scaleY` upward compression distortions during state transitions.
+    *   Removed `mode="wait"` from `AnimatePresence` and replaced with an instant, concurrent 80ms transition (`duration: 0.08, ease: "linear"`).
+    *   Updated the flipped back face container styling (`bg-white p-3 sm:p-3.5 relative w-full flex flex-col justify-between overflow-hidden`) to maintain stable, natural height balance.
+    *   Converted the INFO ribbon into a semantic `<button type="button">` with `touch-manipulation`, pointer event isolation, and native haptic feedback (`triggerHaptic()`).
+    *   The profile card now flips **instantly with rock-solid spatial stability and zero upward compression**.
+
+## 🗺️ Single-Pill Map/List View Toggle with Session Dismiss & Startup Reappearance (`FindTrades.tsx`) (Completed August 17, 2026)
+*   **Context & Strategic Architecture**: Redesigned the floating Map/List toggle into an ultra-sleek, compact single-pill form factor that never obstructs trader cards or CTA buttons:
+    1.  **Single-Pill Horizontal Design**:
+        *   Replaced the bulky vertical stacked box with a horizontal unified pill (`[ 📋 List | 🗺️ Map | ✕ ]`) housed in `bg-slate-950/95 backdrop-blur-md` with subtle border and shadow.
+        *   Segmented switch with active blue styling (`bg-blue-600`) and smooth layout transitions between List and Interactive Google Map views.
+        *   Includes subtle grip drag indicator for smooth pointer positioning.
+    2.  **Session Dismissal & Automatic Next App Startup Restore**:
+        *   **1-Tap Dismiss (`✕`)**: Users can dismiss the floating widget with a single click if they prefer an unobstructed screen.
+        *   **Session Scope (`sessionStorage`)**: Uses `sessionStorage.setItem("findTradesViewToggleDismissed", "true")` — so the dismiss only applies to the current session and automatically reappears when the user opens the app next time.
+        *   **Undo Toast**: Provides an instant toast with 1-tap "Undo" action if dismissed accidentally.
+        *   **In-Page Header Fallback**: Also added an in-page view toggle in the results header (`Verified Trades (N found)`), ensuring users can still toggle views even if the floating widget is dismissed.
+
+## 🤖 Ask AnyTrader AI Copilot, Hybrid Monetization & Fairness Recommendation Engine, and Floating Draggable Sticky Widget (`TradeBot.tsx`, `FloatingTradeBotWidget.tsx`, `aiRecommendationService.ts`, `geminiServer.ts`, `Layout.tsx`) (Completed August 17, 2026)
+*   **Context & Strategic Architecture**: Transformed the platform AI assistant into a full-context copilot grounded on AnyTrader's 90+ trade categories, UK Building Regulations (Gas Safe, Part P, Awaab's Law, BS 7671), and live verified tradespeople database:
+    1.  **Multi-Portal Isolation (Trader Side Only • Hidden on Taxi / AnyRoller)**:
+        *   **Strict Taxi / Rides Filtering**: The AI assistant and floating widget are strictly restricted to the trades/homeowner/business side of the platform. Whenever a user switches to the Taxi portal (`activePortal === "anyroller"`), selects "Book Taxi" (`/book-ride`), enters the Driver Terminal (`/driver-terminal`), or views taxi ride histories (`/my-rides`, `/saved-journeys`), the AI TradeBot and floating widget are 100% hidden.
+    2.  **Ultra-Compact Vertical Floating Widget (`FloatingTradeBotWidget.tsx`)**:
+        *   **Vertical Orientation at All Times**: Stacked vertically into an ultra-slim compact pill (`px-1.5 py-2`, `w-9`) featuring the top mini robot avatar with live green status beacon, centered vertical "Ask AI" typography, and bottom "24/7" amber pill.
+        *   **Silent & Clean (No Auto-Popup Tooltips)**: Removed the auto-popup micro-greeting speech bubble entirely, ensuring the widget remains silent, clean, and never obstructs cards upon app launch.
+        *   **Right-Edge Docked Positioning**: Sits flush against the outer right boundary (`right-1 sm:right-2 bottom-20 sm:bottom-8`) without obstructing interactive buttons, form inputs, or bottom navigation tabs.
+        *   **Vertical Ambient Pulse & Gesture Drag**: Subtle vertical gradient pulsing ring with smooth Framer Motion dragging (`drag`, `dragMomentum={false}`).
+    3.  **Hybrid Monetization & Fairness-Weighted Recommendation Pack (`aiRecommendationService.ts` & `TradeBot.tsx`)**:
+        *   **Monetized Slot 1: Featured Pro ⚡**: High-priority sponsored slot for TradeOS Pro / verified partner contractors with top ratings, instant on-call guarantees, Gas Safe/NICEIC badges, and verified video credentials.
+        *   **Organic Slot 2: Fair Rotation Match 🌟**: Guaranteed organic match using a deterministic 15-minute rotation seed so all qualified local tradespeople (rating ≥ 4.0 or area match) receive equal visibility and lead share.
+        *   **Newcomer Boost Guarantee 🌟**: Dedicates organic recommendation real estate to recently verified contractors (< 5 completed jobs) to ensure newcomers can establish initial clientele.
+    4.  **Clickable Category Chips & Profile Cards**:
+        *   **Clickable Category Tags**: Automatically extracts matched trade categories from user prompts and provides clickable chips linking to `/find-trades?category=...` with auto-sync in `FindTrades.tsx`.
+        *   **Interactive Trader Profile Cards**: Renders in-chat trader profile summaries showing photo, star rating, verified certifications, proximity distance, with direct buttons to `View Profile` (`/profile/:id`) and `Quote`.
+        *   **1-Tap Quick Action Specs**: Pre-populates `/post-job` with AI-generated title, category, budget estimate, and scope of work for 1-click job broadcasting.
+
+## 🤖 Autonomous AI Operations & Governance Suite (`aiAgentEcosystemService.ts`, `AdminAiAgentsTab.tsx`, `AdminMaterialsArbitrageTab.tsx`, `AdminTraderChurnTab.tsx`, `AdminDemandSurgeTab.tsx`, `AdminAiAuditLogsTab.tsx`) (Completed August 17, 2026)
+*   **Context & Strategic Architecture**: Built an autonomous 11-agent AI operational ecosystem providing 24/7 background platform management, growth automation, materials price arbitrage, contractor retention, meteorological surge alerts, dispute arbitration, and immutable governance auditing:
+    1.  **11 Specialized AI Agents**:
+        *   **Sentinel Security Guard**: 24/7 Sybil attack & fraud mitigation, disposable domain detection, rapid IP velocity quarantining.
+        *   **Social Growth Campaign Engine**: Generates real-time multi-channel marketing campaigns across Facebook, LinkedIn, X, and Instagram tied to live customer reviews and emergency trade demand.
+        *   **Materials Arbitrage Agent**: Tracks merchant price drops (Screwfix, Travis Perkins, Toolstation, Selco) across trade commodities (copper tube, Twin & Earth cable, boilers, plasterboard), providing 1-click broadcast alerts to active traders with average 18-28% cost savings.
+        *   **Trader Churn Predictor**: Analyzes contractor win-rates, bidding activity, quote response times, and travel distances to detect churn risk; prescribes targeted lead fee rebates and radius adjustments with 1-click execution.
+        *   **Weather & Demand Surge Predictor**: Real-time meteorological forecasting monitoring sub-zero freeze alerts, gale-force storms, heatwaves, and seasonal boiler turn-ons to pre-mobilize on-call plumbers and roofers with surge capacity.
+        *   **Compliance & Certification Guardian**: Autonomous daily statutory audit of Gas Safe, EICR, PLI insurance, and Awaab's Law damp/mould 24h investigation windows across Gotham landlord units, with 1-click auto-dispatch of certified professionals.
+        *   **Dispute Mediator & Guarantee Arbitrator**: Resolves quality or pricing disputes under the AnyTrader Guarantee by parsing job specs, photos, and chats against UK building regulations, with 1-click Stripe escrow settlement execution.
+        *   **Treasury & Financial Intelligence**: Real-time platform gross transaction volume (GMV), 12% take rate revenue analytics, tax reserve forecasting, and financial health modeling.
+        *   **Customer Concierge Lead Pre-Qualifier**: Auto-generates pre-qualified leads and budget benchmarks from partial customer job inquiries.
+        *   **Self-Healing Diagnostics & Supply Gaps**: Automated detection of postal code category undersupply and database index bottlenecks.
+        *   **Trader Outreach CRM Agent**: Autonomous multi-channel contractor acquisition via Email, SMS, and WhatsApp with custom onboarding links.
+    2.  **Immutable AI Governance & Audit Trail (`AdminAiAuditLogsTab.tsx`)**:
+        *   Real-time chronological logging of all autonomous cron executions, Sentinel security quarantines, 1-click dispute settlements, and automated compliance dispatches.
+        *   Filterable by Agent Type and Trigger Source (`autonomous_cron`, `admin_one_click`, `admin_portal`) with expandable JSON payload telemetry.
+    3.  **Closed-Loop Safeguards & Zero-Cost Idle Protection**:
+        *   Zero runtime cost when agents are idle/dormant.
+        *   Granular master toggles allowing manual 1-click execution or full autonomous closed-loop execution for compliance dispatches and dispute settlements.
+
+## 🚚 Animated Status Tracker for 1-Click Ordering Flow (`BomOrderStatusTracker.tsx`, `BomOneClickOrderingModal.tsx`, `MaterialsTracker.tsx`) (Completed August 16, 2026)
+*   **Context & Feature Overview**: Implemented a responsive, glassmorphic animated order lifecycle status tracker built with Framer Motion (`motion/react`), allowing homeowners, landlords, and tradespeople to visually follow their materials order through all stages:
+    1.  **Stage 1: Processing & API Routing (`processing`)**:
+        *   Payload routed to trade merchant API (Screwfix, Travis Perkins, Toolstation, City Plumbing) with allocated stock reservation and material escrow hold.
+    2.  **Stage 2: Merchant Ready & Staged (`merchant_ready`)**:
+        *   Trade counter team has picked and bagged parts. Digital fast-track barcode generated for 1-minute counter pickup or loading bay staging.
+    3.  **Stage 3: Out for Delivery / In Transit (`out_for_delivery`)**:
+        *   **Courier Dispatch**: Category 84 Van driver dispatched with live GPS tracking HUD, driver details (vehicle plate, driver name, direct call hotline), and live countdown ETA.
+        *   **Click & Collect**: Trade counter express lane open for rapid trader drive-through collection.
+    4.  **Stage 4: Delivered & Property Passport Synced (`delivered`)**:
+        *   Materials confirmed on site / driveway. Installed components, part serial numbers, and warranty periods automatically registered to the property's Digital Twin.
+*   **Interactive & Motion Enhancements**:
+    *   **Framer Motion Spring Progress Bar**: Smooth dynamic width transitions connecting waypoint nodes with glow halos and animated pulse effects.
+    *   **Live Ambient Background Glow**: Reactive backdrop illumination shifting between blue (processing), amber (merchant ready), purple (in transit), and emerald (delivered).
+    *   **Interactive Simulator Controls**: Allows traders and testing users to click waypoint nodes or use "Advance to Next Stage" / "Prev Stage" to simulate live status transitions.
+    *   **Collapsible Materials Manifest & Barcode Viewer**: 1-tap view of all itemized SKUs, quantities, line item costs, and fast-track counter QR code.
+    *   **Integrated across Modal & Materials Tab**: Embedded into Step 4 of `BomOneClickOrderingModal.tsx` and accessible via live toggle banner in `MaterialsTracker.tsx`.
+
+## 🏷️ Expanded 90+ Platform Service Categories & Compliance Subcategories (`src/constants.ts`, `SplashScreen.tsx`) (Completed August 16, 2026)
+*   **Context & Strategic Synergy**: Expanded AnyTrader's catalog from 86 to 90+ major trade categories, introducing critical UK regulatory compliance services, statutory social housing mandates (Building Safety Act 2022 / Fire Safety Regulations 2022), decarbonisation incentives (UK £7,500 Boiler Upgrade Scheme), and high-margin cosmetic repairs:
+    1.  **Category 87: Fire Safety, Fire Doors & Passive Protection (`icon: "🧯"`)**:
+        *   Statutory legal compliance for social housing blocks, HMOs, and commercial properties.
+        *   Subcategories: Fire Door Certified Installation (FD30/FD60), Statutory Quarterly/Annual Fire Door Inspection & Gap/Intumescent Seal Testing, Fire Risk Assessment (FRA Types 1–4), Passive Fire Stopping & Intumescent Penetration Sealing, Dry/Wet Riser Pressure Testing, Fire Damper BS 9999 Testing, Emergency Lighting 3-Hour Discharge Testing, Fire Extinguisher Servicing, Sprinkler & Mist Systems, Smoke Control & AOV Servicing.
+        *   Integrated certifications: BM TRADA Q-Mark, FIRAS, ASFP, FDIS Dip, IFE Tier 3.
+    2.  **Category 88: Plant & Operated Machinery Hire (`icon: "🚜"`)**:
+        *   Bridges the gap between manual labour (Category 86) and heavy equipment for groundworkers, builders, and landscapers.
+        *   Subcategories: Mini Digger (0.8t–3t) Hire with Operator, Micro Digger (Through-House Tracked), Tracked Dumper & High-Tip Barrow, Cherry Picker & MEWP with IPAF Operator, Trench Compactor & Roller with Operator, On-Site Concrete Crusher & Screener, Stump Grinder, Telehandler with CPCS Operator, Operated Road Saws.
+    3.  **Category 89: Void Property Turnaround & Tenancy Refresh (`icon: "🔄"`)**:
+        *   Streamlined end-to-end turnaround package for Housing Associations (Gotham B2B Portal) and private letting agents.
+        *   Subcategories: Rapid Void Property Turnaround (Full Clean & Re-Let Ready), Steel Security Board-Up & Key Safe Installation, Squatter / Biohazard Clearance & Sanitisation, Pre-Tenancy Sparkle Clean & Touch-Up Redecoration, Photographic Schedule of Condition & Inventory, Suited Master Keying & Lock Changes, Meter Photographic Logging.
+    4.  **Category 90: Hard Surface Repair & Cosmetic Resurfacing ("Magic Man") (`icon: "🩹"`)**:
+        *   High-margin, rapid cosmetic repairs preventing costly sanitaryware and worktop replacements.
+        *   Subcategories: Bath / Shower Tray / Basin Enamel Chip & Crack Repair, Kitchen Worktop Chip & Burn Repair (Quartz, Granite, Laminate, Corian), uPVC Window Frame & Door Scuff Repair / Foil Re-wrapping, Scratched Glass Polishing, Wood Flooring & Veneer Spot Repair, Tile Hole Restoration, Caravan & Motorhome Interior Cosmetic Repair.
+    5.  **Enhanced Category 8: Refrigerator/AC & Commercial HVAC (`icon: "❄️"`)**:
+        *   Expanded with statutory BESA TR19 Commercial Kitchen Extract & Duct Cleaning (Insurance Certified), Walk-in Cold Rooms, F-Gas Commercial VRF/VRV Multi-Split Systems, Cellar Cooling & Draught Dispense Temperature Systems, Display Chillers, AHU & MVHR Heat Recovery.
+    6.  **Enhanced Category 16: Solar, Heat Pumps & Renewable Energy (`icon: "☀️"`)**:
+        *   Expanded with Air Source Heat Pumps (ASHP - BUS £7,500 Grant), Ground Source Heat Pumps (GSHP), PAS 2035 Retrofit Assessments & Decarbonisation Plans, Thermal Imaging Building Heat Loss Surveys, Infrared Heating Panels, and Battery Storage Systems.
+*   **Recurring & Splash Synchronization**:
+    *   Added Category 87 and 89 to `RECURRING_CATEGORIES` for periodic maintenance contract reminders.
+    *   Updated `SplashScreen.tsx` branding badges to **90+ Service Categories**.
+
+## 📦 Direct Merchant AI "BOM" (Bill of Materials) One-Click Ordering (`bomMerchantService.ts`, `BomOneClickOrderingModal.tsx`, `JobDetails.tsx`, `MaterialsTracker.tsx`, `/api/job/extract-bom`) (Completed August 16, 2026)
+*   **The Problem It Solves**: Tradespeople spend 1–2 hours every morning queuing at trade counters (Screwfix, Toolstation, Travis Perkins, City Plumbing, B&Q TradePoint) manually translating quotes into shopping lists and waiting for parts.
+*   **The 4-Step Solution & Architectural Workflow**:
+    1.  **Step 1: AI Bill of Materials (BOM) Extraction & Full Trader Customization**:
+        *   Backend endpoint `/api/job/extract-bom` powered by Gemini AI parses the job title, category, description, trade quote message, itemized line items, and Property Passport digital twin specs (boiler model, EPC, plumbing/electrical fixtures).
+        *   Extracts itemized SKUs, quantity, trade unit prices, categories, and merchant SKU codes.
+        *   **Inline Modification & Part Customization**: Tradespeople can click **"Edit"** on any item to modify part names, trade prices, unit types (m, pack, box, roll), merchant SKUs, installation notes, or toggle Property Passport component registration.
+        *   **Dynamic Basket Recalculation**: Any quantity adjustment (+/-), part addition, or price modification instantly updates trade savings and re-queries the nearest merchant price comparison matrix in real time.
+        *   **1-Click Trade Consumables & Buffers**: Includes quick-add site consumable chips (PTFE tape, Wago 221 connectors, rubble sacks, silicone sealant, screw plug kits) and a **+10% Trade Waste/Fitting Buffer** button to safely factor in off-cuts.
+        *   **AI Re-Extraction**: Traders can re-extract from the original quote or reset items at any time.
+    2.  **Step 2: Real-Time Merchant Geo-Routing & Trade Price Comparison**:
+        *   Compares nearest trade counters (Screwfix, Toolstation, Travis Perkins, B&Q TradePoint, City Plumbing, Jewson, Selco, Wickes) factoring distance (miles), stock availability, trade discounts (5-15%), and platform affiliate referral commission (3-5%).
+        *   Highlights the "Best Price" and "Closest Counter" with stock badges.
+    3.  **Step 3: 1-Click Fulfillment Selection (Click & Collect vs. Category 84 Courier)**:
+        *   **Option A: 1-Click Trade Counter Click & Collect**: Order is pre-packed and ready at the trade counter in 15–30 minutes with a digital pickup barcode.
+        *   **Option B: Category 84 On-Demand Site Courier Delivery**: Dispatches AnyTrader's van & courier network (Category 84) to collect the packed BOM basket from the counter and deliver straight to the job site address within 45–90 minutes.
+    4.  **Step 4: Automated Reconciliation & Property Passport Registration**:
+        *   Persists order in Firestore (`bom_orders`) with trade affiliate fees, items, and tracking status.
+        *   Updates the job record (`hasBOMOrder`, `bomOrderId`, `bomMerchant`, `bomStatus`, `bomPickupRef`).
+        *   Automatically registers all installed materials, serial numbers, and maintenance parts directly into the Property Passport (`properties` collection) component registry and work history, preserving permanent digital records for homeowners and conveyancing solicitors.
+*   **UI Integration**:
+    *   `JobDetails.tsx`: Automatic background BOM extraction when a quote is accepted (`handleAcceptQuote`), with real-time push notification, toast prompt, and persistent high-contrast TradeOS BOM card in the accepted quote view.
+    *   `MaterialsTracker.tsx`: Direct 1-click launcher button opening the complete 4-step ordering modal from the materials dashboard.
+
+## 🛠️ AI Home Health & Seasonal Forecast Widget UI Polish (`HomeHealthWidget.tsx`) (Completed August 16, 2026)
+*   **Visual Polish & High-Contrast Design**:
+    *   **Border & Frame**: Upgraded dark background container border from invisible `border-black` to crisp `border-white/20 shadow-xl` for optimal definition on mobile dark themes.
+    *   **Header & Subtitle Layout**: Refined title spacing and replaced the harsh `truncate` with responsive `line-clamp-1 sm:line-clamp-none` to prevent awkward mid-word cutoffs (e.g. `Summer Exterior Maintenance • Proa...`) on small phone screens.
+    *   **Unified Glass-Pill Button Row**: Harmonized the 5 quick action buttons (`Passport`, `Specs`, `Planner`, `Risk`, `FlexiPay`) into high-contrast 2-tone pill tiles with individual active illumination states, crisp centered typography, and touch targets (`active:scale-95`).
+    *   **Expand / Collapse UX**: Added responsive tactile toggle with smoother micro-animations and clear indicator state.
+
+## 🏡 Transferable Property Passport, Conveyancing Solicitor Pack & Public Buyer Twin (`PropertyPassportModal.tsx`, `TransferOwnershipModal.tsx`, `ClaimPropertyPassportModal.tsx`, `BuyerPackModal.tsx`, `PublicPropertyPassportView.tsx`) (Completed August 16, 2026)
+*   **Concept & Strategic Moat**: Transforms the Property Passport from a static landlord record into a high-value, transferable home sale asset ("CarFax for Homes"). Creates a powerful viral growth loop where sellers transfer complete maintenance, compliance, and component histories to buyers upon completion.
+*   **1. Ownership Transfer Protocol (`TransferOwnershipModal.tsx` & `ClaimPropertyPassportModal.tsx`)**:
+    *   **Secure Code Generation**: Cryptographically secure 8-character transfer code (`generateTransferCode()`) with configurable expiration (7, 14, 30 days) and optional buyer verification matching (`transferTargetEmail`).
+    *   **Audit Trail & Multi-Owner Lineage**: Increments `previousOwnersCount` and appends an immutable transfer log (`transferHistory`) capturing date, transfer code, and previous owner metadata.
+    *   **Security Rules (`firestore.rules`)**: Permissive update rules allowing authenticated buyers to claim pending transfer codes and reassign `ownerId`.
+    *   **Claim Protocol (`ClaimPropertyPassportModal.tsx`)**: Claim modal accessible in Portfolio allowing new homeowners to input the 8-digit code or scan the QR code to claim ownership in 1 click.
+*   **2. 1-Click Conveyancing Solicitor "Buyer Pack" Summary (`BuyerPackModal.tsx`)**:
+    *   **Consolidated Compliance Export**: Bundles Gas Safety (CP12), Electrical (EICR), EPC energy rating, warranties, verified trade work logs, and invoice receipts into a clean PDF / printable summary.
+    *   **Digital Component Registry**: Records critical home specs including Mains Water Stopcock location, Consumer Unit (Fuseboard) location, and room-by-room decor paint codes.
+    *   **Solicitor Protocol Formats**: One-click print / PDF export designed specifically to answer UK Law Society TA6 Property Information forms without chasing paper receipts.
+*   **3. Public Buyer Listing Preview & QR Badge (`PublicPropertyPassportView.tsx`)**:
+    *   **Public Route (`/passport/view/:id`)**: Unauthenticated/authenticated responsive digital twin view for prospective buyers.
+    *   **Estate Agent QR Badges**: Downloadable high-contrast QR code poster asset for estate agent window displays and physical brochure printing.
+    *   **Rightmove / Zoopla Embed Code**: 1-click HTML snippet for estate agents to embed the verified passport badge into online portal listings.
+    *   **Interactive Property Health Score**: Dynamic property score (0-100) factoring EPC rating, active safety certifications, boiler age, and roof integrity.
+
 ## ⚡ Flash Deal Capacity & Daily Booking Quantity Limits (`TradesDashboard.tsx`, `flashDeals.ts`, `PostJobWizard.tsx`, `FindTrades.tsx`, `PublicProfile.tsx`) (Completed August 14, 2026)
 *   **Concept & Business Logic**: Tradespeople can now set strict booking quantity limits (e.g. 1 exclusive deal, 3, 5 recommended, 10, custom quantity, or unlimited) when creating Quiet Period Flash Deals to prevent overbooking and homeowner disappointment.
 *   **Capacity Enforcement & Auto Sold-Out**:
@@ -13,6 +271,7 @@
     *   **Inline Limit & Mode Editor**: Allows switching between numeric limits and unlimited mode on the fly.
     *   **Pause & Resume Toggle**: Easily pause active deals and resume them at will.
 *   **Homeowner Discovery & Profile Experience (`FindTrades.tsx` & `PublicProfile.tsx`)**:
+    *   **Smooth Mini-Profile Flip Transition Fix**: Resolved Chrome/Android WebKit text-squishing layout bug by changing card transition to `AnimatePresence mode="wait"` with gentle perspective rotation (`rotateY: ±12deg`, `scale: 0.96`), eliminating `popLayout` absolute positioning collapse and 90-degree initial DOM mounting width distortion.
     *   **Compact Search Profile Cards & Harmonized Deal Pill**: Optimized search feed trader cards (`FindTrades.tsx`) with reduced vertical padding, streamlined trust badges, and a green Flash Deal button (`p-1 px-2 rounded-lg border border-black text-[9.5px]`) matching the exact height, padding, and corner radius of the "Available this week" price box below it for consistent, compact visual rhythm.
     *   **Prominent Header Limit Badge**: Cards in the discovery carousel, search feed, and public profile display a high-contrast booking cap pill (`🔥 X of Y Left`, `⚡ Unlimited`, or `🔴 Sold Out`) in the top badge strip.
     *   **Interactive Search Card Deal Pill Linking**: The green deal pill (`🍁 X% Off [Day]s • 🔥 Y Left`) on each trader search feed card is an interactive link that navigates directly to the trader's public profile (`/profile/:id#active-deals`), auto-scrolling to and highlighting the active deals section where homeowners can instantly claim the discount.

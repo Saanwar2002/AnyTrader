@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { db, handleFirestoreError, OperationType, collection, query, where, onSnapshot, addDoc, doc, deleteDoc, updateDoc } from "@/src/firebase";
-import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store, Users, FileText, Zap, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store, Users, FileText, Zap, ShieldAlert, ShieldCheck, KeyRound } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PropertyPassportModal } from "./PropertyPassportModal";
+import { ClaimPropertyPassportModal } from "./property/ClaimPropertyPassportModal";
 import { toast } from "sonner";
 
 export default function Portfolio() {
@@ -19,6 +20,7 @@ export default function Portfolio() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [passportPropertyModal, setPassportPropertyModal] = useState<any | null>(null);
+  const [showClaimPassportModal, setShowClaimPassportModal] = useState(false);
   const [bulkDispatching, setBulkDispatching] = useState(false);
   
   const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
@@ -44,6 +46,7 @@ export default function Portfolio() {
           await addDoc(collection(db, "jobs"), {
             ownerId: user.uid,
             userId: user.uid,
+            homeownerId: user.uid,
             title: `CP12 Gas Safety Inspection (${prop.name || prop.address?.line1 || 'Property'})`,
             category: "Heating & Gas",
             description: `Bulk compliance dispatch: Annual Gas Safety CP12 Inspection required.\nProperty: ${prop.name || ''} - ${prop.address?.line1 || ''}\nBoiler Spec: ${prop.boilerInfo?.brand || 'Standard Boiler'} ${prop.boilerInfo?.model || ''}`,
@@ -66,6 +69,7 @@ export default function Portfolio() {
           await addDoc(collection(db, "jobs"), {
             ownerId: user.uid,
             userId: user.uid,
+            homeownerId: user.uid,
             title: `EICR Electrical Inspection (${prop.name || prop.address?.line1 || 'Property'})`,
             category: "Electrical",
             description: `Bulk compliance dispatch: 5-Year EICR Electrical Safety Certificate Inspection required.\nProperty: ${prop.name || ''} - ${prop.address?.line1 || ''}`,
@@ -410,7 +414,7 @@ export default function Portfolio() {
             </div>
           )}
 
-          <div className="relative flex gap-3 items-center">
+          <div className="relative flex gap-2 sm:gap-3 items-center">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input 
@@ -421,9 +425,18 @@ export default function Portfolio() {
                 className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
               />
             </div>
+            <button
+              onClick={() => setShowClaimPassportModal(true)}
+              className="px-3.5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition shrink-0"
+              title="Claim Property Passport from previous owner"
+            >
+              <KeyRound className="w-4 h-4" />
+              <span className="hidden sm:inline">Claim Passport</span>
+            </button>
             <button 
               onClick={handleAddNewClick}
               className="w-12 h-12 shrink-0 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 active:scale-95 transition"
+              title="Add New Property"
             >
               <Plus className="w-6 h-6 stroke-2" />
             </button>
@@ -457,6 +470,11 @@ export default function Portfolio() {
                         <span onClick={(e) => { e.stopPropagation(); setSelectedProperty(property); }} className={cn("text-[9px] hover:underline font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border shrink-0", property.occupancy === "vacant" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200")}>
                           {property.occupancy === 'vacant' ? 'Vacant' : 'Occupied'}
                         </span>
+                        {property.transferStatus === "pending" && (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border bg-purple-50 text-purple-700 border-purple-300 flex items-center gap-1 shrink-0">
+                            <KeyRound className="w-2.5 h-2.5" /> Transfer Active
+                          </span>
+                        )}
                       </div>
                       {property.address?.line1 && (
                         <div onClick={(e) => { e.stopPropagation(); setSelectedProperty(property); }} className="text-[12px] hover:underline text-black font-medium break-words whitespace-normal leading-snug line-clamp-2 pr-6">
@@ -732,6 +750,15 @@ export default function Portfolio() {
         <PropertyPassportModal
           property={passportPropertyModal}
           onClose={() => setPassportPropertyModal(null)}
+        />
+      )}
+
+      {showClaimPassportModal && (
+        <ClaimPropertyPassportModal
+          onClose={() => setShowClaimPassportModal(false)}
+          onSuccess={(propertyId) => {
+            setShowClaimPassportModal(false);
+          }}
         />
       )}
     </div>

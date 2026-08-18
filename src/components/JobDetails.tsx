@@ -38,6 +38,8 @@ import { TrustPulse } from "./TrustPulse";
 import { ConfidenceGauge } from "./common/ConfidenceGauge";
 import { toast } from "sonner";
 import { GoogleDocsContractModal } from "@/src/components/shared/GoogleDocsContractModal";
+import { BomOneClickOrderingModal } from "./BomOneClickOrderingModal";
+import { extractBillOfMaterials } from "@/src/services/bomMerchantService";
 
 // Helper to generate Google Calendar link
 const generateGoogleCalendarLink = (job: any, quote: any) => {
@@ -224,6 +226,7 @@ export default function JobDetails() {
   const [showDigitalId, setShowDigitalId] = useState(false);
   const [showJobSummary, setShowJobSummary] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
+  const [showBomModal, setShowBomModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState("");
@@ -951,7 +954,45 @@ const libraries: any[] = ['places', 'geometry'];
       // Refresh local job state
       setJob((prev: any) => ({ ...prev, status: "accepted" }));
 
-      // 5. Ecosystem Synergy: Trigger AI equipment alerts for high-tier traders (background)
+      // 5. Direct Merchant AI BOM 1-Click Ordering Trigger
+      try {
+        const extractedBOM = await extractBillOfMaterials({
+          jobTitle: job.title,
+          category: job.category,
+          description: job.description,
+          quoteMessage: quote.message || quote.notes,
+          quoteMaterialList: quote.materialList || [],
+          propertyPassportSpecs: job.propertyPassportSpecs
+        });
+        if (extractedBOM && extractedBOM.length > 0) {
+          const totalMaterials = extractedBOM.reduce((sum, i) => sum + i.totalCost, 0);
+          await updateDoc(doc(db, "jobs", id), {
+            billOfMaterials: extractedBOM,
+            materialsCost: totalMaterials,
+            hasPendingBOM: true,
+            updatedAt: serverTimestamp()
+          });
+
+          await sendNotification(
+            quote.tradespersonId,
+            "📦 1-Click Trade Materials Ready",
+            `AI Bill of Materials generated for "${job.title}". 1-click trade counter pickup or Category 84 site delivery ready at Screwfix / Toolstation!`,
+            "status",
+            `/job/${id}`
+          );
+        }
+      } catch (bomErr) {
+        console.error("Auto BOM extraction on quote acceptance:", bomErr);
+      }
+
+      toast.success("Quote accepted! 📦 AI Bill of Materials ready for 1-click trade counter ordering.", {
+        action: {
+          label: "Open BOM",
+          onClick: () => setShowBomModal(true)
+        }
+      });
+
+      // 6. Ecosystem Synergy: Trigger AI equipment alerts for high-tier traders (background)
       const acceptedTraderDoc = await getDoc(doc(db, "users", quote.tradespersonId));
       if (acceptedTraderDoc.exists()) {
         const traderData = acceptedTraderDoc.data();
@@ -1896,6 +1937,8 @@ const libraries: any[] = ['places', 'geometry'];
 
       const jobRef = await addDoc(collection(db, "jobs"), {
         ...baseJob,
+        homeownerId: baseJob.homeownerId || user.uid,
+        userId: user.uid,
         status: "posted",
         quoteCount: 0,
         createdAt: serverTimestamp(),
@@ -4182,14 +4225,67 @@ const libraries: any[] = ['places', 'geometry'];
                     )}
                     
                     {quote.status === "accepted" && (
-                      <div className="flex flex-col gap-3">
-                        <button 
-                              onClick={() => handleDownloadQuote(quote)}
-                              className="flex items-center gap-1.5 text-xs font-bold text-green-600 hover:text-green-700 transition-colors bg-green-50 self-start px-3 py-1.5 rounded-lg border border-green-100"
+                      <div className="flex flex-col gap-3 pt-2">
+                        {/* Direct Merchant AI BOM One-Click Ordering Card */}
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950 text-white border border-white/20 shadow-md space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-400 flex items-center justify-center font-bold">
+                                📦
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-xs font-black text-white">Direct Merchant AI BOM Ordering</h4>
+                                  <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase">
+                                    TradeOS
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-300">
+                                  {job.hasBOMOrder 
+                                    ? `Ordered via ${job.bomMerchant || 'Merchant'} • Ref: ${job.bomPickupRef || 'Ready'}`
+                                    : "1-Click Trade Discount Basket (Screwfix / Travis Perkins / Toolstation)"}
+                                </p>
+                              </div>
+                            </div>
+
+                            {job.hasBOMOrder ? (
+                              <span className="text-[10px] font-black bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full">
+                                ✓ {job.bomStatus === 'ready_for_pickup' ? 'Ready for Counter Pick' : 'Dispatched'}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-black text-amber-400 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                                Save 1-2 Hrs
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/10 text-xs">
+                            <div className="text-[11px] text-slate-300">
+                              <span>Materials Total: </span>
+                              <strong className="text-amber-400 font-mono">
+                                £{(job.materialsCost || quote.materialsCost || 85).toFixed(2)}
+                              </strong>
+                              <span className="text-emerald-400 text-[10px] ml-1"> (Trade Pricing)</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowBomModal(true)}
+                              className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm active:scale-95"
                             >
-                              <Download className="w-4 h-4" />
-                              Download Agreed Quote (PDF)
+                              <span>{job.hasBOMOrder ? "View Merchant Barcode & Receipt" : "⚡ 1-Click Order Materials"}</span>
+                              <Sparkles className="w-3.5 h-3.5" />
                             </button>
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => handleDownloadQuote(quote)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-green-600 hover:text-green-700 transition-colors bg-green-50 self-start px-3 py-1.5 rounded-lg border border-green-100"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download Agreed Quote (PDF)
+                        </button>
                       </div>
                     )}
 
@@ -6263,6 +6359,25 @@ const libraries: any[] = ['places', 'geometry'];
             ? `${homeownerProfile.firstName} ${homeownerProfile.lastName || ""}`
             : "Homeowner"
         }
+      />
+
+      <BomOneClickOrderingModal
+        isOpen={showBomModal}
+        onClose={() => setShowBomModal(false)}
+        job={job}
+        quote={quotes.find(q => q.status === "accepted") || quotes[0]}
+        propertyPassportSpecs={job.propertyPassportSpecs}
+        onOrderCreated={(order) => {
+          setJob((prev: any) => ({
+            ...prev,
+            hasBOMOrder: true,
+            bomOrderId: order.id,
+            bomMerchant: order.selectedMerchant,
+            bomStatus: order.status,
+            bomPickupRef: order.pickupReferenceCode,
+            materialsCost: order.subtotalCost
+          }));
+        }}
       />
     </div>
   );

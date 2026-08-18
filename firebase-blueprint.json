@@ -1569,6 +1569,38 @@
             "type": "string"
           }
         },
+        "transferStatus": {
+          "type": "string",
+          "enum": ["none", "pending", "completed", "cancelled"]
+        },
+        "transferCode": {
+          "type": "string"
+        },
+        "transferExpiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "transferTargetEmail": {
+          "type": "string"
+        },
+        "transferTargetName": {
+          "type": "string"
+        },
+        "previousOwnersCount": {
+          "type": "integer"
+        },
+        "transferHistory": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "componentRegistry": {
+          "type": "object"
+        },
+        "publicListingEnabled": {
+          "type": "boolean"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -2497,6 +2529,38 @@
           "items": {
             "type": "string"
           }
+        },
+        "transferStatus": {
+          "type": "string",
+          "enum": ["none", "pending", "completed", "cancelled"]
+        },
+        "transferCode": {
+          "type": "string"
+        },
+        "transferExpiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "transferTargetEmail": {
+          "type": "string"
+        },
+        "transferTargetName": {
+          "type": "string"
+        },
+        "previousOwnersCount": {
+          "type": "integer"
+        },
+        "transferHistory": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "componentRegistry": {
+          "type": "object"
+        },
+        "publicListingEnabled": {
+          "type": "boolean"
         },
         "createdAt": {
           "type": "string",

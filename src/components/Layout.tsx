@@ -7,6 +7,7 @@ import { useSyncStatus } from "@/src/lib/syncTracker";
 import { toast } from "sonner";
 import React, { useEffect, useState, useRef } from "react";
 import { TradeBot } from "./TradeBot";
+import { FloatingTradeBotWidget } from "./FloatingTradeBotWidget";
 import { Logo } from "./Logo";
 import { AnimatePresence, motion } from "motion/react";
 import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
@@ -445,6 +446,16 @@ export default function Layout() {
   
   const isDriverTerminal = activeRole === "driver" && activePortal === "anyroller";
   const isFullScreenPage = location.pathname.includes('/post-job') || location.pathname.includes('/post-emergency-job');
+  
+  // Taxi / Rides portal check: Strictly hide AI TradeBot on taxi / driver screens
+  const isTaxiSide =
+    activePortal === "anyroller" ||
+    activeRole === "driver" ||
+    location.pathname.startsWith("/book-ride") ||
+    location.pathname.startsWith("/driver-terminal") ||
+    location.pathname.startsWith("/my-rides") ||
+    location.pathname.startsWith("/saved-journeys") ||
+    location.pathname.startsWith("/platform-fee-success");
 
   return (
     <div className={cn("min-h-screen flex flex-col w-full overflow-x-hidden relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
@@ -1198,7 +1209,12 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
-      <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
+      {!isTaxiSide && (
+        <>
+          <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
+          <FloatingTradeBotWidget />
+        </>
+      )}
       <TermsAcceptancePrompt />
 
       {/* Bottom Navigation (Mobile) */}

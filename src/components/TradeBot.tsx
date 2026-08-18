@@ -1,8 +1,40 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Bot, X, Send, Loader2, User, Sparkles, ExternalLink, ShieldCheck, Tag } from "lucide-react";
+import { 
+  Bot, 
+  X, 
+  Send, 
+  Loader2, 
+  User, 
+  Sparkles, 
+  ExternalLink, 
+  ShieldCheck, 
+  Tag, 
+  Star, 
+  MapPin, 
+  ArrowRight, 
+  CheckCircle2, 
+  Zap, 
+  FileText, 
+  PhoneCall, 
+  Building2, 
+  Wrench, 
+  Clock, 
+  AlertTriangle,
+  RotateCw,
+  HelpCircle
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { callTradeBot } from "@/src/services/gemini";
+import { useAuth } from "./AuthProvider";
+import { 
+  findMatchingTradeCategories, 
+  getHybridTraderRecommendations, 
+  TraderRecommendationCard 
+} from "@/src/services/aiRecommendationService";
+import { triggerHaptic } from "@/src/lib/capacitor";
+import { toast } from "sonner";
 
 interface GroundingSource {
   title: string;
@@ -13,6 +45,15 @@ interface Message {
   role: "user" | "model";
   text: string;
   sources?: GroundingSource[];
+  suggestedCategories?: string[];
+  recommendedTraders?: TraderRecommendationCard[];
+  quickAction?: {
+    type: "post_job" | "emergency_job" | "find_trades";
+    category: string;
+    title: string;
+    description: string;
+    estimatedBudget?: string;
+  };
 }
 
 interface TradeBotProps {
@@ -21,12 +62,23 @@ interface TradeBotProps {
 }
 
 export function TradeBot({ isOpen, onClose }: TradeBotProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "model",
-      text: "Hello! I'm AnyTrader AI Assistant. I can help you with live UK pricing, safety rules, material costs, or standards for ANY service — from plumbing & rewiring to wedding cakes, catering, cleaning, and events. How can I help you today?"
-    }
-  ]);
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+
+  const userRole = profile?.role || "homeowner";
+  const userPostcode = profile?.postcode || "";
+
+  const initialGreeting: Message = {
+    role: "model",
+    text: `Hello ${profile?.name ? profile.name.split(" ")[0] : "there"}! I'm AnyTrader AI Copilot. 
+
+I'm trained on AnyTrader's UK platform data across 86+ trade sectors — connecting you with real verified local tradespeople, accurate £ GBP pricing, and safety standards (Gas Safe, Part P, Awaab's Law, FSA).
+
+How can I assist your project today?`,
+    suggestedCategories: ["Plumbing", "Electrical", "Gas & Heating", "Specialist Cleaning"]
+  };
+
+  const [messages, setMessages] = useState<Message[]>([initialGreeting]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -37,7 +89,7 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleSendPrompt = async (promptText: string) => {
     if (!promptText.trim() || isLoading) return;
@@ -46,92 +98,176 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
     setInput("");
     setMessages(prev => [...prev, { role: "user", text: userMessage }]);
     setIsLoading(true);
+    triggerHaptic();
 
     try {
-      const res = await callTradeBot(userMessage, messages);
-      const modelText = typeof res === "object" && res.text ? res.text : (typeof res === "string" ? res : "No response from AI assistant.");
+      // 1. Context extraction: Detect matching trade categories
+      const matchedCats = findMatchingTradeCategories(userMessage, 3);
+      const primaryCategory = matchedCats[0] || "General Trades";
+
+      // 2. Query hybrid trader recommendations (Slot 1: Featured Pro ⚡ + Slot 2: Fair Rotation Organic Pro 🌟)
+      const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode);
+
+      // 3. User context payload for Gemini
+      const userContext = {
+        role: userRole,
+        postcode: userPostcode || "UK Wide",
+        propertySummary: (profile as any)?.boilerModel ? `Boiler: ${(profile as any).boilerModel}, EPC: ${(profile as any).epcRating || 'C'}` : undefined
+      };
+
+      // 4. Call server-side Gemini API with live search grounding
+      const [res, recommendedTraders] = await Promise.all([
+        callTradeBot(userMessage, messages.map(m => ({ role: m.role, text: m.text })), userContext),
+        tradersPromise
+      ]);
+
+      const modelText = typeof res === "object" && res.text ? res.text : (typeof res === "string" ? res : "Here is the guidance for your request.");
       const sources = typeof res === "object" && Array.isArray(res.sources) ? res.sources : [];
 
-      setMessages(prev => [...prev, { role: "model", text: modelText, sources }]);
+      // 5. Generate 1-tap quick action spec
+      const quickAction: Message["quickAction"] = {
+        type: userMessage.toLowerCase().includes("emergency") || userMessage.toLowerCase().includes("burst") || userMessage.toLowerCase().includes("flooding")
+          ? "emergency_job"
+          : "post_job",
+        category: primaryCategory,
+        title: userMessage.length > 50 ? `${primaryCategory} Required` : userMessage,
+        description: `Request for ${primaryCategory} assistance.\n\nAI Diagnostic Summary:\n${modelText.slice(0, 200)}...`,
+        estimatedBudget: "Market Standard (£120 - £350)"
+      };
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: "model",
+          text: modelText,
+          sources,
+          suggestedCategories: matchedCats,
+          recommendedTraders: recommendedTraders.slice(0, 2),
+          quickAction
+        }
+      ]);
     } catch (error) {
       console.error("TradeBot Error:", error);
-      setMessages(prev => [...prev, { role: "model", text: "Sorry, I'm having trouble searching live web data right now. Please try again shortly." }]);
+      setMessages(prev => [
+        ...prev, 
+        { 
+          role: "model", 
+          text: "I experienced a brief connection hiccup while grounding with live search. Please ask your question again, or browse verified trades directly below.",
+          suggestedCategories: ["Plumbing", "Electrical", "Gas & Heating"]
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSend = () => handleSendPrompt(input);
+  const handleCategoryClick = (categoryName: string) => {
+    triggerHaptic();
+    onClose();
+    navigate(`/find-trades?category=${encodeURIComponent(categoryName)}`);
+    toast.success(`Showing top verified trades in ${categoryName}`);
+  };
+
+  const handleTraderClick = (uid: string) => {
+    triggerHaptic();
+    onClose();
+    navigate(`/profile/${uid}`);
+  };
+
+  const handleQuickPostJob = (action: NonNullable<Message["quickAction"]>) => {
+    triggerHaptic();
+    onClose();
+    if (action.type === "emergency_job") {
+      navigate(`/post-emergency-job?category=${encodeURIComponent(action.category)}`);
+    } else {
+      const params = new URLSearchParams({
+        category: action.category,
+        title: action.title,
+        description: action.description,
+        prefilledByAI: "true"
+      });
+      navigate(`/post-job?${params.toString()}`);
+    }
+  };
 
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[85dvh] max-h-[650px] sm:h-[650px] border border-black"
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[90dvh] max-h-[720px] sm:h-[700px] border border-black"
         >
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-4 flex items-center justify-between text-white border-b border-black">
+          {/* Top Header */}
+          <div className="bg-slate-900 p-4 flex items-center justify-between text-white border-b border-black">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center border border-white/30">
-                <Bot className="w-6 h-6 text-white" />
+              <div className="relative w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-full flex items-center justify-center border border-white/30 shadow-inner">
+                <Bot className="w-5 h-5 text-white" />
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-slate-900 animate-pulse" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="font-bold text-base">AnyTrader AI Assistant</h2>
-                  <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3" /> Live Web Search
+                  <h2 className="font-bold text-base leading-tight">Ask AnyTrader AI</h2>
+                  <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-2xs">
+                    <Sparkles className="w-2.5 h-2.5" /> Fair Match Engine
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                  <span className="text-[11px] font-medium text-blue-100">Live UK Standards & Supply Prices Active</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[11px] font-medium text-slate-300">
+                    Live UK Pricing • 86+ Trade Categories • Gas Safe & NICEIC
+                  </span>
                 </div>
               </div>
             </div>
+
             <button 
               onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+              title="Close AI Assistant"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+          {/* Messages Feed */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 bg-slate-50">
             {messages.map((msg, i) => (
               <div 
                 key={i}
                 className={cn(
-                  "flex gap-3 max-w-[88%]",
+                  "flex gap-3 max-w-[92%]",
                   msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
                 )}
               >
+                {/* Avatar Icon */}
                 <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-black",
-                  msg.role === "user" ? "bg-blue-600 text-white" : "bg-white text-slate-700"
+                  "w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-black shadow-2xs",
+                  msg.role === "user" ? "bg-blue-600 text-white" : "bg-white text-slate-800"
                 )}>
-                  {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                  {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-blue-600" />}
                 </div>
-                <div className="space-y-2">
+
+                <div className="space-y-3 flex-1 min-w-0">
+                  {/* Message Bubble */}
                   <div className={cn(
-                    "p-3.5 rounded-2xl text-sm leading-relaxed whitespace-pre-line border border-black",
+                    "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-line border border-black shadow-xs",
                     msg.role === "user" 
                       ? "bg-blue-600 text-white rounded-tr-none" 
-                      : "bg-white text-slate-800 rounded-tl-none shadow-sm"
+                      : "bg-white text-slate-900 rounded-tl-none font-medium"
                   )}>
                     {msg.text}
                   </div>
 
-                  {/* Web Sources / Citations */}
+                  {/* Grounding Web Citations */}
                   {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
-                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 space-y-1.5">
-                      <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Verified Sources & Web Citations:
+                    <div className="bg-amber-50 border border-black rounded-xl p-3 space-y-1.5 shadow-2xs">
+                      <div className="text-[11px] font-bold text-amber-950 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Verified Live UK Sources:</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {msg.sources.map((source, sIdx) => (
@@ -140,89 +276,230 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
                             href={source.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 bg-white border border-amber-300 hover:border-amber-500 text-amber-900 text-[11px] px-2 py-0.5 rounded-md transition-colors hover:bg-amber-100/50"
+                            className="inline-flex items-center gap-1 bg-white border border-black text-slate-900 hover:bg-amber-100/60 text-[11px] font-medium px-2 py-0.5 rounded-md transition-colors shadow-2xs"
                           >
-                            <span className="truncate max-w-[200px]">{source.title}</span>
-                            <ExternalLink className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span className="truncate max-w-[220px]">{source.title}</span>
+                            <ExternalLink className="w-3 h-3 text-slate-500 shrink-0" />
                           </a>
                         ))}
                       </div>
                     </div>
                   )}
+
+                  {/* Suggested Category Chips */}
+                  {msg.role === "model" && msg.suggestedCategories && msg.suggestedCategories.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                        <Tag className="w-3 h-3 text-blue-600" /> Suggested Trade Categories:
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {msg.suggestedCategories.map((cat, catIdx) => (
+                          <button
+                            key={catIdx}
+                            onClick={() => handleCategoryClick(cat)}
+                            className="inline-flex items-center gap-1.5 bg-white border border-black hover:bg-blue-50 text-slate-900 text-xs font-bold px-3 py-1.5 rounded-full transition-all shadow-2xs group active:scale-95"
+                          >
+                            <span>{cat}</span>
+                            <ArrowRight className="w-3 h-3 text-blue-600 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Interactive Trader Recommendation Cards (Hybrid Monetized + Fairness Engine) */}
+                  {msg.role === "model" && msg.recommendedTraders && msg.recommendedTraders.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                        <span className="flex items-center gap-1 text-slate-800">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Matching Verified Local Traders
+                        </span>
+                        <span className="text-slate-400 font-normal text-[10px] lowercase">
+                          fair rotation active
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {msg.recommendedTraders.map((trader) => (
+                          <div
+                            key={trader.uid}
+                            className={cn(
+                              "bg-white border rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-3 text-left relative overflow-hidden",
+                              trader.isSponsored ? "border-amber-400 ring-1 ring-amber-400/40 bg-amber-50/20" : "border-black"
+                            )}
+                          >
+                            {/* Slot Badge */}
+                            <div className="flex items-center justify-between gap-2">
+                              {trader.isSponsored ? (
+                                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 border border-black/20 shadow-2xs">
+                                  <Zap className="w-3 h-3 fill-slate-950" /> Featured Pro
+                                </span>
+                              ) : trader.isNewcomerBoost ? (
+                                <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3 text-emerald-600" /> Newcomer Boost
+                                </span>
+                              ) : (
+                                <span className="bg-blue-50 text-blue-900 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                                  <RotateCw className="w-2.5 h-2.5 text-blue-600" /> Fair Match
+                                </span>
+                              )}
+
+                              <div className="flex items-center gap-1 text-xs font-bold text-slate-900">
+                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                <span>{trader.rating.toFixed(1)}</span>
+                                <span className="text-slate-400 font-normal text-[11px]">({trader.reviewsCount})</span>
+                              </div>
+                            </div>
+
+                            {/* Trader Info */}
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={trader.avatarUrl}
+                                alt={trader.name}
+                                className="w-11 h-11 rounded-full object-cover border border-black shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-sm text-slate-900 truncate leading-tight">
+                                  {trader.name}
+                                </h4>
+                                <p className="text-xs text-slate-600 truncate font-medium">
+                                  {trader.businessName || trader.category}
+                                </p>
+                                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                                  <MapPin className="w-3 h-3 text-slate-400" />
+                                  <span>{trader.distanceMiles} miles away</span>
+                                  {trader.isGasSafe && <span className="text-amber-600 font-bold">• Gas Safe</span>}
+                                  {trader.isNiceic && <span className="text-blue-600 font-bold">• NICEIC</span>}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                              <button
+                                onClick={() => handleTraderClick(trader.uid)}
+                                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2 px-3 rounded-xl border border-black transition-colors flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                              >
+                                <span>View Profile</span>
+                                <ArrowRight className="w-3 h-3 text-amber-400" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  triggerHaptic();
+                                  onClose();
+                                  navigate(`/profile/${trader.uid}`);
+                                }}
+                                className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs py-2 px-3 rounded-xl border border-black transition-colors shadow-2xs active:scale-95"
+                                title="Request Quote"
+                              >
+                                Quote
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 1-Tap Quick Action CTA (Post Job with AI Specs) */}
+                  {msg.role === "model" && msg.quickAction && (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-black rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <div className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-blue-700" />
+                          <span>1-Tap Action: Ready to request quotes?</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 font-medium">
+                          Post job with AI pre-filled specs & benchmark pricing ({msg.quickAction.category}).
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleQuickPostJob(msg.quickAction!)}
+                        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl border border-black flex items-center justify-center gap-2 shadow-2xs transition-all shrink-0 active:scale-95"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Post Job with AI Specs</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
+
             {isLoading && (
               <div className="flex gap-3 max-w-[85%] mr-auto">
-                <div className="w-8 h-8 rounded-full bg-white border border-black text-slate-400 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-white border border-black text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="bg-white border border-black p-3.5 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                  <span className="text-xs font-semibold text-slate-600">Searching live UK pricing & safety standards...</span>
+                <div className="bg-white border border-black p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-600 shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">Grounding live UK standards & matching verified trades...</p>
+                    <p className="text-[10px] text-slate-500">Checking Gas Safe, Part P, and fair local rotation</p>
+                  </div>
                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Prompt Pills */}
-          <div className="bg-slate-100 px-4 py-2 border-t border-black flex gap-1.5 overflow-x-auto scrollbar-none">
+          {/* Quick Prompt Carousel Pills */}
+          <div className="bg-slate-100 px-4 py-2.5 border-t border-black flex gap-2 overflow-x-auto scrollbar-none">
             <button
-              onClick={() => handleSendPrompt("What are typical UK prices for a 3-tier custom wedding cake and what food safety/allergen rules apply?")}
-              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs"
+              onClick={() => handleSendPrompt("My boiler is losing pressure and making banging sounds. What causes this and what are typical UK repair costs?")}
+              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-900 text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-2xs active:scale-95"
             >
-              🍰 Wedding Cake & Food Safety
+              <Wrench className="w-3 h-3 text-blue-600" /> Boiler Pressure & Banging Faults
             </button>
             <button
-              onClick={() => handleSendPrompt("What are typical UK prices for emergency plumbing or boiler repair, and what Gas Safe rules apply?")}
-              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs"
+              onClick={() => handleSendPrompt("What are the UK Part P building regulations for installing new downlights and sockets in a kitchen?")}
+              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-900 text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-2xs active:scale-95"
             >
-              <Tag className="w-3 h-3 text-amber-600" /> Plumbing & Boiler Costs
+              <Zap className="w-3 h-3 text-amber-500" /> Part P Kitchen Electrical Rules
             </button>
             <button
-              onClick={() => handleSendPrompt("What are standard UK rates for end-of-tenancy house cleaning or carpet cleaning?")}
-              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs"
+              onClick={() => handleSendPrompt("What are standard UK rates for end-of-tenancy deep cleaning and carpet steam washing?")}
+              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-900 text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-2xs active:scale-95"
             >
-              🧹 Deep Cleaning Rates
+              <ShieldCheck className="w-3 h-3 text-emerald-600" /> End of Tenancy Cleaning Rates
             </button>
             <button
-              onClick={() => handleSendPrompt("What are UK Part P electrical safety rules and BS 7671 standards for home rewiring?")}
-              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs"
+              onClick={() => handleSendPrompt("How much does a 3-tier custom wedding cake cost in the UK and what food allergen laws apply?")}
+              className="shrink-0 bg-white border border-black hover:bg-blue-50 text-slate-900 text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-2xs active:scale-95"
             >
-              <ShieldCheck className="w-3 h-3 text-blue-600" /> Electrical Safety Rules
+              🎂 Wedding Cake Pricing & Natasha's Law
             </button>
           </div>
 
-          {/* Input */}
+          {/* User Input Bar */}
           <div className="p-3 sm:p-4 bg-white border-t border-black shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div className="relative">
               <input 
                 type="text"
-                placeholder="Ask about prices, standards, or rules for any service..."
-                className="w-full pl-4 pr-12 py-3 bg-slate-100 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 focus:bg-white transition-all text-sm font-medium"
+                placeholder="Ask about prices, regulations, or describe a job to match trades..."
+                className="w-full pl-4 pr-12 py-3.5 bg-slate-100 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 focus:bg-white transition-all text-sm font-medium text-slate-900 placeholder:text-slate-400"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onFocus={() => {
-                  setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                  }, 200);
-                }}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                onKeyDown={(e) => e.key === "Enter" && handleSendPrompt(input)}
               />
               <button 
-                onClick={handleSend}
+                onClick={() => handleSendPrompt(input)}
                 disabled={!input.trim() || isLoading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm active:scale-95"
+                title="Send Message"
               >
                 <Send className="w-4 h-4" />
               </button>
             </div>
-            <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400 font-medium uppercase tracking-widest px-1">
-              <div className="flex items-center gap-1 text-slate-500">
-                <Sparkles className="w-3 h-3 text-amber-500" /> AnyTrader Smart Assistant
+            
+            <div className="mt-2.5 flex items-center justify-between text-[10px] text-slate-500 font-medium px-1">
+              <div className="flex items-center gap-1 text-slate-700">
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>Trained on AnyTrader UK Database & Standards</span>
               </div>
-              <div>Real-Time Web Search for All Services</div>
+              <div className="text-slate-400">
+                Fairness Rotation Engine Active
+              </div>
             </div>
           </div>
         </motion.div>

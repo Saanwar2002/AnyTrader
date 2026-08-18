@@ -7,7 +7,9 @@ export const RECURRING_CATEGORIES = [
   "Specialist Cleaning",
   "Car Detailing & Valeting",
   "Windows & Doors", // For window cleaning
-  "Estate Agent & Landlord Services"
+  "Estate Agent & Landlord Services",
+  "Fire Safety, Fire Doors & Passive Protection",
+  "Void Property Turnaround & Tenancy Refresh"
 ];
 
 export const UNSORTED_TRADE_CATEGORIES = [
@@ -169,18 +171,29 @@ export const UNSORTED_TRADE_CATEGORIES = [
   },
   {
     id: 8,
-    name: "Refrigerator/AC",
+    name: "Refrigerator/AC & Commercial HVAC",
     icon: "❄️",
+    requiredCertifications: ["F-Gas Category 1/2 Certified (Refcom / City & Guilds 2079)"],
+    subcategoryCertifications: {
+      "TR19 Commercial Kitchen Extract & Duct Cleaning": ["BESA TR19 / Grease Hygiene Operator"],
+      "Commercial Walk-in Cold Room & Chiller Installation / Repair": ["F-Gas Cat 1", "City & Guilds Refrigeration"],
+      "F-Gas Commercial VRF / VRV Air Conditioning Servicing": ["F-Gas Cat 1"]
+    },
     subcategories: [
       "Domestic Refrigerator & Freezer Repair",
       "Commercial Refrigeration Service",
       "Air Conditioning Installation",
       "Air Conditioning Servicing",
+      "Commercial Walk-in Cold Room & Chiller Installation / Repair",
+      "F-Gas Commercial VRF / VRV Air Conditioning Servicing",
+      "TR19 Commercial Kitchen Extract & Duct Cleaning (Insurance Certified)",
+      "Cellar Cooling & Draught Dispense Temperature Systems",
+      "Commercial Ice Machine & Display Chiller Repair",
       "Wine Cooler & Specialist Cooling Repair",
       "Heat Pump Installation (air source / ground source)",
-      "Ventilation & MVHR Systems",
-      "Ductwork Installation",
-      "Commercial HVAC Systems",
+      "Ventilation, AHU & MVHR Heat Recovery Systems",
+      "Ductwork Installation & Pressure Testing",
+      "Commercial HVAC Systems & Plant Maintenance",
       "Biomass Boiler Installation"
     ]
   },
@@ -302,20 +315,31 @@ export const UNSORTED_TRADE_CATEGORIES = [
   },
   {
     id: 16,
-    name: "Solar & Renewable Energy",
+    name: "Solar, Heat Pumps & Renewable Energy",
     icon: "☀️",
+    requiredCertifications: ["MCS Certified (Microgeneration Certification Scheme) (Optional)"],
+    subcategoryCertifications: {
+      "Air Source Heat Pump (ASHP) Design & Installation (BUS £7,500 Grant)": ["MCS Heat Pump Certification", "Water Regs / Part G"],
+      "Ground Source Heat Pump (GSHP) Sourcing & Ground Loops": ["MCS Heat Pump Certification"],
+      "PAS 2035 Retrofit Assessment & Decarbonisation Plan": ["TrustMark / PAS 2035 Retrofit Assessor"],
+      "Solar Panel Installation (PV)": ["MCS Solar PV Certification", "NICEIC/NAPIT"]
+    },
     subcategories: [
       "Solar Panel Installation (PV)",
+      "Air Source Heat Pump (ASHP) Design & Installation (BUS £7,500 Grant)",
+      "Ground Source Heat Pump (GSHP) Sourcing & Ground Loops",
+      "Battery Storage Systems (Tesla Powerwall, GivEnergy, etc.)",
+      "PAS 2035 Retrofit Assessment & Decarbonisation Plan",
+      "Thermal Imaging Building Heat Loss Survey & Cold Spot Diagnosis",
+      "Infrared Radiant Heating Panel Installation",
       "Solar Panel Cleaning & Maintenance",
-      "Battery Storage Systems",
       "Solar Thermal (hot water)",
       "EV Charger Installation",
-      "Heat Pump Installation",
+      "Heat Pump Servicing, Commissioning & Anti-freeze Flush",
       "Wind Turbine (micro/domestic)",
-      "Energy Efficiency Assessment",
-      "Energy Saving Audit",
+      "Energy Efficiency Assessment & EPC Improvement Retrofit",
       "Composting & Worm Farm Setup",
-      "Rainwater Collection Systems"
+      "Rainwater Harvesting & Greywater Collection Systems"
     ]
   },
   {
@@ -1541,6 +1565,90 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "Post-Renovation Site Cleanup & Tool Helper",
       "Outdoor Landscaping Labour & Turf Laying Helper",
       "Urgent Same-Day On-Demand Site Helper & Extra Hands"
+    ]
+  },
+  {
+    id: 87,
+    name: "Fire Safety, Fire Doors & Passive Protection",
+    icon: "🧯",
+    requiredCertifications: ["FIRAS / BM TRADA / FPA Certification (Optional)", "IFE / BAFE Registered (Optional)"],
+    subcategoryCertifications: {
+      "Fire Door Certified Installation (FD30 / FD60)": ["BM TRADA Q-Mark / FIRAS Fire Door Installer"],
+      "Fire Door Inspection & Gap/Seal Compliance": ["FDIS Dip / Fire Door Inspector Certified"],
+      "Fire Risk Assessment (FRA Type 1-4)": ["IFE Registered Fire Risk Assessor / Tier 3 Assessor"],
+      "Passive Fire Stopping & Intumescent Penetration Sealing": ["FIRAS / ASFP Certified"],
+      "Emergency Lighting 3-Hour Discharge Testing": ["NICEIC / ECA / 18th Edition"]
+    },
+    subcategories: [
+      "Fire Door Certified Installation (FD30 / FD60)",
+      "Fire Door Inspection & Gap/Intumescent Seal Testing (Statutory Quarterly/Annual)",
+      "Fire Risk Assessment (FRA Types 1, 2, 3 & 4)",
+      "Passive Fire Stopping, Intumescent Mastic & Penetration Sealing",
+      "Dry Riser & Wet Riser Hydraulic Pressure Testing",
+      "Fire Damper Inspection & Drop Testing (BS 9999)",
+      "Emergency Lighting 3-Hour Discharge Testing & Certification",
+      "Fire Extinguisher Supply, Inspection & Annual Servicing",
+      "Commercial Sprinkler & High-Pressure Water Mist Systems",
+      "Smoke Control & AOV (Automatic Opening Vent) Servicing"
+    ]
+  },
+  {
+    id: 88,
+    name: "Plant & Operated Machinery Hire",
+    icon: "🚜",
+    requiredCertifications: ["CPCS / NPORS Plant Operator License", "Hired-in Plant Insurance"],
+    subcategoryCertifications: {
+      "Mini Digger (0.8t – 3t) Hire with Certified Operator": ["CPCS / NPORS A02 180 / 360 Excavator"],
+      "Cherry Picker & MEWP with Certified IPAF Operator": ["IPAF 3a / 3b Operator License"],
+      "Telehandler with CPCS Operator": ["CPCS A17 Telehandler License"]
+    },
+    subcategories: [
+      "Mini Digger (0.8t – 3t) Hire with Certified Operator",
+      "Micro Digger Hire (Narrow Access / Through-House Tracked)",
+      "Tracked Dumper & High-Tip Power Barrow Hire with Operator",
+      "Cherry Picker & MEWP with Certified IPAF Operator",
+      "Trench Compactor, Roller & Heavy Plate Compactor with Operator",
+      "Concrete Crusher & Soil Screener On-Site Hire",
+      "Stump Grinder & Tree Winch Machinery with Operator",
+      "Telehandler & Rough Terrain Forklift with CPCS Operator",
+      "Operated Road Saw & Concrete Breaking Equipment"
+    ]
+  },
+  {
+    id: 89,
+    name: "Void Property Turnaround & Tenancy Refresh",
+    icon: "🔄",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "Tenant Abandonment & Biohazard Clearance": ["Licensed Waste Carrier", "Biohazard Hygiene Certification"]
+    },
+    subcategories: [
+      "Rapid Void Property Turnaround (Full Clean & Re-Let Ready)",
+      "Void Property Board-Up, Security Steel Screens & Key Safe Installation",
+      "Squatter & Unauthorised Occupant Clearance & Sanitisation",
+      "Pre-Tenancy Sparkle Clean & Touch-Up Redecoration",
+      "End of Tenancy Photographic Schedule of Condition & Inventory",
+      "Suited Master Keying, Lock Change & Lockbox Fitment",
+      "Tenant Abandonment & Biohazard Clearance",
+      "Council Tax & Utility Meter Final Photographic Logging",
+      "Post-Eviction Locksmith & Property Securing"
+    ]
+  },
+  {
+    id: 90,
+    name: "Hard Surface Repair & Cosmetic Resurfacing",
+    icon: "🩹",
+    requiredCertifications: [],
+    subcategories: [
+      "Bath, Shower Tray & Ceramic Basin Enamel Chip / Crack Repair",
+      "Kitchen Worktop Chip, Burn & Scratch Repair (Quartz, Granite, Laminate, Corian)",
+      "uPVC Window Frame, Sill & Door Scuff Repair / Foil Re-wrapping",
+      "Scratched Glass Polishing (Bi-fold Doors & Panoramic Windows)",
+      "Wood Flooring, Veneer & Laminate Spot Surface Repair",
+      "Porcelain & Ceramic Tile Crack / Hole Restoration",
+      "External Brick, Stone & Powder-Coated Metal Cosmetic Repair",
+      "Caravan & Motorhome Interior Cosmetic Surface Repair",
+      "Fitted Furniture & Wardrobe Veneer Edge Repair"
     ]
   }
 ];

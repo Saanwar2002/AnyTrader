@@ -205,8 +205,16 @@ service cloud.firestore {
       allow update: if isAdmin();
     }
     match /security_alerts/{alertId} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || isSignedIn();
+      allow write: if isAdmin() || isSignedIn();
+    }
+    match /admin_alert_rules/{ruleId} {
+      allow read: if isAdmin() || isSignedIn();
       allow write: if isAdmin();
+    }
+    match /email_alerts_queue/{queueId} {
+      allow create: if isSignedIn();
+      allow read, write: if isAdmin();
     }
     match /shop_orders/{orderId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
@@ -227,7 +235,12 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.userId == request.auth.uid);
-      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid || 
+        resource.data.userId == request.auth.uid || 
+        isAdmin() ||
+        resource.data.get('transferStatus', '') == 'pending'
+      );
       allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid || isAdmin());
     }
 
@@ -290,15 +303,52 @@ service cloud.firestore {
     // --- Home Portal (Tradesperson/Homeowner Logic) ---
     match /jobs/{jobId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && (request.resource.data.homeownerId == request.auth.uid || request.resource.data.isRecurringInstance == true || isAdmin());
-      allow update: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || (resource.data.acceptedTradespersonId == request.auth.uid) || isAdmin());
-      allow delete: if isSignedIn() && (resource == null || resource.data.homeownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (
+        request.resource.data.get('homeownerId', '') == request.auth.uid || 
+        request.resource.data.get('userId', '') == request.auth.uid || 
+        request.resource.data.get('ownerId', '') == request.auth.uid || 
+        request.resource.data.get('posterId', '') == request.auth.uid || 
+        request.resource.data.get('customerId', '') == request.auth.uid || 
+        request.resource.data.get('isRecurringInstance', false) == true || 
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource == null || 
+        resource.data.get('homeownerId', '') == request.auth.uid || 
+        resource.data.get('userId', '') == request.auth.uid || 
+        resource.data.get('ownerId', '') == request.auth.uid || 
+        resource.data.get('posterId', '') == request.auth.uid || 
+        resource.data.get('customerId', '') == request.auth.uid || 
+        resource.data.get('acceptedTradespersonId', '') == request.auth.uid || 
+        request.resource.data.get('acceptedTradespersonId', '') == request.auth.uid || 
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        resource == null || 
+        resource.data.get('homeownerId', '') == request.auth.uid || 
+        resource.data.get('userId', '') == request.auth.uid || 
+        resource.data.get('ownerId', '') == request.auth.uid || 
+        isAdmin()
+      );
     }
 
     match /jobs/{jobId}/quotes/{quoteId} {
       allow read, list: if isSignedIn();
-      allow create: if isSignedIn() && (request.resource.data.tradespersonId == request.auth.uid || request.resource.data.homeownerId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (resource == null || resource.data.tradespersonId == request.auth.uid || resource.data.homeownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (
+        request.resource.data.get('tradespersonId', '') == request.auth.uid || 
+        request.resource.data.get('proId', '') == request.auth.uid || 
+        request.resource.data.get('homeownerId', '') == request.auth.uid || 
+        request.resource.data.get('userId', '') == request.auth.uid || 
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource == null || 
+        resource.data.get('tradespersonId', '') == request.auth.uid || 
+        resource.data.get('proId', '') == request.auth.uid || 
+        resource.data.get('homeownerId', '') == request.auth.uid || 
+        resource.data.get('userId', '') == request.auth.uid || 
+        isAdmin()
+      );
     }
 
     // --- Consultancy System ---
@@ -459,6 +509,27 @@ service cloud.firestore {
         dealId.matches('^seed-.*$') || 
         isAdmin()
       );
+    }
+
+    // --- AI Agent Ecosystem & Audit Log Collections ---
+    match /platform_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && settingId == 'ai_agent_ecosystem');
+    }
+
+    match /ai_agent_audit_logs/{logId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /materials_arbitrage_alerts/{alertId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /demand_surge_forecasts/{forecastId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
   }
 }

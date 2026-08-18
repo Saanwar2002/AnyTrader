@@ -2,16 +2,20 @@ import React, { useState, useEffect } from "react";
 import { db, doc, updateDoc, collection, query, where, onSnapshot, addDoc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { shareToWhatsApp, copyPrivacyShareLink } from "@/src/utils/shareUtils";
-import { X, ArrowLeft, Home, ShieldCheck, AlertTriangle, Calendar, FileText, Wrench, CheckCircle2, Share2, Sparkles, Plus, Edit2, TrendingUp, Info, Copy, Check, Users, Zap, ExternalLink, Clock } from "lucide-react";
+import { X, ArrowLeft, Home, ShieldCheck, AlertTriangle, Calendar, FileText, Wrench, CheckCircle2, Share2, Sparkles, Plus, Edit2, TrendingUp, Info, Copy, Check, Users, Zap, ExternalLink, Clock, KeyRound, Printer, QrCode } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
+import { TransferOwnershipModal } from "./property/TransferOwnershipModal";
+import { BuyerPackModal } from "./property/BuyerPackModal";
+import { calculatePropertyHealthScore } from "./property/propertyUtils";
 
 interface PropertyPassportModalProps {
   property: any;
   onClose: () => void;
+  onUpdated?: () => void;
 }
 
-export function PropertyPassportModal({ property, onClose }: PropertyPassportModalProps) {
+export function PropertyPassportModal({ property, onClose, onUpdated }: PropertyPassportModalProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"passport" | "certs" | "history" | "predictive" | "tenant">("passport");
   const [isEditing, setIsEditing] = useState(false);
@@ -20,6 +24,10 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
   const [completedJobs, setCompletedJobs] = useState<any[]>([]);
   const [tenantIssues, setTenantIssues] = useState<any[]>([]);
   const [dispatchingJobId, setDispatchingJobId] = useState<string | null>(null);
+
+  // Transfer & Buyer Pack modal state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showBuyerPackModal, setShowBuyerPackModal] = useState(false);
 
   // Passport state
   const [epcRating, setEpcRating] = useState(property.epcRating || "C");
@@ -31,6 +39,12 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
   const [boilerLastServiced, setBoilerLastServiced] = useState(property.boilerInfo?.lastServiced || "");
   const [roofCondition, setRoofCondition] = useState(property.roofCondition || "Good");
   const [insuranceProvider, setInsuranceProvider] = useState(property.insuranceProvider || "");
+  
+  // Component Registry state
+  const [stopcockLocation, setStopcockLocation] = useState(property.componentRegistry?.stopcockLocation || "");
+  const [fuseboardLocation, setFuseboardLocation] = useState(property.componentRegistry?.fuseboardLocation || "");
+  const [paintCodes, setPaintCodes] = useState(property.componentRegistry?.paintCodes || "");
+
   const [saving, setSaving] = useState(false);
 
   // Load associated completed jobs for history & valuation impact
@@ -73,6 +87,7 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
       await addDoc(collection(db, "jobs"), {
         ownerId: user.uid,
         userId: user.uid,
+        homeownerId: user.uid,
         title: jobDetails.title,
         category: jobDetails.category,
         description: `${jobDetails.description}\n\n--- PRE-LOADED PROPERTY PASSPORT SPECS ---\n- Address: ${property.address?.line1 || property.name}\n- Boiler Spec: ${boilerBrand || 'Standard'} ${boilerModel || ''} (${boilerAge || 'N/A'} yrs old)\n- Roof Condition: ${roofCondition || 'Good'}\n- EPC Rating: Grade ${epcRating || 'C'}\n- Contact/Access Notes: ${property.contactPhone || "Call Landlord"}`,
@@ -125,10 +140,16 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
         },
         roofCondition,
         insuranceProvider,
+        componentRegistry: {
+          stopcockLocation: stopcockLocation.trim() || null,
+          fuseboardLocation: fuseboardLocation.trim() || null,
+          paintCodes: paintCodes.trim() || null,
+        },
         updatedAt: new Date().toISOString()
       });
-      toast.success("Property Passport updated successfully!");
+      toast.success("Property Passport & Component Registry updated!");
       setIsEditing(false);
+      if (onUpdated) onUpdated();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `properties/${property.id}`);
       toast.error("Failed to update passport");
@@ -193,12 +214,27 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
 
             <div className="flex items-center gap-2">
               <button
-                onClick={handleShareWhatsApp}
+                onClick={() => setShowBuyerPackModal(true)}
+                className="p-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition"
+                title="Conveyancing Solicitor Pack"
+              >
+                <Printer className="w-4 h-4" />
+                <span className="hidden sm:inline">Buyer Pack</span>
+              </button>
+              <button
+                onClick={() => setShowTransferModal(true)}
                 className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition"
+                title="Transfer Ownership to Buyer"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span className="hidden sm:inline">Transfer</span>
+              </button>
+              <button
+                onClick={handleShareWhatsApp}
+                className="p-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 border border-white/20 shadow-sm transition"
                 title="Share via WhatsApp"
               >
                 <Share2 className="w-4 h-4" />
-                <span className="hidden sm:inline">WhatsApp</span>
               </button>
               <button
                 onClick={onClose}
@@ -210,56 +246,109 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex border-b border-black bg-slate-50 px-5 pt-3 gap-2 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab("passport")}
-              className={`pb-3 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
-                activeTab === "passport" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Home className="w-4 h-4" /> Specs
-            </button>
-            <button
-              onClick={() => setActiveTab("certs")}
-              className={`pb-3 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
-                activeTab === "certs" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4" /> Compliance
-              {(isGasExpiringSoon || isEicrExpiringSoon) && (
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("tenant")}
-              className={`pb-3 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 relative ${
-                activeTab === "tenant" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Users className="w-4 h-4 text-emerald-600" /> Tenant Issues
-              {tenantIssues.length > 0 && (
-                <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
-                  {tenantIssues.length}
+          {/* Transfer Pending Alert Banner */}
+          {property.transferStatus === "pending" && property.transferCode && (
+            <div className="p-3 bg-amber-500 text-slate-950 font-sans px-5 flex items-center justify-between border-b border-amber-600 text-xs font-bold">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-slate-950 shrink-0" />
+                <span>
+                  Ownership Transfer Active: Code <strong className="font-mono bg-black text-white px-2 py-0.5 rounded text-xs">{property.transferCode}</strong>
                 </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("history")}
-              className={`pb-3 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
-                activeTab === "history" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Wrench className="w-4 h-4" /> History
-            </button>
-            <button
-              onClick={() => setActiveTab("predictive")}
-              className={`pb-3 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
-                activeTab === "predictive" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-purple-600" /> AI Insights
-            </button>
+              </div>
+              <button
+                onClick={() => setShowTransferModal(true)}
+                className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-[11px] font-black hover:bg-black transition"
+              >
+                Manage / QR Code
+              </button>
+            </div>
+          )}
+
+          {/* Navigation Tabs */}
+          <div className="border-b border-black bg-slate-100 p-2 sm:px-4 sm:py-2.5">
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+              <button
+                type="button"
+                onClick={() => setActiveTab("passport")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === "passport" 
+                    ? "bg-blue-600 text-white shadow-sm border border-blue-700" 
+                    : "bg-white text-slate-700 hover:text-black border border-slate-300 hover:border-slate-400"
+                }`}
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>Specs</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("certs")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === "certs" 
+                    ? "bg-blue-600 text-white shadow-sm border border-blue-700" 
+                    : "bg-white text-slate-700 hover:text-black border border-slate-300 hover:border-slate-400"
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Compliance</span>
+                {(isGasExpiringSoon || isEicrExpiringSoon) && (
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("tenant")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === "tenant" 
+                    ? "bg-blue-600 text-white shadow-sm border border-blue-700" 
+                    : "bg-white text-slate-700 hover:text-black border border-slate-300 hover:border-slate-400"
+                }`}
+              >
+                <Users className={`w-3.5 h-3.5 ${activeTab === "tenant" ? "text-white" : "text-emerald-600"}`} />
+                <span>Tenant Issues</span>
+                {tenantIssues.length > 0 && (
+                  <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                    activeTab === "tenant" ? "bg-white text-blue-600" : "bg-red-500 text-white"
+                  }`}>
+                    {tenantIssues.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("history")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === "history" 
+                    ? "bg-blue-600 text-white shadow-sm border border-blue-700" 
+                    : "bg-white text-slate-700 hover:text-black border border-slate-300 hover:border-slate-400"
+                }`}
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>History</span>
+                {completedJobs.length > 0 && (
+                  <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                    activeTab === "history" ? "bg-white text-blue-600" : "bg-slate-200 text-slate-700"
+                  }`}>
+                    {completedJobs.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("predictive")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === "predictive" 
+                    ? "bg-blue-600 text-white shadow-sm border border-blue-700" 
+                    : "bg-white text-slate-700 hover:text-black border border-slate-300 hover:border-slate-400"
+                }`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${activeTab === "predictive" ? "text-white" : "text-purple-600"}`} />
+                <span>AI Insights</span>
+              </button>
+            </div>
           </div>
 
           {/* Body Content */}
@@ -353,37 +442,116 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
                       </div>
                     </div>
 
+                    <div className="border-t border-slate-200 pt-3 space-y-2">
+                      <p className="text-[11px] font-black uppercase text-blue-700">Digital Component Registry</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">Mains Water Stopcock Location</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Under kitchen sink / Hallway"
+                            value={stopcockLocation}
+                            onChange={(e) => setStopcockLocation(e.target.value)}
+                            className="w-full p-2.5 rounded-xl border border-black bg-white text-xs font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">Consumer Unit (Fuseboard)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Under stairs / Hall cupboard"
+                            value={fuseboardLocation}
+                            onChange={(e) => setFuseboardLocation(e.target.value)}
+                            className="w-full p-2.5 rounded-xl border border-black bg-white text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">Decor Paint Codes & Finishes</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Living: F&B Ammonite, Kitchen: Dulux Heritage Sage"
+                          value={paintCodes}
+                          onChange={(e) => setPaintCodes(e.target.value)}
+                          className="w-full p-2.5 rounded-xl border border-black bg-white text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+
                     <button
                       onClick={handleSavePassport}
                       disabled={saving}
                       className="w-full py-3 bg-blue-600 text-white font-extrabold text-xs rounded-xl border border-black shadow-md hover:bg-blue-700 transition"
                     >
-                      {saving ? "Saving Changes..." : "Save Passport Specs"}
+                      {saving ? "Saving Changes..." : "Save Passport Specs & Registry"}
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div className="p-3.5 bg-slate-50 border border-black rounded-2xl">
-                      <p className="text-[10px] uppercase font-extrabold text-slate-500">EPC Energy Rating</p>
-                      <p className="text-xl font-black text-blue-600 mt-1">Grade {epcRating}</p>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div className="p-3.5 bg-slate-50 border border-black rounded-2xl">
+                        <p className="text-[10px] uppercase font-extrabold text-slate-500">EPC Energy Rating</p>
+                        <p className="text-xl font-black text-blue-600 mt-1">Grade {epcRating}</p>
+                      </div>
+
+                      <div className="p-3.5 bg-slate-50 border border-black rounded-2xl">
+                        <p className="text-[10px] uppercase font-extrabold text-slate-500">Roof Condition</p>
+                        <p className="text-sm font-black text-slate-900 mt-1">{roofCondition}</p>
+                      </div>
+
+                      <div className="p-3.5 bg-slate-50 border border-black rounded-2xl col-span-2 sm:col-span-1">
+                        <p className="text-[10px] uppercase font-extrabold text-slate-500">Boiler System</p>
+                        <p className="text-sm font-black text-slate-900 mt-1">
+                          {boilerBrand || "Not set"} {boilerModel ? `(${boilerModel})` : ""}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-bold">{boilerAge ? `${boilerAge} yrs old` : ""}</p>
+                      </div>
+
+                      <div className="p-3.5 bg-slate-50 border border-black rounded-2xl col-span-2">
+                        <p className="text-[10px] uppercase font-extrabold text-slate-500">Insurance & Warranty</p>
+                        <p className="text-sm font-black text-slate-900 mt-1">{insuranceProvider || "No active provider linked"}</p>
+                      </div>
+
+                      {/* Component Registry Display */}
+                      <div className="p-3.5 bg-slate-50 border border-black rounded-2xl">
+                        <p className="text-[10px] uppercase font-extrabold text-slate-500">Mains Stopcock</p>
+                        <p className="text-xs font-black text-slate-900 mt-1">{stopcockLocation || "Under sink"}</p>
+                      </div>
+
+                      <div className="p-3.5 bg-slate-50 border border-black rounded-2xl">
+                        <p className="text-[10px] uppercase font-extrabold text-slate-500">Fuseboard (Consumer Unit)</p>
+                        <p className="text-xs font-black text-slate-900 mt-1">{fuseboardLocation || "Hall cupboard"}</p>
+                      </div>
+
+                      {paintCodes && (
+                        <div className="p-3.5 bg-slate-50 border border-black rounded-2xl col-span-2 sm:col-span-3">
+                          <p className="text-[10px] uppercase font-extrabold text-slate-500">Paint Codes & Finishes</p>
+                          <p className="text-xs font-bold text-slate-900 mt-0.5">{paintCodes}</p>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="p-3.5 bg-slate-50 border border-black rounded-2xl">
-                      <p className="text-[10px] uppercase font-extrabold text-slate-500">Roof Condition</p>
-                      <p className="text-sm font-black text-slate-900 mt-1">{roofCondition}</p>
-                    </div>
-
-                    <div className="p-3.5 bg-slate-50 border border-black rounded-2xl col-span-2 sm:col-span-1">
-                      <p className="text-[10px] uppercase font-extrabold text-slate-500">Boiler System</p>
-                      <p className="text-sm font-black text-slate-900 mt-1">
-                        {boilerBrand || "Not set"} {boilerModel ? `(${boilerModel})` : ""}
-                      </p>
-                      <p className="text-[10px] text-slate-500 font-bold">{boilerAge ? `${boilerAge} yrs old` : ""}</p>
-                    </div>
-
-                    <div className="p-3.5 bg-slate-50 border border-black rounded-2xl col-span-2">
-                      <p className="text-[10px] uppercase font-extrabold text-slate-500">Insurance & Warranty</p>
-                      <p className="text-sm font-black text-slate-900 mt-1">{insuranceProvider || "No active provider linked"}</p>
+                    {/* Public Buyer Listing & Conveyancing Banner */}
+                    <div className="p-4 bg-slate-50 border border-black rounded-2xl flex items-center justify-between gap-3">
+                      <div>
+                        <h5 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                          <QrCode className="w-4 h-4 text-purple-600" />
+                          Public Buyer View & QR Badge
+                        </h5>
+                        <p className="text-[11px] text-slate-600 font-medium">
+                          Estate agent brochure QR badges, Rightmove embed code, and buyer digital twin preview.
+                        </p>
+                      </div>
+                      <a
+                        href={`/passport/view/${property.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center gap-1 shrink-0 shadow-sm transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Preview Buyer View
+                      </a>
                     </div>
                   </div>
                 )}
@@ -736,6 +904,25 @@ export function PropertyPassportModal({ property, onClose }: PropertyPassportMod
           </div>
         </motion.div>
       </div>
+
+      {showTransferModal && (
+        <TransferOwnershipModal
+          property={property}
+          onClose={() => setShowTransferModal(false)}
+          onUpdated={() => {
+            setShowTransferModal(false);
+            if (onUpdated) onUpdated();
+          }}
+        />
+      )}
+
+      {showBuyerPackModal && (
+        <BuyerPackModal
+          property={property}
+          completedJobs={completedJobs}
+          onClose={() => setShowBuyerPackModal(false)}
+        />
+      )}
     </AnimatePresence>
   );
 }

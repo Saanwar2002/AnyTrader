@@ -1,7 +1,10 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Wrench, Sparkles, CheckCircle2, ShoppingBag, DollarSign, ExternalLink, Loader2, Store, Tag, ShieldCheck, ArrowUpRight } from "lucide-react";
+import { Plus, Trash2, Wrench, Sparkles, CheckCircle2, ShoppingBag, DollarSign, ExternalLink, Loader2, Store, Tag, ShieldCheck, ArrowUpRight, Truck, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { calculateMaterialMerchantAffiliateCommission } from "@/src/services/stripeIntegrationService";
+import { BomOneClickOrderingModal } from "./BomOneClickOrderingModal";
+import { BomOrderStatusTracker } from "./BomOrderStatusTracker";
+import { BOMOrderRecord } from "@/src/services/bomMerchantService";
 
 export interface MaterialItem {
   id: string;
@@ -20,6 +23,7 @@ interface MaterialsTrackerProps {
   materials: MaterialItem[];
   onUpdateMaterials: (materials: MaterialItem[]) => void;
   readOnly?: boolean;
+  job?: any;
 }
 
 export function MaterialsTracker({
@@ -28,7 +32,8 @@ export function MaterialsTracker({
   description,
   materials,
   onUpdateMaterials,
-  readOnly = false
+  readOnly = false,
+  job
 }: MaterialsTrackerProps) {
   const [newItemName, setNewItemName] = useState("");
   const [newItemQty, setNewItemQty] = useState(1);
@@ -36,6 +41,50 @@ export function MaterialsTracker({
   const [newItemSupplier, setNewItemSupplier] = useState("");
   const [selectedMerchant, setSelectedMerchant] = useState("Screwfix Trade");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showBomModal, setShowBomModal] = useState(false);
+  const [activeBomOrder, setActiveBomOrder] = useState<BOMOrderRecord | null>(() => {
+    if (job?.hasBOMOrder) {
+      return {
+        id: job.bomOrderId || "bom_tracked",
+        jobId: job.id || "job_demo",
+        jobTitle: job.title || "Renovation Project",
+        tradespersonId: job.traderId || "trader_1",
+        tradespersonName: job.traderName || "Tradesperson",
+        homeownerId: job.userId,
+        homeownerName: job.homeownerName || "Homeowner",
+        propertyId: job.propertyId,
+        items: materials.map((m, i) => ({
+          id: m.id,
+          name: m.name,
+          category: "Plumbing & Heating",
+          quantity: m.quantity,
+          unitCost: m.unitCost,
+          totalCost: m.totalCost,
+          retailCost: m.unitCost * 1.2,
+          unit: "unit",
+          suggestedSupplier: m.supplier || job.bomMerchant || "Screwfix Trade"
+        })),
+        itemCount: materials.length,
+        selectedMerchant: job.bomMerchant || "Screwfix Trade",
+        subtotalCost: job.materialsCost || totalMaterialsCost,
+        tradeDiscountAmount: 18.50,
+        vatAmount: (job.materialsCost || totalMaterialsCost) * 0.20,
+        totalAmount: (job.materialsCost || totalMaterialsCost) * 1.20,
+        affiliateCommissionEarned: 4.50,
+        fulfillmentType: "click_and_collect",
+        pickupReferenceCode: job.bomPickupRef || "AT-SCR-829104",
+        pickupBarcode: "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=AT-SCR-829104",
+        vatInvoiceNumber: "VAT-BOM-2026-49102",
+        paymentSource: "homeowner_materials_escrow",
+        status: (job.bomStatus as any) || "ready_for_pickup",
+        propertyPassportSynced: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+    return null;
+  });
+  const [showOrderTracker, setShowOrderTracker] = useState(false);
 
   const totalMaterialsCost = materials.reduce((sum, m) => sum + (m.totalCost || m.quantity * m.unitCost), 0);
   
@@ -243,15 +292,62 @@ export function MaterialsTracker({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleFulfillViaMerchantAffiliate}
-            className="w-full py-2.5 bg-slate-900 hover:bg-black text-amber-300 font-extrabold text-xs rounded-xl border border-black shadow-sm flex items-center justify-center gap-2 transition active:scale-98"
-          >
-            <ShoppingBag className="w-4 h-4 text-amber-400" />
-            <span>Fulfill Cart via {merchantAffiliate.merchantName} (Collect +£{merchantAffiliate.affiliateCommissionAmount.toFixed(2)} Affiliate Fee)</span>
-            <ArrowUpRight className="w-4 h-4 text-amber-400" />
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setShowBomModal(true)}
+              className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm active:scale-98"
+            >
+              <Sparkles className="w-4 h-4 text-slate-950" />
+              <span>🚀 Open Direct Merchant AI BOM Ordering (Screwfix/Travis Perkins)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleFulfillViaMerchantAffiliate}
+              className="w-full py-2.5 bg-slate-900 hover:bg-black text-amber-300 font-extrabold text-xs rounded-xl border border-black shadow-sm flex items-center justify-center gap-2 transition active:scale-98"
+            >
+              <ShoppingBag className="w-4 h-4 text-amber-400" />
+              <span>Fulfill Cart via {merchantAffiliate.merchantName} (+£{merchantAffiliate.affiliateCommissionAmount.toFixed(2)} Fee)</span>
+            </button>
+          </div>
+
+          {activeBomOrder && (
+            <div className="pt-2 border-t border-amber-200">
+              <button
+                type="button"
+                onClick={() => setShowOrderTracker(!showOrderTracker)}
+                className="w-full py-2 px-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl flex items-center justify-between shadow-sm transition"
+              >
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-amber-300 animate-pulse" />
+                  <span>
+                    Active 1-Click Order ({activeBomOrder.pickupReferenceCode}) • Status:{" "}
+                    <strong className="uppercase text-amber-300">{activeBomOrder.status.replace(/_/g, " ")}</strong>
+                  </span>
+                </div>
+                <span className="text-[10px] bg-purple-900 px-2 py-0.5 rounded-lg text-purple-200 font-extrabold">
+                  {showOrderTracker ? "Hide Tracker" : "Open Animated Live Tracker"}
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Embedded Live Animated Status Tracker */}
+      {showOrderTracker && activeBomOrder && (
+        <div className="p-2">
+          <BomOrderStatusTracker
+            order={activeBomOrder}
+            onStatusUpdate={(newStatus) => {
+              setActiveBomOrder({
+                ...activeBomOrder,
+                status: newStatus
+              });
+            }}
+            allowManualStageTesting={true}
+          />
         </div>
       )}
 
@@ -350,6 +446,28 @@ export function MaterialsTracker({
           ))}
         </div>
       )}
+
+      <BomOneClickOrderingModal
+        isOpen={showBomModal}
+        onClose={() => setShowBomModal(false)}
+        job={job || { title: jobTitle, category: category, description: description }}
+        onOrderCreated={(order) => {
+          // Convert BOM items to Materials list
+          const newMaterials: MaterialItem[] = order.items.map(i => ({
+            id: i.id,
+            name: i.name,
+            quantity: i.quantity,
+            unitCost: i.unitCost,
+            totalCost: i.totalCost,
+            supplier: order.selectedMerchant,
+            status: "ordered" as const
+          }));
+          onUpdateMaterials(newMaterials);
+          setActiveBomOrder(order);
+          setShowOrderTracker(true);
+          setShowBomModal(false);
+        }}
+      />
     </div>
   );
 }

@@ -25,6 +25,10 @@ import GuestJobs from "./GuestJobs";
 import AdminAdvertsTab from "./AdminAdvertsTab";
 import AffiliatesManager from "./AffiliatesManager";
 import AdminAiAgentsTab from "./AdminAiAgentsTab";
+import AdminFlashDealsAndAiAnalyticsTab from "./AdminFlashDealsAndAiAnalyticsTab";
+import AdminAlertToastContainer from "./AdminAlertToastContainer";
+import AdminAlertThresholdsModal from "./AdminAlertThresholdsModal";
+import { startAdminThresholdBreachListener, ActiveBreachAlert } from "../services/adminAlertThresholdService";
 import {  
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
@@ -40,12 +44,12 @@ export default function AnyTraderAdmin() {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const tabFromUrl = searchParams.get("tab") as any;
-  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "advertising", "affiliates", "ai_agents"].includes(tabFromUrl) ? tabFromUrl : "users";
+  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "advertising", "affiliates", "ai_agents", "sentinel_analytics"].includes(tabFromUrl) ? tabFromUrl : "users";
   
-  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "advertising" | "affiliates" | "ai_agents">(initialTab as any);
+  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "advertising" | "affiliates" | "ai_agents" | "sentinel_analytics">(initialTab as any);
   
   useEffect(() => {
-    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "advertising", "affiliates", "ai_agents"].includes(tabFromUrl) ? tabFromUrl : "users";
+    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "advertising", "affiliates", "ai_agents", "sentinel_analytics"].includes(tabFromUrl) ? tabFromUrl : "users";
     if (validTab !== activeTab) {
       setActiveTab(validTab);
       setFilter(validTab === "jobs" ? "emergency" : "all");
@@ -123,6 +127,8 @@ export default function AnyTraderAdmin() {
   // AI Fraud & Risk Monitor State
   const [riskAlerts, setRiskAlerts] = useState<RiskAlert[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
+  const [activeBreachToasts, setActiveBreachToasts] = useState<ActiveBreachAlert[]>([]);
+  const [showThresholdModal, setShowThresholdModal] = useState(false);
   const [isAnalyzingRisk, setIsAnalyzingRisk] = useState(false);
   const [lastRiskAnalysis, setLastRiskAnalysis] = useState<Date | null>(null);
 
@@ -282,6 +288,11 @@ export default function AnyTraderAdmin() {
       (error) => handleGlobalFirestoreError(error, OperationType.GET, "security_alerts")
     );
 
+    // Mount real-time threshold breach listener (triggers Toast & Email notifications on activity spikes)
+    const unsubThresholdBreaches = startAdminThresholdBreachListener((breach) => {
+      setActiveBreachToasts(prev => [breach, ...prev.filter(b => b.id !== breach.id)]);
+    });
+
     const unsubSecrets = onSnapshot(doc(db, "platform_config", "secrets"), (doc) => {
       if (doc.exists()) {
         setPlatformSecrets(doc.data());
@@ -334,6 +345,7 @@ export default function AnyTraderAdmin() {
       unsubReviews();
       unsubSearchLogs();
       unsubSecurityAlerts();
+      unsubThresholdBreaches();
       unsubSecrets();
       unsubConfig();
     };
@@ -1696,27 +1708,54 @@ export default function AnyTraderAdmin() {
           </div>
 
           {/* Navigation Tabs - Moved below search as per screenshot context */}
-          <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 rounded-[28px] border border-black shadow-xl shadow-slate-100/50 overflow-x-auto no-scrollbar snap-x touch-pan-x max-w-full">
-            <div className="flex items-center gap-2 pr-4">
-              <TabButton active={activeTab === "ai_agents"} onClick={() => handleTabChange("ai_agents")} icon={<Bot className="w-4 h-4 text-indigo-500" />} label="AI Agents" />
-              <TabButton active={activeTab === "users"} onClick={() => handleTabChange("users")} icon={<Users className="w-4 h-4" />} label="Users" />
-              <TabButton active={activeTab === "jobs"} onClick={() => handleTabChange("jobs")} icon={<Briefcase className="w-4 h-4" />} label="Jobs" />
-              <TabButton active={activeTab === "disputes"} onClick={() => handleTabChange("disputes")} icon={<AlertTriangle className="w-4 h-4" />} label="Disputes" />
-              <TabButton active={activeTab === "team"} onClick={() => handleTabChange("team")} icon={<Shield className="w-4 h-4" />} label="Staff" />
-              <TabButton active={activeTab === "verifications"} onClick={() => handleTabChange("verifications")} icon={<CheckCircle2 className="w-4 h-4" />} label="KYC" />
-              <TabButton active={activeTab === "broadcast"} onClick={() => handleTabChange("broadcast")} icon={<Megaphone className="w-4 h-4" />} label="Broadcast" />
-              <TabButton active={activeTab === "advertising"} onClick={() => handleTabChange("advertising")} icon={<Tag className="w-4 h-4" />} label="Banner Ads" />
-              <TabButton active={activeTab === "affiliates"} onClick={() => handleTabChange("affiliates")} icon={<LinkIcon className="w-4 h-4" />} label="Affiliates" />
-              <TabButton active={activeTab === "settings"} onClick={() => handleTabChange("settings")} icon={<Settings className="w-4 h-4" />} label="Configs" />
-              <TabButton active={activeTab === "categories"} onClick={() => handleTabChange("categories")} icon={<Tags className="w-4 h-4" />} label="Categories" />
-              <TabButton active={activeTab === "logs"} onClick={() => handleTabChange("logs")} icon={<FileText className="w-4 h-4" />} label="Audit" />
-              <TabButton active={activeTab === "security"} onClick={() => handleTabChange("security")} icon={<Key className="w-4 h-4" />} label="API Keys" />
-              <TabButton active={activeTab === "analytics"} onClick={() => handleTabChange("analytics")} icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
-              <TabButton active={activeTab === "insights"} onClick={() => handleTabChange("insights")} icon={<Sparkles className="w-4 h-4" />} label="Insights" />
-              <TabButton active={activeTab === "monetization"} onClick={() => handleTabChange("monetization")} icon={<DollarSign className="w-4 h-4" />} label="Tiers" />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 rounded-[28px] border border-black shadow-xl shadow-slate-100/50 overflow-x-auto no-scrollbar snap-x touch-pan-x max-w-full flex-1">
+              <div className="flex items-center gap-2 pr-4">
+                <TabButton active={activeTab === "sentinel_analytics"} onClick={() => handleTabChange("sentinel_analytics")} icon={<ShieldAlert className="w-4 h-4 text-amber-500" />} label="Deals & AI Sentinel" />
+                <TabButton active={activeTab === "ai_agents"} onClick={() => handleTabChange("ai_agents")} icon={<Bot className="w-4 h-4 text-indigo-500" />} label="AI Agents" />
+                <TabButton active={activeTab === "users"} onClick={() => handleTabChange("users")} icon={<Users className="w-4 h-4" />} label="Users" />
+                <TabButton active={activeTab === "jobs"} onClick={() => handleTabChange("jobs")} icon={<Briefcase className="w-4 h-4" />} label="Jobs" />
+                <TabButton active={activeTab === "disputes"} onClick={() => handleTabChange("disputes")} icon={<AlertTriangle className="w-4 h-4" />} label="Disputes" />
+                <TabButton active={activeTab === "team"} onClick={() => handleTabChange("team")} icon={<Shield className="w-4 h-4" />} label="Staff" />
+                <TabButton active={activeTab === "verifications"} onClick={() => handleTabChange("verifications")} icon={<CheckCircle2 className="w-4 h-4" />} label="KYC" />
+                <TabButton active={activeTab === "broadcast"} onClick={() => handleTabChange("broadcast")} icon={<Megaphone className="w-4 h-4" />} label="Broadcast" />
+                <TabButton active={activeTab === "advertising"} onClick={() => handleTabChange("advertising")} icon={<Tag className="w-4 h-4" />} label="Banner Ads" />
+                <TabButton active={activeTab === "affiliates"} onClick={() => handleTabChange("affiliates")} icon={<LinkIcon className="w-4 h-4" />} label="Affiliates" />
+                <TabButton active={activeTab === "settings"} onClick={() => handleTabChange("settings")} icon={<Settings className="w-4 h-4" />} label="Configs" />
+                <TabButton active={activeTab === "categories"} onClick={() => handleTabChange("categories")} icon={<Tags className="w-4 h-4" />} label="Categories" />
+                <TabButton active={activeTab === "logs"} onClick={() => handleTabChange("logs")} icon={<FileText className="w-4 h-4" />} label="Audit" />
+                <TabButton active={activeTab === "security"} onClick={() => handleTabChange("security")} icon={<Key className="w-4 h-4" />} label="API Keys" />
+                <TabButton active={activeTab === "analytics"} onClick={() => handleTabChange("analytics")} icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
+                <TabButton active={activeTab === "insights"} onClick={() => handleTabChange("insights")} icon={<Sparkles className="w-4 h-4" />} label="Insights" />
+                <TabButton active={activeTab === "monetization"} onClick={() => handleTabChange("monetization")} icon={<DollarSign className="w-4 h-4" />} label="Tiers" />
+              </div>
             </div>
+
+            {/* Quick Trigger for Alert Threshold Rules */}
+            <button
+              onClick={() => setShowThresholdModal(true)}
+              className="px-4 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-[22px] border border-black shadow-lg transition-all flex items-center gap-2 text-xs shrink-0 active:scale-95"
+              title="Configure Real-Time Security Thresholds & Alert Notifications"
+            >
+              <Zap className="w-4 h-4 text-slate-950 fill-current animate-bounce" />
+              <span>Alert Thresholds</span>
+            </button>
           </div>
         </div>
+
+        {/* Real-Time Security & Misuse Toast Container */}
+        <AdminAlertToastContainer
+          alerts={activeBreachToasts}
+          onDismiss={(id) => setActiveBreachToasts(prev => prev.filter(a => a.id !== id))}
+          onOpenDashboard={() => handleTabChange("sentinel_analytics")}
+        />
+
+        {/* Real-Time Alert Thresholds Configuration Modal */}
+        <AdminAlertThresholdsModal
+          isOpen={showThresholdModal}
+          onClose={() => setShowThresholdModal(false)}
+          onTestBreachTriggered={(breach) => setActiveBreachToasts(prev => [breach, ...prev])}
+        />
 
         {/* Stats Grid - Optimized for Mobile Viewport */}
         <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
@@ -3321,6 +3360,12 @@ export default function AnyTraderAdmin() {
           </div>
         )}
         
+        {activeTab === "sentinel_analytics" && (
+          <div className="p-2 sm:p-6">
+            <AdminFlashDealsAndAiAnalyticsTab />
+          </div>
+        )}
+
         {activeTab === "ai_agents" && (
           <div className="p-6">
             <AdminAiAgentsTab users={users} jobs={jobs} reviews={reviews} logs={logs} />

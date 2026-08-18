@@ -367,8 +367,12 @@ export async function getBuildingRegsAndSupplierPricing(
   return callServerGemini("getBuildingRegsAndSupplierPricing", [category, description, postcode]);
 }
 
-export async function callTradeBot(userMessage: string, history: {role: "user" | "model", text: string}[]): Promise<any> {
-  return callServerGemini("callTradeBot", [userMessage, history]);
+export async function callTradeBot(
+  userMessage: string, 
+  history: {role: "user" | "model", text: string}[],
+  userContext?: { role?: string; postcode?: string; propertySummary?: string }
+): Promise<any> {
+  return callServerGemini("callTradeBot", [userMessage, history, userContext]);
 }
 
 export async function processTaxiVoiceCommand(text: string, locationContext: string = ""): Promise<any> {
@@ -409,3 +413,44 @@ export async function polishBio(bio: string, trades: string, tags: string): Prom
 export async function getProMatches(role: any, candidatesContext: any[]): Promise<any[]> {
   return callServerGemini("getProMatches", [role, candidatesContext]);
 }
+
+export interface DeepScanForensicsResult {
+  scanId: string;
+  scannedAt: string;
+  overallThreatLevel: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  riskScore: number;
+  executiveSummary: string;
+  flashDealAnomalies: Array<{
+    anomalyType: string;
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+    title: string;
+    description: string;
+    confidenceScore: number;
+    recommendedAction: string;
+    targetEntityId?: string;
+    targetEntityName?: string;
+  }>;
+  aiAgentAnomalies: Array<{
+    anomalyType: string;
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+    title: string;
+    description: string;
+    confidenceScore: number;
+    recommendedAction: string;
+    targetAgent?: string;
+  }>;
+  accountCollusionFlags: Array<{
+    flagType: string;
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+    description: string;
+    involvedAccounts: string[];
+    recommendedMitigation: string;
+  }>;
+  platformIntegrityScore: number;
+  recommendedImmediateActions: string[];
+}
+
+export async function runPlatformMisuseDeepScan(telemetrySummary: any): Promise<DeepScanForensicsResult> {
+  return callServerGemini("runServerPlatformMisuseDeepScan", [telemetrySummary]);
+}
+

@@ -88,6 +88,7 @@ const RecurringJobManager = lazyWithRetry(() => import("./components/RecurringJo
 const AdReport = lazyWithRetry(() => import("./components/AdReport"));
 const TraderAdStudio = lazyWithRetry(() => import("./components/TraderAdStudio"));
 const TenantReportPortal = lazyWithRetry(() => import("./components/TenantReportPortal").then(m => ({ default: m.TenantReportPortal })));
+const PublicPropertyPassportView = lazyWithRetry(() => import("./components/property/PublicPropertyPassportView"));
 
 import SplashScreen from "./components/SplashScreen";
 
@@ -353,6 +354,7 @@ export default function App() {
             <Route path="/ad-report/:id" element={<AdReport />} />
             <Route path="/ad-studio" element={<TraderAdStudio />} />
             <Route path="/tenant-report" element={<TenantReportPortal />} />
+            <Route path="/passport/view/:id" element={<PublicPropertyPassportView />} />
           {!user ? (
             <>
               <Route path="/profile/:id" element={<PublicProfile />} />
@@ -377,6 +379,7 @@ export default function App() {
                 <Route path="consultancy/portfolio" element={<BusinessDashboard />} />
                 <Route path="consultancy/new" element={<BusinessDashboard />} />
                 <Route path="portfolio" element={<Portfolio />} />
+                <Route path="passport/view/:id" element={<PublicPropertyPassportView />} />
                 <Route path="trader/banner-ads" element={<TradesBannerAdStudio />} />
                 <Route path="post-job" element={<PostJobWizard />} />
                 <Route path="post-emergency-job" element={<EmergencyJobWizard />} />

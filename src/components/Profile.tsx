@@ -1,4 +1,3 @@
-import { TradeBot } from "./TradeBot";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { BiometricService } from "@/src/services/biometricService";
@@ -393,7 +392,7 @@ const BiometricSettings: React.FC<{ user: any }> = ({ user }) => {
 };
 
 export default function Profile() {
-  const { user, profile, setProfile } = useAuth();
+  const { user, profile, setProfile, setIsTradeBotOpen } = useAuth();
   const isBusinessProfile = profile?.role === 'business' || profile?.role === 'tradesperson';
   const { activePortal, switchPortal } = usePortal();
   const navigate = useNavigate();
@@ -543,7 +542,6 @@ export default function Profile() {
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
   const [showUserGuide, setShowUserGuide] = useState(false);
   const [showProfileTermsModal, setShowProfileTermsModal] = useState(false);
-  const [isTradeBotOpen, setIsTradeBotOpen] = useState(false);
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isVerificationExpanded, setIsVerificationExpanded] = useState(false);
   const [isNotificationsExpanded, setIsNotificationsExpanded] = useState(false);
@@ -4123,8 +4121,6 @@ export default function Profile() {
         <LogOut className="w-5 h-5" />
         Sign Out
       </button>
-
-      <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
 
       {/* Tradesperson specific sections - Reviews */}
       {isBusinessProfile && (

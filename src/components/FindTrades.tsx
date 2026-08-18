@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, ChevronDown, Trophy, Play, Pause, Share2 } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, GripVertical, ChevronDown, Trophy, Play, Pause, Share2 } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react-google-maps/api";
-import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
+import { getGoogleMapsApiKey, triggerHaptic } from "@/src/lib/capacitor";
 import { db, collection, query, where, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
 import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, textContainsTokenMatch, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
@@ -299,7 +299,7 @@ export default function FindTrades() {
 
       container.style.scrollBehavior = 'smooth';
       container.scrollBy({ left: cardStep, behavior: 'smooth' });
-    }, 3000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [isDealsPlaying, isDealsHovered, allDeals]);
   
@@ -349,6 +349,36 @@ export default function FindTrades() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = React.useRef({ x: 0, y: 0 });
   const positionStartRef = React.useRef({ x: 0, y: 0 });
+
+  const [isToggleDismissed, setIsToggleDismissed] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem("findTradesViewToggleDismissed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDismissToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsToggleDismissed(true);
+    try {
+      sessionStorage.setItem("findTradesViewToggleDismissed", "true");
+    } catch (err) {
+      console.error("Failed to save view toggle dismiss state:", err);
+    }
+    toast.info("Map/List toggle hidden for this session", {
+      description: "It will reappear automatically on next app startup.",
+      action: {
+        label: "Undo",
+        onClick: () => {
+          setIsToggleDismissed(false);
+          try {
+            sessionStorage.removeItem("findTradesViewToggleDismissed");
+          } catch {}
+        }
+      }
+    });
+  };
 
   // Update sessionStorage whenever dragOffset successfully updates
   useEffect(() => {
@@ -558,6 +588,27 @@ export default function FindTrades() {
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = React.useRef<any>(null);
+
+  // --- Auto-sync category & search query from URL search params (e.g. from AI Bot recommendations) ---
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(location.search);
+      const catParam = params.get("category");
+      const searchParam = params.get("search") || params.get("q");
+
+      if (catParam && catParam !== selectedCategory) {
+        setSelectedCategory(catParam);
+        setTimeout(() => {
+          resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 200);
+      }
+      if (searchParam && searchParam !== searchQuery) {
+        setSearchQuery(searchParam);
+      }
+    } catch (e) {
+      console.warn("Failed to parse search params:", e);
+    }
+  }, [location.search]);
 
   // --- Auto Scroll & Focus when Map View is selected ---
   useEffect(() => {
@@ -2124,6 +2175,7 @@ export default function FindTrades() {
                   const { origPrice, discPrice, discountPct, savings } = getDealPricing(deal);
                   const cap = getDealCapacityInfo(deal);
                   const soldOut = cap.isSoldOut;
+                  const dealCategory = deal.category || tradespeople.find(t => t.uid === deal.traderId)?.category || (deal.service ? (deal.service.toLowerCase().includes("boiler") || deal.service.toLowerCase().includes("plumb") ? "Plumbing & Heating" : deal.service.toLowerCase().includes("eicr") || deal.service.toLowerCase().includes("ev charger") ? "Electrical" : deal.service.toLowerCase().includes("carpet") || deal.service.toLowerCase().includes("bin") ? "Specialist Cleaning" : deal.service.toLowerCase().includes("roof") || deal.service.toLowerCase().includes("gutter") ? "Roofing & Guttering" : deal.service.toLowerCase().includes("catering") || deal.service.toLowerCase().includes("cake") ? "Catering & Private Chef" : "General Trade") : "General Trade");
 
                   return (
                     <Link
@@ -2257,17 +2309,22 @@ export default function FindTrades() {
                       </div>
 
                       <div className="flex items-center justify-between gap-1.5 border-t border-slate-100 mt-2.5 pt-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <div className="w-5 h-5 bg-slate-800 rounded-full flex items-center justify-center text-white font-bold text-[9px] overflow-hidden shrink-0 border border-slate-200">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 bg-slate-800 rounded-full flex items-center justify-center text-white font-bold text-[10px] overflow-hidden shrink-0 border border-slate-200">
                             {deal.traderAvatarUrl ? (
                               <img src={deal.traderAvatarUrl} alt={deal.traderName} className="w-full h-full object-cover" />
                             ) : (
                               deal.traderName.charAt(0)
                             )}
                           </div>
-                          <span className="text-[10px] font-extrabold text-slate-800 truncate">
-                            {deal.traderName}
-                          </span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10.5px] font-black text-slate-900 truncate leading-tight">
+                              {deal.traderName}
+                            </span>
+                            <span className="text-[9.5px] font-extrabold text-black truncate leading-tight">
+                              {dealCategory}
+                            </span>
+                          </div>
                         </div>
                         
                         {soldOut ? (
@@ -2408,14 +2465,43 @@ export default function FindTrades() {
 
       {/* Tradespeople List - Bento Grid */}
       <div ref={resultsRef} className="px-4 pb-12">
-        {(searchQuery || selectedCategory !== "All") && (
-          <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
             <h2 className="font-bold text-slate-900">
-              {selectedCategory !== "All" ? `${selectedCategory} Results` : "Search Results"}
+              {selectedCategory !== "All" ? `${selectedCategory} Results` : "Verified Trades"}
             </h2>
             <span className="text-xs text-slate-500 font-medium">({filteredTradespeople.length} found)</span>
           </div>
-        )}
+
+          <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer",
+                viewMode === "list"
+                  ? "bg-white text-slate-950 shadow-xs border border-slate-200 font-bold"
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>List</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("map")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer",
+                viewMode === "map"
+                  ? "bg-blue-600 text-white shadow-xs font-bold"
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              <Map className="w-3.5 h-3.5" />
+              <span>Map</span>
+            </button>
+          </div>
+        </div>
         
         {viewMode === "map" ? (
           <div ref={mapContainerRef} tabIndex={-1} className="mb-10 focus:outline-none">
@@ -2625,7 +2711,6 @@ export default function FindTrades() {
 
           return (
           <motion.div
-            layout
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             key={tp.uid}
@@ -2651,29 +2736,34 @@ export default function FindTrades() {
               </div>
             )}
 
-            {/* Top Right Triangle Corner */}
+            {/* Top Right Triangle Corner (Instant Flip Action) */}
             {!isMiniProfileFlipped && (
-              <div 
-                className="absolute top-0 right-0 w-[52px] h-[52px] bg-[#0066cc] z-10 cursor-pointer hover:bg-blue-700 transition-colors"
+              <button 
+                type="button"
+                aria-label={`View extra info for ${tp.name}`}
+                className="absolute top-0 right-0 w-[54px] h-[54px] bg-[#0066cc] z-20 cursor-pointer hover:bg-blue-700 active:bg-blue-800 transition-colors touch-manipulation focus:outline-none border-none p-0"
                 style={{ clipPath: 'polygon(100% 0, 0 0, 100% 100%)' }}
-                onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(tp); }}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  triggerHaptic();
+                  setSelectedMiniProfile(tp); 
+                }}
               >
-                <div className="absolute top-[8px] right-[2px] transform rotate-45 uppercase text-white text-[10px] font-black tracking-widest">
+                <span className="absolute top-[8px] right-[3px] transform rotate-45 uppercase text-white text-[10.5px] font-black tracking-widest pointer-events-none select-none">
                   INFO
-                </div>
-              </div>
+                </span>
+              </button>
             )}
 
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence initial={false}>
               {isMiniProfileFlipped ? (
                 <motion.div
                   key="flipped"
-                  initial={{ rotateY: -90, opacity: 0 }}
-                  animate={{ rotateY: 0, opacity: 1 }}
-                  exit={{ rotateY: 90, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="bg-white p-3.5 sm:p-4 relative w-full h-full flex flex-col justify-center min-h-[150px]"
-                  style={{ transformStyle: 'preserve-3d' }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.08, ease: "linear" }}
+                  className="bg-white p-3 sm:p-3.5 relative w-full flex flex-col justify-between overflow-hidden"
                 >
                   {/* 30s Auto-Close Visual Timer Bar */}
                   <motion.div 
@@ -2684,9 +2774,15 @@ export default function FindTrades() {
                   />
 
                   <button 
-                    onClick={(e) => { e.stopPropagation(); setSelectedMiniProfile(null); }}
-                    className="absolute top-2.5 right-2.5 p-1.5 bg-slate-200 hover:bg-slate-300 rounded-full transition-colors flex items-center justify-center z-20"
+                    type="button"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      triggerHaptic();
+                      setSelectedMiniProfile(null); 
+                    }}
+                    className="absolute top-2.5 right-2.5 p-1.5 bg-slate-200 hover:bg-slate-300 active:bg-slate-400 rounded-full transition-colors flex items-center justify-center z-20 touch-manipulation cursor-pointer"
                     title="Close Info"
+                    aria-label="Close extra info"
                   >
                     <X className="w-3.5 h-3.5 text-slate-700 font-bold" />
                   </button>
@@ -2822,11 +2918,11 @@ export default function FindTrades() {
               ) : (
                 <motion.div
                   key="front"
-                  initial={{ rotateY: 90, opacity: 0 }}
-                  animate={{ rotateY: 0, opacity: 1 }}
-                  exit={{ rotateY: -90, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  style={{ transformStyle: 'preserve-3d' }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.08, ease: "linear" }}
+                  className="w-full"
                 >
                   <div className="p-2 sm:p-2.5">
                     <div className="flex gap-2.5 items-center">
@@ -2858,7 +2954,7 @@ export default function FindTrades() {
                           {tp.trades?.[0] || 'Professional'}
                         </p>
 
-                        {/* Active Flash Deal Leaf Label with Booking Limit - Exact same height & styling as the box below */}
+                        {/* Active Flash Deal Leaf Label with Booking Limit - 50% less height, 2 ticks up font size, exact height as box below */}
                         {(() => {
                           const activeDeal = allDeals.find(deal => deal.traderId === tp.uid);
                           if (!activeDeal) return null;
@@ -2877,14 +2973,14 @@ export default function FindTrades() {
                                 });
                               }}
                               title={`View active deals & claim discount on ${tp.name}'s profile`}
-                              className="inline-flex items-center gap-1.5 bg-emerald-400 hover:bg-emerald-300 text-black font-black text-[9.5px] p-1 px-2 rounded-lg border border-black shadow-2xs my-1 w-fit max-w-full cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] z-10 group/deal leading-tight"
+                              className="inline-flex items-center gap-1.5 bg-emerald-400 hover:bg-emerald-300 text-black font-black text-[11px] py-0.5 px-2 rounded-lg border border-black shadow-2xs my-0.5 w-fit max-w-full cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] z-10 group/deal leading-tight"
                             >
-                              <span className="text-[10px] leading-none shrink-0">🍁</span>
-                              <span className="underline decoration-black/40 underline-offset-1 leading-none whitespace-nowrap">{activeDeal.discountPercentage}% Off {activeDeal.dayOfWeek}s</span>
-                              <span className="bg-black text-white text-[8px] font-black px-1.5 py-0.5 rounded leading-none tracking-tight shrink-0 ml-0.5">
+                              <span className="text-[11px] leading-none shrink-0">🍁</span>
+                              <span className="underline decoration-black/40 underline-offset-1 leading-none whitespace-nowrap text-[11px] font-black">{activeDeal.discountPercentage}% Off {activeDeal.dayOfWeek}s</span>
+                              <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded leading-none tracking-tight shrink-0 ml-0.5">
                                 {cap.isUnlimited ? "Unlimited" : cap.isSoldOut ? "🔴 Sold Out" : `🔥 ${cap.remaining} of ${cap.max} Left`}
                               </span>
-                              <ChevronRight className="w-2.5 h-2.5 text-black stroke-[3] group-hover/deal:translate-x-0.5 transition-transform shrink-0" />
+                              <ChevronRight className="w-3 h-3 text-black stroke-[3] group-hover/deal:translate-x-0.5 transition-transform shrink-0" />
                             </button>
                           );
                         })()}
@@ -3653,49 +3749,83 @@ export default function FindTrades() {
         )}
       </AnimatePresence>
 
-      {/* Floating [ List View | Map View ] Toggle Button */}
-      <div
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        style={{
-          transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
-          touchAction: "none"
-        }}
-        className="fixed bottom-32 right-4 z-[110] bg-slate-950/95 backdrop-blur-md text-white py-1 px-0.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col items-center gap-1 select-none cursor-grab active:cursor-grabbing w-8"
-      >
-        <div className="py-0.5 text-slate-500 hover:text-slate-300 transition-colors shrink-0">
-          <GripHorizontal className="w-2.5 h-2.5" />
-        </div>
+      {/* Floating Single-Pill [ List | Map | ✕ ] Toggle Button */}
+      <AnimatePresence>
+        {!isToggleDismissed && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+            transition={{ duration: 0.2 }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            style={{
+              transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+              touchAction: "none"
+            }}
+            className="fixed bottom-28 right-3 sm:right-6 z-[110] select-none cursor-grab active:cursor-grabbing"
+          >
+            <div className="bg-slate-950/95 text-white backdrop-blur-md px-1.5 py-1 rounded-full border border-white/20 shadow-2xl flex items-center gap-1 hover:border-blue-400/50 transition-colors">
+              {/* Subtle Drag Grip Indicator */}
+              <div className="pl-1 pr-0.5 text-slate-500 hover:text-slate-300 transition-colors shrink-0 cursor-grab">
+                <GripVertical className="w-3 h-3" />
+              </div>
 
-        <button
-          type="button"
-          onClick={() => setViewMode("list")}
-          className={cn(
-            "w-6 h-8 rounded-xl text-[6.5px] font-black uppercase tracking-wider flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer shrink-0",
-            viewMode === "list"
-              ? "bg-blue-600 text-white shadow-sm font-black"
-              : "text-slate-300 hover:text-white hover:bg-slate-800/80"
-          )}
-        >
-          <List className="w-2.5 h-2.5" />
-          <span>List</span>
-        </button>
+              {/* Single Pill Segmented Buttons */}
+              <div className="flex items-center bg-slate-900/90 rounded-full p-0.5 border border-white/10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewMode("list");
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer",
+                    viewMode === "list"
+                      ? "bg-blue-600 text-white shadow-xs ring-1 ring-blue-400/40"
+                      : "text-slate-300 hover:text-white hover:bg-white/10"
+                  )}
+                >
+                  <List className="w-3 h-3" />
+                  <span>List</span>
+                </button>
 
-        <button
-          type="button"
-          onClick={() => setViewMode("map")}
-          className={cn(
-            "w-6 h-8 rounded-xl text-[6.5px] font-black uppercase tracking-wider flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer shrink-0",
-            viewMode === "map"
-              ? "bg-blue-600 text-white shadow-sm font-black"
-              : "text-slate-300 hover:text-white hover:bg-slate-800/80"
-          )}
-        >
-          <Map className="w-2.5 h-2.5" />
-          <span>Map</span>
-        </button>
-      </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewMode("map");
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer",
+                    viewMode === "map"
+                      ? "bg-blue-600 text-white shadow-xs ring-1 ring-blue-400/40"
+                      : "text-slate-300 hover:text-white hover:bg-white/10"
+                  )}
+                >
+                  <Map className="w-3 h-3" />
+                  <span>Map</span>
+                </button>
+              </div>
+
+              {/* Vertical Divider */}
+              <div className="w-px h-3.5 bg-white/20 mx-0.5" />
+
+              {/* Dismiss Button (✕) with tooltip */}
+              <button
+                type="button"
+                onClick={handleDismissToggle}
+                title="Dismiss for this session (will show up on next app startup)"
+                aria-label="Dismiss view toggle"
+                className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer mr-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Trader Document & Compliance Proof Viewer Modal */}
       <TraderDocumentViewerModal

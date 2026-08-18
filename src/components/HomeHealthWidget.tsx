@@ -1,19 +1,25 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { 
   Sparkles, ShieldAlert, CheckCircle2, Thermometer, 
   Wrench, Calendar, ArrowRight, Clock, ChevronDown, 
   ChevronUp, RefreshCw, Home, AlertTriangle, Droplets, 
   Flame, Zap, AlertCircle, Plus, ShieldCheck, FileText, CreditCard, BarChart3, X,
-  Bell, Trash2, Edit3, CheckSquare, CalendarCheck, Share2
+  Bell, Trash2, Edit3, CheckSquare, CalendarCheck, Share2, MapPin, Building2, ExternalLink,
+  ChevronRight, ArrowUpRight
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getMaintenancePredictions } from "../services/gemini";
 import { toast } from "sonner";
 import { useAuth } from "./AuthProvider";
-import { db, collection, query, where, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, handleFirestoreError, OperationType } from "@/src/firebase";
+import { 
+  db, collection, query, where, onSnapshot, doc, 
+  setDoc, deleteDoc, updateDoc, addDoc, serverTimestamp, 
+  handleFirestoreError, OperationType 
+} from "@/src/firebase";
 import { cn } from "@/src/lib/utils";
 import PropertyRiskAnalyticsWidget from "./PropertyRiskAnalyticsWidget";
 import BnplFinancingModal from "./BnplFinancingModal";
+import { PropertyPassportModal } from "./PropertyPassportModal";
 import { syncJobToGoogleCalendar, openGoogleCalendarUrl } from "../services/googleCalendarService";
 
 interface HomeHealthWidgetProps {
@@ -33,6 +39,7 @@ interface MaintenanceTask {
   impactScore: number; // 1-10
   isPassportTask?: boolean;
   dueDate?: string;
+  propertyAddress?: string;
 }
 
 export interface ScheduledRepairTask {
@@ -47,6 +54,7 @@ export interface ScheduledRepairTask {
   notes?: string;
   propertyId?: string;
   propertyName?: string;
+  propertyAddress?: string;
   createdAt: string;
   status: "scheduled" | "posted" | "completed";
 }
@@ -73,22 +81,27 @@ const TRADE_CATEGORIES = [
 
 const QUICK_SUGGESTION_CHIPS = [
   { title: "Renew Home & Building Insurance", category: "Any Category", budget: "£200 - £450", urgency: "recommended" as const },
-  { title: "Book Driving Lesson / Test", category: "Any Category", budget: "£35 - £70", urgency: "routine" as const },
-  { title: "Vehicle MOT & Annual Service", category: "Any Category", budget: "£45 - £180", urgency: "recommended" as const },
   { title: "Boiler Annual Service & CP12", category: "Heating & Gas", budget: "£90 - £150", urgency: "recommended" as const },
   { title: "Gutter Clearance & Downpipe Flush", category: "Roofing", budget: "£80 - £160", urgency: "routine" as const },
-  { title: "EICR Electrical Safety Check", category: "Electrical", budget: "£150 - £250", urgency: "recommended" as const },
-  { title: "Roof Ridge & Tile Inspection", category: "Roofing", budget: "£120 - £280", urgency: "routine" as const },
+  { title: "EICR 5-Year Electrical Safety Check", category: "Electrical", budget: "£150 - £250", urgency: "recommended" as const },
+  { title: "Roof Ridge & Chimney Flashing Check", category: "Roofing", budget: "£120 - £280", urgency: "routine" as const },
   { title: "Radiator Bleeding & Sludge Flush", category: "Heating & Gas", budget: "£100 - £200", urgency: "routine" as const },
-  { title: "Exterior Fence / Deck Staining", category: "Painting & Decorating", budget: "£150 - £350", urgency: "routine" as const },
-  { title: "Damp & Mould Airflow Inspection", category: "Damp & Mould", budget: "£100 - £220", urgency: "recommended" as const }
+  { title: "Damp & Mould Airflow Inspection", category: "Damp & Mould", budget: "£100 - £220", urgency: "recommended" as const },
+  { title: "Exterior Fence / Deck Staining", category: "Painting & Decorating", budget: "£150 - £350", urgency: "routine" as const }
 ];
 
 export default function HomeHealthWidget({ completedJobs = [], userPostcode }: HomeHealthWidgetProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // Firestore Properties State
   const [passportProperties, setPassportProperties] = useState<any[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+
+  // Specifications State (synchronized with active property or user input)
+  const [propertyAddressLine, setPropertyAddressLine] = useState("");
+  const [propertyPostcode, setPropertyPostcode] = useState(userPostcode || "");
+  const [propertyNameInput, setPropertyNameInput] = useState("");
   const [propertyAge, setPropertyAge] = useState<string>(() => {
     return localStorage.getItem("anytrader_property_age") || "1930s-1970s";
   });
@@ -96,17 +109,28 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
     return localStorage.getItem("anytrader_property_type") || "Semi-Detached";
   });
   const [heatingType, setHeatingType] = useState<string>(() => {
-    return localStorage.getItem("anytrader_heating_type") || "Gas Boiler";
+    return localStorage.getItem("anytrader_heating_type") || "Gas Combi Boiler";
   });
+  const [boilerBrand, setBoilerBrand] = useState("");
+  const [boilerModel, setBoilerModel] = useState("");
+  const [boilerAge, setBoilerAge] = useState("5");
+  const [roofCondition, setRoofCondition] = useState("Good");
+  const [epcRating, setEpcRating] = useState("C");
+  const [gasSafetyExpiry, setGasSafetyExpiry] = useState("");
+  const [eicrExpiry, setEicrExpiry] = useState("");
 
+  // Clean 4-Tab Navigation View State
+  const [activeTab, setActiveTab] = useState<"forecasts" | "planner" | "risk" | "financing">("forecasts");
+
+  // Modal and Editor Overlay States
   const [isExpanded, setIsExpanded] = useState(true);
   const [showConfig, setShowConfig] = useState(false);
-  const [showRiskAnalytics, setShowRiskAnalytics] = useState(false);
+  const [showPassportModal, setShowPassportModal] = useState(false);
   const [showBnplModal, setShowBnplModal] = useState(false);
-  const [showPlanner, setShowPlanner] = useState(false);
-  const [activeForecastTab, setActiveForecastTab] = useState<"ai_forecasts" | "scheduled_repairs">("ai_forecasts");
+  const [showPlannerForm, setShowPlannerForm] = useState(false);
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSavingSpecs, setIsSavingSpecs] = useState(false);
   const [aiPredictions, setAiPredictions] = useState<any[]>([]);
 
   // User Custom Scheduled Tasks State
@@ -137,7 +161,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
-  // Automatically fetch user's Property Passports from Firestore
+  // 1. Automatically fetch user's Property Passports from Firestore
   useEffect(() => {
     if (!user) return;
     const q1 = query(collection(db, "properties"), where("ownerId", "==", user.uid));
@@ -145,18 +169,11 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
       const props = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPassportProperties(props);
 
-      // Auto-sync specs if property exists
       if (props.length > 0) {
-        const primaryProp: any = props[0];
-        if (primaryProp.propertyType) {
-          setPropertyType(primaryProp.propertyType);
-          localStorage.setItem("anytrader_property_type", primaryProp.propertyType);
-        }
-        if (primaryProp.boilerInfo?.brand) {
-          const heatingDesc = `${primaryProp.boilerInfo.brand} Gas Boiler`;
-          setHeatingType(heatingDesc);
-          localStorage.setItem("anytrader_heating_type", heatingDesc);
-        }
+        setSelectedPropertyId(prev => {
+          if (prev && props.some(p => p.id === prev)) return prev;
+          return props[0].id;
+        });
       }
     }, (err) => {
       console.error("HomeHealthWidget Property Passport sync error:", err);
@@ -165,7 +182,45 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
     return () => unsubscribe();
   }, [user]);
 
-  // Realtime Firestore listener for user's scheduled repairs
+  // Compute active property
+  const activeProperty = useMemo(() => {
+    if (passportProperties.length === 0) return null;
+    return passportProperties.find(p => p.id === selectedPropertyId) || passportProperties[0] || null;
+  }, [passportProperties, selectedPropertyId]);
+
+  // Sync active property specs to state
+  useEffect(() => {
+    if (activeProperty) {
+      setPropertyAddressLine(activeProperty.address?.line1 || "");
+      setPropertyPostcode(activeProperty.address?.postcode || userPostcode || "");
+      setPropertyNameInput(activeProperty.name || "");
+      if (activeProperty.propertyType) {
+        setPropertyType(activeProperty.propertyType);
+        localStorage.setItem("anytrader_property_type", activeProperty.propertyType);
+      }
+      if (activeProperty.era) {
+        setPropertyAge(activeProperty.era);
+        localStorage.setItem("anytrader_property_age", activeProperty.era);
+      }
+      if (activeProperty.heatingType) {
+        setHeatingType(activeProperty.heatingType);
+        localStorage.setItem("anytrader_heating_type", activeProperty.heatingType);
+      } else if (activeProperty.boilerInfo?.brand) {
+        const heatingDesc = `${activeProperty.boilerInfo.brand} Gas Boiler`;
+        setHeatingType(heatingDesc);
+        localStorage.setItem("anytrader_heating_type", heatingDesc);
+      }
+      setBoilerBrand(activeProperty.boilerInfo?.brand || "");
+      setBoilerModel(activeProperty.boilerInfo?.model || "");
+      setBoilerAge(activeProperty.boilerInfo?.age || "5");
+      setRoofCondition(activeProperty.roofCondition || "Good");
+      setEpcRating(activeProperty.epcRating || "C");
+      setGasSafetyExpiry(activeProperty.gasSafetyExpiry || "");
+      setEicrExpiry(activeProperty.eicrExpiry || "");
+    }
+  }, [activeProperty, userPostcode]);
+
+  // 2. Realtime Firestore listener for user's scheduled repairs
   useEffect(() => {
     if (!user) return;
     const qTasks = query(
@@ -178,9 +233,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         ...doc.data()
       })) as ScheduledRepairTask[];
 
-      // Sort by target date ascending
       firestoreTasks.sort((a, b) => (a.targetDate > b.targetDate ? 1 : -1));
-
       setScheduledTasks(firestoreTasks);
       localStorage.setItem("anytrader_scheduled_repairs_v1", JSON.stringify(firestoreTasks));
     }, (err) => {
@@ -191,225 +244,255 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
     return () => unsubscribe();
   }, [user]);
 
-  // Auto-close timer ref
-  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Reset or start the auto-close timer (disabled when an interactive overlay like Planner, Specs, or Risk is open)
-  const resetAutoCloseTimer = useCallback(() => {
-    if (autoCloseTimerRef.current) {
-      clearTimeout(autoCloseTimerRef.current);
-      autoCloseTimerRef.current = null;
-    }
-    // DO NOT auto-close if an interactive sub-panel/modal (Planner, Specs, Risk, FlexiPay) is active
-    if (isExpanded && !showPlanner && !showConfig && !showRiskAnalytics && !showBnplModal) {
-      autoCloseTimerRef.current = setTimeout(() => {
-        setIsExpanded(false);
-      }, 20000); // 20s idle timeout for passive viewing only
-    }
-  }, [isExpanded, showPlanner, showConfig, showRiskAnalytics, showBnplModal]);
-
-  // Manage timer lifecycle when states change
-  useEffect(() => {
-    if (isExpanded && !showPlanner && !showConfig && !showRiskAnalytics && !showBnplModal) {
-      resetAutoCloseTimer();
-    } else {
-      if (autoCloseTimerRef.current) {
-        clearTimeout(autoCloseTimerRef.current);
-        autoCloseTimerRef.current = null;
-      }
-    }
-    return () => {
-      if (autoCloseTimerRef.current) {
-        clearTimeout(autoCloseTimerRef.current);
-      }
-    };
-  }, [isExpanded, showPlanner, showConfig, showRiskAnalytics, showBnplModal, resetAutoCloseTimer]);
-
   // Current UK Season Detection
   const currentMonth = new Date().getMonth(); // 0-11
   let currentSeasonName = "Winter Freeze Prep";
-  let seasonIcon = Thermometer;
-  let weatherAlert = "UK Winter Frost Warning: Temperatures dropping below 3°C across England & Wales.";
+  let weatherAlert = "UK Winter Frost Warning: Inspect boiler pressure & external pipe lagging to prevent winter freeze bursts.";
 
   if (currentMonth >= 2 && currentMonth <= 4) {
     currentSeasonName = "Spring Thaw & Roof Check";
-    weatherAlert = "UK Spring Damp Alert: Inspect roof tiles and timber mortar after winter freezing cycles.";
+    weatherAlert = "UK Spring Damp Alert: Inspect roof tiles, chimney flashing & gutter seals after winter freezing cycles.";
   } else if (currentMonth >= 5 && currentMonth <= 7) {
     currentSeasonName = "Summer Exterior Maintenance";
-    weatherAlert = "UK Summer Heatwave: Ideal window for exterior painting, brick repointing & window seals.";
+    weatherAlert = "UK Summer Window: Ideal period for exterior wall painting, brick repointing, and window seal upgrades.";
   } else if (currentMonth >= 8 && currentMonth <= 10) {
     currentSeasonName = "Autumn Rain & Heating Warm-up";
-    weatherAlert = "UK Autumn Rainfall Surge: Gutter clearances & boiler servicing recommended before November frost.";
+    weatherAlert = "UK Autumn Rainfall Surge: Gutter clearances & annual boiler servicing recommended before November frost.";
   }
 
-  // Save config settings
-  const handleSaveConfig = (age: string, type: string, heating: string) => {
-    setPropertyAge(age);
-    setPropertyType(type);
-    setHeatingType(heating);
-    localStorage.setItem("anytrader_property_age", age);
-    localStorage.setItem("anytrader_property_type", type);
-    localStorage.setItem("anytrader_heating_type", heating);
-    setShowConfig(false);
-    toast.success("Property specifications updated! Recalculating health forecast...");
+  // Save / Update Property Specifications (persists to Firestore & State)
+  const handleSaveSpecsAndProperty = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingSpecs(true);
+
+    try {
+      const addressLine = propertyAddressLine.trim();
+      const postcode = propertyPostcode.trim().toUpperCase();
+      const propName = propertyNameInput.trim() || addressLine || "My Home";
+
+      const propData = {
+        name: propName,
+        address: {
+          line1: addressLine || "Home Address",
+          city: "",
+          postcode: postcode,
+          country: "UK"
+        },
+        propertyType: propertyType,
+        era: propertyAge,
+        heatingType: heatingType,
+        boilerInfo: {
+          brand: boilerBrand.trim() || (heatingType.includes("Boiler") ? "Gas Boiler" : "Heating System"),
+          model: boilerModel.trim() || "",
+          age: boilerAge || "5",
+          lastServiced: activeProperty?.boilerInfo?.lastServiced || ""
+        },
+        roofCondition: roofCondition,
+        epcRating: epcRating,
+        gasSafetyExpiry: gasSafetyExpiry || "",
+        eicrExpiry: eicrExpiry || "",
+        updatedAt: new Date().toISOString()
+      };
+
+      if (user) {
+        if (activeProperty?.id) {
+          await updateDoc(doc(db, "properties", activeProperty.id), propData);
+          toast.success("Property specifications updated in Property Passport & Firestore!");
+        } else {
+          const newDocRef = await addDoc(collection(db, "properties"), {
+            ...propData,
+            ownerId: user.uid,
+            userId: user.uid,
+            homeownerId: user.uid,
+            status: "active",
+            createdAt: new Date().toISOString()
+          });
+          setSelectedPropertyId(newDocRef.id);
+          toast.success("New Property Passport created & address linked!");
+        }
+      } else {
+        toast.success("Property specifications saved locally!");
+      }
+
+      localStorage.setItem("anytrader_property_age", propertyAge);
+      localStorage.setItem("anytrader_property_type", propertyType);
+      localStorage.setItem("anytrader_heating_type", heatingType);
+
+      setShowConfig(false);
+    } catch (err: any) {
+      console.error("Error saving property specs:", err);
+      handleFirestoreError(err, OperationType.UPDATE, "properties");
+      toast.error("Failed to save property specifications. Please try again.");
+    } finally {
+      setIsSavingSpecs(false);
+    }
   };
 
-  // Generate dynamic maintenance forecasts based on property age, season, and history
+  // Generate dynamic maintenance forecasts
   const getForecasts = (): MaintenanceTask[] => {
     const tasks: MaintenanceTask[] = [];
+    const propToUse = activeProperty || (passportProperties.length > 0 ? passportProperties[0] : null);
+    const propName = propToUse?.name || propToUse?.address?.line1 || (propertyAddressLine ? propertyAddressLine : "Home");
+    const today = new Date().toISOString().split('T')[0];
 
-    // --- 0. PROPERTY PASSPORT LIVE SYNCED COMING UP DUE TASKS ---
-    passportProperties.forEach((prop) => {
-      const propName = prop.name || prop.address?.line1 || "Home";
-      const today = new Date().toISOString().split('T')[0];
-
-      // A. Gas Safety (CP12) Certificate Expiry
-      if (prop.gasSafetyExpiry) {
-        const isExpired = prop.gasSafetyExpiry <= today;
+    if (propToUse) {
+      // Gas Safety CP12
+      if (propToUse.gasSafetyExpiry) {
+        const isExpired = propToUse.gasSafetyExpiry <= today;
         tasks.push({
-          id: `passport-gas-${prop.id}`,
+          id: `passport-gas-${propToUse.id}`,
           title: `Gas Safety Certificate (CP12) ${isExpired ? 'EXPIRED' : 'Renewal Due'}`,
           category: "Heating & Gas",
           urgency: isExpired ? "urgent" : "recommended",
-          season: "Property Passport Sync",
-          reasoning: `Property Passport record for ${propName} flags CP12 expiration on ${prop.gasSafetyExpiry}. Landlords & homeowners require annual certification.`,
-          recommendedMonth: isExpired ? "IMMEDIATE" : prop.gasSafetyExpiry,
+          season: "Compliance Sync",
+          reasoning: `Property record for ${propName} flags CP12 expiration on ${propToUse.gasSafetyExpiry}. Annual gas certification is required for safety & warranty.`,
+          recommendedMonth: isExpired ? "IMMEDIATE" : propToUse.gasSafetyExpiry,
           estimatedCostRange: "£85 - £140",
           impactScore: 10,
           isPassportTask: true,
-          dueDate: prop.gasSafetyExpiry
+          dueDate: propToUse.gasSafetyExpiry,
+          propertyAddress: propToUse.address?.line1 || propName
         });
       }
 
-      // B. EICR Electrical Safety Expiry
-      if (prop.eicrExpiry) {
-        const isExpired = prop.eicrExpiry <= today;
+      // EICR Electrical
+      if (propToUse.eicrExpiry) {
+        const isExpired = propToUse.eicrExpiry <= today;
         tasks.push({
-          id: `passport-eicr-${prop.id}`,
-          title: `EICR Electrical Safety Certificate ${isExpired ? 'EXPIRED' : 'Renewal Due'}`,
+          id: `passport-eicr-${propToUse.id}`,
+          title: `EICR 5-Year Electrical Safety Check ${isExpired ? 'EXPIRED' : 'Due'}`,
           category: "Electrical",
           urgency: isExpired ? "urgent" : "recommended",
-          season: "Property Passport Sync",
-          reasoning: `Property Passport record for ${propName} flags 5-year EICR electrical inspection renewal on ${prop.eicrExpiry}.`,
-          recommendedMonth: isExpired ? "IMMEDIATE" : prop.eicrExpiry,
+          season: "Compliance Sync",
+          reasoning: `Property record for ${propName} flags 5-year EICR electrical inspection renewal on ${propToUse.eicrExpiry}.`,
+          recommendedMonth: isExpired ? "IMMEDIATE" : propToUse.eicrExpiry,
           estimatedCostRange: "£150 - £280",
           impactScore: 9,
           isPassportTask: true,
-          dueDate: prop.eicrExpiry
+          dueDate: propToUse.eicrExpiry,
+          propertyAddress: propToUse.address?.line1 || propName
         });
       }
 
-      // C. Boiler Servicing & Maintenance
-      if (prop.boilerInfo?.brand || prop.boilerInfo?.age) {
-        const ageNum = parseInt(prop.boilerInfo.age) || 0;
-        if (ageNum >= 5 || prop.boilerInfo.lastServiced) {
+      // Boiler Servicing
+      if (propToUse.boilerInfo?.brand || propToUse.boilerInfo?.age) {
+        const ageNum = parseInt(propToUse.boilerInfo.age) || 0;
+        if (ageNum >= 5 || propToUse.boilerInfo.lastServiced) {
           tasks.push({
-            id: `passport-boiler-${prop.id}`,
-            title: `Annual Boiler Service & Flue Check (${prop.boilerInfo.brand || 'Boiler'})`,
+            id: `passport-boiler-${propToUse.id}`,
+            title: `Annual Boiler Service & Flue Check (${propToUse.boilerInfo.brand || 'Boiler'})`,
             category: "Heating & Gas",
             urgency: ageNum > 8 ? "urgent" : "recommended",
-            season: "Property Passport Sync",
-            reasoning: `${propName} has a ${ageNum}-year-old ${prop.boilerInfo.brand || ''} unit. Passport recommends annual servicing to retain efficiency & warranty.`,
-            recommendedMonth: "Before Winter",
+            season: "Seasonal Care",
+            reasoning: `${propName} has a ${ageNum}-year-old ${propToUse.boilerInfo.brand || 'boiler'} unit. Regular annual servicing prevents winter breakdowns and preserves warranty.`,
+            recommendedMonth: "Before Nov Freeze",
             estimatedCostRange: "£90 - £160",
             impactScore: 8,
-            isPassportTask: true
+            isPassportTask: true,
+            propertyAddress: propToUse.address?.line1 || propName
           });
         }
       }
 
-      // D. Roof Condition Attention
-      if (prop.roofCondition === "Needs Inspection" || prop.roofCondition === "Fair") {
+      // Roof Condition Attention
+      if (propToUse.roofCondition === "Needs Inspection" || propToUse.roofCondition === "Fair") {
         tasks.push({
-          id: `passport-roof-${prop.id}`,
-          title: `Roof Tile & Chimney Flashing Inspection (${prop.roofCondition})`,
+          id: `passport-roof-${propToUse.id}`,
+          title: `Roof Tile & Chimney Flashing Inspection (${propToUse.roofCondition})`,
           category: "Roofing",
-          urgency: prop.roofCondition === "Needs Inspection" ? "urgent" : "recommended",
-          season: "Property Passport Sync",
-          reasoning: `Roof condition is flagged as '${prop.roofCondition}' in Property Passport. Early repair avoids severe damp intrusion.`,
+          urgency: propToUse.roofCondition === "Needs Inspection" ? "urgent" : "recommended",
+          season: "Structural Check",
+          reasoning: `Roof condition is flagged as '${propToUse.roofCondition}' for ${propName}. Early repair avoids costly internal ceiling damp intrusion.`,
           recommendedMonth: "Next 30 Days",
           estimatedCostRange: "£120 - £300",
           impactScore: 8,
-          isPassportTask: true
+          isPassportTask: true,
+          propertyAddress: propToUse.address?.line1 || propName
         });
       }
 
-      // E. EPC Rating Upgrade Recommendation
-      if (prop.epcRating && ['D', 'E', 'F', 'G'].includes(prop.epcRating.toUpperCase())) {
+      // EPC Efficiency
+      if (propToUse.epcRating && ['D', 'E', 'F', 'G'].includes(propToUse.epcRating.toUpperCase())) {
         tasks.push({
-          id: `passport-epc-${prop.id}`,
-          title: `EPC Efficiency Upgrade (Current Grade ${prop.epcRating})`,
+          id: `passport-epc-${propToUse.id}`,
+          title: `EPC Efficiency Upgrade (Current Grade ${propToUse.epcRating})`,
           category: "Insulation & Energy",
           urgency: "recommended",
-          season: "Property Passport Sync",
-          reasoning: `Property Passport lists EPC Grade ${prop.epcRating}. Improving loft insulation or draught proofing cuts energy bills by up to 25%.`,
+          season: "Energy Efficiency",
+          reasoning: `Property record lists EPC Grade ${propToUse.epcRating}. Improving loft insulation, cavity wall seals or TRV valves cuts heating bills by up to 25%.`,
           recommendedMonth: "Autumn / Winter",
           estimatedCostRange: "£200 - £600",
           impactScore: 7,
-          isPassportTask: true
+          isPassportTask: true,
+          propertyAddress: propToUse.address?.line1 || propName
         });
       }
-    });
+    }
 
-    // 1. Heating / Boiler check (General Fallback if no Passport tasks)
+    // Seasonal & Era Fallbacks
     const hasRecentBoilerJob = completedJobs.some(j => 
       j.category?.toLowerCase().includes("heating") || j.category?.toLowerCase().includes("plumbing")
     );
 
-    if ((currentMonth >= 8 || currentMonth <= 1 || !hasRecentBoilerJob) && tasks.length === 0) {
+    if ((currentMonth >= 8 || currentMonth <= 1 || !hasRecentBoilerJob) && !tasks.some(t => t.category === "Heating & Gas")) {
       tasks.push({
-        id: "boiler-service",
-        title: "Annual Boiler & Heating Efficiency Check",
+        id: "boiler-seasonal-service",
+        title: "Annual Boiler & Central Heating Efficiency Check",
         category: "Heating & Gas",
         urgency: currentMonth >= 8 || currentMonth <= 1 ? "urgent" : "recommended",
-        season: "Autumn/Winter",
-        reasoning: `${propertyAge} ${propertyType}s with ${heatingType} systems see a 40% higher breakdown risk during early winter frost if unserviced over 12 months.`,
+        season: "Autumn / Winter Prep",
+        reasoning: `${propertyAge} ${propertyType}s with ${heatingType} experience elevated failure rates during first cold snap if unserviced over 12 months.`,
         recommendedMonth: "Before Nov Freeze",
         estimatedCostRange: "£80 - £150",
-        impactScore: 9
+        impactScore: 9,
+        propertyAddress: propName
       });
     }
 
-    // 2. Gutter & Roof Flashing
-    tasks.push({
-      id: "gutter-clearance",
-      title: "Gutter Clearance & Roof Flashing Inspection",
-      category: "Roofing",
-      urgency: "urgent",
-      season: "Autumn Rainfall",
-      reasoning: "Autumn foliage & downpipe blockages cause water pooling against brickwork leading to internal damp patches.",
-      recommendedMonth: "October / November",
-      estimatedCostRange: "£90 - £180",
-      impactScore: 8
-    });
+    if (!tasks.some(t => t.id === "gutter-clearance")) {
+      tasks.push({
+        id: "gutter-clearance",
+        title: "Gutter Clearance & Roof Flashing Inspection",
+        category: "Roofing",
+        urgency: currentMonth >= 8 && currentMonth <= 11 ? "urgent" : "routine",
+        season: currentSeasonName,
+        reasoning: `Autumn leaves and moss block downpipes, forcing rainwater to pool against masonry and create penetrating damp on ${propertyType} walls.`,
+        recommendedMonth: "October / November",
+        estimatedCostRange: "£90 - £180",
+        impactScore: 8,
+        propertyAddress: propName
+      });
+    }
 
-    // 3. Electrical & Consumer Unit Audit
-    if (propertyAge.includes("1930s") || propertyAge.includes("Victorian") || propertyAge.includes("1970s")) {
+    if ((propertyAge.includes("1930s") || propertyAge.includes("Victorian") || propertyAge.includes("1970s")) && !tasks.some(t => t.category === "Electrical")) {
       tasks.push({
         id: "electrical-safety",
-        title: "Periodic Electrical Safety & RCD Breaker Check",
+        title: "Periodic Electrical Consumer Unit & RCD Audit",
         category: "Electrical",
         urgency: "recommended",
-        season: "Winter Overload Prep",
-        reasoning: `${propertyAge} wiring systems experience elevated load during winter months with space heaters and festive lighting.`,
+        season: "Safety Audit",
+        reasoning: `${propertyAge} wiring systems experience elevated load in colder months. Checking RCD trip switches and bonding prevents fire hazards.`,
         recommendedMonth: "Year-Round",
         estimatedCostRange: "£120 - £250",
-        impactScore: 7
+        impactScore: 7,
+        propertyAddress: propName
       });
     }
 
-    // 4. Damp & Extractor Fan Ventilation
-    tasks.push({
-      id: "damp-ventilation",
-      title: "Damp & Condensation Airflow Audit",
-      category: "Damp Proofing",
-      urgency: "routine",
-      season: "Winter Indoor Humidity",
-      reasoning: "Reduced natural ventilation in cold months increases condensation risk in bathrooms & kitchens.",
-      recommendedMonth: "November - February",
-      estimatedCostRange: "£100 - £220",
-      impactScore: 6
-    });
+    if (!tasks.some(t => t.category === "Damp & Mould" || t.category === "Damp Proofing")) {
+      tasks.push({
+        id: "damp-ventilation",
+        title: "Damp & Condensation Airflow Inspection",
+        category: "Damp & Mould",
+        urgency: "routine",
+        season: "Indoor Humidity",
+        reasoning: "Cold external temperatures increase indoor condensation on window reveals and bathroom walls without sufficient trickle airflow.",
+        recommendedMonth: "November - February",
+        estimatedCostRange: "£100 - £220",
+        impactScore: 6,
+        propertyAddress: propName
+      });
+    }
 
     return tasks;
   };
@@ -418,10 +501,11 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
   // Calculate Home Health Score (out of 100)
   const completedHistoryBonus = Math.min(completedJobs.length * 5, 20);
+  const passportCompleteBonus = activeProperty?.address?.line1 ? 10 : 0;
   const urgentTasksCount = forecasts.filter(f => f.urgency === "urgent").length;
   const recommendedTasksCount = forecasts.filter(f => f.urgency === "recommended").length;
   const attentionCount = urgentTasksCount + recommendedTasksCount;
-  const healthScore = Math.max(50, Math.min(100, 92 - (urgentTasksCount * 8) + completedHistoryBonus));
+  const healthScore = Math.max(50, Math.min(100, 90 - (urgentTasksCount * 8) - (recommendedTasksCount * 3) + completedHistoryBonus + passportCompleteBonus));
 
   const handleFetchAIPredictions = async () => {
     setIsGenerating(true);
@@ -440,8 +524,14 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
     }
   };
 
+  // 1-Tap Post Job for Preventive Forecast Task
   const handlePostPreventiveJob = (task: MaintenanceTask) => {
-    const formattedDesc = `Preventive Maintenance Request (${propertyAge}, ${propertyType}, ${heatingType}):\n\n• Recommended Timeline: ${task.recommendedMonth}\n• Reason for Maintenance: ${task.reasoning}\n• Priority Level: ${task.urgency === 'urgent' ? 'High Seasonal Priority' : 'Recommended Seasonal Maintenance'}\n• Estimated Budget: ${task.estimatedCostRange}`;
+    const propAddressStr = activeProperty?.address?.line1 
+      ? `${activeProperty.address.line1}${activeProperty.address.postcode ? ', ' + activeProperty.address.postcode : ''}`
+      : propertyAddressLine || "Home";
+
+    const formattedDesc = `Preventive Maintenance Request for ${propAddressStr} (${propertyAge}, ${propertyType}, ${heatingType}):\n\n• Recommended Timeline: ${task.recommendedMonth}\n• Reason for Maintenance: ${task.reasoning}\n• Priority Level: ${task.urgency === 'urgent' ? 'High Seasonal Priority' : 'Recommended Seasonal Maintenance'}\n• Estimated Budget: ${task.estimatedCostRange}\n\n--- PROPERTY SPECS ---\n• Address: ${propAddressStr}\n• Era: ${propertyAge}\n• Heating / Boiler: ${boilerBrand || heatingType} ${boilerModel || ''}\n• Roof Condition: ${roofCondition}\n• EPC: Grade ${epcRating}`;
+
     const params = new URLSearchParams({
       category: task.category || "General Maintenance",
       title: task.title,
@@ -450,6 +540,11 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
       budget: task.estimatedCostRange,
       prefilledByAI: "true"
     });
+
+    if (activeProperty?.id) {
+      params.set("linkedPropertyId", activeProperty.id);
+    }
+
     navigate(`/post-job?${params.toString()}`, {
       state: {
         category: task.category || "General Maintenance",
@@ -457,9 +552,25 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         description: formattedDesc,
         urgency: task.urgency === "urgent" ? "asap" : "flexible",
         selectedBudget: task.estimatedCostRange,
-        prefilledByAI: true
+        prefilledByAI: true,
+        linkedPropertyId: activeProperty?.id || null,
+        linkedPropertyName: activeProperty?.name || activeProperty?.address?.line1 || null,
+        linkedProperties: activeProperty ? [activeProperty] : null
       }
     });
+  };
+
+  // Quick Add Forecast Task directly to Maintenance Planner
+  const handleAddForecastToPlanner = (task: MaintenanceTask) => {
+    setPlannerTitle(task.title);
+    setPlannerCategory(task.category);
+    setPlannerBudget(task.estimatedCostRange);
+    setPlannerUrgency(task.urgency);
+    setPlannerNotes(task.reasoning);
+    setPlannerSelectedProperty(activeProperty?.id || "");
+    setActiveTab("planner");
+    setShowPlannerForm(true);
+    toast.info(`Task pre-filled in Planner: "${task.title}"`);
   };
 
   // Days remaining calculation helper
@@ -488,14 +599,14 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
     setPlannerCategory(chip.category);
     setPlannerBudget(chip.budget);
     setPlannerUrgency(chip.urgency);
-    toast.info(`Filled form with preset: "${chip.title}"`);
+    toast.info(`Filled with preset: "${chip.title}"`);
   };
 
   // Save/Schedule task form submit handler
   const handleSaveScheduledTask = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!plannerTitle.trim()) {
-      toast.error("Please enter a repair task title.");
+      toast.error("Please enter a task title.");
       return;
     }
 
@@ -503,7 +614,6 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
     try {
       const taskId = editingTaskId || (user ? doc(collection(db, "scheduledRepairs")).id : `local-${Date.now()}`);
       
-      // Calculate notification trigger date
       const targetDateObj = new Date(plannerTargetDate + "T09:00:00");
       let offsetDays = 0;
       if (plannerReminderOffset === "3_days_before") offsetDays = 3;
@@ -515,9 +625,10 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
       const now = new Date();
       const visibleAtTimestamp = reminderDate > now ? reminderDate.getTime() : now.getTime();
 
-      const selectedProp = passportProperties.find(p => p.id === plannerSelectedProperty);
-      const propId = plannerSelectedProperty || passportProperties[0]?.id || "";
-      const propName = selectedProp?.name || selectedProp?.address?.line1 || passportProperties[0]?.name || "Home";
+      const selectedProp = passportProperties.find(p => p.id === plannerSelectedProperty) || activeProperty;
+      const propId = selectedProp?.id || "";
+      const propName = selectedProp?.name || selectedProp?.address?.line1 || "Home";
+      const propAddress = selectedProp?.address?.line1 ? `${selectedProp.address.line1}${selectedProp.address.postcode ? ', ' + selectedProp.address.postcode : ''}` : "";
 
       const newTask: ScheduledRepairTask = {
         id: taskId,
@@ -531,26 +642,24 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         notes: plannerNotes.trim() || "",
         ...(propId ? { propertyId: propId } : {}),
         propertyName: propName,
+        propertyAddress: propAddress,
         createdAt: new Date().toISOString(),
         status: "scheduled"
       };
 
-      // 1. Save to Firestore if user logged in
       if (user) {
-        // Clean out any undefined keys before sending to Firestore
         const firestoreData = JSON.parse(JSON.stringify(newTask));
         await setDoc(doc(db, "scheduledRepairs", taskId), firestoreData);
 
-        // Create scheduled notification document
         const notifRef = doc(collection(db, "notifications"));
-        const formattedDesc = `Scheduled Maintenance: ${plannerTitle}\nCategory: ${plannerCategory}\nTarget Date: ${plannerTargetDate}\nEstimated Budget: ${plannerBudget}\nNotes: ${plannerNotes}`;
+        const formattedDesc = `Scheduled Maintenance: ${plannerTitle}\nProperty: ${propName} (${propAddress})\nCategory: ${plannerCategory}\nTarget Date: ${plannerTargetDate}\nEstimated Budget: ${plannerBudget}\nNotes: ${plannerNotes}`;
         const postJobUrl = `/post-job?category=${encodeURIComponent(plannerCategory)}&title=${encodeURIComponent(plannerTitle)}&budget=${encodeURIComponent(plannerBudget)}&description=${encodeURIComponent(formattedDesc)}&prefilledByAI=true`;
         
         await setDoc(notifRef, {
           userId: user.uid,
           type: "scheduled_repair_reminder",
-          title: `⏰ Scheduled Task Alert: ${plannerTitle}`,
-          message: `Your scheduled ${plannerCategory} task "${plannerTitle}" is targetted for ${plannerTargetDate}. Tap below to request quotes with prefilled details.`,
+          title: `⏰ Maintenance Alert: ${plannerTitle}`,
+          message: `Your scheduled task "${plannerTitle}" for ${propName} is targeted for ${plannerTargetDate}. Tap to request quotes.`,
           visibleAt: visibleAtTimestamp,
           read: false,
           createdAt: serverTimestamp(),
@@ -560,23 +669,20 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         });
       }
 
-      // 2. Update local state and localStorage
       const updated = scheduledTasks.filter(t => t.id !== taskId);
       updated.push(newTask);
       updated.sort((a, b) => (a.targetDate > b.targetDate ? 1 : -1));
       setScheduledTasks(updated);
       localStorage.setItem("anytrader_scheduled_repairs_v1", JSON.stringify(updated));
 
-      // Reset form
       setPlannerTitle("");
       setPlannerCategory("Any Category");
       setPlannerNotes("");
       setEditingTaskId(null);
-      setShowPlanner(false);
-      setActiveForecastTab("scheduled_repairs");
+      setShowPlannerForm(false);
 
       const reminderDateFormatted = reminderDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      toast.success(`Task scheduled for ${plannerTargetDate}! Platform notification set for ${reminderDateFormatted}.`);
+      toast.success(`Task scheduled for ${plannerTargetDate}! Alert set for ${reminderDateFormatted}.`);
     } catch (err: any) {
       console.error("Error saving scheduled task:", err);
       toast.error("Saved scheduled repair task locally.");
@@ -587,7 +693,8 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
   // 1-Tap Post Job for Custom Scheduled Task
   const handlePostScheduledTask = (task: ScheduledRepairTask) => {
-    const formattedDesc = `Scheduled Maintenance Request (${task.propertyName || 'Home'}):\n\n• Target Scheduled Date: ${task.targetDate}\n• Category: ${task.category}\n• Notes / Specifics: ${task.notes || 'None specified'}\n• Priority Level: ${task.urgency === 'urgent' ? 'High Priority' : task.urgency === 'recommended' ? 'Recommended Maintenance' : 'Routine Maintenance'}\n• Estimated Budget: ${task.estimatedBudget || 'Flexible'}`;
+    const prop = passportProperties.find(p => p.id === task.propertyId) || activeProperty;
+    const formattedDesc = `Scheduled Maintenance Request (${task.propertyName || 'Home'}${task.propertyAddress ? ' - ' + task.propertyAddress : ''}):\n\n• Target Scheduled Date: ${task.targetDate}\n• Category: ${task.category}\n• Notes: ${task.notes || 'None specified'}\n• Priority: ${task.urgency === 'urgent' ? 'High Priority' : task.urgency === 'recommended' ? 'Recommended' : 'Routine'}\n• Budget: ${task.estimatedBudget || 'Flexible'}`;
     
     const params = new URLSearchParams({
       category: task.category || "General Maintenance",
@@ -598,6 +705,10 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
       prefilledByAI: "true"
     });
 
+    if (prop?.id) {
+      params.set("linkedPropertyId", prop.id);
+    }
+
     navigate(`/post-job?${params.toString()}`, {
       state: {
         category: task.category || "General Maintenance",
@@ -605,7 +716,10 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         description: formattedDesc,
         urgency: task.urgency === "urgent" ? "asap" : "flexible",
         selectedBudget: task.estimatedBudget || "",
-        prefilledByAI: true
+        prefilledByAI: true,
+        linkedPropertyId: prop?.id || null,
+        linkedPropertyName: prop?.name || prop?.address?.line1 || null,
+        linkedProperties: prop ? [prop] : null
       }
     });
   };
@@ -618,7 +732,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         title: task.title,
         category: task.category,
         startDate: task.targetDate + "T10:00:00",
-        description: `[AnyTrader Scheduled Maintenance]\nCategory: ${task.category}\nBudget: ${task.estimatedBudget || 'N/A'}\nNotes: ${task.notes || 'N/A'}\nProperty: ${task.propertyName || 'Home'}`
+        description: `[AnyTrader Scheduled Maintenance]\nCategory: ${task.category}\nBudget: ${task.estimatedBudget || 'N/A'}\nNotes: ${task.notes || 'N/A'}\nProperty: ${task.propertyName || 'Home'} (${task.propertyAddress || ''})`
       });
 
       if (res && res.url) {
@@ -659,296 +773,357 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
     setPlannerUrgency(task.urgency);
     setPlannerNotes(task.notes || "");
     setPlannerSelectedProperty(task.propertyId || "");
-    setShowPlanner(true);
+    setShowPlannerForm(true);
+    setActiveTab("planner");
     setIsExpanded(true);
   };
 
   return (
-    <div 
-      onTouchStart={resetAutoCloseTimer}
-      onTouchMove={resetAutoCloseTimer}
-      onMouseEnter={resetAutoCloseTimer}
-      onMouseMove={resetAutoCloseTimer}
-      onKeyDown={resetAutoCloseTimer}
-      onFocus={resetAutoCloseTimer}
-      onClick={resetAutoCloseTimer}
-      className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 border border-black shadow-lg space-y-4 transition-all duration-300"
-    >
-      {/* Top Header - Responsive & Mobile-Optimized */}
-      <div className="space-y-3">
-        {/* Title & Status Row */}
-        <div className="flex items-start justify-between gap-2">
-          <div 
-            onClick={() => {
-              if (!isExpanded) setIsExpanded(true);
-            }}
-            className={`flex items-center gap-2.5 min-w-0 flex-1 ${!isExpanded ? 'cursor-pointer' : ''}`}
-          >
-            <div className="relative w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-              {/* Notification Bubble Badge */}
-              {attentionCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-md animate-bounce">
-                  {attentionCount}
+    <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 border border-white/20 shadow-xl space-y-4 transition-all duration-300 relative">
+      
+      {/* 1. SECTION HEADER: Title, Live Alert Badge & Collapse Toggle */}
+      <div className="flex items-center justify-between gap-3">
+        <div 
+          onClick={() => { if (!isExpanded) setIsExpanded(true); }}
+          className={`flex items-center gap-3 min-w-0 flex-1 ${!isExpanded ? 'cursor-pointer' : ''}`}
+        >
+          <div className="relative w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
+            <Sparkles className="w-5 h-5 animate-pulse" />
+            {attentionCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-md">
+                {attentionCount}
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base sm:text-lg font-black text-white leading-tight">
+                AI Home Health & Seasonal Care
+              </h2>
+              {attentionCount > 0 ? (
+                <span className="text-[10px] bg-red-500/25 text-red-300 border border-red-400/40 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+                  {attentionCount} Actions Due
+                </span>
+              ) : (
+                <span className="text-[10px] bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider shrink-0 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Optimal Condition
                 </span>
               )}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm sm:text-base font-extrabold text-white leading-tight">
-                  AI Home Health & Seasonal Forecast
-                </h2>
-                {/* Notification Bubble Alert Pill */}
-                {attentionCount > 0 ? (
-                  <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-400/40 px-2 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1 shrink-0">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                    🚨 {attentionCount} Alert{attentionCount > 1 ? 's' : ''} Need Attention
-                  </span>
-                ) : (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">
-                    ✓ Healthy
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-300 truncate mt-0.5">
-                {currentSeasonName} • Proactive seasonal predictions based on your UK property.
-              </p>
-            </div>
+            <p className="text-xs text-slate-300 mt-0.5 font-medium">
+              Live UK weather forecasts, predictive maintenance, and digital property records.
+            </p>
           </div>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            className="text-[11px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-xl border border-white/20 transition flex items-center gap-1 cursor-pointer shrink-0"
-            title={isExpanded ? "Collapse box" : "Expand box"}
-          >
-            <span className="hidden sm:inline">{isExpanded ? "Collapse" : "Expand"}</span>
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
         </div>
 
-        {/* Action Buttons Grid - 5 Columns fitting 100% width at all times with mutual auto-close */}
-        <div className="grid grid-cols-5 gap-1 sm:gap-1.5 w-full border-t border-white/10 pt-2.5">
-          {/* 1. Passport (Home Twin) */}
-          <Link
-            to="/portfolio"
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+        >
+          <span className="hidden sm:inline">{isExpanded ? "Minimize" : "Expand"}</span>
+          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+      </div>
+
+      {/* 2. UNIFIED PROPERTY & HEALTH SCORE BAR (Zero redundancy, crystal clear actions) */}
+      <div className="bg-slate-950/80 border border-white/15 rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3.5">
+        
+        {/* Left: Health Score Radial + Address & Specs */}
+        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+          {/* Circular Health Gauge */}
+          <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+            <svg className="w-12 h-12 transform -rotate-90">
+              <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4.5" className="text-slate-800" fill="transparent" />
+              <circle
+                cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4.5"
+                className={healthScore >= 80 ? "text-emerald-400" : healthScore >= 65 ? "text-amber-400" : "text-red-400"}
+                strokeDasharray={126}
+                strokeDashoffset={126 - (126 * healthScore) / 100}
+                strokeLinecap="round"
+                fill="transparent"
+              />
+            </svg>
+            <span className="absolute font-black text-xs text-white">{healthScore}</span>
+          </div>
+
+          {/* Property Info */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs sm:text-sm font-black text-white truncate">
+                {activeProperty ? (activeProperty.name || activeProperty.address?.line1 || "My Home") : "Home Address"}
+              </span>
+              {activeProperty?.address?.postcode && (
+                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.2 rounded-md">
+                  {activeProperty.address.postcode}
+                </span>
+              )}
+              {passportProperties.length > 1 && (
+                <select
+                  value={selectedPropertyId}
+                  onChange={(e) => setSelectedPropertyId(e.target.value)}
+                  className="text-[10px] font-bold bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2 py-1 cursor-pointer ml-1"
+                >
+                  {passportProperties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || p.address?.line1 || "Property"} ({p.address?.postcode || "UK"})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300 mt-0.5">
+              <span>{propertyType}</span>
+              <span className="text-slate-500">•</span>
+              <span>{propertyAge}</span>
+              <span className="text-slate-500">•</span>
+              <span className="text-amber-300 font-semibold">{boilerBrand || heatingType}</span>
+              {epcRating && (
+                <>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-emerald-400 font-bold">EPC {epcRating}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Primary Clear Action Buttons */}
+        <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end pt-2 md:pt-0 border-t md:border-t-0 border-white/10">
+          {/* 1. Property Passport Modal */}
+          <button
+            type="button"
             onClick={() => {
-              setShowConfig(false);
-              setShowRiskAnalytics(false);
-              setShowBnplModal(false);
-              setShowPlanner(false);
-            }}
-            className="w-full py-2 px-1 text-[10px] sm:text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white rounded-xl border border-blue-500 shadow-sm transition flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer text-center leading-none"
-            title="Open Property Passport Digital Twin"
-          >
-            <Home className="w-3.5 h-3.5 text-blue-200 shrink-0" />
-            <span className="truncate">Passport</span>
-          </Link>
-
-          {/* 2. Specs (Property Configuration) */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const nextState = !showConfig;
-              setShowRiskAnalytics(false);
-              setShowBnplModal(false);
-              setShowPlanner(false);
-              setShowConfig(nextState);
-              if (nextState) setIsExpanded(true);
-            }}
-            className={cn(
-              "w-full py-2 px-1 text-[10px] sm:text-xs font-bold rounded-xl border transition flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer text-center leading-none relative group",
-              showConfig 
-                ? "bg-amber-400 text-slate-900 border-amber-300 font-extrabold shadow-sm"
-                : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border-slate-700"
-            )}
-            title={showConfig ? "Close Property Specs" : "Configure Property Specs & Boiler/Roof details"}
-          >
-            <Wrench className={cn("w-3.5 h-3.5 shrink-0", showConfig ? "text-slate-900" : "text-amber-400")} />
-            <span className="truncate">Specs</span>
-            {showConfig && <X className="w-3 h-3 text-slate-900 shrink-0 ml-0.5" />}
-          </button>
-
-          {/* 3. Planner (Custom Repair Schedule & Alerts) */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const nextState = !showPlanner;
-              setShowConfig(false);
-              setShowRiskAnalytics(false);
-              setShowBnplModal(false);
-              setShowPlanner(nextState);
-              if (nextState) setIsExpanded(true);
-            }}
-            className={cn(
-              "w-full py-2 px-1 text-[10px] sm:text-xs font-bold rounded-xl border transition flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer text-center leading-none relative group",
-              showPlanner 
-                ? "bg-purple-500 text-white border-purple-400 font-extrabold shadow-sm"
-                : "bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border-purple-500/40"
-            )}
-            title={showPlanner ? "Close Task Planner" : "Plan Ahead Custom Repair & Schedule Alert"}
-          >
-            <Calendar className={cn("w-3.5 h-3.5 shrink-0", showPlanner ? "text-white" : "text-purple-300")} />
-            <span className="truncate">Planner</span>
-            {showPlanner && <X className="w-3 h-3 text-white shrink-0 ml-0.5" />}
-          </button>
-
-          {/* 4. Risk (Property Risk & Insurance Analytics) */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const nextState = !showRiskAnalytics;
-              setShowConfig(false);
-              setShowBnplModal(false);
-              setShowPlanner(false);
-              setShowRiskAnalytics(nextState);
-              if (nextState) setIsExpanded(true);
-            }}
-            className={cn(
-              "w-full py-2 px-1 text-[10px] sm:text-xs font-bold rounded-xl border transition flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer text-center leading-none relative group",
-              showRiskAnalytics 
-                ? "bg-emerald-500 text-slate-900 border-emerald-400 font-extrabold shadow-sm"
-                : "bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-500/40"
-            )}
-            title={showRiskAnalytics ? "Close Risk Analytics" : "Insurance Underwriter Property Risk Analytics"}
-          >
-            <BarChart3 className={cn("w-3.5 h-3.5 shrink-0", showRiskAnalytics ? "text-slate-900" : "text-emerald-400")} />
-            <span className="truncate">Risk</span>
-            {showRiskAnalytics && <X className="w-3 h-3 text-slate-900 shrink-0 ml-0.5" />}
-          </button>
-
-          {/* 5. FlexiPay (BNPL Financing) */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (showBnplModal) {
-                setShowBnplModal(false);
+              if (activeProperty) {
+                setShowPassportModal(true);
               } else {
-                setShowConfig(false);
-                setShowRiskAnalytics(false);
-                setShowPlanner(false);
-                setShowBnplModal(true);
+                setShowConfig(true);
+                toast.info("Please add your property address first to open your Digital Passport!");
               }
             }}
-            className={cn(
-              "w-full py-2 px-1 text-[10px] sm:text-xs font-bold rounded-xl border transition flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer text-center leading-none",
-              showBnplModal
-                ? "bg-indigo-500 text-slate-900 border-indigo-400 font-extrabold shadow-sm"
-                : "bg-indigo-600/40 hover:bg-indigo-600/70 text-indigo-200 border-indigo-500/50"
-            )}
-            title={showBnplModal ? "Close FlexiPay" : "BNPL Repair Financing (£1,000+)"}
+            className="flex-1 md:flex-initial text-xs font-black bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-xl border border-blue-400/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+            title="View Property Passport Digital Twin"
           >
-            <CreditCard className={cn("w-3.5 h-3.5 shrink-0", showBnplModal ? "text-slate-900" : "text-indigo-300")} />
-            <span className="truncate">FlexiPay</span>
-            {showBnplModal && <X className="w-3 h-3 text-slate-900 shrink-0 ml-0.5" />}
+            <Home className="w-3.5 h-3.5" />
+            <span>Property Passport</span>
+          </button>
+
+          {/* 2. Edit Specs Form */}
+          <button
+            type="button"
+            onClick={() => setShowConfig(true)}
+            className="flex-1 md:flex-initial text-xs font-bold bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white px-3 py-2 rounded-xl border border-white/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            title="Edit address, boiler, roof & EPC details"
+          >
+            <Wrench className="w-3.5 h-3.5 text-amber-400" />
+            <span>Edit Specs</span>
           </button>
         </div>
       </div>
 
-      {/* Content Area Container */}
+      {/* 3. MAIN 4 FUNCTIONAL TABS (Intuitive, purpose-driven navigation) */}
       {isExpanded && (
-        <div className="relative min-h-[180px] transition-all duration-300">
-          {/* Main Widget Info (blurred slightly when overlay is active) */}
-          <div className={cn(
-            "space-y-4 transition-all duration-300",
-            (showConfig || showRiskAnalytics || showPlanner) && "blur-[3px] opacity-25 select-none pointer-events-none"
-          )}>
-            {/* Health Score & Weather Sync - Compact Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Score Card */}
-              <div className="bg-gradient-to-br from-blue-900/50 to-slate-800/80 border border-blue-500/30 rounded-2xl p-3.5 flex items-center gap-3">
-                <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-                  <svg className="w-12 h-12 transform -rotate-90">
-                    <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="5" className="text-slate-700" fill="transparent" />
-                    <circle
-                      cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="5"
-                      className={healthScore >= 80 ? "text-emerald-400" : healthScore >= 65 ? "text-amber-400" : "text-red-400"}
-                      strokeDasharray={126}
-                      strokeDashoffset={126 - (126 * healthScore) / 100}
-                      strokeLinecap="round"
-                      fill="transparent"
-                    />
-                  </svg>
-                  <span className="absolute font-black text-sm text-white">{healthScore}</span>
-                </div>
-                <div>
-                  <p className="text-[9px] font-bold text-blue-300 uppercase tracking-wider">Health Index</p>
-                  <h4 className="font-extrabold text-xs text-white">
-                    {healthScore >= 80 ? "Excellent Preventive Care" : healthScore >= 65 ? "Good — Seasonal Checks Due" : "Action Recommended"}
-                  </h4>
-                  <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
-                    {propertyAge} • {completedJobs.length} past jobs
-                  </p>
-                </div>
-              </div>
+        <div className="space-y-4 pt-1">
+          {/* Navigation Tab Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/80 p-2 rounded-2xl border border-white/15">
+            
+            {/* Tab 1: Seasonal Forecasts */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("forecasts")}
+              className={cn(
+                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                activeTab === "forecasts"
+                  ? "bg-amber-400 text-slate-950 border-amber-300 shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+              )}
+            >
+              <Sparkles className={cn("w-4 h-4 shrink-0", activeTab === "forecasts" ? "text-slate-950" : "text-amber-400")} />
+              <span className="truncate">Seasonal Forecasts</span>
+              <span className={cn(
+                "text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0",
+                activeTab === "forecasts"
+                  ? "bg-slate-950 text-amber-400"
+                  : "bg-amber-400/20 text-amber-300 border border-amber-400/30"
+              )}>
+                {forecasts.length}
+              </span>
+            </button>
 
-              {/* Weather Sync Banner */}
-              <div className="md:col-span-2 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 flex items-center gap-3 text-amber-200">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-extrabold text-[11px] text-amber-300 uppercase tracking-wider">
+            {/* Tab 2: Maintenance Planner */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("planner")}
+              className={cn(
+                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                activeTab === "planner"
+                  ? "bg-purple-600 text-white border-purple-400 shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+              )}
+            >
+              <Calendar className={cn("w-4 h-4 shrink-0", activeTab === "planner" ? "text-white" : "text-purple-400")} />
+              <span className="truncate">Planner</span>
+              <span className={cn(
+                "text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0",
+                activeTab === "planner"
+                  ? "bg-white text-purple-700"
+                  : "bg-purple-400/20 text-purple-300 border border-purple-400/30"
+              )}>
+                {scheduledTasks.length}
+              </span>
+            </button>
+
+            {/* Tab 3: Risk & Insurance */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("risk")}
+              className={cn(
+                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                activeTab === "risk"
+                  ? "bg-emerald-500 text-slate-950 border-emerald-300 shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+              )}
+            >
+              <BarChart3 className={cn("w-4 h-4 shrink-0", activeTab === "risk" ? "text-slate-950" : "text-emerald-400")} />
+              <span className="truncate">Risk & Insurance</span>
+            </button>
+
+            {/* Tab 4: Repair Financing (FlexiPay) */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("financing")}
+              className={cn(
+                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                activeTab === "financing"
+                  ? "bg-cyan-500 text-slate-950 border-cyan-300 shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+              )}
+            >
+              <CreditCard className={cn("w-4 h-4 shrink-0", activeTab === "financing" ? "text-slate-950" : "text-cyan-400")} />
+              <span className="truncate">Repair Financing</span>
+            </button>
+          </div>
+
+          {/* 4. TAB CONTENTS */}
+          
+          {/* TAB 1: SEASONAL FORECASTS */}
+          {activeTab === "forecasts" && (
+            <div className="space-y-3.5 animate-in fade-in duration-200">
+              {/* Seasonal Weather Banner */}
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-amber-200">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-extrabold text-xs text-amber-300 uppercase tracking-wider">
                       {currentSeasonName}
                     </h4>
-                    <button
-                      onClick={handleFetchAIPredictions}
-                      disabled={isGenerating}
-                      className="text-[9px] font-bold text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 px-2 py-0.5 rounded-md transition flex items-center gap-1 shrink-0"
-                    >
-                      <RefreshCw className={`w-2.5 h-2.5 ${isGenerating ? 'animate-spin' : ''}`} />
-                      <span>AI Sync</span>
-                    </button>
+                    <p className="text-xs text-amber-100/90 font-medium leading-snug line-clamp-2 mt-0.5">
+                      {weatherAlert}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-amber-100/90 font-medium leading-snug line-clamp-2 mt-0.5">
-                    {weatherAlert}
-                  </p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleFetchAIPredictions}
+                  disabled={isGenerating}
+                  className="text-xs font-bold text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
+                  <span>AI Refresh</span>
+                </button>
+              </div>
+
+              {/* Forecast Task Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {forecasts.map((task) => (
+                  <div
+                    key={task.id}
+                    className="bg-white/5 border border-white/10 hover:border-blue-500/50 rounded-2xl p-3.5 transition flex flex-col justify-between space-y-3 group"
+                  >
+                    <div className="space-y-1.5">
+                      {/* Priority Tag & Timeframe */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                          task.urgency === 'urgent'
+                            ? 'bg-red-500/20 text-red-300 border-red-400/40'
+                            : task.urgency === 'recommended'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
+                            : 'bg-blue-500/20 text-blue-300 border-blue-400/40'
+                        }`}>
+                          {task.urgency === 'urgent' ? '🚨 High Priority' : task.urgency === 'recommended' ? '⚠️ Recommended' : 'Routine'}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {task.recommendedMonth}
+                        </span>
+                      </div>
+
+                      {/* Title & Plain English Reason */}
+                      <div>
+                        <h4 className="font-black text-sm text-white group-hover:text-blue-300 transition-colors">
+                          {task.title}
+                        </h4>
+                        <p className="text-xs text-slate-300 leading-relaxed mt-1">
+                          {task.reasoning}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Cost & Dual Action Buttons */}
+                    <div className="pt-2.5 border-t border-white/10 flex items-center justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Est. Cost</span>
+                        <span className="text-xs sm:text-sm font-black text-emerald-400">{task.estimatedCostRange}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Add to Planner Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleAddForecastToPlanner(task)}
+                          className="bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-bold px-2.5 py-1.5 rounded-xl border border-white/15 transition flex items-center gap-1 cursor-pointer"
+                          title="Save this task to your Maintenance Planner"
+                        >
+                          <Calendar className="w-3 h-3 text-purple-300" />
+                          <span className="hidden sm:inline">Add to</span> Planner
+                        </button>
+
+                        {/* 1-Tap Request Quotes */}
+                        <button
+                          type="button"
+                          onClick={() => handlePostPreventiveJob(task)}
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow cursor-pointer active:scale-95"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Request Quotes</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Forecast Cards & Scheduled Planner Section */}
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setActiveForecastTab("ai_forecasts")}
-                    className={cn(
-                      "text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer",
-                      activeForecastTab === "ai_forecasts"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "bg-slate-800 text-slate-300 hover:text-white"
-                    )}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-200" />
-                    <span>AI Forecasts ({forecasts.length})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveForecastTab("scheduled_repairs")}
-                    className={cn(
-                      "text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer relative",
-                      activeForecastTab === "scheduled_repairs"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-purple-950/40 text-purple-300 border border-purple-500/30 hover:bg-purple-900/60"
-                    )}
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-purple-300" />
-                    <span>My Planned Tasks ({scheduledTasks.length})</span>
-                    {scheduledTasks.length > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
-                    )}
-                  </button>
+          {/* TAB 2: MAINTENANCE PLANNER */}
+          {activeTab === "planner" && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Planner Header & Add Task CTA */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-purple-950/30 border border-purple-500/30 rounded-2xl p-3 sm:p-4">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-black text-white flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-purple-400" />
+                    <span>Home Maintenance Planner & Alert Engine</span>
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Schedule seasonal upkeep tasks, set automatic in-app alerts, and sync dates to Google Calendar.
+                  </p>
                 </div>
 
                 <button
@@ -958,233 +1133,37 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                     setPlannerTitle("");
                     setPlannerCategory("Any Category");
                     setPlannerNotes("");
-                    setShowPlanner(true);
+                    setShowPlannerForm(!showPlannerForm);
                   }}
-                  className="text-[10px] font-bold bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-xl transition flex items-center gap-1 shadow cursor-pointer shrink-0 ml-auto"
+                  className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-3.5 py-2 rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Plan Ahead</span>
+                  <Plus className="w-4 h-4" />
+                  <span>{showPlannerForm ? "Cancel" : "+ Schedule New Task"}</span>
                 </button>
               </div>
 
-              {/* Tab Content: 1. AI Seasonal Forecasts */}
-              {activeForecastTab === "ai_forecasts" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  {forecasts.map((task) => (
-                    <div
-                      key={task.id}
-                      className="bg-white/5 border border-white/10 hover:border-blue-500/50 rounded-xl p-3 transition space-y-2 flex flex-col justify-between group"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                            task.urgency === 'urgent'
-                              ? 'bg-red-500/20 text-red-300 border-red-400/30'
-                              : task.urgency === 'recommended'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-400/30'
-                              : 'bg-blue-500/20 text-blue-300 border-blue-400/30'
-                          }`}>
-                            {task.urgency === 'urgent' ? '🚨 High Priority' : task.urgency === 'recommended' ? '⚠️ Recommended' : 'Routine'}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-400">
-                            {task.recommendedMonth}
-                          </span>
-                        </div>
-
-                        <div>
-                          <h4 className="font-black text-xs text-white group-hover:text-blue-300 transition-colors">
-                            {task.title}
-                          </h4>
-                          <p className="text-[11px] text-slate-300 line-clamp-2 mt-0.5 leading-tight">
-                            {task.reasoning}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-extrabold text-emerald-400">{task.estimatedCostRange}</span>
-
-                        <button
-                          onClick={() => handlePostPreventiveJob(task)}
-                          className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1 shadow shrink-0"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>Request Quotes</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Tab Content: 2. My Planned Scheduled Tasks */}
-              {activeForecastTab === "scheduled_repairs" && (
-                <div>
-                  {scheduledTasks.length === 0 ? (
-                    <div className="bg-slate-800/50 border border-dashed border-slate-700 rounded-2xl p-6 text-center space-y-3">
-                      <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center mx-auto">
-                        <Calendar className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-white">No Planned Repair Tasks Yet</h4>
-                        <p className="text-[11px] text-slate-400 max-w-sm mx-auto mt-0.5">
-                          Schedule any custom maintenance or repair task for a later date. Our platform will alert you with a platform notification when it's time to request trader quotes!
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setEditingTaskId(null);
-                          setPlannerTitle("");
-                          setPlannerCategory("Any Category");
-                          setPlannerNotes("");
-                          setShowPlanner(true);
-                        }}
-                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 mx-auto cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Schedule Your First Repair Task</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                      {scheduledTasks.map((task) => {
-                        const countdown = getDaysRemaining(task.targetDate);
-                        return (
-                          <div
-                            key={task.id}
-                            className="bg-slate-800/80 border border-purple-500/30 hover:border-purple-400/60 rounded-xl p-3 transition space-y-2 flex flex-col justify-between group relative overflow-hidden"
-                          >
-                            <div className="space-y-1.5">
-                              {/* Header row */}
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-400/30">
-                                  {task.category}
-                                </span>
-
-                                <span className={cn(
-                                  "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1",
-                                  countdown.isOverdue 
-                                    ? "bg-red-500/20 text-red-300 border-red-400/40"
-                                    : countdown.days === 0
-                                    ? "bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse"
-                                    : "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
-                                )}>
-                                  <Clock className="w-2.5 h-2.5" />
-                                  <span>{countdown.text}</span>
-                                </span>
-                              </div>
-
-                              {/* Title & Notes */}
-                              <div>
-                                <h4 className="font-black text-xs text-white group-hover:text-purple-300 transition-colors flex items-center justify-between gap-1">
-                                  <span>{task.title}</span>
-                                </h4>
-                                {task.notes && (
-                                  <p className="text-[11px] text-slate-300 line-clamp-2 mt-0.5 leading-tight">
-                                    {task.notes}
-                                  </p>
-                                )}
-                              </div>
-
-                              {/* Schedule & Notification Tag */}
-                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400 pt-0.5">
-                                <span className="flex items-center gap-1 text-slate-300 font-semibold">
-                                  <Calendar className="w-3 h-3 text-purple-400" />
-                                  Scheduled: {task.targetDate}
-                                </span>
-                                <span className="flex items-center gap-1 text-purple-300 font-medium">
-                                  <Bell className="w-3 h-3 text-purple-400" />
-                                  Alert: {task.reminderOffset.replace(/_/g, ' ')}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Footer Action Controls */}
-                            <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-[11px] font-extrabold text-emerald-400 shrink-0">
-                                {task.estimatedBudget || "Flexible"}
-                              </span>
-
-                              <div className="flex items-center gap-1.5 flex-wrap shrink-0 ml-auto">
-                                {/* Google Calendar Sync */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleSyncToGCal(task)}
-                                  className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold p-1.5 sm:px-2 rounded-lg transition flex items-center gap-1 cursor-pointer"
-                                  title="Sync event to Google Calendar"
-                                >
-                                  <CalendarCheck className="w-3.5 h-3.5 text-blue-400" />
-                                  <span className="hidden sm:inline">GCal</span>
-                                </button>
-
-                                {/* Edit Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditScheduledTask(task)}
-                                  className="bg-slate-700 hover:bg-slate-600 text-slate-200 p-1.5 rounded-lg transition cursor-pointer"
-                                  title="Edit Task"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                                </button>
-
-                                {/* Delete Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteScheduledTask(task.id)}
-                                  className="bg-red-950/40 hover:bg-red-900/60 text-red-300 p-1.5 rounded-lg transition cursor-pointer border border-red-500/30"
-                                  title="Delete Task"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-
-                                {/* ⚡ Post Job Now */}
-                                <button
-                                  type="button"
-                                  onClick={() => handlePostScheduledTask(task)}
-                                  className="bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 shadow cursor-pointer whitespace-nowrap shrink-0"
-                                >
-                                  <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                                  <span>Post Job Now</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Absolute Overlay for Active Tab Section (Specs / Risk / Planner) */}
-          {(showConfig || showRiskAnalytics || showPlanner) && (
-            <div className="absolute inset-0 z-20 bg-slate-950/95 backdrop-blur-md rounded-2xl p-1 overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
-              
-              {/* Planner Overlay Content */}
-              {showPlanner && (
-                <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-4 space-y-4">
+              {/* Interactive Schedule Task Form (If open) */}
+              {showPlannerForm && (
+                <div className="bg-slate-950/90 border border-purple-500/40 rounded-2xl p-4 space-y-3.5 animate-in fade-in duration-150">
                   <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                    <h4 className="text-xs font-black text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 text-purple-400" />
-                      {editingTaskId ? "Edit Scheduled Repair Task" : "Plan Ahead & Schedule Maintenance Task"}
-                    </h4>
+                    <span className="text-xs font-black text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {editingTaskId ? "Edit Scheduled Task" : "Schedule New Maintenance Task"}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setShowPlanner(false)}
-                      className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white rounded-lg border border-white/20 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      onClick={() => setShowPlannerForm(false)}
+                      className="text-slate-400 hover:text-white p-1"
                     >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Close</span>
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
 
-                  {/* 1-Tap Quick Suggestion Preset Chips */}
+                  {/* 1-Tap Quick Presets */}
                   {!editingTaskId && (
                     <div className="space-y-1.5">
                       <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
-                        ⚡ Quick 1-Tap Preset Suggestions
+                        ⚡ Quick 1-Tap Presets
                       </span>
                       <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
                         {QUICK_SUGGESTION_CHIPS.map((chip, idx) => (
@@ -1202,26 +1181,25 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                     </div>
                   )}
 
-                  {/* Task Schedule Form */}
                   <form onSubmit={handleSaveScheduledTask} className="space-y-3 text-xs">
                     {/* Row 1: Title & Category */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-[10px] font-bold text-slate-300 block mb-1">
-                          Task Title / Reminder <span className="text-red-400">*</span>
+                          Task Title / Task Name <span className="text-red-400">*</span>
                         </label>
                         <input
                           type="text"
                           value={plannerTitle}
                           onChange={(e) => setPlannerTitle(e.target.value)}
-                          placeholder="e.g. Renew Home Insurance, Book Driving Lesson, Boiler Service"
+                          placeholder="e.g. Annual Boiler Servicing, Gutter Clearance"
                           required
                           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
                         />
                       </div>
 
                       <div>
-                        <label className="text-[10px] font-bold text-slate-300 block mb-1">Task / Trade Category</label>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">Trade Category</label>
                         <select
                           value={plannerCategory}
                           onChange={(e) => setPlannerCategory(e.target.value)}
@@ -1234,10 +1212,10 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                       </div>
                     </div>
 
-                    {/* Row 2: Target Date & Platform Reminder Offset */}
+                    {/* Row 2: Target Date & Alert Timing */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-300 block mb-1">Scheduled Target Date</label>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">Target Scheduled Date</label>
                         <input
                           type="date"
                           value={plannerTargetDate}
@@ -1248,7 +1226,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                       </div>
 
                       <div>
-                        <label className="text-[10px] font-bold text-slate-300 block mb-1">Platform In-App Alert Timing</label>
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">In-App Notification Alert</label>
                         <select
                           value={plannerReminderOffset}
                           onChange={(e: any) => setPlannerReminderOffset(e.target.value)}
@@ -1263,8 +1241,8 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                       </div>
                     </div>
 
-                    {/* Row 3: Budget & Priority */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Row 3: Budget & Notes */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="text-[10px] font-bold text-slate-300 block mb-1">Estimated Budget</label>
                         <input
@@ -1276,160 +1254,475 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                         />
                       </div>
 
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-300 block mb-1">Priority Level</label>
-                        <select
-                          value={plannerUrgency}
-                          onChange={(e: any) => setPlannerUrgency(e.target.value)}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500"
-                        >
-                          <option value="routine">Routine Maintenance</option>
-                          <option value="recommended">Recommended Care</option>
-                          <option value="urgent">Urgent / Critical</option>
-                        </select>
+                      <div className="sm:col-span-2">
+                        <label className="text-[10px] font-bold text-slate-300 block mb-1">Notes / Instructions</label>
+                        <input
+                          type="text"
+                          value={plannerNotes}
+                          onChange={(e) => setPlannerNotes(e.target.value)}
+                          placeholder="e.g. Access via side gate, boiler located in utility room"
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                        />
                       </div>
                     </div>
 
-                    {/* Row 4: Notes / Specs */}
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 block mb-1">Notes / Instructions for Trader</label>
-                      <textarea
-                        value={plannerNotes}
-                        onChange={(e) => setPlannerNotes(e.target.value)}
-                        rows={2}
-                        placeholder="Add specific details e.g. Combi boiler brand, roof height, access instructions..."
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none resize-none"
-                      />
-                    </div>
-
-                    {/* Save & Calendar Action Row */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
-                      <div className="flex items-center gap-1.5 text-[10px] text-purple-300 font-medium">
-                        <Bell className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Platform alert will notify you automatically when due.</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSaveScheduledTask()}
-                          disabled={isSavingTask}
-                          className="bg-purple-600 hover:bg-purple-500 text-white font-black text-[11px] px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <CalendarCheck className="w-3.5 h-3.5 text-purple-200" />
-                          <span>{isSavingTask ? "Scheduling..." : editingTaskId ? "Update Scheduled Task" : "📌 Save & Schedule Task"}</span>
-                        </button>
-                      </div>
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setShowPlannerForm(false)}
+                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingTask}
+                        className="bg-purple-600 hover:bg-purple-500 text-white font-black px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5"
+                      >
+                        <CalendarCheck className="w-4 h-4 text-purple-200" />
+                        <span>{isSavingTask ? "Saving..." : editingTaskId ? "Update Task" : "Schedule Task"}</span>
+                      </button>
                     </div>
                   </form>
                 </div>
               )}
 
-              {/* Specs Overlay Content */}
-              {showConfig && (
-                <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
-                    <h4 className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                      <Wrench className="w-4 h-4 text-amber-400" />
-                      Property Specifications
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={() => setShowConfig(false)}
-                      className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white rounded-lg border border-white/20 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Close</span>
-                    </button>
+              {/* Scheduled Tasks List */}
+              {scheduledTasks.length === 0 ? (
+                <div className="bg-slate-800/40 border border-dashed border-slate-700 rounded-2xl p-6 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center mx-auto">
+                    <Calendar className="w-5 h-5" />
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 block mb-1">Property Age / Era</label>
-                      <select
-                        value={propertyAge}
-                        onChange={(e) => setPropertyAge(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Pre-1919 Victorian / Edwardian">Pre-1919 Victorian / Edwardian</option>
-                        <option value="1930s-1970s">1930s - 1970s Period Property</option>
-                        <option value="1980s-1990s">1980s - 1990s Modern Construction</option>
-                        <option value="2000+ New Build">2000+ New Build</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 block mb-1">Property Type</label>
-                      <select
-                        value={propertyType}
-                        onChange={(e) => setPropertyType(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Detached House">Detached House</option>
-                        <option value="Semi-Detached">Semi-Detached</option>
-                        <option value="Terraced House">Terraced House</option>
-                        <option value="Flat / Apartment">Flat / Apartment</option>
-                        <option value="Bungalow">Bungalow</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 block mb-1">Heating System</label>
-                      <select
-                        value={heatingType}
-                        onChange={(e) => setHeatingType(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Gas Combi Boiler">Gas Combi Boiler</option>
-                        <option value="Air Source Heat Pump">Air Source Heat Pump</option>
-                        <option value="Electric Radiators / Underfloor">Electric Radiators / Underfloor</option>
-                        <option value="Oil Boiler / LPG">Oil Boiler / LPG</option>
-                      </select>
-                    </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-white">No Planned Repair Tasks Scheduled</h4>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 leading-relaxed">
+                      Plan ahead for boiler servicing, gutter clearance, or insurance renewals. We'll automatically notify you when it's time to request trader quotes!
+                    </p>
                   </div>
+                  <button
+                    onClick={() => setShowPlannerForm(true)}
+                    className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 mx-auto cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Schedule Your First Task</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {scheduledTasks.map((task) => {
+                    const countdown = getDaysRemaining(task.targetDate);
+                    return (
+                      <div
+                        key={task.id}
+                        className="bg-slate-800/80 border border-purple-500/30 hover:border-purple-400/60 rounded-2xl p-3.5 transition space-y-2.5 flex flex-col justify-between group"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                              {task.category}
+                            </span>
 
-                  <div className="flex justify-end pt-2 border-t border-white/10">
-                    <button
-                      onClick={() => handleSaveConfig(propertyAge, propertyType, heatingType)}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-blue-200" />
-                      <span>Save Specs & Recalculate</span>
-                    </button>
-                  </div>
+                            <span className={cn(
+                              "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1",
+                              countdown.isOverdue 
+                                ? "bg-red-500/20 text-red-300 border-red-400/40"
+                                : countdown.days === 0
+                                ? "bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse"
+                                : "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                            )}>
+                              <Clock className="w-2.5 h-2.5" />
+                              <span>{countdown.text}</span>
+                            </span>
+                          </div>
+
+                          <div>
+                            <h4 className="font-black text-sm text-white group-hover:text-purple-300 transition-colors">
+                              {task.title}
+                            </h4>
+                            {task.notes && (
+                              <p className="text-xs text-slate-300 mt-0.5 line-clamp-2 leading-tight">
+                                {task.notes}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pt-1">
+                            <span className="flex items-center gap-1 text-slate-300 font-semibold">
+                              <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                              Target: {task.targetDate}
+                            </span>
+                            <span className="flex items-center gap-1 text-purple-300 font-medium">
+                              <Bell className="w-3.5 h-3.5 text-purple-400" />
+                              Alert: {task.reminderOffset.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-black text-emerald-400">
+                            {task.estimatedBudget || "Flexible"}
+                          </span>
+
+                          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                            {/* Google Calendar Sync */}
+                            <button
+                              type="button"
+                              onClick={() => handleSyncToGCal(task)}
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold p-1.5 sm:px-2 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                              title="Sync to Google Calendar"
+                            >
+                              <CalendarCheck className="w-3.5 h-3.5 text-blue-400" />
+                              <span className="hidden sm:inline">GCal</span>
+                            </button>
+
+                            {/* Edit Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleEditScheduledTask(task)}
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 p-1.5 rounded-lg transition cursor-pointer"
+                              title="Edit Task"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteScheduledTask(task.id)}
+                              className="bg-red-950/40 hover:bg-red-900/60 text-red-300 p-1.5 rounded-lg transition cursor-pointer border border-red-500/30"
+                              title="Delete Task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* ⚡ Post Job Now */}
+                            <button
+                              type="button"
+                              onClick={() => handlePostScheduledTask(task)}
+                              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1 shadow cursor-pointer active:scale-95"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                              <span>Post Job Now</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-
-              {/* Risk Overlay Content */}
-              {showRiskAnalytics && (
-                <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 space-y-3">
-                  <div className="flex justify-between items-center border-b border-white/10 pb-1.5">
-                    <span className="text-xs font-black flex items-center gap-1.5 text-emerald-300">
-                      <BarChart3 className="w-4 h-4 text-emerald-400" />
-                      Property Risk & Insurance Analytics
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowRiskAnalytics(false)}
-                      className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white rounded-lg border border-emerald-400/30 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Close</span>
-                    </button>
-                  </div>
-                  <PropertyRiskAnalyticsWidget
-                    propertyPassport={passportProperties[0]}
-                    userPostcode={userPostcode}
-                  />
-                </div>
-              )}
-
             </div>
           )}
+
+          {/* TAB 3: RISK & INSURANCE UNDERWRITING */}
+          {activeTab === "risk" && (
+            <div className="bg-slate-950/80 border border-emerald-500/30 rounded-2xl p-4 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <div>
+                  <h3 className="text-sm font-black text-emerald-300 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-emerald-400" />
+                    <span>Insurance Underwriter Risk & Premium Analytics</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Risk assessment for {activeProperty?.name || activeProperty?.address?.line1 || "Home"} factoring boiler age, roof condition, and CP12/EICR compliance.
+                  </p>
+                </div>
+              </div>
+
+              <PropertyRiskAnalyticsWidget
+                propertyPassport={activeProperty || {
+                  name: propertyNameInput || propertyAddressLine || "Home",
+                  era: propertyAge,
+                  propertyType: propertyType,
+                  boilerInfo: { brand: boilerBrand, model: boilerModel, age: boilerAge },
+                  roofCondition: roofCondition,
+                  epcRating: epcRating,
+                  address: { line1: propertyAddressLine, postcode: propertyPostcode }
+                }}
+                userPostcode={propertyPostcode || userPostcode}
+              />
+            </div>
+          )}
+
+          {/* TAB 4: REPAIR FINANCING (FlexiPay) */}
+          {activeTab === "financing" && (
+            <div className="bg-slate-950/80 border border-indigo-500/30 rounded-2xl p-4 space-y-4 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <div>
+                  <h3 className="text-sm font-black text-indigo-300 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-indigo-400" />
+                    <span>FlexiPay • 0% APR Home Repair Financing</span>
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Spread unexpected boiler replacements, roof repairs, or emergency jobs (£1,000+) across 3 to 12 months.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBnplModal(true)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <span>Open Full Loan Calculator</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Mini Interactive Preview Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">3-Month Term</span>
+                  <p className="text-sm font-black text-white">0% APR Interest</p>
+                  <p className="text-xs text-slate-400">Equal monthly split with zero extra fees or charges.</p>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">6-Month Term</span>
+                  <p className="text-sm font-black text-white">0% APR Fixed</p>
+                  <p className="text-xs text-slate-400">Manage major heating and structural repairs smoothly.</p>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">12-Month Term</span>
+                  <p className="text-sm font-black text-white">Low-Rate Flexible</p>
+                  <p className="text-xs text-slate-400">Spread complete renovations or major rewiring over a full year.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
-      {/* BNPL Financing Modal */}
+      {/* MODAL 1: Full Property Specifications Form Overlay */}
+      {showConfig && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-white/20 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-4 shadow-2xl">
+            
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Wrench className="w-5 h-5 text-amber-400" />
+                  <span>{activeProperty ? "Edit Property Specifications" : "Add Property Address & Setup Passport"}</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Update address, boiler details, roof condition, and compliance dates to power tailored seasonal forecasts.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfig(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSpecsAndProperty} className="space-y-4 text-xs">
+              {/* Row 1: Address Line 1 & Postcode */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                    Property Address (Line 1) <span className="text-amber-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={propertyAddressLine}
+                      onChange={(e) => setPropertyAddressLine(e.target.value)}
+                      placeholder="e.g. 14 Elm Street, Flat 2B"
+                      required
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                    <MapPin className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Postcode</label>
+                  <input
+                    type="text"
+                    value={propertyPostcode}
+                    onChange={(e) => setPropertyPostcode(e.target.value.toUpperCase())}
+                    placeholder="e.g. M14 5TP"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Era, Type, and Heating System */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Property Age / Era</label>
+                  <select
+                    value={propertyAge}
+                    onChange={(e) => setPropertyAge(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Pre-1919 Victorian / Edwardian">Pre-1919 Victorian / Edwardian</option>
+                    <option value="1930s-1970s">1930s - 1970s Period Property</option>
+                    <option value="1980s-1990s">1980s - 1990s Modern Build</option>
+                    <option value="2000+ New Build">2000+ New Build</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Property Type</label>
+                  <select
+                    value={propertyType}
+                    onChange={(e) => setPropertyType(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Semi-Detached">Semi-Detached</option>
+                    <option value="Detached House">Detached House</option>
+                    <option value="Terraced House">Terraced House</option>
+                    <option value="Flat / Apartment">Flat / Apartment</option>
+                    <option value="Bungalow">Bungalow</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Heating System</label>
+                  <select
+                    value={heatingType}
+                    onChange={(e) => setHeatingType(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Gas Combi Boiler">Gas Combi Boiler</option>
+                    <option value="Air Source Heat Pump">Air Source Heat Pump</option>
+                    <option value="Electric Radiators / Underfloor">Electric Radiators / Underfloor</option>
+                    <option value="Oil Boiler / LPG">Oil Boiler / LPG</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 3: Boiler Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Boiler Brand (optional)</label>
+                  <input
+                    type="text"
+                    value={boilerBrand}
+                    onChange={(e) => setBoilerBrand(e.target.value)}
+                    placeholder="e.g. Worcester Bosch, Vaillant"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Boiler Model</label>
+                  <input
+                    type="text"
+                    value={boilerModel}
+                    onChange={(e) => setBoilerModel(e.target.value)}
+                    placeholder="e.g. Greenstar 30i"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Boiler Age</label>
+                  <select
+                    value={boilerAge}
+                    onChange={(e) => setBoilerAge(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="1">Under 2 years (New)</option>
+                    <option value="3">3 - 5 years</option>
+                    <option value="7">6 - 9 years</option>
+                    <option value="12">10+ years (Replacement recommended)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 4: Roof, EPC, Compliance */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Roof Condition</label>
+                  <select
+                    value={roofCondition}
+                    onChange={(e) => setRoofCondition(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Good">Good Condition</option>
+                    <option value="Fair">Fair / Aged</option>
+                    <option value="Needs Inspection">Needs Inspection</option>
+                    <option value="Recently Replaced">Recently Replaced</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">EPC Rating</label>
+                  <select
+                    value={epcRating}
+                    onChange={(e) => setEpcRating(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="A">Grade A (High Efficiency)</option>
+                    <option value="B">Grade B</option>
+                    <option value="C">Grade C (UK Average)</option>
+                    <option value="D">Grade D</option>
+                    <option value="E">Grade E</option>
+                    <option value="F">Grade F</option>
+                    <option value="G">Grade G</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">CP12 Gas Expiry</label>
+                  <input
+                    type="date"
+                    value={gasSafetyExpiry}
+                    onChange={(e) => setGasSafetyExpiry(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">EICR Expiry</label>
+                  <input
+                    type="date"
+                    value={eicrExpiry}
+                    onChange={(e) => setEicrExpiry(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowConfig(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSpecs}
+                  className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-5 py-2.5 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-slate-950" />
+                  <span>{isSavingSpecs ? "Saving..." : "Save Specs & Recalculate"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Full Digital Twin Property Passport Modal */}
+      {showPassportModal && activeProperty && (
+        <PropertyPassportModal
+          property={activeProperty}
+          onClose={() => setShowPassportModal(false)}
+          onUpdated={() => {
+            setShowPassportModal(false);
+          }}
+        />
+      )}
+
+      {/* MODAL 3: BNPL Financing Modal */}
       {showBnplModal && (
         <BnplFinancingModal
           isOpen={showBnplModal}
@@ -1438,6 +1731,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
           jobTitle="Major Unexpected Homeowner Repair"
         />
       )}
+
     </div>
   );
 }
