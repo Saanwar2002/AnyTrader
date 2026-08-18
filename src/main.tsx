@@ -128,7 +128,8 @@ if (Capacitor.isNativePlatform()) {
 
 // Native Firebase Crashlytics Unhandled Error Listener
 if (Capacitor.isNativePlatform()) {
-  import('@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
+  const crashlyticsPkg = '@capacitor-firebase/crashlytics';
+  import(/* @vite-ignore */ crashlyticsPkg).then(({ FirebaseCrashlytics }: any) => {
     window.addEventListener("error", (event) => {
       FirebaseCrashlytics.recordException({
         message: event.error?.message || event.message || 'Unknown Error',

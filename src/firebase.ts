@@ -207,7 +207,8 @@ export const signInWithGoogle = async (options?: { forceWebView?: boolean }) => 
   if (Capacitor.isNativePlatform() && !forceWebView) {
     try {
       console.log("[signInWithGoogle] Capacitor native container detected. Loading @capacitor-firebase/authentication plugin...");
-      const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
+      const authPluginPkg = "@capacitor-firebase/authentication";
+      const { FirebaseAuthentication } = (await import(/* @vite-ignore */ authPluginPkg)) as any;
       console.log("[signInWithGoogle] Triggering native Google Flow on device...");
       const result = await FirebaseAuthentication.signInWithGoogle({});
       console.log("[signInWithGoogle] Native authentication completed. Checking credentials...");

@@ -1,5 +1,14 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 📱 Capacitor Native Wrapper Build Resolution Fix (`src/firebase.ts`, `src/main.tsx`, `vite.config.ts`) (Completed August 18, 2026)
+*   **Context & Issue Resolved**: During Capacitor native packaging and Vite bundling (`vite build`), Rollup threw a module resolution error: `[vite]: Rollup failed to resolve import "@capacitor-firebase/authentication" from "src/firebase.ts"`.
+*   **Root Cause**: In `src/firebase.ts`, `@capacitor-firebase/authentication` was imported with a static dynamic import string (`await import("@capacitor-firebase/authentication")`), causing Rollup to statically evaluate and fail to resolve the module during Web / PWA build passes when native-only dependencies are externalized or optional.
+*   **Architectural Fix**:
+    *   **Vite-Ignored Dynamic Import Pattern (`src/firebase.ts` & `src/main.tsx`)**: Replaced direct static module string imports with dynamic variables paired with `/* @vite-ignore */`:
+        *   `const authPluginPkg = "@capacitor-firebase/authentication"; const { FirebaseAuthentication } = (await import(/* @vite-ignore */ authPluginPkg)) as any;`
+        *   `const crashlyticsPkg = "@capacitor-firebase/crashlytics"; import(/* @vite-ignore */ crashlyticsPkg)...`
+    *   **Native & Web Parity**: Allows seamless offline PWA and standard web compilation without failing Rollup resolution, while still executing native Google Sign-In and Crashlytics flows when running inside native Android/iOS Capacitor runtimes (`Capacitor.isNativePlatform()`).
+
 ## 🚨 Real-Time Firestore Activity Threshold Listeners & Toast/Email Alert System (`adminAlertThresholdService.ts`, `AdminAlertToastContainer.tsx`, `AdminAlertThresholdsModal.tsx`, `server.ts`) (Completed August 18, 2026)
 *   **Context & User Request**: Implement Firestore listeners in the admin module that trigger toast notifications or email alerts when specific account activity thresholds (e.g. multiple profile creations, rapid API usage, deals misuse, dispute spikes) are breached in real-time.
 *   **Architectural Implementation**:
