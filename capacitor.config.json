@@ -5,9 +5,18 @@
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https",
-    "hostname": "anytrader.app",
-    "url": "https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
-    "cleartext": true
+    "hostname": "localhost",
+    "cleartext": true,
+    "allowNavigation": [
+      "anytrader.app",
+      "*.anytrader.app",
+      "ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
+      "ais-pre-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
+      "identitytoolkit.googleapis.com",
+      "securetoken.googleapis.com",
+      "*.firebaseio.com",
+      "*.googleapis.com"
+    ]
   },
   "plugins": {
     "Keyboard": {

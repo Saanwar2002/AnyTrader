@@ -1,13 +1,38 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 📱 Capacitor Native Wrapper Build Resolution Fix (`src/firebase.ts`, `src/main.tsx`, `vite.config.ts`) (Completed August 18, 2026)
-*   **Context & Issue Resolved**: During Capacitor native packaging and Vite bundling (`vite build`), Rollup threw a module resolution error: `[vite]: Rollup failed to resolve import "@capacitor-firebase/authentication" from "src/firebase.ts"`.
-*   **Root Cause**: In `src/firebase.ts`, `@capacitor-firebase/authentication` was imported with a static dynamic import string (`await import("@capacitor-firebase/authentication")`), causing Rollup to statically evaluate and fail to resolve the module during Web / PWA build passes when native-only dependencies are externalized or optional.
+## 📲 Capacitor Standalone Native APK Packaging Configuration (`capacitor.config.json`, `android/`) (Completed August 18, 2026)
+*   **Issue**: When compiling the `.apk` in Android Studio and installing it on a mobile device, the app opened in the external mobile web browser (Chrome / Samsung Internet) rather than staying inside the standalone native application window.
+*   **Root Cause**:
+    1.  `capacitor.config.json` previously contained a remote live-reload `server.url` (`https://ais-dev-...`). When an installed APK has `server.url` configured, Capacitor's Android WebView intercepts navigation to the external domain and delegates it to the device's default web browser instead of loading the embedded native app assets.
+    2.  `server.allowNavigation` was not declared, causing Android's `WebViewClient` to treat external network requests as external browser links.
+*   **Fix Applied**:
+    1.  Removed `"url": "https://..."` from `capacitor.config.json` so Capacitor serves the embedded, pre-built production web bundle (`webDir: "dist"`) locally via `https://localhost` inside the native Android WebView.
+    2.  Added `server.allowNavigation` to whitelist API domains (`anytrader.app`, Cloud Run dev/pre URLs, Firebase Auth/Firestore endpoints) so API traffic stays inside the native app.
+    3.  Provided exact 2-step sync and build instructions: `npm run build` -> `npx cap sync android` -> Build APK in Android Studio.
+
+## 🔒 Session Heartbeat Network Resilience Fix (`src/components/AuthProvider.tsx`) (Completed August 18, 2026)
+*   **Context & Issue Resolved**: During idle background session heartbeat checks and offline/transient connectivity fluctuations, Firebase Auth threw `[SessionHeartbeat] Token validation error: Firebase: Error (auth/network-request-failed)`.
+*   **Root Cause**: In `AuthProvider.tsx`, `performHeartbeatCheck` and `ensureFreshToken` were catching all rejection errors (including transient network and offline errors) and treating them as critical token invalidations, logging error telemetry and erroneously setting the session status to expiring/expired.
 *   **Architectural Fix**:
-    *   **Vite-Ignored Dynamic Import Pattern (`src/firebase.ts` & `src/main.tsx`)**: Replaced direct static module string imports with dynamic variables paired with `/* @vite-ignore */`:
+    *   Added network error detection (`auth/network-request-failed`, `auth/timeout`, offline detection `!navigator.onLine`) in `performHeartbeatCheck` and `ensureFreshToken`.
+    *   Transient connectivity glitches are now logged as graceful warnings (`console.warn`) and the current active authenticated session state is safely maintained without interruption.
+    *   Fatal authentication invalidation (`auth/user-token-expired`, `auth/user-disabled`, `auth/user-not-found`) continues to strictly trigger re-authentication.
+
+## 📱 Capacitor Native Wrapper Build Resolution Fix (`src/firebase.ts`, `src/main.tsx`, `src/lib/version.ts`, `src/lib/capacitor.ts`, `src/App.tsx`) (Completed August 18, 2026)
+*   **Context & Issue Resolved**: During Capacitor packaging and Vite PWA bundling (`vite build`), Rollup threw module resolution errors for native plugins (e.g. `[vite]: Rollup failed to resolve import "@capacitor/app-launcher" from "src/lib/version.ts"` and `@capacitor-firebase/authentication`).
+*   **Root Cause**: Directly importing optional or native-only Capacitor plugin packages as static JavaScript ES modules (`import { AppLauncher } from '@capacitor/app-launcher'`) forces Rollup to locate their node_modules entry points during web/PWA builds, which fails if the native package is absent in the build environment or intended for the native platform container.
+*   **Architectural Fix**:
+    *   **Universal `registerPlugin` Bridge Pattern (`src/lib/version.ts` & `src/lib/capacitor.ts`)**:
+        *   Replaced static package imports with `@capacitor/core`'s native plugin registry:
+            *   `export const AppLauncher = registerPlugin<AppLauncherPlugin>('AppLauncher');`
+            *   `export const NativeMarket = registerPlugin<NativeMarketPlugin>('NativeMarket');`
+            *   `export const TextToSpeech = registerPlugin<TextToSpeechPlugin>('TextToSpeech');`
+        *   Because `@capacitor/core` is always present, this eliminates all Rollup resolution errors while preserving full native Swift/Java bridge functionality on iOS and Android.
+    *   **Vite-Ignored Dynamic Imports (`src/firebase.ts`, `src/main.tsx`, `src/App.tsx`)**: Replaced direct static module string imports with dynamic variables paired with `/* @vite-ignore */`:
         *   `const authPluginPkg = "@capacitor-firebase/authentication"; const { FirebaseAuthentication } = (await import(/* @vite-ignore */ authPluginPkg)) as any;`
         *   `const crashlyticsPkg = "@capacitor-firebase/crashlytics"; import(/* @vite-ignore */ crashlyticsPkg)...`
-    *   **Native & Web Parity**: Allows seamless offline PWA and standard web compilation without failing Rollup resolution, while still executing native Google Sign-In and Crashlytics flows when running inside native Android/iOS Capacitor runtimes (`Capacitor.isNativePlatform()`).
+        *   `const appPkg = "@capacitor/app"; const { App: CapacitorApp } = (await import(/* @vite-ignore */ appPkg)) as any;`
+    *   **Native & Web Parity**: Allows seamless offline PWA and web builds without failing Rollup resolution, while maintaining full native runtime execution inside Capacitor Android/iOS wrappers (`Capacitor.isNativePlatform()`).
 
 ## 🚨 Real-Time Firestore Activity Threshold Listeners & Toast/Email Alert System (`adminAlertThresholdService.ts`, `AdminAlertToastContainer.tsx`, `AdminAlertThresholdsModal.tsx`, `server.ts`) (Completed August 18, 2026)
 *   **Context & User Request**: Implement Firestore listeners in the admin module that trigger toast notifications or email alerts when specific account activity thresholds (e.g. multiple profile creations, rapid API usage, deals misuse, dispute spikes) are breached in real-time.

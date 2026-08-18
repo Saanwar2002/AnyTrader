@@ -90,7 +90,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.log("[SessionHeartbeat] Auth token successfully refreshed in background.");
               resolve(true);
               return;
-            } catch (refreshErr) {
+            } catch (refreshErr: any) {
+              const isNetworkError =
+                refreshErr?.code === "auth/network-request-failed" ||
+                refreshErr?.message?.includes("network-request-failed") ||
+                refreshErr?.code === "auth/timeout" ||
+                (typeof navigator !== "undefined" && !navigator.onLine);
+
+              if (isNetworkError) {
+                console.warn("[SessionHeartbeat] Network glitch during background token refresh. Preserving active session state.");
+                setSessionStatus("active");
+                resolve(true);
+                return;
+              }
+
               console.warn("[SessionHeartbeat] Background token refresh failed:", refreshErr);
               setSessionStatus("expired");
               setShowReauthModal(true);
@@ -102,6 +115,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSessionStatus("active");
           resolve(true);
         } catch (err: any) {
+          const isNetworkError =
+            err?.code === "auth/network-request-failed" ||
+            err?.message?.includes("network-request-failed") ||
+            err?.code === "auth/timeout" ||
+            err?.message?.includes("Failed to fetch") ||
+            (typeof navigator !== "undefined" && !navigator.onLine);
+
+          if (isNetworkError) {
+            console.warn("[SessionHeartbeat] Transient network glitch during heartbeat token validation. Preserving active session:", err?.message || err);
+            setSessionStatus("active");
+            resolve(true);
+            return;
+          }
+
           console.error("[SessionHeartbeat] Token validation error:", err);
           if (
             err?.code === "auth/user-token-expired" ||
@@ -113,8 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setShowReauthModal(true);
             resolve(false);
           } else {
-            // Transient offline or network delay
-            setSessionStatus("expiring_soon");
+            // Unknown non-fatal error
             resolve(true);
           }
         }
@@ -136,6 +162,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLastHeartbeatAt(Date.now());
       return true;
     } catch (err: any) {
+      const isNetworkError =
+        err?.code === "auth/network-request-failed" ||
+        err?.message?.includes("network-request-failed") ||
+        err?.code === "auth/timeout" ||
+        err?.message?.includes("Failed to fetch") ||
+        (typeof navigator !== "undefined" && !navigator.onLine);
+
+      if (isNetworkError) {
+        console.warn("[SessionHeartbeat] Transient network error in ensureFreshToken, keeping session active:", err);
+        return true;
+      }
+
       console.warn("[SessionHeartbeat] ensureFreshToken failed:", err);
       setSessionStatus("expired");
       setShowReauthModal(true);

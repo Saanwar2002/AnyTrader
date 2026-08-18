@@ -135,7 +135,8 @@ function DeepLinkListener() {
 
     const setupListener = async () => {
       try {
-        const { App: CapacitorApp } = await import('@capacitor/app');
+        const appPkg = '@capacitor/app';
+        const { App: CapacitorApp } = (await import(/* @vite-ignore */ appPkg)) as any;
 
         CapacitorApp.addListener('appUrlOpen', (data: { url: string }) => {
           if (!isSubscribed || !data?.url) return;

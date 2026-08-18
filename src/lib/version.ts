@@ -1,6 +1,18 @@
-import { Capacitor } from '@capacitor/core';
-import { AppLauncher } from '@capacitor/app-launcher';
-import { NativeMarket } from '@capacitor-community/native-market';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+export interface AppLauncherPlugin {
+  canOpenUrl(options: { url: string }): Promise<{ value: boolean }>;
+  openUrl(options: { url: string }): Promise<{ completed: boolean }>;
+}
+
+export interface NativeMarketPlugin {
+  openStoreListing(options: { appId: string }): Promise<void>;
+  openDevPage?(options: { devId: string }): Promise<void>;
+  openCollection?(options: { name: string }): Promise<void>;
+}
+
+export const AppLauncher = registerPlugin<AppLauncherPlugin>('AppLauncher');
+export const NativeMarket = registerPlugin<NativeMarketPlugin>('NativeMarket');
 
 export const CURRENT_APP_VERSION = "1.0.0";
 

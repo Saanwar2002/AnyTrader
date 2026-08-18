@@ -3,7 +3,22 @@ export { ImpactStyle };
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { App } from '@capacitor/app';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+export interface TextToSpeechPlugin {
+  speak(options: {
+    text: string;
+    lang?: string;
+    rate?: number;
+    pitch?: number;
+    volume?: number;
+    voice?: number;
+    category?: string;
+  }): Promise<void>;
+  stop?(): Promise<void>;
+}
+
+export const TextToSpeech = registerPlugin<TextToSpeechPlugin>('TextToSpeech');
 
 export const isCapacitor = () => {
   return Capacitor.isNativePlatform();
@@ -112,8 +127,6 @@ export const initCapacitorKeyboard = async () => {
     }
   }
 };
-
-import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
 export const speakText = async (text: string, volume: number = 1.0) => {
   if (volume <= 0 || !text) return;
