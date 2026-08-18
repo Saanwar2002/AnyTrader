@@ -82,10 +82,20 @@ export default function PublicProfile() {
 
   useEffect(() => {
     if (location.state?.activeDeal) {
-      setSelectedDealForQuote(location.state.activeDeal);
+      const isSoldOut = isDealSoldOut(location.state.activeDeal);
+      if (!isSoldOut) {
+        setSelectedDealForQuote(location.state.activeDeal);
+      } else {
+        setSelectedDealForQuote(null);
+      }
     }
     if (location.state?.autoOpenQuoteModal && location.state?.activeDeal) {
-      openQuoteModal(location.state.activeDeal);
+      const isSoldOut = isDealSoldOut(location.state.activeDeal);
+      if (!isSoldOut) {
+        openQuoteModal(location.state.activeDeal);
+      } else {
+        openQuoteModal(null);
+      }
     }
   }, [location.state]);
 
@@ -307,12 +317,17 @@ export default function PublicProfile() {
   };
 
   const openQuoteModal = async (dealToClaim?: any) => {
+    if (dealToClaim && isDealSoldOut(dealToClaim)) {
+      dealToClaim = null;
+    }
     if (!currentUser) {
-      navigate("/login", { state: { redirectTo: `/profile/${id}`, activeDeal: dealToClaim || selectedDealForQuote, autoOpenQuoteModal: true } });
+      navigate("/login", { state: { redirectTo: `/profile/${id}`, activeDeal: dealToClaim || (selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null), autoOpenQuoteModal: true } });
       return;
     }
-    if (dealToClaim) {
+    if (dealToClaim !== undefined) {
       setSelectedDealForQuote(dealToClaim);
+    } else if (selectedDealForQuote && isDealSoldOut(selectedDealForQuote)) {
+      setSelectedDealForQuote(null);
     }
     setIsQuoteModalOpen(true);
     setLoadingJobs(true);
@@ -1224,7 +1239,7 @@ export default function PublicProfile() {
           </div>
         ) : (
           <div className="max-w-2xl mx-auto space-y-2">
-            {selectedDealForQuote && (
+            {selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) && (
               <div className="bg-emerald-600 text-white px-3.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold shadow-sm">
                 <div className="flex items-center gap-1.5 truncate">
                   <Zap className="w-3.5 h-3.5 fill-white shrink-0" />
@@ -1249,17 +1264,17 @@ export default function PublicProfile() {
                 Message
               </button>
               <button 
-                onClick={() => openQuoteModal(selectedDealForQuote)}
+                onClick={() => openQuoteModal(selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null)}
                 disabled={isProcessing}
                 className={cn(
                   "flex-1 py-3.5 rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50",
-                  selectedDealForQuote
+                  selectedDealForQuote && !isDealSoldOut(selectedDealForQuote)
                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"
                     : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200"
                 )}
               >
-                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedDealForQuote ? <Zap className="w-5 h-5 fill-white shrink-0" /> : <FileText className="w-5 h-5" />)}
-                <span>{selectedDealForQuote ? `Request Quote (${selectedDealForQuote.discountPercentage}% OFF)` : 'Request Quote'}</span>
+                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? <Zap className="w-5 h-5 fill-white shrink-0" /> : <FileText className="w-5 h-5" />)}
+                <span>{selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? `Request Quote (${selectedDealForQuote.discountPercentage}% OFF)` : 'Request Quote'}</span>
               </button>
             </div>
             {profile.appointmentSettings?.enabled && (
@@ -1446,7 +1461,7 @@ export default function PublicProfile() {
                   Select an existing job below to invite <strong className="text-slate-900">{profile.name}</strong>, or post a new job targeted directly to them.
                 </p>
 
-                {selectedDealForQuote && (() => {
+                {selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) && (() => {
                   const { origPrice, discPrice, discountPct, savings } = getDealPricing(selectedDealForQuote);
                   return (
                     <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-2xl shadow-sm flex items-center justify-between gap-2">
@@ -1509,26 +1524,31 @@ export default function PublicProfile() {
                     <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-black">
                       <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                       <p className="text-slate-500 font-medium mb-6">You don't have any active jobs yet.</p>
-                      <Link 
-                        to="/post-job"
-                        state={{ 
-                          targetTradespersonId: id, 
-                          targetTradespersonName: profile.name, 
-                          targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
-                          isB2B, 
-                          linkedPropertyId, 
-                          linkedPropertyName,
-                          claimedDeal: selectedDealForQuote,
-                          title: selectedDealForQuote ? selectedDealForQuote.service : undefined,
-                          description: selectedDealForQuote ? selectedDealForQuote.description : undefined,
-                          budget: selectedDealForQuote ? (selectedDealForQuote.discountedPrice || selectedDealForQuote.price) : undefined,
-                          category: selectedDealForQuote ? selectedDealForQuote.category : undefined
-                        }}
-                        className="inline-flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
-                      >
-                        <Zap className="w-4 h-4 fill-white" />
-                        <span>{selectedDealForQuote ? `Post Job with ${selectedDealForQuote.discountPercentage}% OFF` : 'Post a Job Now'}</span>
-                      </Link>
+                      {(() => {
+                        const validDeal = selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null;
+                        return (
+                          <Link 
+                            to="/post-job"
+                            state={{ 
+                              targetTradespersonId: id, 
+                              targetTradespersonName: profile.name, 
+                              targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
+                              isB2B, 
+                              linkedPropertyId, 
+                              linkedPropertyName,
+                              claimedDeal: validDeal,
+                              title: validDeal ? validDeal.service : undefined,
+                              description: validDeal ? validDeal.description : undefined,
+                              budget: validDeal ? (validDeal.discountedPrice || validDeal.price) : undefined,
+                              category: validDeal ? validDeal.category : undefined
+                            }}
+                            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
+                          >
+                            {validDeal ? <Zap className="w-4 h-4 fill-white" /> : <Briefcase className="w-4 h-4" />}
+                            <span>{validDeal ? `Post Job with ${validDeal.discountPercentage}% OFF` : 'Post a Job Now'}</span>
+                          </Link>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -1536,31 +1556,36 @@ export default function PublicProfile() {
                 {userJobs.length > 0 && (
                   <div className="pt-4 border-t border-black">
                     <p className="text-center text-xs text-slate-400 mb-4">Need to post a new job?</p>
-                    <Link 
-                      to="/post-job"
-                      state={{ 
-                        targetTradespersonId: id, 
-                        targetTradespersonName: profile.name, 
-                        targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
-                        isB2B, 
-                        linkedPropertyId, 
-                        linkedPropertyName,
-                        claimedDeal: selectedDealForQuote,
-                        title: selectedDealForQuote ? selectedDealForQuote.service : undefined,
-                        description: selectedDealForQuote ? selectedDealForQuote.description : undefined,
-                        budget: selectedDealForQuote ? (selectedDealForQuote.discountedPrice || selectedDealForQuote.price) : undefined,
-                        category: selectedDealForQuote ? selectedDealForQuote.category : undefined
-                      }}
-                      className={cn(
-                        "w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer",
-                        selectedDealForQuote
-                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                          : "border border-black text-slate-600 hover:bg-slate-50"
-                      )}
-                    >
-                      <Zap className={cn("w-4 h-4", selectedDealForQuote ? "fill-white" : "text-amber-500")} />
-                      <span>{selectedDealForQuote ? `Post New Job with ${selectedDealForQuote.discountPercentage}% OFF` : 'Post New Job'}</span>
-                    </Link>
+                    {(() => {
+                      const validDeal = selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null;
+                      return (
+                        <Link 
+                          to="/post-job"
+                          state={{ 
+                            targetTradespersonId: id, 
+                            targetTradespersonName: profile.name, 
+                            targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
+                            isB2B, 
+                            linkedPropertyId, 
+                            linkedPropertyName,
+                            claimedDeal: validDeal,
+                            title: validDeal ? validDeal.service : undefined,
+                            description: validDeal ? validDeal.description : undefined,
+                            budget: validDeal ? (validDeal.discountedPrice || validDeal.price) : undefined,
+                            category: validDeal ? validDeal.category : undefined
+                          }}
+                          className={cn(
+                            "w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer",
+                            validDeal
+                              ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                              : "border border-black text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Zap className={cn("w-4 h-4", validDeal ? "fill-white" : "text-amber-500")} />
+                          <span>{validDeal ? `Post New Job with ${validDeal.discountPercentage}% OFF` : 'Post New Job'}</span>
+                        </Link>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

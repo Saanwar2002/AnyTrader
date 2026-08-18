@@ -184,6 +184,7 @@ How can I assist your project today?`,
         category: action.category,
         title: action.title,
         description: action.description,
+        source: "tradebot",
         prefilledByAI: "true"
       });
       navigate(`/post-job?${params.toString()}`);

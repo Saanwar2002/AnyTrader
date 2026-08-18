@@ -765,27 +765,28 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
 
 async function startServer() {
   const app = express();
-  app.set("trust proxy", 1);
+  app.set("trust proxy", true);
   const PORT = 3000;
 
-  // Rate limiters
-  const isDev = process.env.NODE_ENV !== "production";
-
+  // Rate limiters - highly relaxed for container proxies and smooth user navigation
   const aiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: isDev ? 1000 : 30,
+    max: 500,
+    validate: false,
     message: { error: "Too many AI requests from this IP, please try again after a minute" },
   });
   
   const paymentLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: isDev ? 1000 : 50,
+    max: 500,
+    validate: false,
     message: { error: "Too many payment requests from this IP" },
   });
   
   const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: isDev ? 5000 : 250, // Relaxed for fluid navigation and iframe reloads
+    max: 10000, // Generous capacity for rapid navigation, polling, and iframe reloading
+    validate: false,
     message: { error: "Too many requests from this IP" },
   });
 

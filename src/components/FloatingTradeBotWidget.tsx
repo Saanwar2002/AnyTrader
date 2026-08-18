@@ -33,14 +33,14 @@ export function FloatingTradeBotWidget() {
   if (isTaxiSide || isTradeBotOpen) return null;
 
   return (
-    <div className="fixed bottom-20 right-1 sm:bottom-8 sm:right-2 z-[95] pointer-events-none select-none">
+    <div className="fixed bottom-24 right-2 sm:bottom-10 sm:right-4 z-[95] pointer-events-none select-none pb-[env(safe-area-inset-bottom,0px)]">
       <motion.div
         drag
         dragMomentum={false}
         dragConstraints={{
-          top: -window.innerHeight + 120,
+          top: -window.innerHeight + 140,
           bottom: 10,
-          left: -window.innerWidth + 60,
+          left: -window.innerWidth + 70,
           right: 5,
         }}
         onDragStart={() => setIsDragging(true)}
@@ -51,33 +51,33 @@ export function FloatingTradeBotWidget() {
       >
         {/* Permanent Vertical Compact Sticky Pulsing Pill */}
         <div className="relative group">
-          {/* Subtle Ambient Vertical Pulse Ring */}
-          <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-600 via-indigo-600 to-amber-500 rounded-2xl blur-[2px] opacity-70 group-hover:opacity-100 animate-pulse transition-opacity" />
+          {/* Soft Pulsing Bright Orange Ambient Glow Ring */}
+          <div className="absolute -inset-0.5 bg-gradient-to-b from-orange-400 via-orange-500 to-amber-500 rounded-xl blur-[2.5px] opacity-75 group-hover:opacity-100 animate-pulse transition-opacity" />
 
           <button
             onClick={handleOpenBot}
             id="floating-tradebot-widget-btn"
             aria-label="Ask AnyTrader AI"
-            className="relative flex flex-col items-center justify-center gap-1 bg-slate-950/95 text-white border border-white/30 hover:border-blue-400 rounded-2xl px-1.5 py-2 shadow-xl backdrop-blur-md transition-transform active:scale-90 hover:scale-105"
+            className="relative w-[30px] sm:w-[32px] flex flex-col items-center justify-center gap-1 bg-slate-950/95 text-white border border-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.45),0_4px_10px_rgba(0,0,0,0.4)] hover:border-orange-400 rounded-xl px-0.5 py-1.5 backdrop-blur-md transition-all active:scale-90 hover:scale-105"
           >
-            {/* Mini Robot Avatar with Live Online Beacon */}
-            <div className="relative w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center border border-white/30 shadow-inner shrink-0">
-              <Bot className="w-3.5 h-3.5 text-white" />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full ring-1.5 ring-slate-950 animate-pulse" />
+            {/* Mini Robot Avatar in Blue with Live Online Beacon */}
+            <div className="relative w-5 h-5 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center border border-blue-300/40 shadow-inner shrink-0">
+              <Bot className="w-3 h-3 text-white" />
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 rounded-full ring-1 ring-slate-950 animate-pulse" />
             </div>
 
             {/* Vertical Stacked Label: "Ask AI" */}
             <div className="flex flex-col items-center justify-center leading-none text-center">
-              <span className="font-bold text-[8.5px] tracking-tight text-white leading-tight">
+              <span className="font-bold text-[7.5px] tracking-tighter text-white leading-tight">
                 Ask
               </span>
-              <span className="font-black text-[9.5px] tracking-tight text-blue-400 leading-tight">
+              <span className="font-black text-[8.5px] tracking-tighter text-blue-400 leading-tight">
                 AI
               </span>
             </div>
 
             {/* Compact 24/7 Badge */}
-            <span className="bg-amber-400 text-slate-950 font-black text-[7.5px] px-1 py-0.5 rounded uppercase leading-none">
+            <span className="bg-orange-500 text-slate-950 font-black text-[6.5px] px-0.5 py-0.5 rounded uppercase leading-none shadow-sm">
               24/7
             </span>
           </button>

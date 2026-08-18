@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import React, { useEffect, useState, useRef } from "react";
 import { TradeBot } from "./TradeBot";
 import { FloatingTradeBotWidget } from "./FloatingTradeBotWidget";
+import { HeaderSmartTicker } from "./HeaderSmartTicker";
 import { Logo } from "./Logo";
 import { AnimatePresence, motion } from "motion/react";
 import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
@@ -18,6 +19,7 @@ import { getShopRecommendations } from "@/src/services/gemini";
 import RoleTabBar from "./shared/RoleTabBar";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 import { TermsAcceptancePrompt } from "./TermsAcceptancePrompt";
+import { ScrollToTopButton } from "./shared/ScrollToTopButton";
 
 const getIconComponent = (iconName: string) => {
   const icons: any = { Wrench, Hammer, HardHat, Shield, Zap, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, Briefcase, PenTool, Box };
@@ -458,58 +460,60 @@ export default function Layout() {
     location.pathname.startsWith("/platform-fee-success");
 
   return (
-    <div className={cn("min-h-screen flex flex-col w-full overflow-x-hidden relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
-      {/* Network & Local Sync Status Banner */}
-      {!isOnline ? (
-        <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-medium z-[60] shadow-sm transition-all bg-slate-100 text-slate-600 border-b border-black", (!showMaintenanceBanner && !isOnline) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500 animate-pulse" />
-          <span>You're offline. App will sync data once reconnected.</span>
-        </div>
-      ) : hasPendingChanges ? (
-        <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-bold z-[60] shadow-sm transition-all bg-blue-50 text-blue-700 border-b border-blue-200", (!showMaintenanceBanner) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
-          <RefreshCw className="w-3.5 h-3.5 shrink-0 text-blue-600 animate-spin" />
-          <span>Syncing {pendingCount} local update{pendingCount > 1 ? "s" : ""} to Cloud storage...</span>
-        </div>
-      ) : null}
-
-      {/* Scheduled Maintenance Banner */}
-      {showMaintenanceBanner && platformConfig?.scheduledMaintenance && (
-        <div className="bg-primary text-white px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] flex items-center justify-between gap-4 shadow-lg z-[60]">
-          <div className="flex items-center gap-3 max-w-4xl mx-auto">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <Calendar className="w-6 h-6" />
+    <div className={cn("min-h-screen flex flex-col w-full overflow-x-clip relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
+      {/* Sticky Top Header & Navigation Bar Container */}
+      {!isDriverTerminal && !isTaxiSide && (
+        <div className="sticky top-0 z-50 w-full bg-slate-50 border-b border-black shadow-xs">
+          {/* Network & Local Sync Status Banner */}
+          {!isOnline ? (
+            <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-medium shadow-sm transition-all bg-slate-100 text-slate-600 border-b border-black", (!showMaintenanceBanner && !isOnline) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500 animate-pulse" />
+              <span>You're offline. App will sync data once reconnected.</span>
             </div>
-            <div>
-              <p className="text-sm font-bold leading-tight">Scheduled Maintenance</p>
-              <p className="text-xs opacity-90">{platformConfig.scheduledMaintenance.message}</p>
+          ) : hasPendingChanges ? (
+            <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-bold shadow-sm transition-all bg-blue-50 text-blue-700 border-b border-blue-200", (!showMaintenanceBanner) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
+              <RefreshCw className="w-3.5 h-3.5 shrink-0 text-blue-600 animate-spin" />
+              <span>Syncing {pendingCount} local update{pendingCount > 1 ? "s" : ""} to Cloud storage...</span>
             </div>
-          </div>
-          <button 
-            onClick={dismissMaintenanceBanner}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      )}
+          ) : null}
 
-      {/* Guest Banner */}
-      {isAnonymous && (
-        <div className={cn("bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-center gap-2 text-amber-800 text-xs font-medium", !showMaintenanceBanner && "pt-[calc(0.5rem+env(safe-area-inset-top,0px))]")}>
-          <AlertCircle className="w-4 h-4 text-amber-600" />
-          <span>You are using a guest account. Sign up to save your data permanently.</span>
-          <Link to="/profile" className="underline font-bold hover:text-amber-900 ml-1">
-            Go to Profile
-          </Link>
-        </div>
-      )}
+          {/* Scheduled Maintenance Banner */}
+          {showMaintenanceBanner && platformConfig?.scheduledMaintenance && (
+            <div className="bg-primary text-white px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] flex items-center justify-between gap-4 shadow-lg">
+              <div className="flex items-center gap-3 max-w-4xl mx-auto">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                  <Calendar className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold leading-tight">Scheduled Maintenance</p>
+                  <p className="text-xs opacity-90">{platformConfig.scheduledMaintenance.message}</p>
+                </div>
+              </div>
+              <button 
+                onClick={dismissMaintenanceBanner}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          )}
 
-      {/* Cross-Portal Activity Banner */}
-      <CrossPortalBanner />
+          {/* Guest Banner */}
+          {isAnonymous && (
+            <div className={cn("bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-center gap-2 text-amber-800 text-xs font-medium", !showMaintenanceBanner && "pt-[calc(0.5rem+env(safe-area-inset-top,0px))]")}>
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <span>You are using a guest account. Sign up to save your data permanently.</span>
+              <Link to="/profile" className="underline font-bold hover:text-amber-900 ml-1">
+                Go to Profile
+              </Link>
+            </div>
+          )}
 
-      {/* Header */}
-      {!isDriverTerminal && activePortal !== 'anyroller' && (
-      <header className={cn("bg-slate-50/95 backdrop-blur-md border-b border-black sticky top-0 z-50", !isAnonymous && !showMaintenanceBanner && "pt-[env(safe-area-inset-top,0px)]")}>
+          {/* Cross-Portal Activity Banner */}
+          <CrossPortalBanner />
+
+          {/* Header */}
+          <header className={cn("bg-slate-50/95 backdrop-blur-md", !isAnonymous && !showMaintenanceBanner && "pt-[env(safe-area-inset-top,0px)]")}>
           <div className="max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
               {activePortal === "anyroller" && (
@@ -625,20 +629,27 @@ export default function Layout() {
               )}
             </div>
 
-            <div className="flex items-center justify-evenly flex-1 pl-1 sm:pl-0 sm:flex-none sm:justify-end sm:gap-4 pr-1">
+            {/* Role-Based Smart Status Ticker & Platform Ad Capsule */}
+            <HeaderSmartTicker />
+
+            <div className="flex items-center justify-end gap-1.5 sm:gap-2.5 shrink-0 pl-1 sm:pl-0">
               {/* AI Smart Shop Button & Popover */}
             {(profile?.role === "tradesperson" || profile?.subscriptionType === "business") && (
               <div className="relative" ref={popoverRef}>
                 <button 
                   onClick={loadShopRecommendations}
+                  id="header-shop-btn"
                   className={cn(
-                    "w-8 h-8 sm:w-8 sm:h-8 rounded-full shadow-[inset_0_-2px_4px_rgba(0,0,0,0.2),0_4px_8px_rgba(0,0,0,0.1)] flex items-center justify-center text-white transition-all active:translate-y-0.5 active:shadow-[inset_0_-1px_2px_rgba(0,0,0,0.3),0_2px_4px_rgba(0,0,0,0.1)] relative",
-                    showShopPopover ? "bg-blue-600 scale-105" : "bg-blue-500 hover:bg-blue-600 hover:scale-105"
+                    "w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-blue-600 hover:bg-blue-50 transition-all relative active:scale-95 shrink-0",
+                    showShopPopover && "bg-blue-50 border-blue-600"
                   )}
                   title="Trade Equipment Shop"
                 >
-                  <ShoppingCart className="w-4 h-4 fill-white stroke-white" />
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black animate-pulse" />
+                  <div className="relative">
+                    <ShoppingCart className="w-4 h-4 text-blue-600" />
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-black animate-pulse" />
+                  </div>
+                  <span className="text-[7.5px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Shop</span>
                 </button>
 
                 <AnimatePresence>
@@ -743,9 +754,11 @@ export default function Layout() {
                   <div className="relative" ref={quickActionsRef}>
                      <button 
                        onClick={() => setShowQuickActions(!showQuickActions)}
-                       className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-sm"
+                       id="header-quick-actions-btn"
+                       className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-blue-600 border border-black shadow-sm flex flex-col items-center justify-center text-white hover:bg-blue-700 transition-all active:scale-95 shrink-0"
                      >
-                       <Plus className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-transform", showQuickActions && "rotate-45")} />
+                       <Plus className={cn("w-4 h-4 sm:w-5 sm:h-5 transition-transform", showQuickActions && "rotate-45")} />
+                       <span className="text-[7.5px] font-black uppercase text-white tracking-tight leading-none mt-0.5">Add</span>
                      </button>
                      
                      <AnimatePresence>
@@ -779,72 +792,85 @@ export default function Layout() {
                   
                   <Link 
                     to="/availability"
-                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-blue-600 transition-colors"
+                    id="header-calendar-btn"
+                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-slate-50 hover:text-blue-600 transition-all active:scale-95 shrink-0"
                     title="Schedule & Availability"
                   >
-                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+                    <span className="text-[7.5px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Cal</span>
                   </Link>
                 </>
               )}
 
             {isOnline && hasPendingChanges && (
               <div 
-                className="flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 shadow-sm animate-pulse shrink-0 cursor-help"
+                className="flex items-center gap-1 px-2 py-1 rounded-[12px] bg-blue-50 border border-black text-blue-600 shadow-sm animate-pulse shrink-0 cursor-help"
                 title={`${pendingCount} database modifications pending server synchronization`}
               >
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                <span className="text-[10px] font-extrabold tracking-wider uppercase hidden xs:inline">Syncing ({pendingCount})</span>
+                <span className="text-[9px] font-black tracking-wider uppercase hidden xs:inline">{pendingCount}</span>
               </div>
             )}
 
-            <button 
-              onClick={() => setIsTradeBotOpen(true)}
-              className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-primary transition-colors relative group"
-              title="AnyTrader Assistant"
-            >
-              <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-2 h-2 bg-primary rounded-full border-2 border-black group-hover:scale-125 transition-transform" />
-            </button>
+
             <Link 
               to="/notifications" 
-              className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 relative"
+              id="header-notifications-btn"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-slate-50 transition-all relative active:scale-95 shrink-0"
+              title="Notifications"
             >
-              <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
-              {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 sm:top-1.5 sm:right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-black">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
+              <div className="relative">
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-black shadow-sm">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[7.5px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Alerts</span>
             </Link>
-            <Link to="/profile" className="w-8 h-8 sm:w-10 sm:h-10 relative group flex items-center justify-center z-20">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-blue-500 flex items-center justify-center text-slate-400 relative z-10 bg-slate-200 shadow-md">
+            <Link 
+              to="/profile" 
+              id="header-profile-btn"
+              className="h-10 sm:h-11 px-1.5 sm:px-2.5 rounded-[14px] bg-white border border-black shadow-sm flex items-center gap-1.5 hover:bg-slate-50 transition-all relative active:scale-95 shrink-0"
+              title="My Profile"
+            >
+              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-[10px] overflow-hidden border border-black flex items-center justify-center text-black relative bg-slate-100 shrink-0">
                 {user?.photoURL ? (
                   <img 
                     src={user.photoURL} 
                     alt="User" 
-                    className="w-full h-full object-cover relative z-10"
+                    className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <UserIcon className="w-4 h-4 sm:w-6 sm:h-6 relative z-10" />
+                  <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-black" />
                 )}
               </div>
-              {profile?.role && (
-                <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[7px] sm:text-[8px] font-black uppercase text-white bg-blue-600 px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-sm z-20">
-                  {profile.role === 'tradesperson' ? 'Trader' : profile.role}
+              <div className="flex flex-col text-left">
+                <span className="text-[7.5px] sm:text-[8px] font-black uppercase text-blue-600 tracking-tight leading-none">
+                  {profile?.role === 'tradesperson' ? 'Trader' : profile?.role === 'business' ? 'Business' : 'Home'}
                 </span>
-              )}
+                <span className="text-[9.5px] sm:text-[10px] font-black text-black leading-tight max-w-[48px] sm:max-w-[70px] truncate">
+                  {profile?.displayName?.split(' ')[0] || (profile?.role === 'tradesperson' ? 'Pro' : 'Account')}
+                </span>
+              </div>
             </Link>
             <button 
               onClick={() => setShowLogoutConfirm(true)}
-              className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+              id="header-signout-btn"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-red-50 hover:text-red-600 transition-all active:scale-95 shrink-0"
               title="Sign Out"
             >
-              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+              <LogOut className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-black hover:text-red-600 transition-colors" />
+              <span className="text-[7.5px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Exit</span>
             </button>
           </div>
         </div>
       </header>
+
+      <RoleTabBar />
+      </div>
       )}
 
       {/* Logout Confirmation Modal */}
@@ -877,8 +903,6 @@ export default function Layout() {
           </div>
         </div>
       )}
-
-      {(!isDriverTerminal && activePortal !== 'anyroller') && <RoleTabBar />}
 
       {/* Main Content */}
       <main className={cn(
@@ -1213,6 +1237,7 @@ export default function Layout() {
         <>
           <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
           <FloatingTradeBotWidget />
+          <ScrollToTopButton />
         </>
       )}
       <TermsAcceptancePrompt />

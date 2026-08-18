@@ -88,12 +88,12 @@
     text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
     cursor: default;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-surface text-text-main font-sans antialiased;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   /* Hide scrollbar globally */

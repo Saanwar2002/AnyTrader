@@ -1,4 +1,16 @@
 import admin from 'firebase-admin';
+import Stripe from 'stripe';
+
+let stripeClient: Stripe | null = null;
+function getStripeClient(): Stripe | null {
+  if (!stripeClient) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (key) {
+      stripeClient = new Stripe(key);
+    }
+  }
+  return stripeClient;
+}
 
 let globalConfig: any = {
   imMaxAttempts: 10,
@@ -73,12 +85,13 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
                   // Refund customer
                   if (match?.stripePaymentIntentId) {
                      try {
-                         const Stripe = require('stripe');
-                         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-                         await stripe.refunds.create({
-                           payment_intent: match.stripePaymentIntentId,
-                           reason: 'requested_by_customer'
-                         });
+                         const stripe = getStripeClient();
+                         if (stripe) {
+                           await stripe.refunds.create({
+                             payment_intent: match.stripePaymentIntentId,
+                             reason: 'requested_by_customer'
+                           });
+                         }
                      } catch (err) {
                          console.error("Failed to refund instant match:", err);
                      }
@@ -127,12 +140,13 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
              });
              if (matchDoc.data()?.stripePaymentIntentId) {
                 try {
-                    const Stripe = require('stripe');
-                    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-                    await stripe.refunds.create({
-                      payment_intent: matchDoc.data()?.stripePaymentIntentId,
-                      reason: 'requested_by_customer'
-                    });
+                    const stripe = getStripeClient();
+                    if (stripe) {
+                      await stripe.refunds.create({
+                        payment_intent: matchDoc.data()?.stripePaymentIntentId,
+                        reason: 'requested_by_customer'
+                      });
+                    }
                 } catch (err) {
                     console.error("Failed to refund instant match:", err);
                 }

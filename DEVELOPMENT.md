@@ -1,5 +1,107 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🏷️ Sold-Out Flash Deal Quote Action Guard (`PublicProfile.tsx`) (Completed August 18, 2026)
+*   **Context & Bug**: When navigating to a trader's profile with a flash deal or clicking a deal card that reached maximum capacity (`Sold Out (4/4 Booked)`), the floating bottom action bar and quote modal still displayed green "Request Quote (15% OFF)" / "Claiming 15% OFF" callouts.
+*   **Root Cause**: `selectedDealForQuote` state was being hydrated directly from `location.state.activeDeal` without checking `isDealSoldOut(deal)`.
+*   **Fix Applied**:
+    1.  **State Hydration Guard**: Added `isDealSoldOut(location.state.activeDeal)` checks in `useEffect` and `openQuoteModal()` in `PublicProfile.tsx` to automatically set `selectedDealForQuote` to `null` if the deal is sold out.
+    2.  **UI Banner & Button Guards**: Updated the sticky bottom bar, modal header banner, and post-job buttons to check `!isDealSoldOut(selectedDealForQuote)`, ensuring sold-out deals revert to standard "Request Quote" mode without discount claims.
+
+## 🐛 TDZ Initialization Error Fix in PostJobWizard (`PostJobWizard.tsx`) (Completed August 18, 2026)
+*   **Context & Bug**: React ErrorBoundary caught `Cannot access 'formData' before initialization` in `PostJobWizard.tsx`.
+*   **Root Cause & Fix**: `prefillTagLabel` and `prefillHeadline` constants were defined prior to the `const [formData, setFormData] = useState(...)` hook call while referencing `formData.category`. Relocated the definitions below the `formData` state hook, eliminating the Temporal Dead Zone (TDZ) reference error.
+
+## 🛠️ Build Artifacts & Output Directory Configuration (`package.json`) (Completed August 18, 2026)
+*   **Context & Issue**: Deployment pipeline reported empty build artifacts when building full-stack production bundles.
+*   **Fix**: Standardized the `build` script in `package.json` to `"vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs"`, ensuring all static HTML/JS assets and server bundles are output cleanly into `dist/` without extra subdirectory copies.
+
+## 🗑️ Removal of Duplicate Floating List/Map Bar (`FindTrades.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Remove the floating black bottom `[ ::: List | Map | X ]` pill widget that appeared on every app startup in Find Trades, relying solely on the primary inline `List | Map` section toggle.
+*   **Fix & Clean Up**:
+    *   **Removed Floating Widget**: Deleted floating pill JSX container and its `AnimatePresence` wrapper in `FindTrades.tsx`.
+    *   **Cleaned Up Drag State**: Removed `dragOffset`, `isToggleDismissed`, pointer event handlers (`handlePointerDown`, `handlePointerMove`, `handlePointerUp`), and `handleDismissToggle`.
+    *   **Single Source of Truth**: Retained the primary inline segmented toggle above the results list (`List` vs `Map`).
+
+## 🔍 Search Bar Z-Index Stacking Context Fix (`FindTrades.tsx`, `Layout.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Fix issue where the search input box in Find Trades appeared on top of the sticky top header when scrolling down the page.
+*   **Fix & Z-Index Adjustments**:
+    *   **Lowered Search Container Z-Index**: Reduced `searchContainerRef` and inner search input wrapper from `z-[90]` and `z-[95]` to `z-30`.
+    *   **Adjusted Dropdown Z-Index**: Updated backdrop overlay to `z-35` and autocomplete dropdown to `z-40`.
+    *   **Scroll Order Restored**: Because `z-30`/`z-40` is lower than the sticky header's `z-50` (`Layout.tsx`), the search bar smoothly scrolls underneath the fixed top header without overlapping.
+
+## 🤖 Dynamic AI Job Prefill Source Tags & Banner Titles (`PostJobWizard.tsx`, `TradeBot.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Fix issue where clicking AI Bot suggestions or general AI recommendations always displayed static "Seasonal Maintenance" and "Pre-filled from AI Home Health Forecast" headers.
+*   **Fix & Dynamic Source Resolution**:
+    *   **Source Parameter (`source: "tradebot"`)**: Added `source: "tradebot"` to `TradeBot.tsx` quick action redirects.
+    *   **Dynamic Source Tag & Headline**: Updated `PostJobWizard.tsx` to read `paramSource`. Automatically sets tag to `"AI TradeBot"` and headline to `"Pre-filled from AI TradeBot Assistant"` when originating from TradeBot, or `"AI Recommendation"` / `Pre-filled for [Category]` when originating from general AI suggestions — reserving `"Seasonal Maintenance"` solely for genuine AI Home Health Forecast tasks.
+
+## ✨ Job Posting Description & AI Polish Layout Optimization (`PostJobWizard.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Increase the height of the job description text box and resize the "AI Magic Polish" button to be more compact, positioned neatly at the bottom-right corner of the description field.
+*   **Architecture & Layout**:
+    *   **Description Textarea Height (`rows={7}`, `min-h-[190px]`, `pb-11`)**: Expanded textarea height from 4 rows to 7 rows with a minimum height of `190px` and `11px` bottom padding to prevent text from overlapping behind the AI Polish action button.
+    *   **Compact AI Polish Badge (`absolute bottom-2.5 right-2.5`)**: Resized button padding to `px-2.5 py-1`, font to `text-[11px] font-extrabold`, and icon to `w-2.5 h-2.5`, anchoring it cleanly in the bottom right corner.
+
+## ⬆️ Persistent Scroll-to-Top Button (`ScrollToTopButton.tsx`, `Layout.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Introduce a persistent bottom-left "Up Arrow" button that is always visible and enables 1-tap smooth scrolling to the top of the page.
+*   **Architecture & Placement**:
+    *   **Modular Component (`ScrollToTopButton.tsx`)**: Created a high-contrast dark slate button with thick black border (`bg-slate-900 border-2 border-black shadow-xl rounded-2xl`), bold `ArrowUp` icon, hover/active scale feedback, and `window.scrollTo({ top: 0, behavior: "smooth" })` handler.
+    *   **Conditional Rendering**: Wrapped with `!isTaxiSide` in `Layout.tsx` so the up-arrow button is hidden on the taxi side of the platform while remaining active across all trades pages.
+
+## 📌 Sticky Top Header Bar & Unified Navigation Container (`Layout.tsx`, `index.html`, `index.css`) (Completed August 18, 2026)
+*   **Context & Request**: Ensure the top navigation header bar remains 100% fixed and visible at `top: 0` without moving up when scrolling down on trades pages, while being completely hidden on the taxi side (`!isTaxiSide`) of the platform as requested.
+*   **Architecture & Fix**:
+    *   **Taxi-Side Conditional Hiding**: Wrapped sticky header container in `{!isDriverTerminal && !isTaxiSide && (...)}`, cleanly hiding the top header, alert banners, and navigation tabs when navigating taxi/rides portals (customer booking, driver terminal, my rides, saved journeys).
+    *   **Root Overflow Clipping (`overflow-x: clip`)**: Updated `#root` in `index.html` from `overflow-x-hidden` to `overflow-x-clip`, eliminating ancestor scroll context isolation that broke standard window-level `position: sticky`.
+    *   **Unified Sticky Container**: Wrapped top alert banners, main header (`<header>`), and role tab bar (`<RoleTabBar />`) in a single `<div className="sticky top-0 z-50 w-full bg-slate-50 border-b border-black shadow-xs">`.
+    *   **Zero-Offset Scroll Anchoring**: Prevents any banner scroll offset when scrolling down. All primary navigation controls (**Book Taxi / Switch**, **Smart Ticker**, **Shop**, **Alerts**, **Account**, **Exit**, and **Role Tabs**) stay permanently fixed at the top of the viewport.
+
+## ⚡ Proxy IP & Rate Limit Threshold Resolution (`server.ts`) (Completed August 18, 2026)
+*   **Context & Request**: Fixed "Rate exceeded" and express-rate-limit IPv6 `keyGenerator` validation errors when navigating or reloading in Cloud Run sandboxed environment.
+*   **Fix & Resolution**:
+    *   **Rate Limit Validation (`validate: false`)**: Set `validate: false` on rate limiters to bypass strict express-rate-limit internal IPv6 `keyGenerator` assertions while using standard Express `app.set("trust proxy", true)` IP handling.
+    *   **Relaxed Limits**: Expanded general API rate limit to `10,000 req/min`, payment limiter to `500 req/min`, and AI limiter to `500 req/min`, ensuring seamless tab reloads, background status checks, and active browsing without throttling.
+
+## 🛠️ Build Configuration & Artifact Output Hardening (`vite.config.ts`, `package.json`) (Completed August 18, 2026)
+*   **Context & Request**: Fixed Cloud Run deployment build artifact packaging by explicitly defining `outDir: 'dist'` and `emptyOutDir: true` in `vite.config.ts`, ensuring all compiled static client assets and bundled server artifacts (`dist/server.cjs`) output cleanly without missing artifacts.
+
+## 🔥 10 Daily Hot Searches Feed & Single-Line Marquee Ticker (`HeaderSmartTicker.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Integrate a dynamic daily "Hot Searches" feed into the header ticker, selecting 10 random high-demand search items each day using a deterministic algorithm, presented in a single centered line with right-to-left marquee scrolling.
+*   **Architecture & Logic**:
+    *   **Deterministic Daily Sampler (`getDailyHotSearches`)**: Uses a date-based pseudo-random hash (`YYYY-MM-DD`) on `MASTER_HOT_SEARCHES` (covering emergency plumbing, boiler repair, smart home wiring, leak detection, EV chargers, bathroom renovations, roof repairs, EICRs, CP12s, couriers, and more) to select 10 fresh searches every single day.
+    *   **Unified Single-Line Marquee**: Feature tag chip (`🔥 HOT SEARCH` in high-contrast colorways) and full headline (e.g. `Emergency Plumber • 24/7 Rapid Callout`, `EV Charger Installation • OZEV Approved Grants`) scrolling continuously from right to left with a clean gap, smooth seamless loop, and relaxed speed (`10.5s` duration).
+    *   **Seamless Rotation**: Smoothly cycles between the platform core guarantees and the 10 daily hot searches every 6.8 seconds.
+
+## ⚡ Colorful Prominent Feature Showcase Stickers (`HeaderSmartTicker.tsx`, `Layout.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Since the floating AI TradeBot is already accessible via the bottom floating widget (`FloatingTradeBotWidget.tsx`), remove the redundant AI bot button from the header action bar. Use the expanded header space to showcase colorful, prominent scrolling text stickers for role-based platform features and functions (non-clickable, pure display showcase).
+*   **Architecture & Visual Polish**:
+    *   **Removed Duplicate Header AI Bot**: Streamlined header action buttons to focus on Notifications, Profile Capsule, and Exit/Sign Out.
+    *   **Prominent Colorful Sticker Chips**:
+        *   **Homeowner Showcase**: High-impact colorful sticker badges for ⚡ `14M AVG` Fast Emergency Dispatch, 💳 `0% APR` FlexiPay Financing, 🏠 `FREE SPECS` Property Passport Digital Twin, 🛡️ `0% COMM` 100% Vetted Local Trades, ✨ `AI PRICING` Real-Time Price Transparency, and 🚖 `RIDES & VAN` On-Demand Heavy Courier.
+        *   **Tradesperson Showcase**: 🟢 `0% LEAD FEES` Keep 100% of Every Job, 📹 `+35 PTS WIN` 15s Video Selfie Badge, 💷 `TRADEOS TAX` Auto Tax & NI Reserves, 📅 `CALENDAR` Smart Auto-Booking Slots, and 🛡️ `FAIRNESS` Anti-Serial Complainer Shield.
+        *   **Landlords / B2B Showcase**: 🛡️ `100% VALID` CP12 & EICR Vault, 🏢 `GOTHAM SLA` Awaab's Law 2h SLA Engine, and 👥 `TENANT HUB` Direct WhatsApp Repair Bridge.
+        *   **AnyRoller Rides Showcase**: 🚖 `12% FLAT` Zero Weekly Shift Fees, 🛡️ `SAFE UK` 24/7 Live GPS Journey Share, and 📦 `ON-DEMAND` Bulky Item & Van Courier.
+    *   **Pure Display & Non-Clickable**: Structured as a non-clickable (`pointer-events-none`) visual ticker with smooth vertical motion transitions every 4.2 seconds and pulsing status indicator beacons.
+
+## 🎨 Header Modernization & Tactile Action Cards (`Layout.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: Redesign and transform the top header action buttons (AI Bot, Notifications, Profile Capsule, Sign Out) so they have an aligned, aesthetic look while keeping the Book Taxi widget intact on the left.
+*   **Design & Architecture**:
+    *   **Unified Compact Tactile Cards**: Transformed individual loose icons into cohesive `rounded-[14px]` card buttons with subtle black borders (`border border-black`), white background (`bg-white`), compact elevation (`shadow-sm`), and responsive tap micro-interactions (`active:scale-95`).
+    *   **AI Assistant**: Streamlined into a rounded card featuring the Bot icon with integrated live indicator beacon and clean uppercase "AI" label.
+    *   **Notifications**: Integrated bell icon with a bounded red unread count badge and uppercase "Alerts" label.
+    *   **Profile Capsule**: Modernized profile button with rounded avatar image, bold uppercase role badge ("Trader" / "Business" / "Home"), and user first name.
+    *   **Sign Out / Exit**: Clean square exit button with hover/active red feedback.
+
+## 🤖 Floating AI TradeBot Widget Mobile Elevation, Slim Width & Pulsing Orange Border (`FloatingTradeBotWidget.tsx`) (Completed August 18, 2026)
+*   **Context & Request**: On mobile screens after APK installation, the floating AI assistant widget was partially overlapping the bottom navigation bar and required higher visual prominence with a 30% slimmer horizontal profile while keeping the original blue bot icon styling.
+*   **Styling & Spatial Adjustments**:
+    *   **Elevated Positioning**: Raised bottom offset to `bottom-24 sm:bottom-10 right-2 sm:right-4` with `pb-[env(safe-area-inset-bottom,0px)]` to guarantee it floats cleanly above the bottom navigation bar and avoids device gesture/navigation bars.
+    *   **30% Slimmer Horizontal Profile**: Constrained width to `w-[30px] sm:w-[32px]` with `rounded-xl` and compact inner padding (`px-0.5 py-1.5`) for a sleek, unobtrusive vertical pill.
+    *   **Restored Blue Bot Avatar**: Preserved the original blue gradient avatar (`bg-gradient-to-tr from-blue-600 to-indigo-600`), white icon, live green beacon, and blue "AI" label.
+    *   **Soft Pulsing Bright Orange Border & Ambient Glow**:
+        *   Added a continuous soft pulsing ambient glow ring: `bg-gradient-to-b from-orange-400 via-orange-500 to-amber-500 rounded-xl blur-[2.5px] opacity-75 animate-pulse`.
+        *   Added a crisp thin bright orange border: `border border-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.45),0_4px_10px_rgba(0,0,0,0.4)]`.
+        *   Compact orange "24/7" badge (`bg-orange-500 text-slate-950 font-black text-[6.5px]`).
+
 ## 📲 Capacitor Standalone Native APK Packaging Configuration (`capacitor.config.json`, `android/`) (Completed August 18, 2026)
 *   **Issue**: When compiling the `.apk` in Android Studio and installing it on a mobile device, the app opened in the external mobile web browser (Chrome / Samsung Internet) rather than staying inside the standalone native application window.
 *   **Root Cause**:

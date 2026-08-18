@@ -150,6 +150,7 @@ export default function PostJobWizard() {
   const paramDescription = searchParams.get("description") || (location.state as any)?.description || "";
   const paramUrgency = searchParams.get("urgency") || (location.state as any)?.urgency || "flexible";
   const paramBudget = searchParams.get("budget") || (location.state as any)?.selectedBudget || null;
+  const paramSource = searchParams.get("source") || (location.state as any)?.prefillSource || (location.state as any)?.source || "";
   const isPrefilledByAI = searchParams.get("prefilledByAI") === "true" || (location.state as any)?.prefilledByAI || Boolean(paramCategory && (paramTitle || paramDescription));
 
   const editJob = (location.state as any)?.editJob;
@@ -252,6 +253,18 @@ export default function PostJobWizard() {
     isEmergencyBoost: false,
     isInstantMatch: false,
   });
+
+  const prefillTagLabel = (paramSource === "seasonal_maintenance" || paramSource === "home_health")
+    ? "Seasonal Maintenance"
+    : (paramSource === "tradebot" || paramSource === "ai_chat" || paramSource === "ai_bot")
+    ? "AI TradeBot"
+    : (paramCategory || formData.category || "AI Recommendation");
+
+  const prefillHeadline = (paramSource === "seasonal_maintenance" || paramSource === "home_health")
+    ? "Pre-filled from AI Home Health Forecast"
+    : (paramSource === "tradebot" || paramSource === "ai_chat" || paramSource === "ai_bot")
+    ? "Pre-filled from AI TradeBot Assistant"
+    : `Pre-filled from AI (${paramCategory || formData.category || "Smart Recommendation"})`;
   
   const [showBoostInfo, setShowBoostInfo] = useState<"emergency" | "instant" | null>(null);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
@@ -2798,16 +2811,16 @@ export default function PostJobWizard() {
                       <Sparkles className="w-5 h-5 animate-pulse text-amber-400" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full shrink-0 shadow-xs">
                           AI Pre-filled
                         </span>
-                        <span className="text-[11px] font-bold text-slate-300">
-                          Seasonal Maintenance
+                        <span className="text-[10px] font-bold text-slate-200 bg-slate-800 border border-slate-700/80 px-2.5 py-0.5 rounded-full shrink-0">
+                          {prefillTagLabel}
                         </span>
                       </div>
                       <h4 className="font-extrabold text-sm text-white mt-1">
-                        Pre-filled from AI Home Health Forecast
+                        {prefillHeadline}
                       </h4>
                       <p className="text-xs text-slate-300">
                         We've filled in the category, title, description, and budget for you. Feel free to review or adjust below!
@@ -2864,10 +2877,10 @@ export default function PostJobWizard() {
                   <label className="text-sm font-bold text-slate-700">Description <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <textarea 
-                      rows={4}
+                      rows={7}
                       placeholder="Describe the issue, any specific parts needed, and the current state..."
                       className={cn(
-                        "w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white",
+                        "w-full p-4 pb-11 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none bg-white min-h-[190px]",
                         descriptionError ? "border-red-500" : "border-black"
                       )}
                       value={formData.description}
@@ -2881,24 +2894,24 @@ export default function PostJobWizard() {
                         }
                       }}
                     />
-                    <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                    <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 z-10">
                       {formData.description.length > 0 && formData.description.length < 10 && (
-                        <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">Keep typing to use AI...</span>
+                        <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">Keep typing to use AI...</span>
                       )}
                       <button 
                         onClick={handleImproveDescription}
                         disabled={isImprovingDescription || formData.description.length < 10}
                         className={cn(
-                          "px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm",
+                          "px-2.5 py-1 rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all shadow-xs",
                           formData.description.length >= 10 
                             ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95" 
                             : "bg-slate-100 text-slate-400 cursor-not-allowed"
                         )}
                       >
                         {isImprovingDescription ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
                         ) : (
-                          <Sparkles className="w-3 h-3" />
+                          <Sparkles className="w-2.5 h-2.5" />
                         )}
                         {isImprovingDescription ? "Improving..." : "AI Magic Polish"}
                       </button>

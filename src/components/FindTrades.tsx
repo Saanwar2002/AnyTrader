@@ -326,94 +326,6 @@ export default function FindTrades() {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [selectedMapTrader, setSelectedMapTrader] = useState<Tradesperson | null>(null);
   const [mapRadiusKm, setMapRadiusKm] = useState<number>(5);
-  const [dragOffset, setDragOffset] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem("findTradesDragOffset");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          // Allow reasonable range matching the viewport bounds
-          if (Math.abs(parsed.x) > 500 || Math.abs(parsed.y) > 900) {
-            return { x: 0, y: 0 };
-          }
-          const x = Math.max(-400, Math.min(20, parsed.x));
-          const y = Math.max(-700, Math.min(100, parsed.y));
-          return { x, y };
-        }
-      }
-      return { x: 0, y: 0 };
-    } catch {
-      return { x: 0, y: 0 };
-    }
-  });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = React.useRef({ x: 0, y: 0 });
-  const positionStartRef = React.useRef({ x: 0, y: 0 });
-
-  const [isToggleDismissed, setIsToggleDismissed] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem("findTradesViewToggleDismissed") === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  const handleDismissToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsToggleDismissed(true);
-    try {
-      sessionStorage.setItem("findTradesViewToggleDismissed", "true");
-    } catch (err) {
-      console.error("Failed to save view toggle dismiss state:", err);
-    }
-    toast.info("Map/List toggle hidden for this session", {
-      description: "It will reappear automatically on next app startup.",
-      action: {
-        label: "Undo",
-        onClick: () => {
-          setIsToggleDismissed(false);
-          try {
-            sessionStorage.removeItem("findTradesViewToggleDismissed");
-          } catch {}
-        }
-      }
-    });
-  };
-
-  // Update sessionStorage whenever dragOffset successfully updates
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("findTradesDragOffset", JSON.stringify(dragOffset));
-    } catch (err) {
-      console.error("Failed to save drag position to sessionStorage:", err);
-    }
-  }, [dragOffset]);
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    setIsDragging(true);
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-    positionStartRef.current = { ...dragOffset };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStartRef.current.x;
-    const dy = e.clientY - dragStartRef.current.y;
-    const newX = Math.max(-400, Math.min(20, positionStartRef.current.x + dx));
-    const newY = Math.max(-700, Math.min(100, positionStartRef.current.y + dy));
-    setDragOffset({ x: newX, y: newY });
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDragging) {
-      setIsDragging(false);
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
-    }
-  };
   
   const googleMapsApiKey = getGoogleMapsApiKey();
   const { isLoaded: isMapScriptLoaded } = useJsApiLoader({
@@ -1562,8 +1474,8 @@ export default function FindTrades() {
         </div>
 
         {/* Search Bar */}
-        <div ref={searchContainerRef} className="relative mb-6 z-[90]">
-          <div className="relative z-[95]">
+        <div ref={searchContainerRef} className="relative mb-6 z-30">
+          <div className="relative z-30">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type="text"
@@ -1643,7 +1555,7 @@ export default function FindTrades() {
           {/* Backdrop when search suggestion box is open to prevent card bleed-through */}
           {isSearchFocused && searchQuery.trim().length >= 1 && autocompleteSuggestions.hasSuggestions && (
             <div 
-              className="fixed inset-0 bg-slate-900/15 backdrop-blur-[0.5px] z-[80] transition-opacity" 
+              className="fixed inset-0 bg-slate-900/15 backdrop-blur-[0.5px] z-35 transition-opacity" 
               onClick={() => setIsSearchFocused(false)} 
             />
           )}
@@ -1656,10 +1568,10 @@ export default function FindTrades() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-black rounded-2xl shadow-2xl z-[100] overflow-hidden text-slate-900 divide-y divide-slate-100 max-h-[320px] overflow-y-auto"
+                className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-black rounded-2xl shadow-2xl z-40 overflow-hidden text-slate-900 divide-y divide-slate-100 max-h-[320px] overflow-y-auto"
               >
                 {/* Top Header Bar with Close Cross Button */}
-                <div className="sticky top-0 z-[110] bg-white/95 backdrop-blur-sm px-3.5 py-2 border-b border-slate-200 flex items-center justify-between">
+                <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm px-3.5 py-2 border-b border-slate-200 flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                     Search Suggestions
                   </span>
@@ -3746,84 +3658,6 @@ export default function FindTrades() {
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* Floating Single-Pill [ List | Map | ✕ ] Toggle Button */}
-      <AnimatePresence>
-        {!isToggleDismissed && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 10 }}
-            transition={{ duration: 0.2 }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            style={{
-              transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
-              touchAction: "none"
-            }}
-            className="fixed bottom-28 right-3 sm:right-6 z-[110] select-none cursor-grab active:cursor-grabbing"
-          >
-            <div className="bg-slate-950/95 text-white backdrop-blur-md px-1.5 py-1 rounded-full border border-white/20 shadow-2xl flex items-center gap-1 hover:border-blue-400/50 transition-colors">
-              {/* Subtle Drag Grip Indicator */}
-              <div className="pl-1 pr-0.5 text-slate-500 hover:text-slate-300 transition-colors shrink-0 cursor-grab">
-                <GripVertical className="w-3 h-3" />
-              </div>
-
-              {/* Single Pill Segmented Buttons */}
-              <div className="flex items-center bg-slate-900/90 rounded-full p-0.5 border border-white/10">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewMode("list");
-                  }}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer",
-                    viewMode === "list"
-                      ? "bg-blue-600 text-white shadow-xs ring-1 ring-blue-400/40"
-                      : "text-slate-300 hover:text-white hover:bg-white/10"
-                  )}
-                >
-                  <List className="w-3 h-3" />
-                  <span>List</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewMode("map");
-                  }}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer",
-                    viewMode === "map"
-                      ? "bg-blue-600 text-white shadow-xs ring-1 ring-blue-400/40"
-                      : "text-slate-300 hover:text-white hover:bg-white/10"
-                  )}
-                >
-                  <Map className="w-3 h-3" />
-                  <span>Map</span>
-                </button>
-              </div>
-
-              {/* Vertical Divider */}
-              <div className="w-px h-3.5 bg-white/20 mx-0.5" />
-
-              {/* Dismiss Button (✕) with tooltip */}
-              <button
-                type="button"
-                onClick={handleDismissToggle}
-                title="Dismiss for this session (will show up on next app startup)"
-                aria-label="Dismiss view toggle"
-                className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer mr-0.5"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
 
