@@ -1,5 +1,28 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 📱 Capacitor Mobile AI Bot Connection & CORS Fix (`server.ts`, `src/services/geminiServer.ts`, `src/main.tsx`) (Completed August 19, 2026)
+*   **Context & Bug**: When running the app wrapped in Capacitor and installed on an Android device (`com.anytrader.app`), the Ask AnyTrader AI Bot failed with the error: *"I experienced a brief connection hiccup while grounding with live search. Please ask your question again, or browse verified trades directly below."*
+*   **Root Causes**:
+    1.  **Missing CORS & Preflight Handling**: Native Android Capacitor apps serve the web bundle from `https://localhost` (or `http://localhost` / `capacitor://localhost`). When the app sent POST requests to `/api/gemini/call`, the Android WebView dispatched preflight `OPTIONS` requests. Because `server.ts` lacked CORS middleware and preflight handlers, the WebView blocked the network response with a CORS policy violation, causing `fetch()` to fail immediately.
+    2.  **`last_known_origin` Localhost Leaking**: `localStorage.getItem('last_known_origin')` could resolve to `http://localhost:3000` if the device had previously tested the dev server, attempting to query port 3000 on the physical mobile device rather than the remote Cloud server.
+    3.  **Search Grounding Exception Fallback**: If Gemini Google Search grounding experienced rate limits or connection interruptions, `callTradeBot` in `geminiServer.ts` lacked a graceful fallback to standard Gemini generation.
+*   **Fixes Applied**:
+    1.  **CORS & Preflight Handling (`server.ts`)**: Added global CORS middleware in `server.ts` that reflects the requesting native origin (`https://localhost`, `capacitor://localhost`, etc.), sets `Access-Control-Allow-Credentials`, `Access-Control-Allow-Methods`, and `Access-Control-Allow-Headers`, and returns HTTP 204 for `OPTIONS` preflight requests.
+    2.  **Sanitized Capacitor Base URL Resolution (`src/main.tsx`)**: Updated the fetch interceptor in `src/main.tsx` to explicitly exclude localhost/capacitor schemes from `last_known_origin`, guaranteeing that native mobile calls always route to the live backend server.
+    3.  **Search Grounding Fallback (`src/services/geminiServer.ts`)**: Added fallback handling in `callTradeBot` so if live Google Search grounding encounters a network or quota exception, it seamlessly falls back to standard model generation.
+
+## ⚡ PWA Service Worker & API Caching Policy Hardening (`vite.config.ts`, `server.ts`, `src/main.tsx`) (Completed August 19, 2026)
+*   **Context & Review**: Reviewed the Vite PWA and Service Worker registration logic to ensure that caching policies for `/api/` endpoints do not cause stale data issues, race conditions, or rate limit spikes during rapid user interactions.
+*   **Issues Identified**:
+    *   `vite.config.ts` previously configured `/api/` runtime caching with `NetworkFirst`, a 5-second network timeout, and a 7-day TTL cache under `api-cache-v1`. Slow requests (e.g. AI calls or heavy calculations >5s) caused Workbox to fallback to stale cached JSON.
+    *   Workbox lacked `navigateFallbackDenylist: [/^\/api/]`, which risked SPA HTML fallback intercepting failed API requests.
+    *   Dynamic `/api/` endpoints in Express lacked explicit `no-store` headers.
+*   **Remediations Applied**:
+    1.  **Strict NetworkOnly for APIs**: Updated `vite.config.ts` Workbox `runtimeCaching` so all `/api/.*` routes use `NetworkOnly` with no response caching.
+    2.  **API SPA Fallback Exclusion**: Added `navigateFallbackDenylist: [/^\/api/]` to prevent SPA `index.html` fallback from serving on API routes.
+    3.  **Explicit Cache-Control Headers**: Added middleware in `server.ts` enforcing `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate`, `Pragma: no-cache`, `Expires: 0` for all `/api/` requests.
+    4.  **Client Cache Eviction**: Updated `src/main.tsx` cache cleanup routine to purge legacy `api-cache` stores on startup and bumped the cache prefix to `anytrader-v1.0.2`.
+
 ## 🏷️ Sold-Out Flash Deal Quote Action Guard (`PublicProfile.tsx`) (Completed August 18, 2026)
 *   **Context & Bug**: When navigating to a trader's profile with a flash deal or clicking a deal card that reached maximum capacity (`Sold Out (4/4 Booked)`), the floating bottom action bar and quote modal still displayed green "Request Quote (15% OFF)" / "Claiming 15% OFF" callouts.
 *   **Root Cause**: `selectedDealForQuote` state was being hydrated directly from `location.state.activeDeal` without checking `isDealSoldOut(deal)`.

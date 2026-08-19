@@ -1,5 +1,6 @@
 import { db, collection, doc, setDoc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, onSnapshot } from "@/src/firebase";
 import { calculateMaterialMerchantAffiliateCommission, MaterialMerchantAffiliateBreakdown } from "./stripeIntegrationService";
+import { getApiUrl } from "@/src/lib/apiUrl";
 
 export interface BOMItem {
   id: string;
@@ -206,7 +207,7 @@ export async function extractBillOfMaterials(params: {
   };
 }): Promise<BOMItem[]> {
   try {
-    const response = await fetch("/api/job/extract-bom", {
+    const response = await fetch(getApiUrl("/api/job/extract-bom"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params)

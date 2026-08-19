@@ -106,7 +106,7 @@ How can I assist your project today?`,
       const primaryCategory = matchedCats[0] || "General Trades";
 
       // 2. Query hybrid trader recommendations (Slot 1: Featured Pro ⚡ + Slot 2: Fair Rotation Organic Pro 🌟)
-      const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode);
+      const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode).catch(() => []);
 
       // 3. User context payload for Gemini
       const userContext = {

@@ -1,4 +1,5 @@
 import { auth } from "../firebase";
+import { getApiUrl } from "../lib/apiUrl";
 
 // Clean HTTP proxy to make authorized server-side Gemini calls
 async function callServerGemini(functionName: string, args: any[]): Promise<any> {
@@ -11,7 +12,8 @@ async function callServerGemini(functionName: string, args: any[]): Promise<any>
       headers["Authorization"] = `Bearer ${token}`;
     }
     
-    const response = await fetch("/api/gemini/call", {
+    const targetUrl = getApiUrl("/api/gemini/call");
+    const response = await fetch(targetUrl, {
       method: "POST",
       headers,
       body: JSON.stringify({ functionName, args }),

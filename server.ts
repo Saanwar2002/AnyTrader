@@ -768,6 +768,30 @@ async function startServer() {
   app.set("trust proxy", true);
   const PORT = 3000;
 
+  // CORS middleware for Native Capacitor Mobile Apps (Android/iOS) and Web
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, X-Firebase-AppCheck, stripe-signature"
+    );
+    
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+    next();
+  });
+
   // Rate limiters - highly relaxed for container proxies and smooth user navigation
   const aiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
@@ -792,6 +816,17 @@ async function startServer() {
 
   // Apply general limiter to all API routes
   app.use('/api/', generalLimiter);
+
+  // Set anti-caching headers on all dynamic API endpoints to prevent stale data
+  app.use('/api/', (req, res, next) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+    next();
+  });
 
   // Stripe Webhook MUST come before express.json()
   app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {

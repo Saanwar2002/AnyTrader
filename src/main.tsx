@@ -11,13 +11,16 @@ import { registerSW } from 'virtual:pwa-register';
 
 // Register service worker for offline support and versioned cache management
 if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
-  // Clear legacy or outdated versioned caches on startup
+  // Clear legacy or outdated versioned caches and any legacy api-cache entries on startup
   if ('caches' in window) {
-    const activeCachePrefix = 'anytrader-v1.0.0';
+    const activeCachePrefix = 'anytrader-v1.0.2';
     caches.keys().then((cacheNames) => {
       cacheNames.forEach((cacheName) => {
-        if (cacheName.startsWith('anytrader-') && !cacheName.startsWith(activeCachePrefix)) {
-          console.log(`[SW] Purging outdated cache: ${cacheName}`);
+        if (
+          cacheName.startsWith('api-cache') ||
+          (cacheName.startsWith('anytrader-') && !cacheName.startsWith(activeCachePrefix))
+        ) {
+          console.log(`[SW] Purging outdated or legacy API cache: ${cacheName}`);
           caches.delete(cacheName);
         }
       });
@@ -94,7 +97,15 @@ if (Capacitor.isNativePlatform()) {
       } else {
         try {
           const lastOrigin = localStorage.getItem('last_known_origin');
-          if (lastOrigin) {
+          if (
+            lastOrigin && 
+            !lastOrigin.includes('localhost') && 
+            !lastOrigin.includes('127.0.0.1') && 
+            !lastOrigin.startsWith('capacitor://') && 
+            !lastOrigin.startsWith('ionic://') &&
+            !lastOrigin.startsWith('http://localhost') &&
+            !lastOrigin.startsWith('https://localhost')
+          ) {
             baseUrl = lastOrigin.endsWith('/') ? lastOrigin.slice(0, -1) : lastOrigin;
           }
         } catch (e) {

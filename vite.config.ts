@@ -18,7 +18,8 @@ export default defineConfig(({mode}) => {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
-          cacheId: 'anytrader-v1.0.0',
+          navigateFallbackDenylist: [/^\/api/],
+          cacheId: 'anytrader-v1.0.2',
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -78,19 +79,10 @@ export default defineConfig(({mode}) => {
               }
             },
             {
+              // CRITICAL: All /api/ endpoints must be NetworkOnly so Service Worker never serves stale cached data
+              // or masks backend rate limits / transaction mutations.
               urlPattern: /\/api\/.*/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'api-cache-v1',
-                expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24 * 7
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                },
-                networkTimeoutSeconds: 5
-              }
+              handler: 'NetworkOnly'
             }
           ]
         },

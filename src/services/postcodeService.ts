@@ -1,5 +1,6 @@
 
 import { getOutwardPostcode } from "@/src/lib/utils";
+import { getApiUrl } from "@/src/lib/apiUrl";
 
 export interface PostcodeData {
   postcode: string;
@@ -34,7 +35,7 @@ export const lookupPostcode = async (postcode: string): Promise<PostcodeData | n
 
   try {
     // Attempt cached proxy fetch via server first
-    let response = await fetch(`/api/postcode/${encodeURIComponent(postcode)}`);
+    let response = await fetch(getApiUrl(`/api/postcode/${encodeURIComponent(postcode)}`));
     if (!response.ok) {
       // Fallback to direct API if backend is unreachable or returns an error
       response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);

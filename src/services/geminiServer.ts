@@ -1800,14 +1800,26 @@ Always perform live Google Searches when users ask about prices, regulations, or
       { role: "user" as const, parts: [{ text: userMessage }] }
     ];
 
-    const response = await ai.models.generateContent({
-      model: model || "gemini-2.5-flash",
-      contents,
-      config: {
-        systemInstruction,
-        tools: [{ googleSearch: {} }]
-      }
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: model || "gemini-2.5-flash",
+        contents,
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }]
+        }
+      });
+    } catch (searchError) {
+      console.warn("TradeBot search grounding error, falling back to standard generation:", searchError);
+      response = await ai.models.generateContent({
+        model: model || "gemini-2.5-flash",
+        contents,
+        config: {
+          systemInstruction
+        }
+      });
+    }
 
     const candidates = response.candidates;
     const groundingChunks = candidates?.[0]?.groundingMetadata?.groundingChunks;
