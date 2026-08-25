@@ -1242,20 +1242,20 @@ export default function JobFeed() {
                     return null;
                   })()}
 
-                  <p className="text-sm text-slate-500 line-clamp-2 mb-4">{job.description}</p>
+                  <p className="text-xs sm:text-sm text-slate-900 font-semibold line-clamp-2 mb-4 leading-relaxed">{job.description}</p>
                   
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-600">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-slate-400" />
-                      <span className="uppercase tracking-wide">{formatJobLocation(job)}</span>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-slate-900">
+                    <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+                      <MapPin className="w-4 h-4 text-slate-800" />
+                      <span className="uppercase tracking-wide text-slate-900 font-black">{formatJobLocation(job)}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-slate-400" />
+                    <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+                      <Clock className="w-4 h-4 text-slate-800" />
                       {job.urgency === "emergency" ? (
                         <EmergencyTimer postedDate={job.createdAt?.seconds ? new Date(job.createdAt.seconds * 1000) : job.createdAt} />
                       ) : (
                         <span className={cn(
-                          job.urgency === "asap" ? "text-orange-600 font-bold" : ""
+                          job.urgency === "asap" ? "text-orange-600 font-bold" : "text-slate-900 font-black"
                         )}>
                           {job.urgency === "specific_date" && job.jobDate ? `Date: ${new Date(job.jobDate).toLocaleDateString()}` : job.urgency || "Flexible"}
                         </span>
@@ -1268,9 +1268,9 @@ export default function JobFeed() {
                       <PoundSterling className={cn("w-4 h-4", (job.quoteCount || 0) >= 5 ? "text-red-500" : "text-blue-500")} />
                       <span>{job.quoteCount || 0} Quotes (Max 5)</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 text-slate-400" />
-                      <span>Posted {new Date(job.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString('en-GB')}</span>
+                    <div className="flex items-center gap-1.5 text-slate-900 font-bold">
+                      <Calendar className="w-4 h-4 text-slate-800" />
+                      <span className="text-slate-900 font-bold">Posted {new Date(job.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString('en-GB')}</span>
                     </div>
                   </div>
 

@@ -114,7 +114,19 @@ if (Capacitor.isNativePlatform()) {
       }
       
       if (!baseUrl) {
-        baseUrl = "https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app";
+        if (
+          typeof window !== 'undefined' && 
+          window.location && 
+          window.location.origin && 
+          !window.location.origin.includes('localhost') && 
+          !window.location.origin.startsWith('capacitor://') && 
+          !window.location.origin.startsWith('ionic://') &&
+          !window.location.origin.startsWith('file://')
+        ) {
+          baseUrl = window.location.origin.endsWith('/') ? window.location.origin.slice(0, -1) : window.location.origin;
+        } else {
+          baseUrl = "https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app";
+        }
       }
       
       const newUrl = `${baseUrl}${url}`;

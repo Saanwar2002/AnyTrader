@@ -21,9 +21,16 @@ async function callServerGemini(functionName: string, args: any[]): Promise<any>
     
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || "Failed to execute secure server-side AI function");
+      throw new Error(errData.error || `Failed to execute secure server-side AI function (Status ${response.status})`);
     }
     
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const text = await response.text().catch(() => "");
+      console.warn(`[AI Proxy] Non-JSON response received for ${functionName}:`, text.substring(0, 100));
+      throw new Error(`Server returned non-JSON response for ${functionName}`);
+    }
+
     return await response.json();
   } catch (error: any) {
     console.error(`AI Proxy Secure Execution Error [${functionName}]:`, error);
@@ -555,7 +562,21 @@ export async function getDynamicInstantMatchPricing(
   title: string,
   description: string
 ): Promise<{ price: number; title: string; desc: string; bullets: { text: string }[] }> {
-  return callServerGemini("getDynamicInstantMatchPricing", [category, title, description]);
+  try {
+    return await callServerGemini("getDynamicInstantMatchPricing", [category, title, description]);
+  } catch (err) {
+    console.warn("getDynamicInstantMatchPricing fallback used:", err);
+    return {
+      price: 2.99,
+      title: "Instant Match",
+      desc: "Get peace of mind instantly! Our Instant Match directly secures a top-rated, fully vetted professional for your job.",
+      bullets: [
+        { text: "Instant SMS & Push Alert to verified local pros" },
+        { text: "Priority placement on active job feed" },
+        { text: "100% money-back guarantee if unmatched" }
+      ]
+    };
+  }
 }
 
 // Newly introduced helpers

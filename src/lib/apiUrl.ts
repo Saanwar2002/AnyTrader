@@ -23,6 +23,20 @@ export function getApiUrl(path: string): string {
   }
 
   try {
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+      const currentOrigin = window.location.origin;
+      if (
+        !currentOrigin.includes('localhost') &&
+        !currentOrigin.includes('127.0.0.1') &&
+        !currentOrigin.startsWith('capacitor://') &&
+        !currentOrigin.startsWith('ionic://') &&
+        !currentOrigin.startsWith('file://')
+      ) {
+        const cleanOrigin = currentOrigin.endsWith('/') ? currentOrigin.slice(0, -1) : currentOrigin;
+        return `${cleanOrigin}${normalizedPath}`;
+      }
+    }
+
     const lastOrigin = localStorage.getItem('last_known_origin');
     if (
       lastOrigin &&
@@ -31,16 +45,19 @@ export function getApiUrl(path: string): string {
       !lastOrigin.startsWith('capacitor://') &&
       !lastOrigin.startsWith('ionic://') &&
       !lastOrigin.startsWith('http://localhost') &&
-      !lastOrigin.startsWith('https://localhost')
+      !lastOrigin.startsWith('https://localhost') &&
+      !lastOrigin.startsWith('file://')
     ) {
       const cleanOrigin = lastOrigin.endsWith('/') ? lastOrigin.slice(0, -1) : lastOrigin;
       return `${cleanOrigin}${normalizedPath}`;
     }
   } catch (e) {
-    console.warn('[API URL] Could not read last_known_origin:', e);
+    console.warn('[API URL] Could not read origin:', e);
   }
 
-  // Default cloud container endpoint for AnyTrader
-  const defaultBackend = "https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app";
-  return `${defaultBackend}${normalizedPath}`;
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return `${window.location.origin.endsWith('/') ? window.location.origin.slice(0, -1) : window.location.origin}${normalizedPath}`;
+  }
+
+  return normalizedPath;
 }

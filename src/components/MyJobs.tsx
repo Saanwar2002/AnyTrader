@@ -11,7 +11,7 @@ import { EmergencyTimer } from "./EmergencyTimer";
 import MediaGalleryModal from "./MediaGalleryModal";
 
 export default function MyJobs() {
-  const { user, profile } = useAuth();
+  const { user, profile, isAuthReady, loading: authLoading } = useAuth();
   const { activeRole } = usePortal();
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,28 +32,49 @@ export default function MyJobs() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    // If auth is still resolving, wait
+    if (authLoading && !isAuthReady) return;
 
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    // Query without compound orderBy to avoid requiring a composite Firestore index
     const q = query(
       collection(db, "jobs"),
-      where("homeownerId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      where("homeownerId", "==", user.uid)
     );
 
+    // Timeout safety fallback so spinner never hangs indefinitely (max 2.5 seconds)
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+    }, 2500);
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      clearTimeout(timeoutId);
       const jobsData = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((job: any) => !job.clientDeleted);
+        .filter((job: any) => !job.clientDeleted)
+        .sort((a: any, b: any) => {
+          const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+          const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+          return timeB - timeA;
+        });
       setJobs(jobsData);
       setLoading(false);
     }, (error) => {
+      clearTimeout(timeoutId);
       console.error("Error fetching jobs:", error);
       handleFirestoreError(error, OperationType.LIST, "jobs");
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [user]);
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
+  }, [user, authLoading, isAuthReady]);
 
   const displayJobs = jobs.filter(job => {
     if (propertyId && job.assetId !== propertyId) return false;
@@ -403,7 +424,7 @@ export default function MyJobs() {
                 ) : job.urgency === 'emergency' ? (
                   <div className="bg-gradient-to-r from-red-600 to-rose-600 text-center py-2 text-white font-black text-xs tracking-widest uppercase border-b border-red-700 flex items-center justify-center gap-1.5">
                     <AlertCircle className="w-3.5 h-3.5" />
-                    Emergency Dispatch
+                    Emergency Job
                   </div>
                 ) : (
                   <div className="bg-slate-900 text-center py-1.5 text-white font-black text-[11px] tracking-widest uppercase border-b border-slate-800">
@@ -437,11 +458,9 @@ export default function MyJobs() {
 
                     {/* Status Badges & Quotes Received Tab in 1 Row */}
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {job.jobNo && (
-                        <span className="bg-slate-900 text-white px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider">
-                          #{job.jobNo}
-                        </span>
-                      )}
+                      <span className="bg-slate-900 text-white px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider shrink-0">
+                        #{job.jobNo || (job.id ? `AT-${job.id.substring(0, 6).toUpperCase()}` : "AT-JOB")}
+                      </span>
                       {job.urgency === 'emergency' && (
                         <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 border border-red-200">
                           <AlertCircle className="w-2.5 h-2.5" />
@@ -511,10 +530,10 @@ export default function MyJobs() {
                         <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">{job.assetName}</span>
                       </div>
                     )}
-                    <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug group-hover:text-blue-600 transition-colors">
+                    <h3 className="text-lg sm:text-xl font-black text-slate-950 leading-snug group-hover:text-blue-600 transition-colors">
                       {job.title}
                     </h3>
-                    <p className="text-slate-600 font-medium line-clamp-2 text-xs sm:text-sm leading-snug">
+                    <p className="text-slate-900 font-semibold line-clamp-2 text-xs sm:text-sm leading-relaxed">
                       {job.description}
                     </p>
                   </div>
@@ -560,18 +579,18 @@ export default function MyJobs() {
                   ) : null}
 
                   {/* Combined Location, Time & Action Icons Row */}
-                  <div className="flex items-center justify-between gap-2 pt-1 text-slate-600 font-bold text-xs">
+                  <div className="flex items-center justify-between gap-2 pt-1 text-slate-900 font-extrabold text-xs">
                     {/* Left: Location, Time & Badges */}
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <div className="flex items-center gap-1 text-slate-600 font-bold text-xs">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="uppercase tracking-wide">
+                      <div className="flex items-center gap-1 text-slate-900 font-extrabold text-xs">
+                        <MapPin className="w-3.5 h-3.5 text-slate-800 shrink-0" />
+                        <span className="uppercase tracking-wide text-slate-900 font-black">
                           {formatJobLocation(job)}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-slate-600 font-bold text-xs">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="uppercase tracking-wide">
+                      <div className="flex items-center gap-1 text-slate-900 font-extrabold text-xs">
+                        <Clock className="w-3.5 h-3.5 text-slate-800 shrink-0" />
+                        <span className="uppercase tracking-wide text-slate-900 font-black">
                           {formatRelativeTime(job.createdAt)}
                         </span>
                       </div>
@@ -606,7 +625,7 @@ export default function MyJobs() {
 
                     {/* Right: Trash & Gear Action Buttons */}
                     <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
                         {/* Quick Delete button */}
                         <div className="relative">
                           <AnimatePresence>
@@ -636,7 +655,7 @@ export default function MyJobs() {
                             }}
                             disabled={isProcessing === job.id}
                             className={cn(
-                              "p-1.5 rounded-lg transition-colors",
+                              "p-1 rounded-lg transition-colors",
                               confirmDeleteId === job.id ? "bg-red-100 text-red-600" : "hover:bg-red-50 text-slate-500 hover:text-red-500"
                             )}
                             title={confirmDeleteId === job.id ? "Confirm Delete" : "Delete Job"}
@@ -652,7 +671,7 @@ export default function MyJobs() {
                               e.stopPropagation();
                               setActionId(actionId === job.id ? null : job.id);
                             }}
-                            className="p-1.5 hover:bg-white rounded-lg text-slate-500 hover:text-slate-700 transition-colors"
+                            className="p-1 hover:bg-white rounded-lg text-slate-500 hover:text-slate-700 transition-colors"
                             title="Job Settings & Options"
                           >
                             <Settings className="w-4 h-4" />

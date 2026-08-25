@@ -88,13 +88,18 @@ export default function Dashboard() {
     // Fetch all jobs for stats
     const allJobsQuery = query(
       collection(db, "jobs"),
-      where("homeownerId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      where("homeownerId", "==", user.uid)
     );
 
     const unsubscribeAllJobs = onSnapshot(allJobsQuery, (snapshot) => {
       let jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      jobsData = jobsData.filter(j => j.clientDeleted !== true);
+      jobsData = jobsData
+        .filter(j => j.clientDeleted !== true)
+        .sort((a: any, b: any) => {
+          const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+          const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+          return timeB - timeA;
+        });
       setAllJobs(jobsData);
       setActiveJobs(jobsData.filter(j => j.status !== "completed" && j.status !== "cancelled"));
       setLoading(false);
@@ -385,130 +390,133 @@ export default function Dashboard() {
                 <div
                   key={job.id}
                   className={cn(
-                    "bg-white rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all overflow-hidden relative group",
+                    "bg-white rounded-[2rem] sm:rounded-[2.5rem] border shadow-xs hover:shadow-md transition-all overflow-hidden relative group",
                     job.urgency === "emergency" ? "border-red-500 bg-red-50/30" : "border-black"
                   )}
                 >
                   {/* Top Bar for Flash Deal / Direct Request */}
                   {job.claimedDeal ? (
-                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs uppercase py-2 px-5 flex items-center justify-between border-b border-amber-600 shadow-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="bg-slate-950 text-amber-400 p-0.5 rounded">
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-amber-600 shadow-2xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="bg-slate-950 text-amber-400 p-0.5 rounded shrink-0">
                           <Zap className="w-3 h-3 fill-current" />
                         </span>
-                        <span>Flash Deal Quote Request</span>
+                        <span className="truncate">Flash Deal Quote Request</span>
                       </div>
-                      <span className="bg-slate-950 text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                      <span className="bg-slate-950 text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase shrink-0">
                         {job.targetTradespersonName || job.claimedDeal.traderName || "Individual Trader"}
                       </span>
                     </div>
                   ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
-                    <div className="bg-gradient-to-r from-indigo-900 to-blue-900 text-white font-black text-xs uppercase py-2 px-5 flex items-center justify-between border-b border-indigo-950 shadow-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span>🎯</span>
-                        <span>Direct 1-on-1 Quote Request</span>
+                    <div className="bg-gradient-to-r from-indigo-900 to-blue-900 text-white font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-indigo-950 shadow-2xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="shrink-0">🎯</span>
+                        <span className="truncate">Direct 1-on-1 Quote Request</span>
                       </div>
-                      <span className="bg-white/20 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-white/20">
+                      <span className="bg-white/20 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-white/20 shrink-0">
                         {job.targetTradespersonName || "Individual Trader"}
                       </span>
                     </div>
                   ) : null}
 
-                  {/* Status Badge & Quotes Received Tab */}
-                  <div className={cn(
-                    "absolute right-6 z-10 flex items-center gap-2 flex-wrap justify-end",
-                    job.claimedDeal || job.targetTradespersonName || job.targetTradespersonId ? "top-14" : "top-6"
-                  )}>
-                    {job.urgency === 'emergency' && (
-                      <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[9px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1">
-                        <AlertCircle className="w-2.5 h-2.5" />
-                        Emergency
-                      </span>
-                    )}
-                    {job.status === 'completed' ? (
-                      <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm mr-2 mt-2 whitespace-pre-line text-center">
-                        COMPLETED{job.completedAt ? ` ON\n${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
-                      </span>
-                    ) : (
-                      <>
-                        {/* Seeking Quotes Badge with Pulsing Green or Solid Red Border */}
-                        {(() => {
-                          const qCount = quoteCounts[job.id] || job.quoteCount || 0;
-                          const isFull = qCount >= 5;
-                          return (
-                            <span className={cn(
-                              "px-3 py-1 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider transition-all",
-                              job.status === "posted"
-                                ? isFull
-                                  ? "border-2 border-red-500 text-red-700 bg-red-50"
-                                  : "border-2 border-emerald-500 text-emerald-800 bg-emerald-50 pulse-green-border"
-                                : job.status === "accepted"
-                                ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                : "bg-red-100 text-red-800 border border-red-200"
-                            )}>
-                              {job.status === 'posted' ? (isFull ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace("_", " ")}
-                            </span>
-                          );
-                        })()}
-
-                        {/* Quotes Received Tab moved right next to Seeking Quotes */}
-                        <Link 
-                          to={`/job/${job.id}#quote-form-section`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="hover:opacity-90 transition-opacity"
-                        >
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 border transition-all",
-                            (quoteCounts[job.id] || job.quoteCount || 0) >= 5
-                              ? "bg-amber-100 text-amber-900 border-amber-300"
-                              : (quoteCounts[job.id] || job.quoteCount || 0) > 0
-                              ? "bg-blue-100 text-blue-800 border-blue-300"
-                              : "bg-slate-100 text-slate-700 border-slate-300"
-                          )}>
-                            <span>{(quoteCounts[job.id] || job.quoteCount || 0)} Quotes</span>
-                            {(quoteCounts[job.id] || job.quoteCount || 0) > 0 && <ChevronRight className="w-3 h-3" />}
-                          </span>
-                        </Link>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="p-6 space-y-3">
-                    {/* Category & Subcategory - Single Line Row */}
-                    <div className="flex items-center gap-2 pr-32 overflow-hidden min-w-0">
-                      <div className={cn(
-                        "w-4 h-4 rounded-lg flex items-center justify-center shrink-0",
-                        job.urgency === "emergency" ? "bg-red-100" : "bg-orange-50"
-                      )}>
-                        {(() => {
-                          const category = TRADE_CATEGORIES.find(c => c.name === job.category);
-                          if (category) {
-                            const Icon = iconMap[category.icon];
-                            return Icon ? <Icon className={cn(
-                              "w-2.5 h-2.5",
+                  <div className="p-4 sm:p-6 space-y-3">
+                    {/* Header Row: Category & Badges in in-flow flex layout */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      {/* Category & Subcategory */}
+                      <div className="flex items-center gap-2 min-w-0 max-w-full">
+                        <div className={cn(
+                          "w-5 h-5 rounded-lg flex items-center justify-center shrink-0",
+                          job.urgency === "emergency" ? "bg-red-100" : "bg-orange-50"
+                        )}>
+                          {(() => {
+                            const category = TRADE_CATEGORIES.find(c => c.name === job.category);
+                            if (category) {
+                              const Icon = iconMap[category.icon];
+                              return Icon ? <Icon className={cn(
+                                "w-3 h-3",
+                                job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
+                              )} /> : <span className="text-[10px]">{category.icon}</span>;
+                            }
+                            return <Briefcase className={cn(
+                              "w-3 h-3",
                               job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
-                            )} /> : <span className="text-[10px]">{category.icon}</span>;
-                          }
-                          return <Briefcase className={cn(
-                            "w-2.5 h-2.5",
-                            job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
-                          )} />;
-                        })()}
+                            )} />;
+                          })()}
+                        </div>
+                        <p className={cn(
+                          "text-[10px] sm:text-xs font-black uppercase tracking-widest truncate min-w-0",
+                          job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
+                        )}>
+                          {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
+                        </p>
                       </div>
-                      <p className={cn(
-                        "text-[9px] font-black uppercase tracking-widest truncate whitespace-nowrap min-w-0 flex-1",
-                        job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
-                      )}>
-                        {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
-                      </p>
+
+                      {/* Status Badges & Quotes Received Tab */}
+                      <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                        <span className="bg-slate-900 text-white px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider shrink-0">
+                          #{job.jobNo || (job.id ? `AT-${job.id.substring(0, 6).toUpperCase()}` : "AT-JOB")}
+                        </span>
+                        {job.urgency === 'emergency' && (
+                          <span className="bg-red-100 text-red-600 px-2.5 py-0.5 rounded-full text-[9px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 shrink-0 border border-red-200">
+                            <AlertCircle className="w-2.5 h-2.5" />
+                            Emergency
+                          </span>
+                        )}
+                        {job.status === 'completed' ? (
+                          <span className="text-[10px] font-black tracking-widest uppercase text-emerald-600 border-2 border-emerald-600 px-2.5 py-0.5 rounded-md shadow-2xs bg-white/90">
+                            COMPLETED{job.completedAt ? ` ON ${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
+                          </span>
+                        ) : (
+                          <>
+                            {/* Seeking Quotes Badge */}
+                            {(() => {
+                              const qCount = quoteCounts[job.id] || job.quoteCount || 0;
+                              const isFull = qCount >= 5;
+                              return (
+                                <span className={cn(
+                                  "px-2.5 py-0.5 rounded-full text-[9px] font-black shadow-2xs uppercase tracking-wider transition-all shrink-0",
+                                  job.status === "posted"
+                                    ? isFull
+                                      ? "border-2 border-red-500 text-red-700 bg-red-50"
+                                      : "border-2 border-emerald-500 text-emerald-800 bg-emerald-50 pulse-green-border"
+                                    : job.status === "accepted"
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                    : "bg-red-100 text-red-800 border border-red-200"
+                                )}>
+                                  {job.status === 'posted' ? (isFull ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace("_", " ")}
+                                </span>
+                              );
+                            })()}
+
+                            {/* Quotes Received Tab */}
+                            <Link 
+                              to={`/job/${job.id}#quote-form-section`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="hover:opacity-90 transition-opacity shrink-0"
+                            >
+                              <span className={cn(
+                                "px-2.5 py-0.5 rounded-full text-[9px] font-black flex items-center gap-1 border transition-all",
+                                (quoteCounts[job.id] || job.quoteCount || 0) >= 5
+                                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                                  : (quoteCounts[job.id] || job.quoteCount || 0) > 0
+                                  ? "bg-blue-100 text-blue-800 border-blue-300"
+                                  : "bg-slate-100 text-slate-700 border-slate-300"
+                              )}>
+                                <span>{(quoteCounts[job.id] || job.quoteCount || 0)} Quotes</span>
+                                {(quoteCounts[job.id] || job.quoteCount || 0) > 0 && <ChevronRight className="w-2.5 h-2.5" />}
+                              </span>
+                            </Link>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {/* Title & Description */}
                     <div className="space-y-1 cursor-pointer" onClick={() => navigate(`/job/${job.id}`)}>
-                      <h3 className="text-xl font-black text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
+                      <h3 className="text-base sm:text-xl font-black text-slate-950 leading-tight group-hover:text-blue-600 transition-colors">
                         {job.title}
                       </h3>
-                      <p className="text-slate-500 font-medium line-clamp-1 text-xs leading-relaxed">
+                      <p className="text-slate-900 font-semibold line-clamp-2 text-xs sm:text-sm leading-relaxed">
                         {job.description}
                       </p>
                     </div>
@@ -516,15 +524,15 @@ export default function Dashboard() {
                     {/* Flash Deal Callout box in Dashboard */}
                     {job.claimedDeal ? (
                       <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs shrink-0">
                             <Zap className="w-3.5 h-3.5 fill-current" />
                           </div>
-                          <div>
-                            <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block truncate">
                               Flash Deal • {job.claimedDeal.discountPercentage}% OFF
                             </span>
-                            <span className="text-xs font-bold text-slate-800">
+                            <span className="text-xs font-bold text-slate-800 truncate block">
                               To: <span className="text-amber-950 font-black">{job.targetTradespersonName || job.claimedDeal.traderName || "Individual Specialist"}</span>
                             </span>
                           </div>
@@ -538,14 +546,14 @@ export default function Dashboard() {
                       </div>
                     ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 flex items-center gap-2 shadow-2xs">
-                        <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px]">
+                        <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px] shrink-0">
                           🎯
                         </div>
-                        <div>
-                          <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider block">
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider block truncate">
                             Direct 1-on-1 Request
                           </span>
-                          <span className="text-xs font-bold text-slate-800">
+                          <span className="text-xs font-bold text-slate-800 truncate block">
                             Exclusive to: <span className="text-blue-950 font-black">{job.targetTradespersonName || "Individual Trader"}</span>
                           </span>
                         </div>
@@ -554,9 +562,9 @@ export default function Dashboard() {
 
                     {/* Location & Time */}
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      <div className="flex items-center gap-1 text-slate-400">
-                        <MapPin className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wide">
+                      <div className="flex items-center gap-1 text-slate-900 font-bold">
+                        <MapPin className="w-3.5 h-3.5 shrink-0 text-slate-800" />
+                        <span className="text-[10px] sm:text-[11px] font-black text-slate-900 uppercase tracking-wide">
                           {(() => {
                             const outcode = getOutwardPostcode(job.postcode || job.area);
                             const city = job.city && job.city !== "Area Hidden" && job.city.toLowerCase() !== "home" && job.city.toLowerCase() !== "property" && job.city.toUpperCase() !== outcode ? job.city : "";
@@ -567,19 +575,19 @@ export default function Dashboard() {
                           })()}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-slate-400">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wide">
+                      <div className="flex items-center gap-1 text-slate-900 font-bold">
+                        <Clock className="w-3.5 h-3.5 shrink-0 text-slate-800" />
+                        <span className="text-[10px] sm:text-[11px] font-black text-slate-900 uppercase tracking-wide">
                           {formatRelativeTime(job.createdAt)}
                         </span>
                       </div>
                     </div>
 
-                    <div className="h-px bg-slate-50 my-2" />
+                    <div className="h-px bg-slate-100 my-2" />
 
-                    {/* Footer: Urgency & Quotes */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    {/* Footer: Urgency & Quotes & Media */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         {job.urgency === "emergency" ? (
                           <div className="text-[9px]">
                             <EmergencyTimer postedDate={job.createdAt?.seconds ? new Date(job.createdAt.seconds * 1000) : job.createdAt} />
@@ -620,8 +628,8 @@ export default function Dashboard() {
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-3">
-                        {job.status === "accepted" && job.acceptedTradespersonId && (
+                      {job.status === "accepted" && job.acceptedTradespersonId && (
+                        <div className="flex items-center gap-3 shrink-0 ml-auto">
                           <Link
                             to={`/chat/${job.id}_${job.acceptedTradespersonId}`}
                             state={{ jobTitle: job.title }}
@@ -631,8 +639,8 @@ export default function Dashboard() {
                           >
                             <MessageSquare className="w-5 h-5" />
                           </Link>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

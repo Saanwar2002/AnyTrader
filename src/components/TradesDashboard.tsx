@@ -1003,22 +1003,22 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                       </div>
                     </div>
                   </div>
-                  <h3 className="font-bold text-slate-900 mb-1 group-hover:text-orange-600 transition-colors line-clamp-1">{job.title}</h3>
-                  <p className="text-xs text-slate-500 line-clamp-2 mb-3">{job.description}</p>
+                  <h3 className="font-black text-slate-950 mb-1 group-hover:text-orange-600 transition-colors line-clamp-1">{job.title}</h3>
+                  <p className="text-xs text-slate-900 font-semibold line-clamp-2 mb-3 leading-relaxed">{job.description}</p>
                   
                   {job.aiReason && (
                     <div className="mb-3 p-2 bg-orange-50/50 rounded-xl border border-orange-100/50">
-                      <p className="text-[10px] text-orange-700 leading-tight italic">
-                        <span className="font-bold uppercase mr-1">AI Insight:</span>
+                      <p className="text-[10px] text-orange-950 font-medium leading-tight italic">
+                        <span className="font-black uppercase mr-1">AI Insight:</span>
                         {job.aiReason}
                       </p>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      <span>{formatJobLocation(job)}</span>
+                  <div className="flex items-center justify-between text-[10px] font-black text-slate-900 uppercase">
+                    <div className="flex items-center gap-1 text-slate-900 font-black">
+                      <MapPin className="w-3 h-3 text-slate-800" />
+                      <span className="text-slate-900 font-black">{formatJobLocation(job)}</span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform" />
                   </div>

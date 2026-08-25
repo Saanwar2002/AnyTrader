@@ -2,7 +2,7 @@ import { textContainsTokenMatch, tokenize, tokenMatches, categoryMatchesSearch }
 import React, { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2, ShieldCheck, Tag, ExternalLink, Briefcase } from "lucide-react";
-import { cn } from "@/src/lib/utils";
+import { cn, generateJobNumber } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { lookupPostcode } from "@/src/services/postcodeService";
 import { db, collection, serverTimestamp, doc, setDoc, OperationType, handleFirestoreError, storage, ref, uploadBytesResumable, getDownloadURL, uploadBytes, uploadString, getDoc, getDocs, query, where } from "@/src/firebase";
@@ -424,8 +424,10 @@ export default function EmergencyJobWizard() {
 
       // Create the document with a specific ID
       const jobRef = doc(collection(db, "jobs"));
+      const newJobNo = generateJobNumber();
       await setDoc(jobRef, {
         id: jobRef.id,
+        jobNo: newJobNo,
         homeownerId: user.uid,
         category: formData.category,
         title: `Emergency ${formData.category} Job`,
