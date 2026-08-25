@@ -377,6 +377,171 @@ export async function callTradeBot(
   return callServerGemini("callTradeBot", [userMessage, history, userContext]);
 }
 
+export interface TradeBotStreamCallbacks {
+  onChunk?: (textChunk: string, accumulatedText: string) => void;
+  onSources?: (sources: { title: string; url: string }[]) => void;
+  onDone?: (fullText: string) => void;
+  onError?: (error: any) => void;
+}
+
+export async function callTradeBotStream(
+  userMessage: string,
+  history: { role: "user" | "model"; text: string }[],
+  userContext?: { role?: string; postcode?: string; propertySummary?: string },
+  callbacks?: TradeBotStreamCallbacks
+): Promise<{ text: string; sources: { title: string; url: string }[] }> {
+  const targetUrl = getApiUrl("/api/gemini/stream");
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken().catch(() => null) : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  let accumulatedText = "";
+  let sources: { title: string; url: string }[] = [];
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        task: "callTradeBotStream",
+        args: [userMessage, history, userContext]
+      })
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Streaming request failed with status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+        const dataStr = trimmed.replace(/^data:\s*/, "");
+        if (dataStr === "[DONE]") break;
+
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.type === "chunk" && parsed.text) {
+            accumulatedText += parsed.text;
+            callbacks?.onChunk?.(parsed.text, accumulatedText);
+          } else if (parsed.type === "sources" && Array.isArray(parsed.sources)) {
+            sources = parsed.sources;
+            callbacks?.onSources?.(sources);
+          } else if (parsed.type === "error") {
+            throw new Error(parsed.error || "Streaming error occurred");
+          }
+        } catch (e: any) {
+          if (e.message && !e.message.includes("JSON")) {
+            console.warn("SSE event parsing warning:", e);
+          }
+        }
+      }
+    }
+
+    callbacks?.onDone?.(accumulatedText);
+    return { text: accumulatedText, sources };
+  } catch (error: any) {
+    console.warn("SSE Stream failed, falling back to unary call:", error);
+    callbacks?.onError?.(error);
+    const fallback = await callTradeBot(userMessage, history, userContext);
+    const fallbackText = typeof fallback === "object" ? fallback.text : fallback;
+    const fallbackSources = typeof fallback === "object" && Array.isArray(fallback.sources) ? fallback.sources : [];
+    callbacks?.onChunk?.(fallbackText, fallbackText);
+    callbacks?.onSources?.(fallbackSources);
+    callbacks?.onDone?.(fallbackText);
+    return { text: fallbackText, sources: fallbackSources };
+  }
+}
+
+export async function streamDiagnostic(
+  prompt: string,
+  systemInstruction?: string,
+  callbacks?: {
+    onChunk?: (textChunk: string, accumulatedText: string) => void;
+    onDone?: (fullText: string) => void;
+    onError?: (error: any) => void;
+  }
+): Promise<string> {
+  const targetUrl = getApiUrl("/api/gemini/stream");
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken().catch(() => null) : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  let accumulatedText = "";
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        task: "streamDiagnostic",
+        args: [prompt, systemInstruction]
+      })
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Streaming failed: HTTP ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+        const dataStr = trimmed.replace(/^data:\s*/, "");
+        if (dataStr === "[DONE]") break;
+
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.type === "chunk" && parsed.text) {
+            accumulatedText += parsed.text;
+            callbacks?.onChunk?.(parsed.text, accumulatedText);
+          } else if (parsed.type === "error") {
+            throw new Error(parsed.error || "Streaming error");
+          }
+        } catch (e) {
+          // ignore incomplete lines
+        }
+      }
+    }
+
+    callbacks?.onDone?.(accumulatedText);
+    return accumulatedText;
+  } catch (error: any) {
+    callbacks?.onError?.(error);
+    throw error;
+  }
+}
+
 export async function processTaxiVoiceCommand(text: string, locationContext: string = ""): Promise<any> {
   return callServerGemini("processTaxiVoiceCommand", [text, locationContext]);
 }
@@ -454,5 +619,30 @@ export interface DeepScanForensicsResult {
 
 export async function runPlatformMisuseDeepScan(telemetrySummary: any): Promise<DeepScanForensicsResult> {
   return callServerGemini("runServerPlatformMisuseDeepScan", [telemetrySummary]);
+}
+
+export interface AiCacheStats {
+  totalRequests: number;
+  cacheHits: number;
+  cacheMisses: number;
+  hitRatePercent: number;
+  estimatedTokensSaved: number;
+  avgHitLatencyMs: number;
+  totalEntries: number;
+  topIntents: { intent: string; hits: number; sample: string; category: string }[];
+}
+
+export async function getAiCacheStats(): Promise<AiCacheStats> {
+  const targetUrl = getApiUrl("/api/gemini/cache-stats");
+  const res = await fetch(targetUrl);
+  if (!res.ok) throw new Error("Failed to fetch AI cache stats");
+  return res.json();
+}
+
+export async function clearAiCache(): Promise<{ success: boolean; message: string }> {
+  const targetUrl = getApiUrl("/api/gemini/cache-clear");
+  const res = await fetch(targetUrl, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to clear AI cache");
+  return res.json();
 }
 

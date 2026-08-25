@@ -18,6 +18,8 @@ import { SlowTrustBadgesCarousel } from "./SlowTrustBadgesCarousel";
 import { SEO } from "./SEO";
 import { seedMockTraders, INITIAL_MOCK_TRADERS, INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
 import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
+import { shareDeal, DealCountdownBadge } from "@/src/lib/dealUtils";
+export { shareDeal, DealCountdownBadge };
 import { Capacitor } from '@capacitor/core';
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import { toast } from "sonner";
@@ -158,91 +160,6 @@ const COMPARE_THEMES = [
     avatarRing: "ring-2 ring-amber-500",
   },
 ];
-
-export async function shareDeal(e: React.MouseEvent | React.TouchEvent, deal: any) {
-  e.preventDefault();
-  e.stopPropagation();
-
-  const traderName = deal.traderName || "Verified Trader";
-  const service = deal.service || "Flash Discount";
-  const discount = deal.discountPercentage || 15;
-  const dealUrl = `${window.location.origin}/profile/${deal.traderId}`;
-
-  const title = `⚡ ${discount}% OFF ${service} on AnyTrader`;
-  const text = `🔥 Check out this ${discount}% OFF Flash Deal on AnyTrader!\n\n🛠️ Service: ${service}\n👤 Trader: ${traderName}\n${deal.description ? `💬 "${deal.description}"\n` : ""}`;
-
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title,
-        text,
-        url: dealUrl,
-      });
-      toast.success("Deal shared successfully!");
-      return;
-    } catch (err: any) {
-      if (err.name === "AbortError") return; // User cancelled
-    }
-  }
-
-  // Fallback: Copy to clipboard
-  try {
-    await navigator.clipboard.writeText(`${text}\n👉 Claim discount: ${dealUrl}`);
-    toast.success("Deal link copied to clipboard!");
-  } catch (err) {
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`${text}\n👉 Claim discount: ${dealUrl}`)}`, '_blank');
-  }
-}
-
-export function DealCountdownBadge({ deal, className }: { deal: any; className?: string }) {
-  const [timeLeft, setTimeLeft] = useState("");
-
-  useEffect(() => {
-    const calculateTime = () => {
-      let targetMs: number;
-      if (deal.expiresAt) {
-        targetMs = typeof deal.expiresAt === "string" ? new Date(deal.expiresAt).getTime() : Number(deal.expiresAt);
-      } else {
-        let hash = 0;
-        const key = deal.id || deal.service || "deal";
-        for (let i = 0; i < key.length; i++) {
-          hash = (hash << 5) - hash + key.charCodeAt(i);
-          hash |= 0;
-        }
-        const baseOffsetMs = (75 + (Math.abs(hash) % 270)) * 60 * 1000;
-        const now = Date.now();
-        const cycleLength = 8 * 3600 * 1000;
-        const cycleStart = Math.floor(now / cycleLength) * cycleLength;
-        targetMs = cycleStart + baseOffsetMs;
-        if (targetMs <= now) {
-          targetMs = now + baseOffsetMs;
-        }
-      }
-
-      const diff = Math.max(0, targetMs - Date.now());
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-      if (hours > 0) {
-        setTimeLeft(`${hours}h ${minutes}m`);
-      } else {
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        setTimeLeft(`${minutes}m ${seconds}s`);
-      }
-    };
-
-    calculateTime();
-    const interval = setInterval(calculateTime, 1000);
-    return () => clearInterval(interval);
-  }, [deal.id, deal.expiresAt]);
-
-  return (
-    <span className={cn("inline-flex items-center gap-1 text-[9px] sm:text-[9.5px] bg-amber-50 text-amber-900 border border-amber-300/80 px-2 py-0.5 rounded-md font-extrabold uppercase tracking-tight shrink-0 shadow-2xs", className)}>
-      <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0 animate-pulse" />
-      Ends in {timeLeft || "2h 15m"}
-    </span>
-  );
-}
 
 export default function FindTrades() {
   const navigate = useNavigate();
@@ -3193,6 +3110,7 @@ export default function FindTrades() {
                   { name: "Lisa Park", trades: ["Painting & Decorating"], tags: ["Painter", "Decorator", "Wallpapering", "Exterior Painting"], postcode: "M20 3LJ", rating: 4.7, totalReviews: 63, totalJobsDone: 78, completedJobsRevenue: 15600, responseRate: 95, trustScore: 82, badges: ["Verified"], bio: "Interior and exterior decorating. Fast, clean, and quality finish.", isEstablishedTradesperson: true, verificationStatus: "verified" },
                   { name: "Mike Walsh", trades: ["Plumbing & Heating"], tags: ["Heating Engineer", "Plumber", "Boiler Installation", "Radiator Repair"], postcode: "M2 5NA", rating: 4.6, totalReviews: 210, totalJobsDone: 240, completedJobsRevenue: 52800, responseRate: 90, trustScore: 88, badges: ["Gas Safe", "Verified"], bio: "Boiler installation specialist with 20+ years experience.", isTopTradesperson: true, verificationStatus: "verified" },
                   { name: "Callum Evans", trades: ["General Labour, Trade Mates & Site Helpers"], tags: ["Labourer", "Trade Mate", "Garden Digging", "Heavy Lifting", "Site Helper"], postcode: "M1 4BT", rating: 4.9, totalReviews: 54, totalJobsDone: 82, completedJobsRevenue: 12300, responseRate: 98, trustScore: 95, badges: ["CSCS Card", "Verified"], bio: "Hardworking site helper & trade mate. CSCS card holder available for garden digging, material lifting & builder assistance.", isTopTradesperson: true, verificationStatus: "verified" },
+                  { name: "Dean Harrison", trades: ["Graphics & Signages"], tags: ["Sign Maker", "Shopfront Signs", "Safety Boards", "Display Boards", "Vinyl Graphics", "Illuminated Signs"], postcode: "M3 2BW", rating: 4.95, totalReviews: 78, totalJobsDone: 104, completedJobsRevenue: 36400, responseRate: 99, trustScore: 98, badges: ["IPAF Certified", "Verified", "ID Verified"], bio: "Bespoke shopfront fascias, 3D illuminated letters, Foamex display boards, site safety boards, and architectural vinyl graphics.", isTopTradesperson: true, verificationStatus: "verified" },
                   { name: "Tom Briggs", trades: ["Plumbing & Heating"], tags: ["Plumber", "Drainage", "Tap Repair"], postcode: "SK1 3PL", rating: 4.3, totalReviews: 45, totalJobsDone: 58, completedJobsRevenue: 8700, responseRate: 85, trustScore: 72, badges: ["Gas Safe"], bio: "Family-run plumbing business with 10 years in the trade.", isEstablishedTradesperson: true, verificationStatus: "unverified" }
                 ];
                 

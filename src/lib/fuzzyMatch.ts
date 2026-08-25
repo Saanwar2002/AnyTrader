@@ -315,13 +315,59 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
   "trade mate": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "Trade Mate & Helper", keywords: ["plumber mate", "sparky mate", "builder mate", "apprentice", "helping hand", "site assistant", "extra hands"] },
   "site helper": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "Site Helper", keywords: ["heavy lifting", "carrying", "plasterboard", "timber", "rubble bagging", "site cleanup", "digging"] },
   "garden digging": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "Groundwork Labourer", keywords: ["trenching", "digging patio", "soil clearing", "turf laying", "garden helper", "manual labour"] },
-  "helping hand": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "General Labourer & Helper", keywords: ["helper", "mate", "extra hands", "lifting", "moving", "day rate", "on demand helper"] }
+  "helping hand": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "General Labourer & Helper", keywords: ["helper", "mate", "extra hands", "lifting", "moving", "day rate", "on demand helper"] },
+
+  // Graphics & Signages / Signage & Display Boards
+  "signs": { categoryName: "Graphics & Signages", tradeTitle: "Sign Maker & Signage Installer", keywords: ["shop signs", "fascia", "display boards", "safety boards", "vinyl", "lettering", "graphics", "lightboxes", "banners"] },
+  "signage": { categoryName: "Graphics & Signages", tradeTitle: "Signage Specialist", keywords: ["shop signs", "shopfront", "acrylic", "neon", "illuminated", "pavement sign", "totem", "site safety", "wayfinding"] },
+  "signages": { categoryName: "Graphics & Signages", tradeTitle: "Signage Specialist", keywords: ["signs", "graphics", "shopfront", "display boards", "signage", "fascias"] },
+  "sinages": { categoryName: "Graphics & Signages", tradeTitle: "Signage Specialist", keywords: ["signs", "graphics", "shopfront", "display boards", "signage", "fascias"] },
+  "graphics": { categoryName: "Graphics & Signages", tradeTitle: "Graphics & Signage Installer", keywords: ["window graphics", "vinyl decals", "frosted vinyl", "display boards", "banners", "vehicle graphics", "wall graphics"] },
+  "display boards": { categoryName: "Graphics & Signages", tradeTitle: "Display Board & Print Specialist", keywords: ["foamex", "correx", "dibond", "acrylic", "poster boards", "exhibition boards", "site boards", "rigid panels"] },
+  "site safety boards": { categoryName: "Graphics & Signages", tradeTitle: "Site Safety Signage Installer", keywords: ["ppe signs", "hazard boards", "construction signs", "scaffold banners", "hoarding signs", "health and safety notices"] },
+  "shop front signs": { categoryName: "Graphics & Signages", tradeTitle: "Shopfront Sign Maker", keywords: ["fascia", "3d letters", "lightbox", "illuminated signs", "neon", "projecting sign", "window display", "retail signs"] },
+  "window graphics": { categoryName: "Graphics & Signages", tradeTitle: "Window Vinyl & Graphics Installer", keywords: ["frosted vinyl", "manifestations", "window decals", "contra vision", "privacy film", "shop window graphics"] },
+  "foamex boards": { categoryName: "Graphics & Signages", tradeTitle: "Board Printing & Sign Specialist", keywords: ["foamex", "correx", "dibond", "aluminium composite", "printed boards", "display panels", "fluted boards"] },
+  "scaffold banners": { categoryName: "Graphics & Signages", tradeTitle: "Banners & Hoarding Specialist", keywords: ["mesh banners", "hoarding graphics", "site banners", "pvc banners", "construction hoarding"] },
+  "pavement signs": { categoryName: "Graphics & Signages", tradeTitle: "Pavement Signs & Displays", keywords: ["a board", "swing signs", "chalkboard", "sandwich board", "shop display", "forecourt signs"] },
+
+  // Tailoring, Garment Alterations, Seamstress & Laundry
+  "tailor": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Master Tailor & Alterations Specialist", keywords: ["tailoring", "suits", "hemming", "alteration", "sewing", "made to measure", "trousers", "dressmaking", "clothes"] },
+  "tailoring": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Tailor", keywords: ["garment", "suit", "fitting", "alterations", "bespoke", "jacket", "trousers"] },
+  "tailering": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Tailor", keywords: ["garment", "suit", "fitting", "alterations", "bespoke", "tailor"] },
+  "alteration": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Garment Alterations Specialist", keywords: ["seamstress", "hemming", "tapering", "waist", "zip", "sleeves", "shortening", "lengthening", "dress"] },
+  "alterations": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Garment Alterations Specialist", keywords: ["tailor", "seamstress", "hemming", "tapering", "waist", "zip", "sleeves", "clothing repairs", "dress"] },
+  "garment alterations": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Garment Alterations Specialist", keywords: ["clothing", "tailoring", "seamstress", "sewing", "hemming", "trousers", "suit"] },
+  "seamstress": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Seamstress & Dressmaker", keywords: ["dress", "wedding dress", "bridal", "gown", "sewing", "alterations", "pattern cutting", "curtains"] },
+  "dressmaker": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Dressmaker & Seamstress", keywords: ["dress", "prom dress", "bridal", "gown", "clothing", "tailoring", "fashion"] },
+  "dressmaking": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Dressmaker & Seamstress", keywords: ["dress", "prom dress", "bridal", "gown", "clothing", "tailoring"] },
+  "ironing": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Professional Ironing & Pressing Service", keywords: ["ironing", "pressing", "steam pressing", "shirts", "bedding", "laundry", "wash and iron"] },
+  "laundry": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Mobile Laundry & Ironing Specialist", keywords: ["wash and fold", "washing", "dry cleaning", "ironing", "clothes washing", "duvet cleaning", "linen"] },
+  "dry clean": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Dry Cleaning Specialist", keywords: ["dry cleaning", "suit cleaning", "coat cleaning", "eco dry cleaning", "curtain cleaning", "stain removal"] },
+  "dry cleaning": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Dry Cleaning & Garment Care", keywords: ["dry clean", "suit cleaning", "coat cleaning", "eco dry cleaning", "curtain cleaning", "stain removal"] },
+  "dry cleaner": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Dry Cleaner", keywords: ["dry clean", "laundry", "suit cleaning", "stain removal", "garment care"] },
+  "clothing repairs": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Clothing Repair & Tailoring Specialist", keywords: ["zip replacement", "buttons", "torn seam", "patches", "relining", "leather repair", "zip repair"] },
+  "clothes repair": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Clothing Repair Specialist", keywords: ["zip replacement", "buttons", "torn seam", "patches", "relining", "tailoring"] },
+  "curtain alterations": { categoryName: "Tailoring, Alterations & Laundry Services", tradeTitle: "Curtain & Soft Furnishing Specialist", keywords: ["curtains", "drapes", "blinds", "hemming", "cushions", "sewing", "alterations"] }
 };
 
 /**
  * Pre-populated dictionary of common trade category keywords, synonyms, and variations.
  */
 export const COMMON_TRADE_VOCABULARY: CandidateItem[] = [
+  // Tailoring, Garment Alterations & Laundry
+  { label: "Tailoring, Alterations & Laundry Services", type: "category", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Tailor", type: "trade", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Seamstress", type: "trade", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Dressmaker", type: "trade", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Ironing & Laundry Service", type: "trade", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Garment Alterations", type: "subcategory", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Bespoke Tailoring & Suits", type: "subcategory", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Wedding Dress & Bridal Alterations", type: "subcategory", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Professional Ironing & Pressing", type: "subcategory", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Dry Cleaning Collection & Delivery", type: "subcategory", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Clothing & Zip Repairs", type: "subcategory", categoryName: "Tailoring, Alterations & Laundry Services" },
+  { label: "Curtain & Blind Alterations", type: "subcategory", categoryName: "Tailoring, Alterations & Laundry Services" },
   // Plumbing
   { label: "Plumbing", type: "category", categoryName: "Plumbing" },
   { label: "Plumber", type: "trade", categoryName: "Plumbing" },
@@ -435,7 +481,30 @@ export const COMMON_TRADE_VOCABULARY: CandidateItem[] = [
   { label: "Demolition & Non-Structural Wall Strip-Out Helper", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
   { label: "Material Offloading, Plasterboard, Bricks & Timber Carrying", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
   { label: "Skip Loading, Rubble Bagging & Waste Clearance Helper", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
-  { label: "Urgent Same-Day On-Demand Site Helper & Extra Hands", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" }
+  { label: "Urgent Same-Day On-Demand Site Helper & Extra Hands", type: "subcategory", categoryName: "General Labour, Trade Mates & Site Helpers" },
+
+  // Graphics & Signages
+  { label: "Graphics & Signages", type: "category", categoryName: "Graphics & Signages" },
+  { label: "Graphics & Sinages", type: "category", categoryName: "Graphics & Signages" },
+  { label: "Signage & Display Boards", type: "category", categoryName: "Graphics & Signages" },
+  { label: "Sign Maker", type: "trade", categoryName: "Graphics & Signages" },
+  { label: "Signage Specialist", type: "trade", categoryName: "Graphics & Signages" },
+  { label: "Shopfront Sign Maker", type: "trade", categoryName: "Graphics & Signages" },
+  { label: "Window Vinyl & Graphics Installer", type: "trade", categoryName: "Graphics & Signages" },
+  { label: "Site Safety Signage Installer", type: "trade", categoryName: "Graphics & Signages" },
+  { label: "Shopfront Fascias, 3D Built-Up Lettering & Illuminated Signs", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Construction Site Safety Boards, PPE Notices & Hazard Signs", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Display Boards & Large Format Printing (Foamex, Correx, Dibond & Acrylic)", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Window Graphics, Frosted Privacy Vinyl & Manifestations", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Wayfinding, Architectural Directory Boards & Door Plaques", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Pavement Signs, A-Boards, Swing Signs & Chalkboards", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Scaffold Banners, Site Hoarding Graphics & Mesh Banners", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Exhibition Stands, Roll-Up Banners & Pop-Up Displays", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Vehicle Signwriting, Fleet Decals & Van Lettering", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Illuminated Lightboxes, Neon & LED Shopfront Fascias", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Estate Agent & Property Boards (T-Boards, Flag Boards & V-Boards)", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "Post, Panel & Monolith / Totem Roadside Signs", type: "subcategory", categoryName: "Graphics & Signages" },
+  { label: "High-Level Building Signage Installation & Abseil / Cherry Picker Access", type: "subcategory", categoryName: "Graphics & Signages" }
 ];
 
 /**

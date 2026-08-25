@@ -33,6 +33,7 @@ const MASTER_HOT_SEARCHES = [
   { term: "Gas Safety Certificate CP12", highlight: "Annual Boiler Check", category: "Gas" },
   { term: "Appliance & Van Courier", highlight: "Bulky Item Transport", category: "Couriers" },
   { term: "General Labour & Mate", highlight: "Site Helpers & Strip-Out", category: "Labour" },
+  { term: "Shop Signs & Graphics", highlight: "Fascias & Display Boards", category: "Signage" },
   { term: "Tree Surgery & Pruning", highlight: "NPTC Qualified Surgeons", category: "Tree Care" },
   { term: "Mobile Wheelie Bin Wash", highlight: "Eco Disinfection & Deodorise", category: "Cleaning" },
   { term: "Double Glazing & Windows", highlight: "A-Rated Energy Efficient", category: "Glazing" },

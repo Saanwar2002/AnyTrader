@@ -9,7 +9,8 @@ export const RECURRING_CATEGORIES = [
   "Windows & Doors", // For window cleaning
   "Estate Agent & Landlord Services",
   "Fire Safety, Fire Doors & Passive Protection",
-  "Void Property Turnaround & Tenancy Refresh"
+  "Void Property Turnaround & Tenancy Refresh",
+  "Tailoring, Alterations & Laundry Services"
 ];
 
 export const UNSORTED_TRADE_CATEGORIES = [
@@ -1649,6 +1650,85 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "External Brick, Stone & Powder-Coated Metal Cosmetic Repair",
       "Caravan & Motorhome Interior Cosmetic Surface Repair",
       "Fitted Furniture & Wardrobe Veneer Edge Repair"
+    ]
+  },
+  {
+    id: 91,
+    name: "Graphics & Signages",
+    icon: "🪧",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "Illuminated Lightboxes, Neon & LED Shopfront Fascias": ["Part P / Qualified Electrician for Mains Connection (Optional)"],
+      "Construction Site Safety Boards, Scaffold Hoarding & PPE Signs": ["CSCS Card (Optional)"],
+      "High-Level Building Signage Installation & Abseil / Cherry Picker Access": ["IPAF / PASMA Certification (Optional)"]
+    },
+    subcategories: [
+      "Shopfront Fascias, 3D Built-Up Lettering & Illuminated Signs",
+      "Construction Site Safety Boards, PPE Notices & Hazard Signs",
+      "Display Boards & Large Format Printing (Foamex, Correx, Dibond & Acrylic)",
+      "Window Graphics, Frosted Privacy Vinyl & Manifestations",
+      "Wayfinding, Architectural Directory Boards & Door Plaques",
+      "Pavement Signs, A-Boards, Swing Signs & Chalkboards",
+      "Scaffold Banners, Site Hoarding Graphics & Mesh Banners",
+      "Exhibition Stands, Roll-Up Banners & Pop-Up Displays",
+      "Vehicle Signwriting, Fleet Decals & Van Lettering",
+      "Illuminated Lightboxes, Neon & LED Shopfront Fascias",
+      "Estate Agent & Property Boards (T-Boards, Flag Boards & V-Boards)",
+      "Post, Panel & Monolith / Totem Roadside Signs",
+      "High-Level Building Signage Installation & Abseil / Cherry Picker Access"
+    ]
+  },
+  {
+    id: 92,
+    name: "Ready-Mix Concrete & Tarmacadam Surfacing",
+    icon: "🚛",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "Volumetric Concrete On-Site Batching & Barrowing Service": ["CSCS / Driver CPC (Optional)"],
+      "Concrete Boom Pump & Ground Line Pumping Hire": ["CPCS / NPORS Concrete Pump Operator Card (Optional)"],
+      "Highway Dropped Kerbs & Council Vehicle Crossover Tarmac": ["Street Works (NRSWA) Operative Certification (Optional)"]
+    },
+    subcategories: [
+      "Ready-Mix Concrete Drum Mixer Delivery (C20, C25, C30, C35)",
+      "Volumetric Concrete On-Site Batching & Barrowing Service",
+      "Concrete Boom Pump & Ground Line Pumping Hire",
+      "Commercial & Domestic Tarmacadam Laying (SMA / Hot Rolled Asphalt)",
+      "Tarmac Driveway Surfacing, Resurfacing & Red Tarmac",
+      "Car Park Surfacing, Forecourts & Commercial Access Roads",
+      "Farm Tracks, Equestrian Yards & Heavy-Duty Asphalt Paving",
+      "Building Site Foundation Pouring & Trench Footings",
+      "Reinforced Concrete Floor Slabs & Power Floating (Industrial / Domestic)",
+      "Foamed Concrete & Flowable Screed for Trench Reinstatement",
+      "Pattern Imprinted Concrete (Driveways, Patios & Paths)",
+      "Tarmac Pothole Repair & Asphalt Patching",
+      "Highway Dropped Kerbs & Council Vehicle Crossover Tarmac",
+      "Sub-Base Preparation & MOT Type 1 Laser Grading / Compaction"
+    ]
+  },
+  {
+    id: 93,
+    name: "Tailoring, Alterations & Laundry Services",
+    icon: "🧵",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "Bespoke Tailoring & Made-to-Measure (Suits, Blazers & Formalwear)": ["City & Guilds in Bespoke Tailoring / Fashion Design (Optional)"],
+      "Bridal, Bridesmaid & Wedding Dress Alterations": ["Professional Seamstress / Pattern Cutting Certification (Optional)"],
+      "Eco-Friendly Dry Cleaning Collection & Delivery": ["Guild of Cleaners and Launderers Certification (Optional)"]
+    },
+    subcategories: [
+      "Garment Alterations & Resizing (Hemming, Tapering, Waist Adjustments)",
+      "Bespoke Tailoring & Made-to-Measure (Suits, Blazers & Formalwear)",
+      "Bridal, Bridesmaid & Wedding Dress Alterations",
+      "Evening Gowns, Prom Dresses & Delicate Fabric Alterations",
+      "Clothing Repairs, Zips, Buttons & Torn Seam Fixing",
+      "Jacket & Coat Relining / Pocket Repairs",
+      "Leather, Suede & Fur Garment Repairs & Alterations",
+      "Curtains, Roman Blinds & Soft Furnishing Alterations / Hemming",
+      "Professional Ironing & Shirt Pressing Service",
+      "Mobile Laundry Wash, Dry & Fold Collection / Delivery",
+      "Eco-Friendly Dry Cleaning Collection & Delivery",
+      "Uniform, Workwear & Schoolwear Badging / Alterations",
+      "Costume, Cosplay & Theatrical Garment Alterations"
     ]
   }
 ];

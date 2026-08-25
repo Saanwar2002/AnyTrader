@@ -2,6 +2,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import firebaseConfig from "../../firebase-applet-config.json" with { type: "json" };
+import { 
+  getSemanticCachedResponse, 
+  setSemanticCachedResponse, 
+  streamFromSemanticCache, 
+  getSemanticCacheTelemetry, 
+  clearSemanticCache 
+} from "./semanticAiCache";
+
+export { getSemanticCacheTelemetry, clearSemanticCache };
 
 function getSafeAdminDb() {
   try {
@@ -1600,17 +1609,23 @@ export async function transcribeVoiceAudio(audioData: string, mimeType: string) 
 }
 
 export async function processVoiceAudio(audioData: string, mimeType: string, categories: string[]) {
-  const prompt = `Listen to the voice recording of a homeowner posting a job. 
-  Extract the job details and return a JSON object with:
-  - title: A concise, professional title (max 6 words)
-  - description: A clear, complete description based on what they said
-  - category: One of the matching categories from this list: ${JSON.stringify(categories)}. Choose the most relevant.
-  - urgency: One of "emergency", "asap", "flexible", or "specific_date"`;
+  const prompt = `Listen to the voice recording of a UK homeowner describing a job or repair. 
+  Extract and structure the job details. Return a JSON object with:
+  - title: A concise, professional trade title (e.g. "Boiler Error F75 Repair & Diagnostic", "Emergency Kitchen Pipe Leak Repair")
+  - description: A clear, professional, structured description based on what they dictated, highlighting symptoms, access, and specific requests.
+  - category: One of the closest matching categories from this list: ${JSON.stringify(categories)}. Choose the most relevant.
+  - subcategory: A specific subcategory for this trade if mentioned or implied (e.g. "Boiler Repair & Servicing", "Consumer Unit Upgrade", "Tarmac Driveway Surfacing")
+  - urgency: One of "emergency" (if active leak, boiler breakdown in winter, power loss, gas smell), "asap", "flexible", or "specific_date"
+  - quoteScope: One of "supply_and_fit", "labour_only", or "materials_only"
+  - city: UK town or city if mentioned, or null
+  - estimatedCompletionTime: e.g. "2-4" or "1-2"
+  - estimatedCompletionTimeUnit: "hours", "days", or "weeks"
+  - keyHighlights: Array of 2 to 4 short bullet points summarizing key specifications`;
 
   try {
     const result = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash-live-preview", // Supports audio
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1619,7 +1634,16 @@ export async function processVoiceAudio(audioData: string, mimeType: string, cat
             title: { type: Type.STRING },
             description: { type: Type.STRING },
             category: { type: Type.STRING },
-            urgency: { type: Type.STRING }
+            subcategory: { type: Type.STRING },
+            urgency: { type: Type.STRING },
+            quoteScope: { type: Type.STRING },
+            city: { type: Type.STRING },
+            estimatedCompletionTime: { type: Type.STRING },
+            estimatedCompletionTimeUnit: { type: Type.STRING },
+            keyHighlights: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
           },
           required: ["title", "description", "category", "urgency"]
         }
@@ -1649,17 +1673,23 @@ export async function processVoiceAudio(audioData: string, mimeType: string, cat
 }
 
 export async function processVoiceTranscript(transcript: string, categories: string[]) {
-  const prompt = `A homeowner dictation/transcript: "${transcript}".
-  Based on this, return a JSON object with:
-  - title: A concise, professional title (max 6 words)
-  - description: A clear, complete description based on what they said
-  - category: One of the matching categories from this list: ${JSON.stringify(categories)}. Choose the most relevant.
-  - urgency: One of "emergency", "asap", "flexible", or "specific_date"`;
+  const prompt = `A UK homeowner dictated the following job request: "${transcript}".
+  Extract and structure the trade job details into a professional format. Return a JSON object with:
+  - title: A concise, professional trade title (e.g. "Boiler Error F75 Repair & Diagnostic", "Emergency Kitchen Pipe Leak Repair", "40m² Tarmac Driveway Resurfacing")
+  - description: A clear, professional, well-structured description based on what they said, clarifying the problem and requirements.
+  - category: One of the closest matching categories from this list: ${JSON.stringify(categories)}. Choose the most relevant.
+  - subcategory: A specific subcategory for this trade if applicable (e.g. "Boiler Repair & Servicing", "Fuse Box & Consumer Units", "Tarmac Driveway Surfacing")
+  - urgency: One of "emergency" (if gas leak, active flood, heating failure in freezing weather, electrical tripping), "asap", "flexible", or "specific_date"
+  - quoteScope: One of "supply_and_fit", "labour_only", or "materials_only"
+  - city: UK town or city if mentioned, or null
+  - estimatedCompletionTime: e.g. "2-4" or "1"
+  - estimatedCompletionTimeUnit: "hours", "days", or "weeks"
+  - keyHighlights: Array of 2 to 4 short bullet points summarizing key job specifications`;
 
   try {
     const result = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1668,7 +1698,16 @@ export async function processVoiceTranscript(transcript: string, categories: str
             title: { type: Type.STRING },
             description: { type: Type.STRING },
             category: { type: Type.STRING },
-            urgency: { type: Type.STRING }
+            subcategory: { type: Type.STRING },
+            urgency: { type: Type.STRING },
+            quoteScope: { type: Type.STRING },
+            city: { type: Type.STRING },
+            estimatedCompletionTime: { type: Type.STRING },
+            estimatedCompletionTimeUnit: { type: Type.STRING },
+            keyHighlights: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
           },
           required: ["title", "description", "category", "urgency"]
         }
@@ -1770,6 +1809,20 @@ export async function callTradeBot(
   history: {role: "user" | "model", text: string}[],
   userContext?: { role?: string; postcode?: string; propertySummary?: string }
 ) {
+  // 1. Fast Semantic Cache Check for repeat / high-frequency queries (<1ms)
+  const isTopLevelQuery = !history || history.length <= 1;
+  if (isTopLevelQuery) {
+    const cached = getSemanticCachedResponse(userMessage);
+    if (cached) {
+      return {
+        text: cached.response.text,
+        sources: cached.response.sources || [],
+        cached: true,
+        intentKey: cached.intentKey
+      };
+    }
+  }
+
   const contextNote = userContext ? `
 User Context:
 - Role: ${userContext.role || "Homeowner / Customer"}
@@ -1777,16 +1830,18 @@ User Context:
 ${userContext.propertySummary ? `- Property Twin / Equipment: ${userContext.propertySummary}` : ""}
 ` : "";
 
-  const systemInstruction = `You are AnyTrader AI Assistant, the intelligent UK trade and home services copilot on the AnyTrader platform. AnyTrader connects UK customers, landlords, and social housing managers with verified professionals across 86+ trade and service categories (from Plumbing, Electrical, Gas & Heating, Roofing, and Carpentry to Specialist Cleaning, Cake Baking, Event Hire, and Bulky Transport).
+  const systemInstruction = `You are AnyTrader AI Assistant, the expert UK trade and home services copilot on AnyTrader.
 
-Your goals:
-1. Provide accurate, real-world UK price guidance (always in £ GBP), labor vs material benchmarks, and project timelines.
-2. Clearly identify the correct AnyTrader Service Category (e.g. "Gas & Heating", "Plumbing", "Electrical", "Domestic & Commercial Cleaning", "Gardening & Landscaping", "Roofing & Guttering").
-3. Explain UK building regulations, safety standards, and compliance rules in straightforward plain English (e.g. Gas Safe registration, Part P electrical safety, BS 7671, Awaab's Law for damp/mould, CP12 Gas Safety certificates, Food Standards Agency rules).
-4. For homeowners and landlords: Guide them on diagnosing the issue, how to post the job with clear specs, and what credentials to verify before hiring.
-5. For tradespeople: Provide technical advice (Part P sizing, radiator BTU calculation, boiler fault codes, merchant pricing tips).
+CRITICAL DIRECTIVES FOR RELEVANCE, ACCURACY & BREVITY:
+1. DIRECTLY ANSWER FIRST: Immediately address the user's specific query, symptom, or problem in the very first sentence. Never output generic boilerplate or unrelated advice.
+2. RELEVANT SUMMARY BULLETS (Max 200 words total): Provide concise bullet points tailored specifically to what they asked:
+   - 🎯 **Direct Diagnosis / Answer**: The exact solution, regulation rule, or trade explanation for their specific query.
+   - 💷 **UK Price Benchmark & Duration**: Realistic £ GBP cost range and typical timeframe (if price/job related).
+   - 📋 **Key Safety & UK Standards**: Critical compliance checks (e.g., Gas Safe, Part P BS 7671, Awaab's Law, WRAS) strictly relevant to this issue.
+   - 💡 **Actionable Pro Tip**: What to check immediately or specify when hiring a professional.
+3. STRICT WORD LIMIT: Keep the ENTIRE response strictly under 200 words (aim for 100–160 words).
 ${contextNote}
-Always perform live Google Searches when users ask about prices, regulations, or equipment issues to provide accurate, real-time UK data. Keep responses structured, concise, friendly, and actionable with clear bullet points.`;
+Always perform live Google Searches when users ask about prices, regulations, or equipment diagnostics to provide accurate, real-time UK data. Keep responses structured, concise, and friendly.`;
 
   try {
     const ai = getGenAI();
@@ -1835,15 +1890,175 @@ Always perform live Google Searches when users ask about prices, regulations, or
       });
     }
 
+    const finalText = response.text || "I'm sorry, I couldn't process that request right now.";
+    const finalSources = sources.slice(0, 5);
+
+    // Save to Semantic Cache for future queries
+    if (isTopLevelQuery && finalText.length > 50) {
+      setSemanticCachedResponse(userMessage, {
+        text: finalText,
+        sources: finalSources
+      });
+    }
+
     return {
-      text: response.text || "I'm sorry, I couldn't process that request right now.",
-      sources: sources.slice(0, 5)
+      text: finalText,
+      sources: finalSources
     };
   } catch (error) {
     console.error("Gemini TradeBot Error:", error);
     return {
       text: "I'm currently unable to access live search grounding. Please try again shortly.",
       sources: []
+    };
+  }
+}
+
+export async function* callTradeBotStream(
+  userMessage: string, 
+  history: {role: "user" | "model", text: string}[],
+  userContext?: { role?: string; postcode?: string; propertySummary?: string }
+) {
+  // 1. Fast Semantic Cache Check (<1ms response, 0 API quota consumption)
+  const isTopLevelQuery = !history || history.length <= 1;
+  if (isTopLevelQuery) {
+    const cached = getSemanticCachedResponse(userMessage);
+    if (cached) {
+      yield* streamFromSemanticCache(cached.response);
+      return;
+    }
+  }
+
+  const contextNote = userContext ? `
+User Context:
+- Role: ${userContext.role || "Homeowner / Customer"}
+- Location/Postcode: ${userContext.postcode || "UK"}
+${userContext.propertySummary ? `- Property Twin / Equipment: ${userContext.propertySummary}` : ""}
+` : "";
+
+  const systemInstruction = `You are AnyTrader AI Assistant, the expert UK trade and home services copilot on AnyTrader.
+
+CRITICAL DIRECTIVES FOR RELEVANCE, ACCURACY & BREVITY:
+1. DIRECTLY ANSWER FIRST: Immediately address the user's specific query, symptom, or problem in the very first sentence. Never output generic boilerplate or unrelated advice.
+2. RELEVANT SUMMARY BULLETS (Max 200 words total): Provide concise bullet points tailored specifically to what they asked:
+   - 🎯 **Direct Diagnosis / Answer**: The exact solution, regulation rule, or trade explanation for their specific query.
+   - 💷 **UK Price Benchmark & Duration**: Realistic £ GBP cost range and typical timeframe (if price/job related).
+   - 📋 **Key Safety & UK Standards**: Critical compliance checks (e.g., Gas Safe, Part P BS 7671, Awaab's Law, WRAS) strictly relevant to this issue.
+   - 💡 **Actionable Pro Tip**: What to check immediately or specify when hiring a professional.
+3. STRICT WORD LIMIT: Keep the ENTIRE response strictly under 200 words (aim for 100–160 words).
+${contextNote}
+Always perform live Google Searches when users ask about prices, regulations, or equipment diagnostics to provide accurate, real-time UK data. Keep responses structured, concise, and friendly.`;
+
+  try {
+    const ai = getGenAI();
+    const model = await getGlobalAiModel();
+
+    const contents = [
+      ...history.map(msg => ({
+        role: msg.role === "model" ? "model" as const : "user" as const,
+        parts: [{ text: msg.text }]
+      })),
+      { role: "user" as const, parts: [{ text: userMessage }] }
+    ];
+
+    let stream;
+    try {
+      stream = await ai.models.generateContentStream({
+        model: model || "gemini-3.7-flash",
+        contents,
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }]
+        }
+      });
+    } catch (searchError) {
+      console.warn("TradeBot search grounding stream error, falling back to standard streaming:", searchError);
+      stream = await ai.models.generateContentStream({
+        model: model || "gemini-3.7-flash",
+        contents,
+        config: {
+          systemInstruction
+        }
+      });
+    }
+
+    const sources: { title: string; url: string }[] = [];
+    const seenUrls = new Set<string>();
+    let accumulatedText = "";
+
+    for await (const chunk of stream) {
+      // Check for grounding metadata in candidates
+      const candidates = chunk.candidates;
+      const groundingChunks = candidates?.[0]?.groundingMetadata?.groundingChunks;
+      if (groundingChunks && Array.isArray(groundingChunks)) {
+        groundingChunks.forEach((gChunk: any) => {
+          if (gChunk.web?.uri && !seenUrls.has(gChunk.web.uri)) {
+            seenUrls.add(gChunk.web.uri);
+            sources.push({
+              title: gChunk.web.title || gChunk.web.uri,
+              url: gChunk.web.uri
+            });
+          }
+        });
+      }
+
+      const chunkText = chunk.text;
+      if (chunkText) {
+        accumulatedText += chunkText;
+        yield { type: "chunk", text: chunkText };
+      }
+    }
+
+    const finalSources = sources.slice(0, 5);
+    if (finalSources.length > 0) {
+      yield { type: "sources", sources: finalSources };
+    }
+
+    // Save newly generated answer to Semantic Cache
+    if (isTopLevelQuery && accumulatedText.length > 50) {
+      setSemanticCachedResponse(userMessage, {
+        text: accumulatedText,
+        sources: finalSources
+      });
+    }
+
+    yield { type: "done" };
+  } catch (error: any) {
+    console.error("Gemini TradeBot Stream Error:", error);
+    yield {
+      type: "error",
+      error: error.message || "Failed to stream TradeBot response"
+    };
+  }
+}
+
+export async function* streamGeminiDiagnostic(
+  prompt: string,
+  systemInstruction?: string
+) {
+  try {
+    const ai = getGenAI();
+    const model = await getGlobalAiModel();
+
+    const stream = await ai.models.generateContentStream({
+      model: model || "gemini-3.7-flash",
+      contents: prompt,
+      config: systemInstruction ? { systemInstruction } : undefined
+    });
+
+    for await (const chunk of stream) {
+      const chunkText = chunk.text;
+      if (chunkText) {
+        yield { type: "chunk", text: chunkText };
+      }
+    }
+
+    yield { type: "done" };
+  } catch (error: any) {
+    console.error("Gemini Diagnostic Stream Error:", error);
+    yield {
+      type: "error",
+      error: error.message || "Failed to stream diagnostic"
     };
   }
 }

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { calculatePropertyHealthScore } from "./propertyUtils";
 import { BuyerPackModal } from "./BuyerPackModal";
 import { ClaimPropertyPassportModal } from "./ClaimPropertyPassportModal";
+import MoveInPackHub from "./MoveInPackHub";
 
 export default function PublicPropertyPassportView() {
   const { propertyId, id } = useParams<{ propertyId?: string; id?: string }>();
@@ -22,7 +23,7 @@ export default function PublicPropertyPassportView() {
   const [completedJobs, setCompletedJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"health" | "specs" | "history" | "agent_badge">("health");
+  const [activeTab, setActiveTab] = useState<"health" | "specs" | "history" | "move_in" | "agent_badge">("health");
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
@@ -146,13 +147,12 @@ export default function PublicPropertyPassportView() {
       <div className="sticky top-0 z-40 bg-slate-900 text-white border-b border-slate-800 shadow-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2">
-              <span className="bg-blue-600 text-white text-[11px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider">
-                AnyTrader
-              </span>
-              <span className="font-extrabold text-sm tracking-tight text-slate-200 hidden sm:inline">
-                TradeOS Digital Twin
-              </span>
+            <Link 
+              to="/" 
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-black uppercase px-3 py-1.5 rounded-xl tracking-wider transition shadow-xs"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back To AnyTrader</span>
             </Link>
           </div>
 
@@ -297,6 +297,15 @@ export default function PublicPropertyPassportView() {
             }`}
           >
             <Wrench className="w-4 h-4" /> Verified Trade History ({completedJobs.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("move_in")}
+            className={`pb-3 px-3 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === "move_in" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <KeyRound className="w-4 h-4 text-amber-500" /> Move-In Trade Pack
           </button>
 
           <button
@@ -552,6 +561,21 @@ export default function PublicPropertyPassportView() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 4: Move-In Trade Pack */}
+          {activeTab === "move_in" && (
+            <div className="pt-2">
+              <MoveInPackHub
+                propertyId={property.id}
+                propertyName={property.name || property.address?.line1}
+                propertyAddress={property.address}
+                postcode={property.address?.postcode}
+                epcRating={property.epcRating}
+                boilerInfo={property.boilerInfo}
+                embeddedMode={true}
+              />
             </div>
           )}
         </div>

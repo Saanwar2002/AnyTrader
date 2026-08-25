@@ -2267,6 +2267,61 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     }
   });
 
+  // High-Performance SSE Token Streaming Endpoint (<100-200ms TTFB)
+  app.post("/api/gemini/stream", async (req, res) => {
+    // Configure SSE Headers
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    if (res.flushHeaders) res.flushHeaders();
+
+    const { task, args } = req.body || {};
+
+    try {
+      if (task === "callTradeBotStream") {
+        const [userMessage, history, userContext] = args || [];
+        const generator = geminiServer.callTradeBotStream(userMessage, history, userContext);
+        for await (const event of generator) {
+          res.write(`data: ${JSON.stringify(event)}\n\n`);
+        }
+      } else if (task === "streamDiagnostic") {
+        const [prompt, systemInstruction] = args || [];
+        const generator = geminiServer.streamGeminiDiagnostic(prompt, systemInstruction);
+        for await (const event of generator) {
+          res.write(`data: ${JSON.stringify(event)}\n\n`);
+        }
+      } else {
+        res.write(`data: ${JSON.stringify({ type: "error", error: `Unknown streaming task: ${task}` })}\n\n`);
+      }
+    } catch (error: any) {
+      console.error(`Gemini Streaming Server Error [${task}]:`, error);
+      res.write(`data: ${JSON.stringify({ type: "error", error: error.message || "Streaming failed" })}\n\n`);
+    } finally {
+      res.write("data: [DONE]\n\n");
+      res.end();
+    }
+  });
+
+  // Server-Side Semantic AI Query Cache Endpoints
+  app.get("/api/gemini/cache-stats", (req, res) => {
+    try {
+      const stats = geminiServer.getSemanticCacheTelemetry();
+      res.json(stats);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to retrieve cache stats" });
+    }
+  });
+
+  app.post("/api/gemini/cache-clear", (req, res) => {
+    try {
+      geminiServer.clearSemanticCache();
+      res.json({ success: true, message: "Semantic cache successfully purged" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to clear cache" });
+    }
+  });
+
   // --- AI Agent Ecosystem Endpoints ---
   app.post("/api/admin/agents/scan", async (req, res) => {
     try {

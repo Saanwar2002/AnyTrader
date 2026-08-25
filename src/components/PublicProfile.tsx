@@ -21,8 +21,8 @@ import { format } from "date-fns";
 import { SEO } from "./SEO";
 import { Logo } from "./Logo";
 import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
-import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
-import { DealCountdownBadge, shareDeal } from "./FindTrades";
+import { INITIAL_MOCK_FLASH_DEALS, INITIAL_MOCK_TRADERS } from "@/src/services/seedService";
+import { DealCountdownBadge, shareDeal } from "@/src/lib/dealUtils";
 import { isDealSoldOut, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
 
 export default function PublicProfile() {
@@ -31,18 +31,52 @@ export default function PublicProfile() {
   const location = useLocation();
   const { isB2B, linkedPropertyId, linkedPropertyName } = location.state || {};
   const { profile: currentUserProfile, user: currentUser } = useAuth();
-  const [profile, setProfile] = useState<any>(null);
+
+  // Instant seed trader matching & pre-hydration
+  const initialSeedTrader = id ? INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id) : null;
+  const initialProfileData = location.state?.initialProfile || initialSeedTrader || null;
+  
+  const initialSeedReviews = initialSeedTrader ? [
+    {
+      id: "rev-seed-1",
+      reviewerName: "David Henderson",
+      rating: 5,
+      comment: `Outstanding service from ${initialSeedTrader.name}. Extremely professional, punctual, clean work and fair transparent pricing.`,
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 3 }
+    },
+    {
+      id: "rev-seed-2",
+      reviewerName: "Claire Thompson",
+      rating: 5,
+      comment: `Superb communication from initial quote to job completion. Left everything tidy and verified all certificates. 10/10!`,
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 12 }
+    },
+    {
+      id: "rev-seed-3",
+      reviewerName: "Oliver Wright",
+      rating: 5,
+      comment: `Responded very fast and solved the issue within an hour. Reliable and honest tradesperson. Will definitely hire again.`,
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 25 }
+    }
+  ] : [];
+
+  const [profile, setProfile] = useState<any>(() => initialProfileData);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>(() => initialSeedReviews);
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingReviews, setLoadingReviews] = useState(true);
+  const [loading, setLoading] = useState(() => !initialProfileData);
+  const [loadingReviews, setLoadingReviews] = useState(() => !initialSeedTrader);
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isServicesExpanded, setIsServicesExpanded] = useState(false);
   const [openFaqIds, setOpenFaqIds] = useState<string[]>([]);
   const [isDocViewerOpen, setIsDocViewerOpen] = useState(false);
   const [docViewerBadgeId, setDocViewerBadgeId] = useState<string>("liability_insurance");
   const [activeDeals, setActiveDeals] = useState<any[]>([]);
+
+  // Instant scroll to top on mount
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -68,6 +102,14 @@ export default function PublicProfile() {
     setOpenFaqIds(prev => 
       prev.includes(faqId) ? prev.filter(id => id !== faqId) : [...prev, faqId]
     );
+  };
+
+  const handleCloseProfile = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/find-trades");
+    }
   };
 
   const isOwnProfile = currentUser && profile && (currentUser.uid === profile.uid || currentUser.uid === profile.id);
@@ -207,11 +249,22 @@ export default function PublicProfile() {
             console.error("Error updating recently viewed:", e);
           }
         } else {
-          console.error("No such profile!");
+          // Fallback to seed/mock traders
+          const mockMatch = INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id);
+          if (mockMatch) {
+            setProfile(mockMatch);
+          } else {
+            console.error("No such profile!");
+          }
         }
       } catch (error) {
         console.error("Error fetching profile:", error);
-        handleFirestoreError(error, OperationType.GET, `users/${id}`);
+        const mockMatch = INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id);
+        if (mockMatch) {
+          setProfile(mockMatch);
+        } else {
+          handleFirestoreError(error, OperationType.GET, `users/${id}`);
+        }
       } finally {
         setLoading(false);
       }
@@ -246,11 +299,64 @@ export default function PublicProfile() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedReviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setReviews(fetchedReviews.filter((r: any) => r.status !== "cooling_off"));
+      const activeReviews = fetchedReviews.filter((r: any) => r.status !== "cooling_off");
+      if (activeReviews.length === 0) {
+        const mockTrader = INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id);
+        if (mockTrader) {
+          const sampleReviews = [
+            {
+              id: "rev-seed-1",
+              reviewerName: "David Henderson",
+              rating: 5,
+              comment: `Outstanding service from ${mockTrader.name}. Extremely professional, punctual, clean work and fair transparent pricing.`,
+              createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 3 }
+            },
+            {
+              id: "rev-seed-2",
+              reviewerName: "Claire Thompson",
+              rating: 5,
+              comment: `Superb communication from initial quote to job completion. Left everything tidy and verified all certificates. 10/10!`,
+              createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 12 }
+            },
+            {
+              id: "rev-seed-3",
+              reviewerName: "Oliver Wright",
+              rating: 5,
+              comment: `Responded very fast and solved the issue within an hour. Reliable and honest tradesperson. Will definitely hire again.`,
+              createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 25 }
+            }
+          ];
+          setReviews(sampleReviews);
+          setLoadingReviews(false);
+          return;
+        }
+      }
+      setReviews(activeReviews);
       setLoadingReviews(false);
     }, (error) => {
       console.error("Error fetching reviews:", error);
-      handleFirestoreError(error, OperationType.LIST, "reviews");
+      const mockTrader = INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id);
+      if (mockTrader) {
+        const sampleReviews = [
+          {
+            id: "rev-seed-1",
+            reviewerName: "David Henderson",
+            rating: 5,
+            comment: `Outstanding service from ${mockTrader.name}. Extremely professional, punctual, clean work and fair transparent pricing.`,
+            createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 3 }
+          },
+          {
+            id: "rev-seed-2",
+            reviewerName: "Claire Thompson",
+            rating: 5,
+            comment: `Superb communication from initial quote to job completion. Left everything tidy and verified all certificates. 10/10!`,
+            createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 12 }
+          }
+        ];
+        setReviews(sampleReviews);
+      } else {
+        handleFirestoreError(error, OperationType.LIST, "reviews");
+      }
       setLoadingReviews(false);
     });
 
@@ -503,37 +609,54 @@ export default function PublicProfile() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-2">
         <div className="flex items-center gap-2 sm:gap-4 relative z-50 min-w-0">
-          <button onClick={() => { console.log("Back button clicked"); navigate(-1); }} className="p-2 sm:p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0">
+          <button 
+            type="button"
+            onClick={handleCloseProfile} 
+            title="Go Back"
+            aria-label="Go Back"
+            className="p-2 sm:p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group shrink-0 active:scale-95 cursor-pointer"
+          >
             <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-slate-800 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Tradesperson Profile</h1>
         </div>
-        <button 
-          onClick={async () => {
-            try {
-              if (navigator.share) {
-                await navigator.share({
-                  title: `${profile.name} on AnyTrader`,
-                  text: `Check out ${profile.name}'s profile on AnyTrader!`,
-                  url: window.location.href,
-                });
-              } else {
-                await navigator.clipboard.writeText(window.location.href);
-                alert('Profile link copied to clipboard!');
+        <div className="flex items-center gap-2 shrink-0">
+          <button 
+            onClick={async () => {
+              try {
+                if (navigator.share) {
+                  await navigator.share({
+                    title: `${profile.name} on AnyTrader`,
+                    text: `Check out ${profile.name}'s profile on AnyTrader!`,
+                    url: window.location.href,
+                  });
+                } else {
+                  await navigator.clipboard.writeText(window.location.href);
+                  alert('Profile link copied to clipboard!');
+                }
+              } catch (err: any) {
+                if (err.name === 'AbortError') {
+                  console.log('Sharing canceled by user');
+                  return;
+                }
+                console.error('Error sharing:', err);
               }
-            } catch (err: any) {
-              if (err.name === 'AbortError') {
-                console.log('Sharing canceled by user');
-                return;
-              }
-              console.error('Error sharing:', err);
-            }
-          }}
-          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white rounded-xl shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-1.5 sm:gap-2 text-slate-600 border border-black shrink-0 text-xs sm:text-sm font-bold"
-        >
-          <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
-          <span>Share Profile</span>
-        </button>
+            }}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white rounded-xl shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-1.5 sm:gap-2 text-slate-600 border border-black shrink-0 text-xs sm:text-sm font-bold"
+          >
+            <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+            <span>Share Profile</span>
+          </button>
+          <button 
+            type="button"
+            onClick={handleCloseProfile}
+            title="Close Profile"
+            aria-label="Close Profile"
+            className="p-2 sm:p-2.5 bg-white border border-black rounded-xl shadow-sm hover:bg-slate-50 hover:shadow-md transition-all text-slate-800 hover:text-black shrink-0 active:scale-95 cursor-pointer"
+          >
+            <X className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+          </button>
+        </div>
       </div>
 
       {/* Admin Suspension Banner */}
@@ -549,6 +672,17 @@ export default function PublicProfile() {
 
       {/* Profile Card */}
       <div className="bg-white rounded-3xl border border-black shadow-sm p-4 sm:p-8 mb-8 relative w-full overflow-hidden">
+        {/* Prominent Profile Close Button (Cross) */}
+        <button 
+          type="button"
+          onClick={handleCloseProfile}
+          title="Close Profile"
+          aria-label="Close Profile"
+          className="absolute top-3.5 sm:top-5 right-3.5 sm:right-5 z-30 p-2 sm:p-2.5 bg-slate-100/90 hover:bg-slate-200 text-slate-800 hover:text-black border border-black rounded-full shadow-xs transition-all active:scale-90 flex items-center justify-center cursor-pointer group"
+        >
+          <X className="w-5 h-5 sm:w-6 sm:h-6 text-slate-900 stroke-[2.5] transition-transform group-hover:scale-110" />
+        </button>
+
         <div className="flex flex-col items-center w-full">
           <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-900 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold overflow-hidden border-4 border-white/20 shadow-lg mb-4 shrink-0">
             {profile.photoURL || profile.avatarUrl ? (
@@ -564,40 +698,76 @@ export default function PublicProfile() {
                 {profile.memberId}
               </span>
             )}
-            <div className="flex flex-wrap items-center justify-center gap-1.5 mb-2 w-full">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">{profile.name}</h2>
-              {profile.isAcceptingRequests === false && (
-                <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-700 flex items-center gap-1 shadow-sm shrink-0">
-                  <AlertTriangle className="w-3 h-3" />
-                  Currently Unavailable
-                </span>
-              )}
-              {isBusyToday() && profile.isAcceptingRequests !== false && (
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1 shrink-0">
-                    <Clock className="w-3 h-3" />
-                    Busy Today
-                  </span>
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50/50 rounded-lg border border-blue-100/50">
-                    <HelpCircle className="w-3 h-3 text-blue-600 shrink-0" />
-                    <p className="text-[9px] text-blue-700 font-bold leading-none uppercase tracking-tighter">
-                      Available for Messages & Quotes
-                    </p>
+            {/* Trader / Business Display Header */}
+            {(() => {
+              const isBusinessOnly = profile.displayNamePreference === "business_only" || profile.showBusinessNameOnly;
+              const hasBusiness = !!(profile.businessName || profile.companyName);
+              const mainHeading = isBusinessOnly && hasBusiness 
+                ? (profile.businessName || profile.companyName) 
+                : (profile.name || profile.businessName || profile.companyName || "Verified Tradesperson");
+              const showSecondary = !isBusinessOnly && hasBusiness && profile.name;
+
+              return (
+                <>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 mb-1 w-full">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900">{mainHeading}</h2>
+                    {profile.isAcceptingRequests === false && (
+                      <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-700 flex items-center gap-1 shadow-sm shrink-0">
+                        <AlertTriangle className="w-3 h-3" />
+                        Currently Unavailable
+                      </span>
+                    )}
+                    {isBusyToday() && profile.isAcceptingRequests !== false && (
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1 shrink-0">
+                          <Clock className="w-3 h-3" />
+                          Busy Today
+                        </span>
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50/50 rounded-lg border border-blue-100/50">
+                          <HelpCircle className="w-3 h-3 text-blue-600 shrink-0" />
+                          <p className="text-[9px] text-blue-700 font-bold leading-none uppercase tracking-tighter">
+                            Available for Messages & Quotes
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {profile.isDisabled && (
+                      <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-200 shrink-0">
+                        Suspended
+                      </span>
+                    )}
+                    {(profile.recommendedCategories?.length > 0 || platformConfig?.feeTiers?.find((t: any) => t.name === (profile.tierId || "Basic"))?.includesRecommendation) && (
+                      <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1 shrink-0">
+                        <Award className="w-3 h-3 fill-orange-500" />
+                        Recommended
+                      </span>
+                    )}
                   </div>
-                </div>
-              )}
-              {profile.isDisabled && (
-                <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-200 shrink-0">
-                  Suspended
-                </span>
-              )}
-              {(profile.recommendedCategories?.length > 0 || platformConfig?.feeTiers?.find((t: any) => t.name === (profile.tierId || "Basic"))?.includesRecommendation) && (
-                <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-orange-200 flex items-center gap-1 shrink-0">
-                  <Award className="w-3 h-3 fill-orange-500" />
-                  Recommended
-                </span>
-              )}
-            </div>
+
+                  {showSecondary && (
+                    <div className="flex items-center justify-center gap-1.5 mb-2.5 flex-wrap px-2">
+                      <span className="text-xs sm:text-sm font-extrabold text-blue-800 bg-blue-50/80 px-3 py-1 rounded-lg border border-blue-200 shadow-2xs flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>{profile.businessName || profile.companyName}</span>
+                        {profile.trades?.[0] && (
+                          <span className="text-blue-600/80 font-semibold">· {profile.trades[0]}</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {isBusinessOnly && (
+                    <div className="flex items-center justify-center gap-1.5 mb-2.5 flex-wrap px-2">
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 flex items-center gap-1.5">
+                        <span>🏢 Verified Trading Business</span>
+                        {profile.trades?.[0] && (
+                          <span className="text-slate-500 font-semibold">· {profile.trades[0]}</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="flex flex-col items-center gap-3 mb-6 w-full">
               <div className="flex items-stretch gap-2 sm:gap-3 bg-white p-1.5 sm:p-2 rounded-[1.25rem] sm:rounded-[1.5rem] border border-black shadow-lg shadow-slate-200/50 w-full max-w-sm mx-auto">

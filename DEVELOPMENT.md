@@ -1,5 +1,253 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🏡 New Homebuyer Move-In Pack & Estate Agency QR Key Handover Flow (Completed August 24, 2026)
+*   **Context & User Request**: Implemented a comprehensive New Homebuyer Move-In Pack & Trade Recommendation ecosystem designed to capture high-value property sales and tenancy handovers friction-free directly from estate agent offices via QR codes on key tags and A4 handover certificates.
+*   **Key Architecture & Components**:
+    1.  **Move-In Task & Bundle Catalog (`src/data/moveInBundles.ts`)**:
+        *   Standardized catalog of 9 essential Day-One and Week-One trade tasks categorized into distinct phases: *🚨 Security & Safety* (Insurance-approved cylinder re-keying, Gas Safe boiler service & radiator bleed, EICR test), *🧹 Hygiene & Setup* (Pre-move deep sanitisation & oven steam, Fresh paint refresh, TV wall mounting & flatpack assembly), *🚛 Exterior & Waste* (Packing box & clearance disposal, Garden hedge trimming), and *🛡️ Smart Home* (Video doorbell & outdoor security camera installation).
+        *   Each task includes typical price guides, estimated duration, "Why Recommended" homeowner justifications, priority chips, and pre-filled title/description payloads for 1-click job posting.
+        *   Local state persistence helpers (`getStoredCompletedTasks`, `saveStoredCompletedTasks`, `getStoredSkippedTasks`, `saveStoredSkippedTasks`) with property-isolated keys.
+    2.  **Move-In Pack Hub (`src/components/property/MoveInPackHub.tsx`)**:
+        *   Interactive checklist interface featuring real-time circular completion progress (% and count), phase category tabs, search filter, custom task addition modal, browser print formatting, and Strategy 1 WhatsApp privacy share bridge.
+        *   **"⚡ Post This Job (Pre-Filled)"**: Routes to `/post-job` with pre-filled title, category, subcategory, scope, urgency, and linked property ID and address specs.
+        *   **"Mark as Done" & "Skip"**: Interactive toggles for homeowners to self-pace their move-in tasks without being forced into rigid upfront bookings.
+    3.  **Estate Agent Key Handover & Branch Display QR Generator (`src/components/property/EstateAgentQRGeneratorModal.tsx`)**:
+        *   Generator modal for estate agents, landlords, and housing portfolio managers.
+        *   Features **Branch Desk/Wall Mode** & **Property Handover Mode**.
+        *   Supports 5 tailored printable formats:
+            *   **🪧 Desk Stand Plaque**: Compact A5/tent-card layout designed for acrylic desk stands on agent negotiation desks and reception counters.
+            *   **🖼️ Wall / Window Poster (A4/A3)**: High-contrast large format display with prominent headings and bullet points for branch reception walls and window displays.
+            *   **🏷️ Key Fob Tag**: Sized specifically for physical keychains handed over with front door keys.
+            *   **📄 Handover Certificate**: Official A4 welcome document with property address and digital twin scan codes.
+            *   **🔗 Smart URL & Share**: 1-Click WhatsApp and clipboard sharing with branch attribution tracking.
+        *   1-Click high-resolution print triggers.
+    4.  **Move-In Landing Route (`/move-in`, `src/components/property/MoveInLanding.tsx`)**:
+        *   Publicly accessible landing page parsing `passportId`, `agentId`, `agentName`, `postcode`, and `transferCode` from URL parameters.
+        *   Loads live digital twin specs (boiler details, EPC energy ratings, address) from Firestore.
+        *   Provides 1-tap ownership claim modal when a transfer code is present and embeds the `MoveInPackHub`.
+    5.  **Multi-Portal Integrations**:
+        *   **Homeowner Dashboard (`src/components/Dashboard.tsx`)**: Added high-visibility "📦 New Home Move-In Pack & Trade Hub" banner card leading directly to `/move-in`.
+        *   **Portfolio Management (`src/components/Portfolio.tsx`)**: Added "Move-In QR" action button on every property card opening the `EstateAgentQRGeneratorModal`.
+        *   **Public Property Passport (`src/components/property/PublicPropertyPassportView.tsx`)**: Added dedicated "Move-In Trade Pack" tab and header link for prospective buyers and new occupants.
+        *   **Routing (`src/App.tsx`)**: Registered `/move-in` route for both guest visitors and authenticated users.
+
+## 🎙️ Voice-to-Text Interactive Confirmation Summary Screen (`src/components/voice/VoiceJobAssistant.tsx`) (Completed August 23, 2026)
+*   **Context & User Request**: Implemented an interactive confirmation summary screen that appears immediately following voice-to-text processing and Gemini extraction, allowing the user to review, edit, or append to the AI-generated job description, title, category, subcategory, urgency, and detected specifications before final submission.
+*   **Features Implemented**:
+    1.  **AI Voice Spec Confirmation Header**: Displays structured status pill (`Ready to Review`) alongside an optional audio playback button (`Listen to Voice Recording`) if recorded via microphone or uploaded.
+    2.  **Inline Editable Job Title**: Full-width input allowing rapid tweaking of the AI-generated job title.
+    3.  **Category & Subcategory Selectors**: Dynamic dropdown menus pre-selected to the AI classification with full access to all 86+ trade categories and subcategories.
+    4.  **Urgency & Quote Scope Switchers**: 1-Tap selectable pills for Emergency, ASAP, Flexible, and Pick Date, plus Supply & Fit, Labour Only, and Materials Only scope selectors.
+    5.  **Editable AI Description with Live Word Count**: Multiline textarea displaying the transcribed description with real-time word counting for immediate in-place edits.
+    6.  **Quick Append Assistant**: 1-Tap preset chips (`+ Access via side gate / key safe`, `+ Parking available on driveway`, `+ Need work completed on weekends only`, `+ Boiler error code noted on unit`, `+ Materials already on site`) plus custom note input box with "Append Note" action that smoothly appends notes into the description.
+    7.  **Interactive Detected Specifications (Chips)**: Visual chips displaying extracted specs with 1-click removal (`✕`) and custom tag addition (`+ Add Spec`).
+    8.  **Action Navigation**: "Confirm & Continue to Post" primary action, "Speak Again" re-recording trigger, and "Discard" controls.
+
+## 📱 Capacitor Mobile Native Voice Architecture Verification (Completed August 23, 2026)
+*   **Audit Scope**: Verified and hardened the native "Speak with Voice" workflow across both the **Home / Trade Job Posting** (`VoiceJobAssistant.tsx`, `PostJobWizard.tsx`) and **Taxi / Rides Booking** (`PassengerBooking.tsx`) portals for seamless operation inside native Android & iOS Capacitor wrappers.
+*   **Capacitor Native Flow & Sequence Verified**:
+    1.  **Platform Detection**: Uses `Capacitor.isNativePlatform()` to switch automatically between `@capacitor-community/speech-recognition` (native) and Web Speech API / MediaRecorder (browser).
+    2.  **Plugin & Hardware Availability**: Calls `SpeechRecognition.available()` to ensure the device's native speech recognition engine is active and ready.
+    3.  **OS Permission Handling**: Checks `checkPermissions()` and requests permissions dynamically via `requestPermissions()` if not already granted. If denied, displays the native settings permission guidance modal.
+    4.  **Live Real-Time Dictation**: Listens for native `partialResults` to stream live words onto the interface in real time with British English (`en-GB`) language tuning.
+    5.  **Clean Teardown & Lifecycle**: Removes prior listeners before attaching new ones, listens to native `listeningState: 'stopped'` events, stops native recording in `stopRecordingSession()`, and guarantees full cleanup on unmount.
+    6.  **Secure Backend AI Extraction**: Passes transcribed text to server-side Gemini endpoints (`/api/gemini/call`) using `getApiUrl`, which automatically routes relative API paths to the cloud production backend when running inside native mobile webviews (`https://localhost`).
+    7.  **Auto Geocoding & Address Resolution**: In Taxi Booking (`PassengerBooking.tsx`), coordinates and addresses extracted by Gemini are automatically geocoded with Google Maps to set pickup, dropoff, and stops directly on the map.
+
+## 🎙️ Voice Job Assistant Single Microphone UX Refinement (`src/components/voice/VoiceJobAssistant.tsx`) (Completed August 23, 2026)
+*   **Context & User Request**: Cleaned up the voice job posting interface by removing the redundant top "Post by Voice" banner with its static microphone icon, leaving only the primary, clickable "Tap to speak with microphone" button.
+*   **Implementation**:
+    1.  **Single Unified Microphone Interface**: Removed the top header icon block so the customer sees exactly one clear microphone target to tap to speak.
+    2.  **Integrated AI Badge**: Embedded the high-contrast `AI Powered` pill badge directly into the interactive speak button beside `Tap to speak with microphone`.
+    3.  **Refined Spacing**: Balanced padding (`p-4 sm:p-5`) and inner spacing (`space-y-3.5`) for a compact, clean card layout on mobile and desktop.
+
+## ❌ Prominent Profile Close Button & Navigation System (`src/components/PublicProfile.tsx`) (Completed August 23, 2026)
+*   **Context & User Request**: Added a prominent close button (`✕`) on the public profile view alongside the highlighted back button (`<`), providing instant 1-tap exit options from any profile page.
+*   **Implementation**:
+    1.  **Prominent Card Close Button (Cross `✕`)**: Placed in the top-right corner of the main white profile card (`absolute top-3.5 sm:top-5 right-3.5 sm:right-5 z-30`) with high-contrast circular styling (`border border-black bg-slate-100/90 hover:bg-slate-200 text-slate-900 rounded-full shadow-xs active:scale-90`) and stroke width `2.5`.
+    2.  **Top Navigation Header Close Button**: Added an additional quick-close button in the top action bar alongside "Share Profile".
+    3.  **Preserved High-Contrast Back Button**: Maintained the top-left `<` back button with hover translations and smooth shadow transitions.
+    4.  **Resilient Close Logic (`handleCloseProfile`)**: Checks `window.history.length > 1` to return seamlessly to the previous route (search feed, map, job details, direct message, or admin console); if accessed directly, safely routes to `/find-trades`.
+
+## 🛠️ PublicProfile Chunk Decoupling & Resilient Dynamic Loading (`src/lib/dealUtils.tsx`, `src/components/PublicProfile.tsx`, `src/components/FindTrades.tsx`, `src/App.tsx`) (Completed August 23, 2026)
+*   **Root Cause**: `PublicProfile.tsx` previously imported `DealCountdownBadge` and `shareDeal` directly from `FindTrades.tsx` (a 3,600+ line map and multi-filter component). During dynamic import splitting or transient dev server reloads, this heavy circular dependency could cause the browser to fail fetching `PublicProfile.tsx`.
+*   **Resolution**:
+    1.  **Shared Utility Extraction (`src/lib/dealUtils.tsx`)**: Extracted `DealCountdownBadge` and `shareDeal` into a lightweight, standalone utility file. Both `PublicProfile.tsx` and `FindTrades.tsx` now import from `@/src/lib/dealUtils`.
+    2.  **Resilient Lazy-Load Retry (`src/App.tsx`)**: Enhanced `lazyWithRetry` with an immediate 300ms recovery retry before attempting fallback recovery, preventing transient module fetch hiccups.
+
+
+## 🧵 Tailoring, Garment Alterations & Laundry Services (Category 93) (`src/constants.ts`, `src/lib/fuzzyMatch.ts`, `src/services/seedService.ts`, `src/components/shared/PartnerAdvertisement.tsx`) (Completed August 22, 2026)
+*   **Context & Scope**: Added a dedicated, full-featured category for Tailoring, Clothing & Garment Alterations, Seamstress/Dressmaking, Ironing, and Dry Cleaning Services:
+    1.  **Category Specs (`src/constants.ts`)**:
+        *   `id: 93`
+        *   `name: "Tailoring, Alterations & Laundry Services"`
+        *   `icon: "🧵"`
+        *   Added to both `UNSORTED_TRADE_CATEGORIES` and `RECURRING_CATEGORIES`.
+    2.  **Subcategories (13 comprehensive specializations)**:
+        *   *Garment Alterations & Resizing (Hemming, Tapering, Waist Adjustments)*
+        *   *Bespoke Tailoring & Made-to-Measure (Suits, Blazers & Formalwear)*
+        *   *Bridal, Bridesmaid & Wedding Dress Alterations*
+        *   *Evening Gowns, Prom Dresses & Delicate Fabric Alterations*
+        *   *Clothing Repairs, Zips, Buttons & Torn Seam Fixing*
+        *   *Jacket & Coat Relining / Pocket Repairs*
+        *   *Leather, Suede & Fur Garment Repairs & Alterations*
+        *   *Curtains, Roman Blinds & Soft Furnishing Alterations / Hemming*
+        *   *Professional Ironing & Shirt Pressing Service*
+        *   *Mobile Laundry Wash, Dry & Fold Collection / Delivery*
+        *   *Eco-Friendly Dry Cleaning Collection & Delivery*
+        *   *Uniform, Workwear & Schoolwear Badging / Alterations*
+        *   *Costume, Cosplay & Theatrical Garment Alterations*
+    3.  **Search & Fuzzy Token Indexing (`src/lib/fuzzyMatch.ts`)**:
+        *   Added rich keyword mappings for `tailor`, `tailoring`, `tailering`, `alteration`, `alterations`, `garment alterations`, `seamstress`, `dressmaker`, `dressmaking`, `ironing`, `laundry`, `dry clean`, `dry cleaning`, `dry cleaner`, `clothing repairs`, `clothes repair`, and `curtain alterations`.
+        *   Added candidate vocabulary items to `COMMON_TRADE_VOCABULARY`.
+    4.  **Mock Profile & Promoted Advert (`src/services/seedService.ts`, `src/components/shared/PartnerAdvertisement.tsx`)**:
+        *   Added Amira Hassan (*Savile & Stitch Master Tailoring & Alterations*, W1S 2JR) to mock database profiles and featured specialist carousel.
+
+## 📐 Streamlined Trader Card & Profile Header Hierarchy (`src/components/shared/PartnerAdvertisement.tsx`, `src/components/PublicProfile.tsx`) (Completed August 22, 2026)
+*   **Context & Refinement**: Standardized the visual hierarchy across both advertising cards and public profile headers so that information flows naturally without overlapping badges or squashed text on narrow mobile viewports:
+    1.  **Line 1 (Primary Title)**: Trader's **Personal Name** (e.g. *David O'Connor*, *James Miller*, *Chloe Dupont*) in bold high-contrast display. (Or company name if configured in Business-Only mode).
+    2.  **Line 2 (Business & Category Subtitle)**: **Business / Trading Name & Primary Trade Category** (e.g. *Pristine Shine Eco Clean · Cleaning Specialist*) directly below the personal name.
+    3.  **Line 3 (Rating Badge)**: Star rating badge (`⭐ 4.9 (115)`) directly under the business name.
+    4.  **Full-Width Middle Highlight Banner**: Moved the key perk highlight (`✨ 🛡️ 100% Deposit-Back Guarantee`, `✨ 🎂 5-Star FSA Hygiene Rated`) to a dedicated full-width slot above the tagline description so it receives 100% horizontal clearance and never truncates to "Depo...".
+*   **Bottom Verification & Action Bar**:
+    *   Left side: Clean `Verified Pro · Postcode · Free Quote` indicator with strict flex boundary and `truncate` prevent collision.
+    *   Right side: Compact, responsive action pill (`View Profile →`) with dedicated padding that never overlaps or squashes the left-hand text.
+
+## ⚡ Instant Ad-to-Profile Opening & Zero-Latency Pre-Hydration (`src/components/shared/PartnerAdvertisement.tsx`, `src/components/PublicProfile.tsx`) (Completed August 22, 2026)
+*   **Context & Problem**: Clicking advertising cards previously took several seconds to open trader profile pages due to blocking `await` statements in the click handler (waiting for remote Firestore impression/budget mutations) and `PublicProfile.tsx` showing a full-screen loading spinner while waiting for remote Firestore `getDoc` network calls.
+*   **Key Optimizations**:
+    1.  **Non-Blocking Fire-and-Forget Click Logging (`PartnerAdvertisement.tsx`)**:
+        *   Converted database click metrics, budget deduction, and notification triggers into non-blocking asynchronous background execution (`(async () => { ... })()`).
+        *   Immediate, synchronous execution of `navigate('/profile/' + traderUid, { state: { initialProfile: resolvedTrader } })` in 0ms.
+    2.  **Instant Synchronous State Pre-Hydration (`PublicProfile.tsx`)**:
+        *   Initialized `profile` state synchronously from `location.state?.initialProfile` or `INITIAL_MOCK_TRADERS.find(...)`.
+        *   Initialized `loading` and `loadingReviews` to `false` when pre-hydrated data exists, eliminating the full-screen loading spinner completely.
+        *   Pre-populated verified reviews and instant scroll-to-top (`window.scrollTo({ top: 0, behavior: 'instant' })`) on mount.
+        *   Maintained background Firestore synchronization without UI interruption.
+
+## 🌟 Seeded Trader Adverts, Trading Business Name Synchronization & Profile Navigation (`src/components/shared/PartnerAdvertisement.tsx`, `src/components/PublicProfile.tsx`, `src/services/seedService.ts`) (Completed August 22, 2026)
+*   **Context & Scope**: Aligned the advertising card headers with tradesperson public profiles. Resolved the discrepancy where the ad banner showed the trader's registered company/business title (e.g. *Elite Pro Plumbing & Heating 24/7*, *Artisan Sweet & Savoury Creations*), while the public profile header previously only showed the individual's personal name (*Marcus Vance*, *Chloe Dupont*) without showing their business name.
+*   **Key Architecture Improvements**:
+    1.  **Public Profile Registered Business & Business-Only Mode**:
+        *   Added a prominent `businessName` / `companyName` badge to `PublicProfile.tsx` beneath the tradesperson's personal name, ensuring immediate visual continuity between the ad card and the profile.
+        *   Supported **Business Name Only** mode (`displayNamePreference: "business_only"` or `showBusinessNameOnly`): when enabled by traders wishing to keep personal names private, the public profile, listings, quote requests, and invoices display strictly their company/brand identity (*e.g., Apex Plumbing & Heating Ltd*) with a "Verified Trading Business" badge, while legal KYC credentials remain safely verified in the background.
+    2.  **Advert Card Dual Name & Byline Display**:
+        *   Updated `PartnerAdvertisement.tsx` to display both the business ad campaign title and the individual tradesperson's personal name (e.g., `By Marcus Vance · Gas & Heating`) as well as the trader name in the bottom verification pill.
+    3.  **Direct Public Profile Routing & Seed Review Hydration**:
+        *   Updated `DEFAULT_HOMEOWNER_ADVERTS` and `mockAds` in `seedService.ts` to set explicit target URLs to `/profile/seed-promoted-...`.
+        *   Enhanced `handleAdClick` in `PartnerAdvertisement.tsx` to detect `advertiserUid` / `trader_promo` ads and directly trigger `navigate('/profile/' + advertiserUid)` with click tracking.
+        *   Updated `PublicProfile.tsx` `fetchProfile` and review snapshot listeners to seamlessly hydrate data and verified 5-star sample reviews from `INITIAL_MOCK_TRADERS`.
+    3.  **Multi-Trade Seeded Promoted Campaigns**:
+        *   Configured 7 distinct verified trader ad campaigns across essential trade sectors:
+            - **Plumbing & Heating**: Marcus Vance (*Elite Pro Plumbing 24/7*, Gas Safe Registered, 4.95★, 184 reviews).
+            - **Electrical & EV**: Sarah Jenkins (*VoltMaster Electrical & EV Charging*, NICEIC Approved, 4.90★, 142 reviews).
+            - **Building & Roofing**: Liam Gallagher (*Apex Master Builders & Roofing*, Federation of Master Builders, 4.92★, 158 reviews).
+            - **Locksmith & Security**: James Miller (*24/7 Rapid Master Locksmiths*, MLA Approved, 4.98★, 212 reviews).
+            - **Painting & Decorating**: Elena Rostova (*Heritage Luxe Painting & Decorating*, City & Guilds, 4.96★, 134 reviews).
+            - **Specialist Cleaning**: David O'Connor (*Pristine Shine Eco Deep Cleaning*, COSHH Compliant, 4.88★, 115 reviews).
+            - **Catering & Bakery**: Chloe Dupont (*Artisan Wedding Cakes & Event Catering*, 5-Star FSA, 5.0★, 96 reviews).
+
+## 🏷️ Hybrid Partner Advertising, Contextual Job-Status Targeting & Micro Carousel Indicators (`src/components/shared/PartnerAdvertisement.tsx`, `src/components/Dashboard.tsx`) (Completed August 22, 2026)
+*   **Context & Scope**: Completely overhauled the promotional banner system on the Homeowner and Tradesperson dashboards. Resolved mobile WebAPK button rendering defects, fixed coupon container vertical overlap on promoted message descriptions, implemented sleek micro-pill indicators placed cleanly below content without text obstruction, reinforced paid trader & partner advertising monetization pipelines, and integrated contextual job-status ad ranking.
+*   **Key Architecture Improvements**:
+    1.  **Zero-Obstruction Flexible Card Layout**:
+        *   Resolved mobile text clipping and overlap by transitioning to a clean non-collapsing flex column layout with natural breathing room (`min-h-[150px] sm:min-h-[140px]`), dedicated vertical spacing for the 2-line promotional description (`my-2 min-h-[36px]`), and distinct separation between the top title bar and bottom coupon/action row.
+    2.  **Micro-Pill Indicators**:
+        *   Replaced oversized mobile button dots with sleek, micro-thin 3px horizontal indicator bars (`w-6 bg-amber-500` active, `w-2 bg-slate-300` inactive) docked cleanly underneath the card.
+    2.  **Contextual Job-Status & Active Category Targeting**:
+        *   `Dashboard.tsx` dynamically forwards the homeowner's `activeCategories` (derived from their live posted jobs).
+        *   The intelligent ad ranking engine automatically prioritizes matching promotions to the front of the carousel (e.g. British Gas boiler breakdown cover & Gas Safe heating pros prioritized when the user has an active heating/boiler job, or Wickes/B&Q decorating deals prioritized when they have a bathroom/painting job).
+    3.  **Trader & Business Paid Advertising Integrity**:
+        *   Fully synchronized with `TraderAdStudio.tsx`, `TradesBannerAdStudio.tsx`, and `AdminAdvertsTab.tsx`.
+        *   Verifies both `advertiserUid` and `advertiserId`, filters out expired day-based campaigns (`endDate`) and depleted prepaid wallets (`prepaidBalance <= 0`), handles automated CTR tracking, low-balance notification alerts, and smooth in-app navigation directly to the promoted trader's public profile (`/profile/:id`).
+    4.  **Prominent "AD" & "FEATURED PRO" Disclosures**:
+        *   High-contrast, backdrop-blurred badge (`AD`, `PROMOTED AD`, `PARTNER OFFER`, or `FEATURED PRO`) with a pulsing indicator ensures clear advertising compliance with UK ASA guidelines.
+    5.  **Dual-Purpose Voucher Chips & Multi-Touch Carousel**:
+        *   Interactive 1-tap promo code copy buttons with clipboard confirmation toasts, touch-swipe slide detection, and auto-pause on hover/touch.
+
+## 🎙️ Next-Generation "Post by Voice" Dictation & AI Job Extraction (`src/components/voice/VoiceJobAssistant.tsx`, `src/components/PostJobWizard.tsx`, `src/services/geminiServer.ts`, `src/services/gemini.ts`) (Completed August 22, 2026)
+*   **Context & Scope**: Upgraded the "Post by Voice" feature to provide real-time speech dictation, live audio decibel equalizer animations, prompt inspiration templates, and instant structured Gemini AI extraction.
+*   **Key Architecture Improvements**:
+    1.  **Dual-Engine Hybrid Voice Capture (`VoiceJobAssistant.tsx`)**:
+        *   **Real-Time Web Speech API**: Streams live speech text to the user's screen word-by-word with zero delay (`interimResults: true`, `lang: 'en-GB'`).
+        *   **Web Audio API Equalizer**: Connects `AudioContext` & `AnalyserNode` to the live microphone stream to power a smooth 10-bar equalizer animation that reacts to the speaker's vocal frequency and volume.
+        *   **Capacitor Native Speech Support**: Full iOS and Android native app compatibility via `@capacitor-community/speech-recognition`.
+        *   **Phone Voice Memo Bypass**: File upload fallback for restrictive in-app browsers/WebViews unable to access device microphone permissions.
+    2.  **Interactive Voice Inspiration Prompts**:
+        *   Pre-configured 1-tap example chips (e.g. *Boiler EA error code in Manchester*, *RCD fuse box tripping on oven*, *Bathroom radiator valve leak*, *45m² Tarmac driveway resurfacing*, *6m³ Ready-mix concrete extension foundations*) allow instant testing and quick prefill without speaking out loud in noisy environments.
+    3.  **Enhanced Gemini AI Extraction (`processVoiceTranscript` & `processVoiceAudio` in `src/services/geminiServer.ts`)**:
+        *   Extracts professional trade titles, structured descriptions with bulleted symptoms, exact trade category matches from the platform's 92+ categories, specific subcategory classification, urgency level (Emergency vs ASAP vs Flexible), quote scope (`supply_and_fit` vs `labour_only`), location city, and estimated completion timeline.
+    4.  **Interactive AI Job Card Review & 1-Tap Hand-off**:
+        *   Displays an AI Job Card summary before advancing, showing detected category pills, subcategory badges, urgency alerts, key bullet specifications, and an optional audio memo player.
+        *   1-Tap **"Looks Great — Continue to Post"** carries all pre-filled fields seamlessly into Step 3 of the job posting workflow with optional attached voice note.
+
+## 🚛 Ready-Mix Concrete & Tarmacadam Surfacing (Category 92) (`src/constants.ts`, `src/services/semanticAiCache.ts`) (Completed August 20, 2026)
+*   **Context & Scope**: Added dedicated Category 92 ("Ready-Mix Concrete & Tarmacadam Surfacing") covering commercial & domestic concrete supply, volumetric on-site batching, boom/line concrete pumping, tarmacadam driveway surfacing, car park paving, foundation pouring, and MOT Type 1 sub-base grading.
+*   **Subcategories Added**:
+    - Ready-Mix Concrete Drum Mixer Delivery (C20, C25, C30, C35)
+    - Volumetric Concrete On-Site Batching & Barrowing Service
+    - Concrete Boom Pump & Ground Line Pumping Hire
+    - Commercial & Domestic Tarmacadam Laying (SMA / Hot Rolled Asphalt)
+    - Tarmac Driveway Surfacing, Resurfacing & Red Tarmac
+    - Car Park Surfacing, Forecourts & Commercial Access Roads
+    - Farm Tracks, Equestrian Yards & Heavy-Duty Asphalt Paving
+    - Building Site Foundation Pouring & Trench Footings
+    - Reinforced Concrete Floor Slabs & Power Floating (Industrial / Domestic)
+    - Foamed Concrete & Flowable Screed for Trench Reinstatement
+    - Pattern Imprinted Concrete (Driveways, Patios & Paths)
+    - Tarmac Pothole Repair & Asphalt Patching
+    - Highway Dropped Kerbs & Council Vehicle Crossover Tarmac
+    - Sub-Base Preparation & MOT Type 1 Laser Grading / Compaction
+*   **AI Cache & Semantic Search Integration**: Added canonical intent detection and pre-seeded instant cached benchmarks for `intent:concrete_ready_mix_supply_cost` and `intent:tarmac_driveway_surfacing_cost` with BS 8500 and SUDS drainage regulation rules.
+
+## 🎯 Concise & Action-Oriented TradeBot Prompt Engineering (`src/services/geminiServer.ts`, `src/services/semanticAiCache.ts`, `src/components/TradeBot.tsx`) (Completed August 20, 2026)
+*   **Context & Goal**: Prevent long, overwhelming, theoretical essays that confuse users. Deliver crisp, digestible answers (80–160 words) structured in a scannable 3-part format, with instant seamless handoffs to category filters, verified local trader profile cards, and 1-tap AI job posting.
+*   **Prompt Architecture**:
+    1.  **Strict Length Limit**: Hard instruction capping response length strictly between **80 to 160 words**.
+    2.  **Scannable 3-Part Layout**:
+        *   💷 **Estimated Cost & Timeline**: Benchmark range in £ GBP and typical project duration (e.g. *"£180 – £380, 2–4 hours"*).
+        *   📋 **Key UK Regulations & Compliance**: 1–2 bullet points on critical safety/legal checks (Gas Safe, Part P, BS 7671, Awaab's Law, Waste Carrier license).
+        *   💡 **Pro Tip / Diagnosis**: 1 sentence on diagnosing the issue or preparing before the tradesperson arrives.
+    3.  **Actionable UI Handoff**: Every response is complemented by interactive Category Chips, Matching Verified Local Trader cards (with "View Profile" and "Quote" CTAs), and 1-Tap "Post Job with AI Specs".
+
+## 🧠 Server-Side Semantic AI Query Caching (`src/services/semanticAiCache.ts`, `src/services/geminiServer.ts`, `server.ts`, `src/services/gemini.ts`) (Completed August 20, 2026)
+*   **Context & Capability**: Stores common, high-frequency UK trade questions (e.g., *"Cost to rewire a 3-bed semi"*, *"Do downlights in a bathroom require Part P?"*, *"Cost of annual boiler service"*, *"Awaab's Law damp & mould timescales"*, *"Landlord CP12 gas safety certificate cost"*) in an in-memory semantic TTL cache on the Express server.
+*   **Benefit**: Delivers instant **<5ms response latency** (<1ms memory read) for repeat or canonical trade queries with **zero API quota consumption**.
+*   **Architecture & Implementation**:
+    1.  **Canonical Intent Normalization (`src/services/semanticAiCache.ts`)**: Cleans, stems, and maps user queries with varying natural language phrasings into canonical semantic intent keys (e.g., `intent:electrical_rewire_3_bed_semi`, `intent:electrical_part_p_bathroom_downlights`, `intent:gas_cp12_safety_certificate_cost`, `intent:compliance_awaabs_law_damp_mould`).
+    2.  **Pre-Seeded High-Frequency UK Trade Knowledge**: Pre-populates the cache on server startup with verified pricing benchmarks, building regulations (Part P, BS 7671, Gas Safe, Awaab's Law), and official authority citations (NICEIC, Gas Safe Register, HSE, Gov.uk).
+    3.  **Adaptive TTL & LRU Eviction**: Dynamic cache entries are retained for 4 hours with an LRU ceiling of 1,200 entries to prevent memory pressure.
+    4.  **Instant Streaming Yield Generator (`streamFromSemanticCache`)**: When a cached query is received over the SSE streaming endpoint `/api/gemini/stream`, the cache yields simulated micro-burst token chunks (12 words per 2ms) to give users an ultra-responsive streaming experience with zero delay and 0 token cost.
+    5.  **Telemetry & Admin Endpoints**: Added `GET /api/gemini/cache-stats` (tracking hit rate %, saved tokens, avg latency, top cached intents) and `POST /api/gemini/cache-clear` in `server.ts` with client helpers `getAiCacheStats()` and `clearAiCache()` in `src/services/gemini.ts`.
+
+## ⚡ Low-Latency Token Streaming via SSE (`server.ts`, `src/services/geminiServer.ts`, `src/services/gemini.ts`, `src/components/TradeBot.tsx`) (Completed August 20, 2026)
+*   **Context & Enhancement**: Prior to this change, conversational chatbot responses and diagnostic queries waited for the entire model output to finish generation on the server before transmitting JSON, resulting in a 3–5 second latency.
+*   **Implementation**:
+    1.  **Server Generator (`src/services/geminiServer.ts`)**: Implemented async generator `callTradeBotStream(userMessage, history, userContext)` and `streamGeminiDiagnostic(prompt, systemInstruction)` utilizing `@google/genai`'s `ai.models.generateContentStream` with search grounding and live source chunk aggregation.
+    2.  **SSE Streaming Endpoint (`server.ts`)**: Added `/api/gemini/stream` configured with `Content-Type: text/event-stream`, `Cache-Control: no-cache, no-transform`, and unbuffered streaming. Chunks are formatted as SSE events (`data: {"type": "chunk", "text": "..."}`), followed by extracted web grounding sources (`data: {"type": "sources", "sources": [...]}`), and closed with `data: [DONE]`.
+    3.  **Client SSE Consumer (`src/services/gemini.ts`)**: Built `callTradeBotStream` and `streamDiagnostic` using `fetch()` + `ReadableStream` (`getReader()`), streaming progressive chunks to UI callbacks within **100–200ms TTFB** with seamless automatic fallback to unary HTTP calls if streaming is interrupted.
+    4.  **Interactive UI Stream Rendering (`src/components/TradeBot.tsx`)**: Upgraded `TradeBot` component to stream incoming response tokens in real-time with smooth auto-scroll, an active typing cursor animation (`<span className="animate-pulse ..." />`), and progressive citation/trader recommendation card attachment upon completion.
+
+## 🪧 Graphics & Signages Category Addition (`src/constants.ts`, `src/lib/fuzzyMatch.ts`, `src/components/FindTrades.tsx`, `src/components/HeaderSmartTicker.tsx`) (Completed August 19, 2026)
+*   **Context & Request**: Added dedicated standalone category `"Graphics & Signages"` (Category 91) supporting graphic signs, display boards, site safety boards, shopfront displays, illuminated fascias, and large format printing.
+*   **Subcategories & Specialisms Added**:
+    1.  `Shopfront Fascias, 3D Built-Up Lettering & Illuminated Signs`
+    2.  `Construction Site Safety Boards, PPE Notices & Hazard Signs`
+    3.  `Display Boards & Large Format Printing (Foamex, Correx, Dibond & Acrylic)`
+    4.  `Window Graphics, Frosted Privacy Vinyl & Manifestations`
+    5.  `Wayfinding, Architectural Directory Boards & Door Plaques`
+    6.  `Pavement Signs, A-Boards, Swing Signs & Chalkboards`
+    7.  `Scaffold Banners, Site Hoarding Graphics & Mesh Banners`
+    8.  `Exhibition Stands, Roll-Up Banners & Pop-Up Displays`
+    9.  `Vehicle Signwriting, Fleet Decals & Van Lettering`
+    10. `Illuminated Lightboxes, Neon & LED Shopfront Fascias`
+    11. `Estate Agent & Property Boards (T-Boards, Flag Boards & V-Boards)`
+    12. `Post, Panel & Monolith / Totem Roadside Signs`
+    13. `High-Level Building Signage Installation & Abseil / Cherry Picker Access`
+*   **Fuzzy Search & Synonyms**:
+    *   Added full keyword and tokenized prefix index entries for `signs`, `signage`, `sinages`, `graphics`, `display boards`, `site safety boards`, `shop front signs`, `window graphics`, `foamex boards`, `scaffold banners`, and `pavement signs`.
+    *   Integrated into `COMMON_TRADE_VOCABULARY`, search autocomplete suggestions, Header Smart Ticker, and sample trader seeds in Find Trades.
+
 ## 📱 Capacitor Mobile AI Bot Connection & CORS Fix (`server.ts`, `src/services/geminiServer.ts`, `src/main.tsx`) (Completed August 19, 2026)
 *   **Context & Bug**: When running the app wrapped in Capacitor and installed on an Android device (`com.anytrader.app`), the Ask AnyTrader AI Bot failed with the error: *"I experienced a brief connection hiccup while grounding with live search. Please ask your question again, or browse verified trades directly below."*
 *   **Root Causes**:

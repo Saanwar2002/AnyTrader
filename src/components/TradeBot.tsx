@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
-import { callTradeBot } from "@/src/services/gemini";
+import { callTradeBotStream, callTradeBot } from "@/src/services/gemini";
 import { useAuth } from "./AuthProvider";
 import { 
   findMatchingTradeCategories, 
@@ -72,7 +72,7 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
     role: "model",
     text: `Hello ${profile?.name ? profile.name.split(" ")[0] : "there"}! I'm AnyTrader AI Copilot. 
 
-I'm trained on AnyTrader's UK platform data across 86+ trade sectors — connecting you with real verified local tradespeople, accurate £ GBP pricing, and safety standards (Gas Safe, Part P, Awaab's Law, FSA).
+I'm trained on AnyTrader's UK platform data across 93+ trade sectors — connecting you with real verified local tradespeople, accurate £ GBP pricing, and safety standards (Gas Safe, Part P, Awaab's Law, FSA).
 
 How can I assist your project today?`,
     suggestedCategories: ["Plumbing", "Electrical", "Gas & Heating", "Specialist Cleaning"]
@@ -81,6 +81,7 @@ How can I assist your project today?`,
   const [messages, setMessages] = useState<Message[]>([initialGreeting]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -89,40 +90,92 @@ How can I assist your project today?`,
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, isStreaming]);
 
   const handleSendPrompt = async (promptText: string) => {
-    if (!promptText.trim() || isLoading) return;
+    if (!promptText.trim() || isLoading || isStreaming) return;
 
     const userMessage = promptText.trim();
     setInput("");
-    setMessages(prev => [...prev, { role: "user", text: userMessage }]);
-    setIsLoading(true);
     triggerHaptic();
 
+    // 1. Context extraction: Detect matching trade categories
+    const matchedCats = findMatchingTradeCategories(userMessage, 3);
+    const primaryCategory = matchedCats[0] || "General Trades";
+
+    // 2. Query hybrid trader recommendations in parallel
+    const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode).catch(() => []);
+
+    // 3. User context payload for Gemini
+    const userContext = {
+      role: userRole,
+      postcode: userPostcode || "UK Wide",
+      propertySummary: (profile as any)?.boilerModel ? `Boiler: ${(profile as any).boilerModel}, EPC: ${(profile as any).epcRating || 'C'}` : undefined
+    };
+
+    // Add user message and prepare empty model message for token streaming
+    const historyPayload = messages.map(m => ({ role: m.role, text: m.text }));
+    setMessages(prev => [
+      ...prev,
+      { role: "user", text: userMessage },
+      {
+        role: "model",
+        text: "",
+        suggestedCategories: matchedCats,
+      }
+    ]);
+
+    setIsLoading(true);
+    setIsStreaming(true);
+
     try {
-      // 1. Context extraction: Detect matching trade categories
-      const matchedCats = findMatchingTradeCategories(userMessage, 3);
-      const primaryCategory = matchedCats[0] || "General Trades";
+      let finalAccumulatedText = "";
+      let capturedSources: GroundingSource[] = [];
 
-      // 2. Query hybrid trader recommendations (Slot 1: Featured Pro ⚡ + Slot 2: Fair Rotation Organic Pro 🌟)
-      const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode).catch(() => []);
+      const streamResult = await callTradeBotStream(
+        userMessage,
+        historyPayload,
+        userContext,
+        {
+          onChunk: (_chunk, accumulatedText) => {
+            finalAccumulatedText = accumulatedText;
+            setIsLoading(false); // First token arrived! Transition from loading to active streaming
+            setMessages(prev => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "model") {
+                updated[lastIdx] = {
+                  ...updated[lastIdx],
+                  text: accumulatedText
+                };
+              }
+              return updated;
+            });
+          },
+          onSources: (sources) => {
+            capturedSources = sources;
+            setMessages(prev => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "model") {
+                updated[lastIdx] = {
+                  ...updated[lastIdx],
+                  sources
+                };
+              }
+              return updated;
+            });
+          },
+          onError: (err) => {
+            console.warn("TradeBot stream callback error:", err);
+          }
+        }
+      );
 
-      // 3. User context payload for Gemini
-      const userContext = {
-        role: userRole,
-        postcode: userPostcode || "UK Wide",
-        propertySummary: (profile as any)?.boilerModel ? `Boiler: ${(profile as any).boilerModel}, EPC: ${(profile as any).epcRating || 'C'}` : undefined
-      };
-
-      // 4. Call server-side Gemini API with live search grounding
-      const [res, recommendedTraders] = await Promise.all([
-        callTradeBot(userMessage, messages.map(m => ({ role: m.role, text: m.text })), userContext),
-        tradersPromise
-      ]);
-
-      const modelText = typeof res === "object" && res.text ? res.text : (typeof res === "string" ? res : "Here is the guidance for your request.");
-      const sources = typeof res === "object" && Array.isArray(res.sources) ? res.sources : [];
+      // Await trader recommendations
+      const recommendedTraders = await tradersPromise;
+      const modelText = finalAccumulatedText || streamResult.text || "Here is the guidance for your request.";
+      const finalSources = capturedSources.length > 0 ? capturedSources : streamResult.sources || [];
 
       // 5. Generate 1-tap quick action spec
       const quickAction: Message["quickAction"] = {
@@ -135,29 +188,38 @@ How can I assist your project today?`,
         estimatedBudget: "Market Standard (£120 - £350)"
       };
 
-      setMessages(prev => [
-        ...prev,
-        {
-          role: "model",
-          text: modelText,
-          sources,
-          suggestedCategories: matchedCats,
-          recommendedTraders: recommendedTraders.slice(0, 2),
-          quickAction
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "model") {
+          updated[lastIdx] = {
+            role: "model",
+            text: modelText,
+            sources: finalSources,
+            suggestedCategories: matchedCats,
+            recommendedTraders: recommendedTraders.slice(0, 2),
+            quickAction
+          };
         }
-      ]);
+        return updated;
+      });
     } catch (error) {
       console.error("TradeBot Error:", error);
-      setMessages(prev => [
-        ...prev, 
-        { 
-          role: "model", 
-          text: "I experienced a brief connection hiccup while grounding with live search. Please ask your question again, or browse verified trades directly below.",
-          suggestedCategories: ["Plumbing", "Electrical", "Gas & Heating"]
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "model") {
+          updated[lastIdx] = {
+            role: "model",
+            text: "I experienced a brief connection hiccup while grounding with live search. Please ask your question again, or browse verified trades directly below.",
+            suggestedCategories: ["Plumbing", "Electrical", "Gas & Heating"]
+          };
         }
-      ]);
+        return updated;
+      });
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -219,7 +281,7 @@ How can I assist your project today?`,
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[11px] font-medium text-slate-300">
-                    Live UK Pricing • 86+ Trade Categories • Gas Safe & NICEIC
+                    Live UK Pricing • 93+ Trade Categories • Gas Safe & NICEIC
                   </span>
                 </div>
               </div>
@@ -254,14 +316,26 @@ How can I assist your project today?`,
 
                 <div className="space-y-3 flex-1 min-w-0">
                   {/* Message Bubble */}
-                  <div className={cn(
-                    "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-line border border-black shadow-xs",
-                    msg.role === "user" 
-                      ? "bg-blue-600 text-white rounded-tr-none" 
-                      : "bg-white text-slate-900 rounded-tl-none font-medium"
-                  )}>
-                    {msg.text}
-                  </div>
+                  {msg.text ? (
+                    <div className={cn(
+                      "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-line border border-black shadow-xs",
+                      msg.role === "user" 
+                        ? "bg-blue-600 text-white rounded-tr-none" 
+                        : "bg-white text-slate-900 rounded-tl-none font-medium"
+                    )}>
+                      {msg.text}
+                      {isStreaming && i === messages.length - 1 && msg.role === "model" && (
+                        <span className="inline-block w-1.5 h-4 bg-blue-600 animate-pulse ml-1.5 align-middle rounded-xs shadow-2xs" />
+                      )}
+                    </div>
+                  ) : (
+                    msg.role === "model" && isStreaming && (
+                      <div className="p-3.5 rounded-2xl bg-white border border-black rounded-tl-none shadow-xs flex items-center gap-2.5 text-xs text-slate-700">
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-600 shrink-0" />
+                        <span className="font-semibold animate-pulse">Streaming live response from AnyTrader AI...</span>
+                      </div>
+                    )
+                  )}
 
                   {/* Grounding Web Citations */}
                   {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
@@ -427,20 +501,7 @@ How can I assist your project today?`,
               </div>
             ))}
 
-            {isLoading && (
-              <div className="flex gap-3 max-w-[85%] mr-auto">
-                <div className="w-8 h-8 rounded-full bg-white border border-black text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
-                  <Bot className="w-4 h-4" />
-                </div>
-                <div className="bg-white border border-black p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-3">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-600 shrink-0" />
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">Grounding live UK standards & matching verified trades...</p>
-                    <p className="text-[10px] text-slate-500">Checking Gas Safe, Part P, and fair local rotation</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Messages Feed End Ref */}
             <div ref={messagesEndRef} />
           </div>
 
@@ -485,7 +546,7 @@ How can I assist your project today?`,
               />
               <button 
                 onClick={() => handleSendPrompt(input)}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || isStreaming}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm active:scale-95"
                 title="Send Message"
               >

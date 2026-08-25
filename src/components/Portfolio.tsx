@@ -7,6 +7,7 @@ import { cn } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PropertyPassportModal } from "./PropertyPassportModal";
 import { ClaimPropertyPassportModal } from "./property/ClaimPropertyPassportModal";
+import { EstateAgentQRGeneratorModal } from "./property/EstateAgentQRGeneratorModal";
 import { toast } from "sonner";
 
 export default function Portfolio() {
@@ -21,6 +22,7 @@ export default function Portfolio() {
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [passportPropertyModal, setPassportPropertyModal] = useState<any | null>(null);
   const [showClaimPassportModal, setShowClaimPassportModal] = useState(false);
+  const [qrGeneratorProperty, setQrGeneratorProperty] = useState<any | null>(null);
   const [bulkDispatching, setBulkDispatching] = useState(false);
   
   const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
@@ -489,15 +491,28 @@ export default function Portfolio() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-black/10 gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPassportPropertyModal(property);
-                      }}
-                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-black uppercase tracking-wider border border-blue-200 flex items-center gap-1 transition"
-                    >
-                      <FileText className="w-3.5 h-3.5" /> Passport
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPassportPropertyModal(property);
+                        }}
+                        className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-black uppercase tracking-wider border border-blue-200 flex items-center gap-1 transition"
+                      >
+                        <FileText className="w-3.5 h-3.5" /> Passport
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQrGeneratorProperty(property);
+                        }}
+                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-[11px] font-black uppercase tracking-wider border border-amber-200 flex items-center gap-1 transition"
+                        title="Generate Estate Agent Handover QR Tag & Move-In Pack"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" /> Move-In QR
+                      </button>
+                    </div>
 
                     <div className="flex items-center gap-2">
                       <div className="relative">
@@ -759,6 +774,13 @@ export default function Portfolio() {
           onSuccess={(propertyId) => {
             setShowClaimPassportModal(false);
           }}
+        />
+      )}
+
+      {qrGeneratorProperty && (
+        <EstateAgentQRGeneratorModal
+          initialProperty={qrGeneratorProperty}
+          onClose={() => setQrGeneratorProperty(null)}
         />
       )}
     </div>

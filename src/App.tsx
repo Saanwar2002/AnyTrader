@@ -50,15 +50,20 @@ function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () =
     try {
       return await componentImport();
     } catch (error) {
-      console.warn("Failed to load component dynamically, retrying...", error);
-      // Retry once after short delay or force clean reload if module chunk failed
-      const key = "vite_lazy_reload";
-      const lastReload = sessionStorage.getItem(key);
-      if (!lastReload || Date.now() - parseInt(lastReload, 10) > 8000) {
-        sessionStorage.setItem(key, Date.now().toString());
-        window.location.reload();
+      console.warn("Failed to load component dynamically, retrying once...", error);
+      try {
+        await new Promise((r) => setTimeout(r, 300));
+        return await componentImport();
+      } catch (retryError) {
+        console.error("Second dynamic import attempt failed:", retryError);
+        const key = "vite_lazy_reload";
+        const lastReload = sessionStorage.getItem(key);
+        if (!lastReload || Date.now() - parseInt(lastReload, 10) > 10000) {
+          sessionStorage.setItem(key, Date.now().toString());
+          window.location.reload();
+        }
+        throw retryError;
       }
-      throw error;
     }
   });
 }
@@ -89,6 +94,7 @@ const AdReport = lazyWithRetry(() => import("./components/AdReport"));
 const TraderAdStudio = lazyWithRetry(() => import("./components/TraderAdStudio"));
 const TenantReportPortal = lazyWithRetry(() => import("./components/TenantReportPortal").then(m => ({ default: m.TenantReportPortal })));
 const PublicPropertyPassportView = lazyWithRetry(() => import("./components/property/PublicPropertyPassportView"));
+const MoveInLanding = lazyWithRetry(() => import("./components/property/MoveInLanding"));
 
 import SplashScreen from "./components/SplashScreen";
 
@@ -356,6 +362,7 @@ export default function App() {
             <Route path="/ad-studio" element={<TraderAdStudio />} />
             <Route path="/tenant-report" element={<TenantReportPortal />} />
             <Route path="/passport/view/:id" element={<PublicPropertyPassportView />} />
+            <Route path="/move-in" element={<MoveInLanding />} />
           {!user ? (
             <>
               <Route path="/profile/:id" element={<PublicProfile />} />
@@ -380,6 +387,7 @@ export default function App() {
                 <Route path="consultancy/portfolio" element={<BusinessDashboard />} />
                 <Route path="consultancy/new" element={<BusinessDashboard />} />
                 <Route path="portfolio" element={<Portfolio />} />
+                <Route path="move-in" element={<MoveInLanding />} />
                 <Route path="passport/view/:id" element={<PublicPropertyPassportView />} />
                 <Route path="trader/banner-ads" element={<TradesBannerAdStudio />} />
                 <Route path="post-job" element={<PostJobWizard />} />

@@ -40,6 +40,7 @@ import {
   PenTool,
   MessageSquare,
   Calendar,
+  CalendarClock,
   PoundSterling
 } from "lucide-react";
 import { cn, generateJobNumber, getOutwardPostcode, getDealPricing } from "@/src/lib/utils";
@@ -58,6 +59,7 @@ import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { getGoogleMapsApiKey, isCapacitor } from "@/src/lib/capacitor";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 import { toast } from "sonner";
+import VoiceJobAssistant from "./voice/VoiceJobAssistant";
 
 import { getInstantMatchCopy } from "@/src/lib/boosts";
 
@@ -892,6 +894,42 @@ export default function PostJobWizard() {
       console.error("Microphone access denied:", err);
       toast.error("Microphone permission denied. Please allow access to record audio notes.");
     }
+  };
+
+  const handleApplyVoiceJob = async (extracted: any) => {
+    setFormData(prev => ({
+      ...prev,
+      category: extracted.category || prev.category,
+      subcategory: extracted.subcategory || prev.subcategory,
+      title: extracted.title || prev.title,
+      description: extracted.description || prev.description,
+      urgency: extracted.urgency || prev.urgency,
+      quoteScope: extracted.quoteScope || prev.quoteScope,
+      city: extracted.city || prev.city,
+      estimatedCompletionTime: extracted.estimatedCompletionTime || prev.estimatedCompletionTime,
+      estimatedCompletionTimeUnit: extracted.estimatedCompletionTimeUnit || prev.estimatedCompletionTimeUnit
+    }));
+
+    if (extracted.audioBlob) {
+      try {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          if (dataUrl) {
+            setFormData(prev => ({
+              ...prev,
+              documents: [...prev.documents, { name: 'Voice Job Note', url: dataUrl }]
+            }));
+          }
+        };
+        reader.readAsDataURL(extracted.audioBlob);
+      } catch (e) {
+        console.warn("Could not attach audio note:", e);
+      }
+    }
+
+    toast.success("Voice details structured! Review specifications and add any photos.");
+    setStep(3);
   };
 
   const handleToggleListening = async () => {
@@ -2420,104 +2458,11 @@ export default function PostJobWizard() {
               </div>
 
               {/* Post by Voice */}
-              <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-                      <Mic className={cn("w-6 h-6", isListening ? "text-red-600 animate-pulse" : "text-slate-600")} />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900">Post by Voice</h4>
-                      <p className="text-sm text-slate-500">Speak your job — AI fills in the details</p>
-                    </div>
-                  </div>
-                  <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NEW</span>
-                </div>
-
-                {voiceError && (
-                  <div className="p-4 bg-amber-50 rounded-xl border border-black text-black text-xs font-semibold leading-relaxed space-y-2 relative">
-                    <button 
-                      type="button"
-                      onClick={() => setVoiceError(null)}
-                      className="absolute top-2 right-2 text-slate-500 hover:text-black p-1"
-                      title="Clear error"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                    <div className="pr-6">
-                      <p className="font-bold text-[#b91c1c] pr-2 flex items-center gap-1.5">⚠️ Error</p>
-                      <p className="mt-1 font-normal text-slate-700 leading-normal">
-                        {voiceError}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {isListening || voiceText ? (
-                  <div className="space-y-4">
-                    <div className="bg-slate-50 rounded-xl border border-black overflow-hidden">
-                      <textarea 
-                        className="w-full min-h-[120px] p-4 bg-transparent border-none focus:ring-0 resize-y text-slate-700 placeholder:text-slate-400"
-                        placeholder="Listening..."
-                        value={voiceText}
-                        onChange={(e) => setVoiceText(e.target.value)}
-                        disabled={isListening || isProcessingVoice}
-                      />
-                    </div>
-                    <div className="flex gap-3">
-                      {isListening ? (
-                        <button 
-                          onClick={handleToggleListening}
-                          className="flex-1 p-3 rounded-xl bg-red-600 text-white font-bold flex items-center justify-center gap-2"
-                        >
-                          <StopCircle className="w-5 h-5" /> Stop
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => { 
-                            setVoiceText("");
-                            audioChunksRef.current = [];
-                            if (audioStreamRef.current) {
-                              audioStreamRef.current.getTracks().forEach(track => track.stop());
-                              audioStreamRef.current = null;
-                            }
-                            setIsListening(false); 
-                          }}
-                          className="flex-1 p-3 rounded-xl bg-slate-200 text-slate-700 font-bold flex items-center justify-center gap-2 hover:bg-slate-300 transition-colors"
-                        >
-                          <X className="w-5 h-5" /> Clear
-                        </button>
-                      )}
-                      
-                      <button 
-                        onClick={handleProcessVoice}
-                        disabled={!voiceText || isProcessingVoice}
-                        className="flex-1 p-3 rounded-xl bg-[#1e3a5f] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {isProcessingVoice ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                        Process
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <button 
-                      onClick={handleToggleListening}
-                      className="w-full p-4 rounded-xl border border-black text-slate-700 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Mic className="w-5 h-5 text-blue-600" /> Tap to speak with microphone
-                    </button>
-                    {isCapacitor() && (
-                      <button 
-                        onClick={() => audioInputRef.current?.click()}
-                        className="w-full p-3 rounded-xl border border-black bg-blue-50 text-blue-800 font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
-                      >
-                        🎙️ Use Phone Recorder (Bypass WebView permission)
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+              <VoiceJobAssistant 
+                categories={categories} 
+                onApplyVoiceJob={handleApplyVoiceJob} 
+                targetTradespersonName={targetTradespersonName} 
+              />
 
               {/* Popular Categories */}
               <div className="space-y-4">

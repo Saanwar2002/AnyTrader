@@ -12,7 +12,7 @@ import {
   ChevronRight, Plus, Loader2, AlertCircle, Star,
   Search, BarChart3, Zap as EmergencyIcon, Zap, Bot, Bell,
   MapPin, Image as ImageIcon, Video as VideoIcon,
-  ShieldCheck, Activity, Calendar as CalendarIcon, Car
+  ShieldCheck, Activity, Calendar as CalendarIcon, Car, KeyRound, Sparkles, Package
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
@@ -210,8 +210,11 @@ export default function Dashboard() {
         </div>
       </div>
       
-      {/* Auto-scrolling Advertisement Banner */}
-      <PartnerAdvertisement role="homeowner" />
+      {/* Auto-scrolling Advertisement Banner with Contextual Job-Status Targeting */}
+      <PartnerAdvertisement 
+        role="homeowner" 
+        activeCategories={activeJobs.map(j => j.category).filter(Boolean)} 
+      />
 
       {/* TradeBot Banner */}
       <button 
@@ -229,6 +232,36 @@ export default function Dashboard() {
           <ChevronRight className="w-4 h-4 text-primary" />
         </div>
       </button>
+
+      {/* New Home Move-In Pack & Day-One Concierge Banner */}
+      <Link
+        to="/move-in"
+        className="w-full bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/15 border border-black p-4 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 shadow-sm hover:shadow-md transition-all group"
+      >
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500 text-slate-950 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-black group-hover:scale-105 transition-transform mt-0.5 sm:mt-0">
+            <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-display font-black text-slate-900 text-base sm:text-lg leading-tight">
+                📦 New Home Move-In Pack & Trade Hub
+              </h3>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-950 px-2 py-0.5 rounded-full border border-black/20 whitespace-nowrap">
+                Estate Agent Ready
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-700 font-bold mt-1 leading-snug">
+              Day-One Checklist: Insurance Locks, Gas Safe Boiler Service, Deep Clean & 1-Click Quotes
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 text-white text-xs sm:text-sm font-black px-4 py-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm group-hover:bg-slate-800 transition-all border border-black w-full sm:w-auto">
+          <span>Open Move-In Hub</span>
+          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+        </div>
+      </Link>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
@@ -261,7 +294,7 @@ export default function Dashboard() {
       {/* Prominent Post New Job Section */}
       <Link 
         to="/post-job" 
-        className="w-full bg-gradient-to-br from-orange-50 via-amber-50 to-orange-50/80 border border-black p-4 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 shadow-sm hover:shadow-md transition-all group cursor-pointer"
+        className="w-full bg-yellow-300 hover:bg-yellow-400 border border-black p-4 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 shadow-sm hover:shadow-md transition-all group cursor-pointer"
       >
         <div className="flex items-start sm:items-center gap-3.5 min-w-0">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black text-white rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-black/20 group-hover:bg-slate-900 transition-colors mt-0.5 sm:mt-0">
@@ -272,17 +305,17 @@ export default function Dashboard() {
               <h3 className="font-display font-black text-black text-base sm:text-lg leading-tight">
                 Post a New Job
               </h3>
-              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-orange-200/90 text-orange-950 px-2 py-0.5 rounded-full border border-black/20 whitespace-nowrap">
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-black text-yellow-300 px-2.5 py-0.5 rounded-full border border-black whitespace-nowrap">
                 Free Quotes
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-800 font-extrabold mt-1 leading-snug">
+            <p className="text-xs sm:text-sm text-black font-extrabold mt-1 leading-snug">
               Connect with top-rated local tradespeople in minutes
             </p>
           </div>
         </div>
 
-        <div className="bg-black text-white text-xs sm:text-sm font-bold px-4 py-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm group-hover:bg-slate-900 transition-all border border-black w-full sm:w-auto">
+        <div className="bg-black text-white text-xs sm:text-sm font-black px-4 py-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm group-hover:bg-slate-900 transition-all border border-black w-full sm:w-auto">
           <span>Post Job Now</span>
           <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </div>
