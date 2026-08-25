@@ -30,6 +30,12 @@
   --text-muted-color: #64748b;
   --border-color: #f1f5f9;
   --header-color: #0f172a;
+
+  /* Capacitor Safe Area Inset Support */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 /* Dark Theme */
@@ -54,6 +60,45 @@
   --text-muted-color: #71717a;
   --border-color: #e4e4e7;
   --header-color: #000000;
+}
+
+/* Global Print Styles */
+@media print {
+  #mobile-bottom-nav,
+  header,
+  footer,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    overflow: visible !important;
+  }
+
+  .overflow-y-auto,
+  .overflow-y-scroll,
+  .overflow-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+}
+
+@keyframes pulseGreenBorder {
+  0%, 100% {
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
+  }
+  50% {
+    border-color: #34d399;
+    box-shadow: 0 0 0 0px rgba(16, 185, 129, 0);
+  }
+}
+
+.pulse-green-border {
+  animation: pulseGreenBorder 1.5s infinite ease-in-out;
 }
 
 @layer utilities {

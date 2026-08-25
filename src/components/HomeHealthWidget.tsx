@@ -21,6 +21,7 @@ import PropertyRiskAnalyticsWidget from "./PropertyRiskAnalyticsWidget";
 import BnplFinancingModal from "./BnplFinancingModal";
 import { PropertyPassportModal } from "./PropertyPassportModal";
 import { syncJobToGoogleCalendar, openGoogleCalendarUrl } from "../services/googleCalendarService";
+import { lookupPostcode } from "../services/postcodeService";
 
 interface HomeHealthWidgetProps {
   completedJobs?: any[];
@@ -267,17 +268,39 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
     try {
       const addressLine = propertyAddressLine.trim();
-      const postcode = propertyPostcode.trim().toUpperCase();
+      let postcode = propertyPostcode.trim().toUpperCase();
+
+      if (!postcode) {
+        toast.error("Please enter a valid UK postcode so local trade services can be routed to your property passport.");
+        setIsSavingSpecs(false);
+        return;
+      }
+
       const propName = propertyNameInput.trim() || addressLine || "My Home";
+
+      let resolvedCity = activeProperty?.address?.city || activeProperty?.city || "";
+      if (postcode && !resolvedCity) {
+        try {
+          const lookup = await lookupPostcode(postcode);
+          if (lookup) {
+            postcode = lookup.postcode;
+            if (lookup.city) resolvedCity = lookup.city;
+          }
+        } catch (e) {
+          console.warn("Postcode lookup in HomeHealthWidget:", e);
+        }
+      }
 
       const propData = {
         name: propName,
         address: {
           line1: addressLine || "Home Address",
-          city: "",
+          city: resolvedCity,
           postcode: postcode,
           country: "UK"
         },
+        postcode: postcode,
+        city: resolvedCity,
         propertyType: propertyType,
         era: propertyAge,
         heatingType: heatingType,
@@ -779,7 +802,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
   };
 
   return (
-    <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 border border-white/20 shadow-xl space-y-4 transition-all duration-300 relative">
+    <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 border border-white shadow-xl space-y-4 transition-all duration-300 relative">
       
       {/* 1. SECTION HEADER: Title, Live Alert Badge & Collapse Toggle */}
       <div className="flex items-center justify-between gap-3">
@@ -787,13 +810,8 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
           onClick={() => { if (!isExpanded) setIsExpanded(true); }}
           className={`flex items-center gap-3 min-w-0 flex-1 ${!isExpanded ? 'cursor-pointer' : ''}`}
         >
-          <div className="relative w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
+          <div className="relative w-10 h-10 rounded-2xl bg-blue-500/20 border border-white flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
             <Sparkles className="w-5 h-5 animate-pulse" />
-            {attentionCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-md">
-                {attentionCount}
-              </span>
-            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -801,12 +819,12 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                 AI Home Health & Seasonal Care
               </h2>
               {attentionCount > 0 ? (
-                <span className="text-[10px] bg-red-500/25 text-red-300 border border-red-400/40 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] bg-red-500/25 text-red-300 border border-white px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
                   {attentionCount} Actions Due
                 </span>
               ) : (
-                <span className="text-[10px] bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider shrink-0 flex items-center gap-1">
+                <span className="text-[10px] bg-emerald-500/25 text-emerald-300 border border-white px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider shrink-0 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   Optimal Condition
                 </span>
@@ -821,7 +839,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+          className="text-xs font-black bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl border border-white transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
         >
           <span className="hidden sm:inline">{isExpanded ? "Minimize" : "Expand"}</span>
           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -829,7 +847,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
       </div>
 
       {/* 2. UNIFIED PROPERTY & HEALTH SCORE BAR (Zero redundancy, crystal clear actions) */}
-      <div className="bg-slate-950/80 border border-white/15 rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3.5">
+      <div className="bg-slate-950/80 border border-white rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3.5">
         
         {/* Left: Health Score Radial + Address & Specs */}
         <div className="flex items-center gap-3.5 min-w-0 flex-1">
@@ -856,7 +874,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                 {activeProperty ? (activeProperty.name || activeProperty.address?.line1 || "My Home") : "Home Address"}
               </span>
               {activeProperty?.address?.postcode && (
-                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.2 rounded-md">
+                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-white px-2 py-0.2 rounded-md">
                   {activeProperty.address.postcode}
                 </span>
               )}
@@ -864,7 +882,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                 <select
                   value={selectedPropertyId}
                   onChange={(e) => setSelectedPropertyId(e.target.value)}
-                  className="text-[10px] font-bold bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2 py-1 cursor-pointer ml-1"
+                  className="text-[10px] font-bold bg-slate-800 text-slate-200 border border-white rounded-lg px-2 py-1 cursor-pointer ml-1"
                 >
                   {passportProperties.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -892,7 +910,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         </div>
 
         {/* Right: Primary Clear Action Buttons */}
-        <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end pt-2 md:pt-0 border-t md:border-t-0 border-white/10">
+        <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end pt-2 md:pt-0 border-t md:border-t-0 border-white/20">
           {/* 1. Property Passport Modal */}
           <button
             type="button"
@@ -904,7 +922,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                 toast.info("Please add your property address first to open your Digital Passport!");
               }
             }}
-            className="flex-1 md:flex-initial text-xs font-black bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-xl border border-blue-400/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+            className="flex-1 md:flex-initial text-xs font-black bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-xl border border-white transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
             title="View Property Passport Digital Twin"
           >
             <Home className="w-3.5 h-3.5" />
@@ -915,11 +933,14 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
           <button
             type="button"
             onClick={() => setShowConfig(true)}
-            className="flex-1 md:flex-initial text-xs font-bold bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white px-3 py-2 rounded-xl border border-white/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            className="flex-1 md:flex-initial text-xs font-bold bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white px-3 py-2 rounded-xl border border-white transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
             title="Edit address, boiler, roof & EPC details"
           >
-            <Wrench className="w-3.5 h-3.5 text-amber-400" />
-            <span>Edit Specs</span>
+            <Wrench className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <div className="flex flex-col text-left leading-tight">
+              <span>Edit Property</span>
+              <span>Specs</span>
+            </div>
           </button>
         </div>
       </div>
@@ -928,29 +949,31 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
       {isExpanded && (
         <div className="space-y-4 pt-1">
           {/* Navigation Tab Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/80 p-2 rounded-2xl border border-white/15">
+          <div className="grid grid-cols-4 gap-1 sm:gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-white">
             
-            {/* Tab 1: Seasonal Forecasts */}
+            {/* Tab 1: Seasonal Care */}
             <button
               type="button"
               onClick={() => setActiveTab("forecasts")}
               className={cn(
-                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                "py-2 px-1 rounded-xl text-[9px] sm:text-xs font-black transition-all flex flex-col items-center justify-center cursor-pointer border text-center leading-tight min-h-[48px]",
                 activeTab === "forecasts"
-                  ? "bg-amber-400 text-slate-950 border-amber-300 shadow-md scale-[1.02]"
-                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+                  ? "bg-amber-400 text-slate-950 border-white shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/30"
               )}
             >
-              <Sparkles className={cn("w-4 h-4 shrink-0", activeTab === "forecasts" ? "text-slate-950" : "text-amber-400")} />
-              <span className="truncate">Seasonal Forecasts</span>
-              <span className={cn(
-                "text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0",
-                activeTab === "forecasts"
-                  ? "bg-slate-950 text-amber-400"
-                  : "bg-amber-400/20 text-amber-300 border border-amber-400/30"
-              )}>
-                {forecasts.length}
-              </span>
+              <div className="flex items-center justify-center gap-0.5">
+                <span>Seasonal</span>
+                <span className={cn(
+                  "text-[8px] font-black px-1 py-0.2 rounded-full shrink-0 border border-white",
+                  activeTab === "forecasts"
+                    ? "bg-slate-950 text-amber-400"
+                    : "bg-amber-400/20 text-amber-300"
+                )}>
+                  {forecasts.length}
+                </span>
+              </div>
+              <span>Care</span>
             </button>
 
             {/* Tab 2: Maintenance Planner */}
@@ -958,22 +981,24 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
               type="button"
               onClick={() => setActiveTab("planner")}
               className={cn(
-                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                "py-2 px-1 rounded-xl text-[9px] sm:text-xs font-black transition-all flex flex-col items-center justify-center cursor-pointer border text-center leading-tight min-h-[48px]",
                 activeTab === "planner"
-                  ? "bg-purple-600 text-white border-purple-400 shadow-md scale-[1.02]"
-                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+                  ? "bg-purple-600 text-white border-white shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/30"
               )}
             >
-              <Calendar className={cn("w-4 h-4 shrink-0", activeTab === "planner" ? "text-white" : "text-purple-400")} />
-              <span className="truncate">Planner</span>
-              <span className={cn(
-                "text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0",
-                activeTab === "planner"
-                  ? "bg-white text-purple-700"
-                  : "bg-purple-400/20 text-purple-300 border border-purple-400/30"
-              )}>
-                {scheduledTasks.length}
-              </span>
+              <div className="flex items-center justify-center gap-0.5">
+                <span>Planner</span>
+                <span className={cn(
+                  "text-[8px] font-black px-1 py-0.2 rounded-full shrink-0 border border-white",
+                  activeTab === "planner"
+                    ? "bg-white text-purple-700"
+                    : "bg-purple-400/20 text-purple-300"
+                )}>
+                  {scheduledTasks.length}
+                </span>
+              </div>
+              <span>Tasks</span>
             </button>
 
             {/* Tab 3: Risk & Insurance */}
@@ -981,14 +1006,14 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
               type="button"
               onClick={() => setActiveTab("risk")}
               className={cn(
-                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                "py-2 px-1 rounded-xl text-[9px] sm:text-xs font-black transition-all flex flex-col items-center justify-center cursor-pointer border text-center leading-tight min-h-[48px]",
                 activeTab === "risk"
-                  ? "bg-emerald-500 text-slate-950 border-emerald-300 shadow-md scale-[1.02]"
-                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+                  ? "bg-emerald-500 text-slate-950 border-white shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/30"
               )}
             >
-              <BarChart3 className={cn("w-4 h-4 shrink-0", activeTab === "risk" ? "text-slate-950" : "text-emerald-400")} />
-              <span className="truncate">Risk & Insurance</span>
+              <span>Risk &</span>
+              <span>Insurance</span>
             </button>
 
             {/* Tab 4: Repair Financing (FlexiPay) */}
@@ -996,14 +1021,14 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
               type="button"
               onClick={() => setActiveTab("financing")}
               className={cn(
-                "py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                "py-2 px-1 rounded-xl text-[9px] sm:text-xs font-black transition-all flex flex-col items-center justify-center cursor-pointer border text-center leading-tight min-h-[48px]",
                 activeTab === "financing"
-                  ? "bg-cyan-500 text-slate-950 border-cyan-300 shadow-md scale-[1.02]"
-                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/10"
+                  ? "bg-cyan-500 text-slate-950 border-white shadow-md scale-[1.02]"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800/80 border-white/30"
               )}
             >
-              <CreditCard className={cn("w-4 h-4 shrink-0", activeTab === "financing" ? "text-slate-950" : "text-cyan-400")} />
-              <span className="truncate">Repair Financing</span>
+              <span>FlexiPay</span>
+              <span>Repair</span>
             </button>
           </div>
 
@@ -1013,9 +1038,9 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
           {activeTab === "forecasts" && (
             <div className="space-y-3.5 animate-in fade-in duration-200">
               {/* Seasonal Weather Banner */}
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-amber-200">
+              <div className="bg-amber-500/10 border border-white rounded-2xl p-3.5 flex items-center justify-between gap-3 text-amber-200">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-white flex items-center justify-center text-amber-400 shrink-0">
                     <AlertTriangle className="w-4 h-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1032,7 +1057,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                   type="button"
                   onClick={handleFetchAIPredictions}
                   disabled={isGenerating}
-                  className="text-xs font-bold text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  className="text-xs font-bold text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 border border-white px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
                   <span>AI Refresh</span>
@@ -1044,17 +1069,17 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                 {forecasts.map((task) => (
                   <div
                     key={task.id}
-                    className="bg-white/5 border border-white/10 hover:border-blue-500/50 rounded-2xl p-3.5 transition flex flex-col justify-between space-y-3 group"
+                    className="bg-white/5 border border-white hover:border-amber-400 rounded-2xl p-3.5 transition flex flex-col justify-between space-y-3 group"
                   >
                     <div className="space-y-1.5">
                       {/* Priority Tag & Timeframe */}
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-white ${
                           task.urgency === 'urgent'
-                            ? 'bg-red-500/20 text-red-300 border-red-400/40'
+                            ? 'bg-red-500/20 text-red-300'
                             : task.urgency === 'recommended'
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
-                            : 'bg-blue-500/20 text-blue-300 border-blue-400/40'
+                            ? 'bg-amber-500/20 text-amber-300'
+                            : 'bg-blue-500/20 text-blue-300'
                         }`}>
                           {task.urgency === 'urgent' ? '🚨 High Priority' : task.urgency === 'recommended' ? '⚠️ Recommended' : 'Routine'}
                         </span>
@@ -1076,7 +1101,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                     </div>
 
                     {/* Cost & Dual Action Buttons */}
-                    <div className="pt-2.5 border-t border-white/10 flex items-center justify-between gap-2">
+                    <div className="pt-2.5 border-t border-white/20 flex items-center justify-between gap-2">
                       <div>
                         <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">Est. Cost</span>
                         <span className="text-xs sm:text-sm font-black text-emerald-400">{task.estimatedCostRange}</span>
@@ -1087,7 +1112,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                         <button
                           type="button"
                           onClick={() => handleAddForecastToPlanner(task)}
-                          className="bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-bold px-2.5 py-1.5 rounded-xl border border-white/15 transition flex items-center gap-1 cursor-pointer"
+                          className="bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-bold px-2.5 py-1.5 rounded-xl border border-white transition flex items-center gap-1 cursor-pointer"
                           title="Save this task to your Maintenance Planner"
                         >
                           <Calendar className="w-3 h-3 text-purple-300" />
@@ -1098,7 +1123,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                         <button
                           type="button"
                           onClick={() => handlePostPreventiveJob(task)}
-                          className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow cursor-pointer active:scale-95"
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black px-3 py-1.5 rounded-xl border border-white transition flex items-center gap-1 shadow cursor-pointer active:scale-95"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Request Quotes</span>
@@ -1115,7 +1140,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
           {activeTab === "planner" && (
             <div className="space-y-4 animate-in fade-in duration-200">
               {/* Planner Header & Add Task CTA */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-purple-950/30 border border-purple-500/30 rounded-2xl p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-purple-950/30 border border-white rounded-2xl p-3 sm:p-4">
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-black text-white flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-purple-400" />
@@ -1135,7 +1160,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                     setPlannerNotes("");
                     setShowPlannerForm(!showPlannerForm);
                   }}
-                  className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-3.5 py-2 rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer shrink-0"
+                  className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-3.5 py-2 rounded-xl border border-white transition shadow flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
                   <Plus className="w-4 h-4" />
                   <span>{showPlannerForm ? "Cancel" : "+ Schedule New Task"}</span>
@@ -1144,8 +1169,8 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
               {/* Interactive Schedule Task Form (If open) */}
               {showPlannerForm && (
-                <div className="bg-slate-950/90 border border-purple-500/40 rounded-2xl p-4 space-y-3.5 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <div className="bg-slate-950/90 border border-white rounded-2xl p-4 space-y-3.5 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between border-b border-white/20 pb-2">
                     <span className="text-xs font-black text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5" />
                       {editingTaskId ? "Edit Scheduled Task" : "Schedule New Maintenance Task"}
@@ -1171,7 +1196,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                             key={idx}
                             type="button"
                             onClick={() => handleQuickChipSelect(chip)}
-                            className="text-[10px] font-bold bg-slate-800 hover:bg-purple-900/50 text-slate-200 hover:text-purple-200 border border-slate-700 hover:border-purple-500 px-2.5 py-1 rounded-xl transition cursor-pointer flex items-center gap-1"
+                            className="text-[10px] font-bold bg-slate-800 hover:bg-purple-900/50 text-slate-200 hover:text-purple-200 border border-white px-2.5 py-1 rounded-xl transition cursor-pointer flex items-center gap-1"
                           >
                             <Plus className="w-2.5 h-2.5 text-purple-400" />
                             <span>{chip.title}</span>
@@ -1194,7 +1219,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                           onChange={(e) => setPlannerTitle(e.target.value)}
                           placeholder="e.g. Annual Boiler Servicing, Gutter Clearance"
                           required
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
+                          className="w-full bg-slate-800 border border-white/20 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
                         />
                       </div>
 
@@ -1203,7 +1228,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                         <select
                           value={plannerCategory}
                           onChange={(e) => setPlannerCategory(e.target.value)}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500"
+                          className="w-full bg-slate-800 border border-white/20 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500"
                         >
                           {TRADE_CATEGORIES.map((cat) => (
                             <option key={cat} value={cat}>{cat}</option>
@@ -1221,7 +1246,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                           value={plannerTargetDate}
                           onChange={(e) => setPlannerTargetDate(e.target.value)}
                           required
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
+                          className="w-full bg-slate-800 border border-white/20 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
                         />
                       </div>
 
@@ -1230,7 +1255,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                         <select
                           value={plannerReminderOffset}
                           onChange={(e: any) => setPlannerReminderOffset(e.target.value)}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500"
+                          className="w-full bg-slate-800 border border-white/20 rounded-xl px-2.5 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500"
                         >
                           <option value="same_day">On the scheduled date</option>
                           <option value="3_days_before">3 days before target date</option>
@@ -1250,7 +1275,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                           value={plannerBudget}
                           onChange={(e) => setPlannerBudget(e.target.value)}
                           placeholder="e.g. £100 - £250"
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
+                          className="w-full bg-slate-800 border border-white/20 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-purple-500 outline-none"
                         />
                       </div>
 
@@ -1261,23 +1286,23 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                           value={plannerNotes}
                           onChange={(e) => setPlannerNotes(e.target.value)}
                           placeholder="e.g. Access via side gate, boiler located in utility room"
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                          className="w-full bg-slate-800 border border-white/20 rounded-xl px-3 py-2 text-white text-xs font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/20">
                       <button
                         type="button"
                         onClick={() => setShowPlannerForm(false)}
-                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition"
+                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/20 rounded-xl font-bold transition"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={isSavingTask}
-                        className="bg-purple-600 hover:bg-purple-500 text-white font-black px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5"
+                        className="bg-purple-600 hover:bg-purple-500 text-white font-black px-4 py-2 rounded-xl border border-white transition shadow flex items-center gap-1.5"
                       >
                         <CalendarCheck className="w-4 h-4 text-purple-200" />
                         <span>{isSavingTask ? "Saving..." : editingTaskId ? "Update Task" : "Schedule Task"}</span>
@@ -1289,8 +1314,8 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
               {/* Scheduled Tasks List */}
               {scheduledTasks.length === 0 ? (
-                <div className="bg-slate-800/40 border border-dashed border-slate-700 rounded-2xl p-6 text-center space-y-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center mx-auto">
+                <div className="bg-slate-800/40 border border-white rounded-2xl p-6 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 border border-white flex items-center justify-center mx-auto">
                     <Calendar className="w-5 h-5" />
                   </div>
                   <div>
@@ -1301,7 +1326,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                   </div>
                   <button
                     onClick={() => setShowPlannerForm(true)}
-                    className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 mx-auto cursor-pointer"
+                    className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-4 py-2 rounded-xl border border-white transition shadow flex items-center gap-1.5 mx-auto cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Schedule Your First Task</span>
@@ -1314,21 +1339,21 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                     return (
                       <div
                         key={task.id}
-                        className="bg-slate-800/80 border border-purple-500/30 hover:border-purple-400/60 rounded-2xl p-3.5 transition space-y-2.5 flex flex-col justify-between group"
+                        className="bg-slate-800/80 border border-white hover:border-purple-300 rounded-2xl p-3.5 transition space-y-2.5 flex flex-col justify-between group"
                       >
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-white">
                               {task.category}
                             </span>
 
                             <span className={cn(
-                              "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1",
+                              "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-white flex items-center gap-1",
                               countdown.isOverdue 
-                                ? "bg-red-500/20 text-red-300 border-red-400/40"
+                                ? "bg-red-500/20 text-red-300"
                                 : countdown.days === 0
-                                ? "bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse"
-                                : "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                                ? "bg-amber-500/20 text-amber-300 animate-pulse"
+                                : "bg-emerald-500/20 text-emerald-300"
                             )}>
                               <Clock className="w-2.5 h-2.5" />
                               <span>{countdown.text}</span>
@@ -1358,7 +1383,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                           </div>
                         </div>
 
-                        <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
+                        <div className="pt-2.5 border-t border-white/20 flex flex-wrap items-center justify-between gap-2">
                           <span className="text-xs font-black text-emerald-400">
                             {task.estimatedBudget || "Flexible"}
                           </span>
@@ -1368,7 +1393,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                             <button
                               type="button"
                               onClick={() => handleSyncToGCal(task)}
-                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold p-1.5 sm:px-2 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold p-1.5 sm:px-2 rounded-lg border border-white transition flex items-center gap-1 cursor-pointer"
                               title="Sync to Google Calendar"
                             >
                               <CalendarCheck className="w-3.5 h-3.5 text-blue-400" />
@@ -1379,7 +1404,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                             <button
                               type="button"
                               onClick={() => handleEditScheduledTask(task)}
-                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 p-1.5 rounded-lg transition cursor-pointer"
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 p-1.5 rounded-lg border border-white transition cursor-pointer"
                               title="Edit Task"
                             >
                               <Edit3 className="w-3.5 h-3.5 text-amber-400" />
@@ -1389,7 +1414,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                             <button
                               type="button"
                               onClick={() => handleDeleteScheduledTask(task.id)}
-                              className="bg-red-950/40 hover:bg-red-900/60 text-red-300 p-1.5 rounded-lg transition cursor-pointer border border-red-500/30"
+                              className="bg-red-950/40 hover:bg-red-900/60 text-red-300 p-1.5 rounded-lg transition cursor-pointer border border-white"
                               title="Delete Task"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1399,7 +1424,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                             <button
                               type="button"
                               onClick={() => handlePostScheduledTask(task)}
-                              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1 shadow cursor-pointer active:scale-95"
+                              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-white transition flex items-center gap-1 shadow cursor-pointer active:scale-95"
                             >
                               <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
                               <span>Post Job Now</span>
@@ -1416,8 +1441,8 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
           {/* TAB 3: RISK & INSURANCE UNDERWRITING */}
           {activeTab === "risk" && (
-            <div className="bg-slate-950/80 border border-emerald-500/30 rounded-2xl p-4 space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="bg-slate-950/80 border border-white rounded-2xl p-4 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-white/20 pb-2">
                 <div>
                   <h3 className="text-sm font-black text-emerald-300 flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-emerald-400" />
@@ -1446,8 +1471,8 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
           {/* TAB 4: REPAIR FINANCING (FlexiPay) */}
           {activeTab === "financing" && (
-            <div className="bg-slate-950/80 border border-indigo-500/30 rounded-2xl p-4 space-y-4 animate-in fade-in duration-200">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div className="bg-slate-950/80 border border-white rounded-2xl p-4 space-y-4 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/20 pb-3">
                 <div>
                   <h3 className="text-sm font-black text-indigo-300 flex items-center gap-2">
                     <CreditCard className="w-4 h-4 text-indigo-400" />
@@ -1461,7 +1486,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                 <button
                   type="button"
                   onClick={() => setShowBnplModal(true)}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer shrink-0"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-2 rounded-xl border border-white transition shadow flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
                   <span>Open Full Loan Calculator</span>
                   <ArrowRight className="w-4 h-4" />
@@ -1470,17 +1495,17 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
 
               {/* Mini Interactive Preview Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
+                <div className="bg-white/5 border border-white rounded-xl p-3 space-y-1">
                   <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">3-Month Term</span>
                   <p className="text-sm font-black text-white">0% APR Interest</p>
                   <p className="text-xs text-slate-400">Equal monthly split with zero extra fees or charges.</p>
                 </div>
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
+                <div className="bg-white/5 border border-white rounded-xl p-3 space-y-1">
                   <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">6-Month Term</span>
                   <p className="text-sm font-black text-white">0% APR Fixed</p>
                   <p className="text-xs text-slate-400">Manage major heating and structural repairs smoothly.</p>
                 </div>
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
+                <div className="bg-white/5 border border-white rounded-xl p-3 space-y-1">
                   <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">12-Month Term</span>
                   <p className="text-sm font-black text-white">Low-Rate Flexible</p>
                   <p className="text-xs text-slate-400">Spread complete renovations or major rewiring over a full year.</p>
@@ -1537,12 +1562,15 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Postcode</label>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                    Postcode <span className="text-amber-400">*</span>
+                  </label>
                   <input
                     type="text"
                     value={propertyPostcode}
                     onChange={(e) => setPropertyPostcode(e.target.value.toUpperCase())}
                     placeholder="e.g. M14 5TP"
+                    required
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none uppercase"
                   />
                 </div>

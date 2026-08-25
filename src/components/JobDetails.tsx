@@ -19,7 +19,7 @@ import jsPDF from 'jspdf';
 import { Capacitor } from '@capacitor/core';
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
-import { cn, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 import { ReviewForm } from "./ReviewForm";
 import { AnimatePresence } from "motion/react";
 import MediaGalleryModal from "./MediaGalleryModal";
@@ -2272,7 +2272,7 @@ const libraries: any[] = ['places', 'geometry'];
                         </button>
                       )}
                       
-                      {(job.status === "posted" || job.status === "accepted") && (
+                      {(job.status === "posted" || job.status === "open" || job.status === "accepted" || job.status === "pending_admin_review" || job.status === "quoting") && (
                         <button
                           onClick={handleCancelJobClick}
                           disabled={isProcessing}
@@ -2302,25 +2302,21 @@ const libraries: any[] = ['places', 'geometry'];
                         </button>
                       )}
                       
-                      {job.status === "cancelled" && (
-                        <>
-                          <div className="h-px bg-slate-100 my-1" />
-                          <button
-                            onClick={handleDeleteJobClick}
-                            disabled={isProcessing}
-                            className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
-                          >
-                            {isProcessing ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : confirmDelete ? (
-                                <AlertTriangle className="w-4 h-4 text-red-600" />
-                            ) : (
-                                <Trash2 className="w-4 h-4" />
-                            )}
-                            {confirmDelete ? "Confirm Delete" : "Delete Job"}
-                          </button>
-                        </>
-                      )}
+                      <div className="h-px bg-slate-100 my-1" />
+                      <button
+                        onClick={handleDeleteJobClick}
+                        disabled={isProcessing}
+                        className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {isProcessing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : confirmDelete ? (
+                            <AlertTriangle className="w-4 h-4 text-red-600" />
+                        ) : (
+                            <Trash2 className="w-4 h-4" />
+                        )}
+                        {confirmDelete ? "Confirm Delete" : "Delete Job"}
+                      </button>
 
                       {/* Delete Job option removed as requested (except for cancelled now) */}
                     </motion.div>
@@ -3413,7 +3409,10 @@ const libraries: any[] = ['places', 'geometry'];
             <div className="flex items-center gap-2 text-slate-500">
               <MapPin className="w-4 h-4" />
               <span className="text-sm font-bold uppercase">
-                {canSeeFullDetails ? job.postcode : getOutwardPostcode(job.postcode || job.area)}
+                {canSeeFullDetails 
+                  ? (job.postcode ? `${job.postcode}${job.city && job.city.toLowerCase() !== 'home' ? ' • ' + job.city : ''}` : (job.fullAddress || job.address?.line1 || job.area || job.city || "UK Location"))
+                  : formatJobLocation(job)
+                }
               </span>
             </div>
             

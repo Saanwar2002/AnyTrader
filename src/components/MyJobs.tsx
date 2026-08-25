@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, AlertTriangle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { cn, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 import { EmergencyTimer } from "./EmergencyTimer";
 import MediaGalleryModal from "./MediaGalleryModal";
 
@@ -411,60 +411,92 @@ export default function MyJobs() {
                   </div>
                 )}
                 <div className={cn(
-                  "p-6 sm:p-8 space-y-4",
+                  "p-3.5 sm:p-5 space-y-2.5",
                   job.urgency === "emergency" ? "bg-red-50/20" : ""
                 )}>
                   {/* Header: Category and Badges */}
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    {/* Category & Subcategory */}
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-1.5">
+                    {/* Category & Subcategory in a single line row */}
+                    <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
                       <div className={cn(
-                        "w-6 h-6 rounded-lg flex items-center justify-center shrink-0",
+                        "w-5 h-5 rounded-lg flex items-center justify-center shrink-0",
                         job.urgency === "emergency" ? "bg-red-100" : "bg-orange-100"
                       )}>
                         <Briefcase className={cn(
-                          "w-3.5 h-3.5",
+                          "w-3 h-3",
                           job.urgency === "emergency" ? "text-red-600" : "text-orange-600"
                         )} />
                       </div>
                       <p className={cn(
-                        "text-[11px] font-black uppercase tracking-wider",
+                        "text-[10px] sm:text-[11px] font-black uppercase tracking-wider truncate whitespace-nowrap min-w-0 flex-1",
                         job.urgency === "emergency" ? "text-red-600" : "text-orange-600"
                       )}>
                         {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
                       </p>
                     </div>
 
-                    {/* Status Badges */}
-                    <div className="flex items-center gap-2">
+                    {/* Status Badges & Quotes Received Tab in 1 Row */}
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {job.jobNo && (
-                        <span className="bg-slate-900 text-white px-2.5 py-0.5 rounded-md text-[10px] font-black shadow-2xs uppercase tracking-widest">
+                        <span className="bg-slate-900 text-white px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider">
                           #{job.jobNo}
                         </span>
                       )}
                       {job.urgency === 'emergency' && (
-                        <span className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 border border-red-200">
-                          <AlertCircle className="w-3 h-3" />
+                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 border border-red-200">
+                          <AlertCircle className="w-2.5 h-2.5" />
                           Emergency
                         </span>
                       )}
                       {job.status === 'completed' ? (
-                        <span className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-emerald-600 border-[3px] border-emerald-600 px-3 py-1 rounded-md rotate-[-12deg] inline-block shadow-sm bg-white/90 backdrop-blur-sm whitespace-pre-line text-center">
-                          COMPLETED{job.completedAt ? ` ON\n${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
+                        <span className="text-[10px] font-black tracking-widest uppercase text-emerald-600 border-[2px] border-emerald-600 px-2 py-0.5 rounded-md shadow-sm bg-white/90">
+                          COMPLETED
                         </span>
                       ) : (
-                        <span className={cn(
-                          "px-3 py-1 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider",
-                          job.status === "posted" ? ((quoteCounts[job.id] || 0) >= 5 ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-blue-100 text-blue-800 border border-blue-200") : 
-                          job.status === "accepted" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" :
-                          "bg-red-100 text-red-800 border border-red-200"
-                        )}>
-                          {job.status === 'posted' ? ((quoteCounts[job.id] || 0) >= 5 ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace(/_/g, " ")}
-                        </span>
+                        <>
+                          {/* Seeking Quotes Badge with Pulsing Green or Solid Red Border */}
+                          {(() => {
+                            const qCount = quoteCounts[job.id] || job.quoteCount || 0;
+                            const isFull = qCount >= 5;
+                            return (
+                              <span className={cn(
+                                "px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider transition-all",
+                                job.status === "posted"
+                                  ? isFull
+                                    ? "border-2 border-red-500 text-red-700 bg-red-50"
+                                    : "border-2 border-emerald-500 text-emerald-800 bg-emerald-50 pulse-green-border"
+                                  : job.status === "accepted"
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                  : "bg-red-100 text-red-800 border border-red-200"
+                              )}>
+                                {job.status === 'posted' ? (isFull ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace(/_/g, " ")}
+                              </span>
+                            );
+                          })()}
+
+                          {/* Quotes Received Tab directly next to Seeking Quotes */}
+                          <Link 
+                            to={`/job/${job.id}#quote-form-section`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:opacity-90 transition-opacity"
+                          >
+                            <span className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black flex items-center gap-1 border transition-all",
+                              (quoteCounts[job.id] || job.quoteCount || 0) >= 5
+                                ? "bg-amber-100 text-amber-900 border-amber-300"
+                                : (quoteCounts[job.id] || job.quoteCount || 0) > 0
+                                ? "bg-blue-100 text-blue-800 border-blue-300"
+                                : "bg-slate-100 text-slate-700 border-slate-300"
+                            )}>
+                              <span>{(quoteCounts[job.id] || job.quoteCount || 0)} Quotes</span>
+                              {(quoteCounts[job.id] || job.quoteCount || 0) > 0 && <ChevronRight className="w-2.5 h-2.5" />}
+                            </span>
+                          </Link>
+                        </>
                       )}
                       {job.status === "posted" && job.boostTier === "instant_match" && (
-                        <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 animate-pulse border border-amber-300">
-                          <Zap className="w-3 h-3" />
+                        <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black shadow-2xs uppercase tracking-wider flex items-center gap-1 animate-pulse border border-amber-300">
+                          <Zap className="w-2.5 h-2.5" />
                           Finding Pro
                         </span>
                       )}
@@ -472,126 +504,91 @@ export default function MyJobs() {
                   </div>
 
                   {/* Title & Description */}
-                  <div className="space-y-2 cursor-pointer" onClick={() => navigate(`/job/${job.id}`)}>
+                  <div className="space-y-1 cursor-pointer" onClick={() => navigate(`/job/${job.id}`)}>
                     {job.assetName && (
-                      <div className="flex items-center gap-2 mb-1">
-                        <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">{job.assetName}</span>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">{job.assetName}</span>
                       </div>
                     )}
-                    <h3 className="text-2xl font-black text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
+                    <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug group-hover:text-blue-600 transition-colors">
                       {job.title}
                     </h3>
-                    <p className="text-slate-600 font-medium line-clamp-2 text-sm leading-relaxed">
+                    <p className="text-slate-600 font-medium line-clamp-2 text-xs sm:text-sm leading-snug">
                       {job.description}
                     </p>
                   </div>
 
                   {/* Flash Deal / Direct Quote Request Information Box */}
                   {job.claimedDeal ? (
-                    <div className="bg-gradient-to-r from-amber-50 to-orange-50/60 border-2 border-amber-300 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                      <div className="flex items-start sm:items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                          <Zap className="w-5 h-5 fill-current" />
+                    <div className="bg-gradient-to-r from-amber-50 to-orange-50/60 border-2 border-amber-300 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+                      <div className="flex items-start sm:items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <Zap className="w-4 h-4 fill-current" />
                         </div>
                         <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-black text-amber-950 uppercase tracking-wider">
                               Pre-Agreed Flash Deal
                             </span>
-                            <span className="bg-amber-200 text-amber-950 text-[10px] font-black px-2 py-0.5 rounded-md uppercase border border-amber-300">
+                            <span className="bg-amber-200 text-amber-950 text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase border border-amber-300">
                               {job.claimedDeal.discountPercentage || 0}% OFF
                             </span>
-                            {job.claimedDeal.dealTitle && (
-                              <span className="text-xs font-bold text-slate-600 truncate max-w-[200px]">
-                                • {job.claimedDeal.dealTitle}
-                              </span>
-                            )}
                           </div>
-                          <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
+                          <p className="text-xs font-bold text-slate-800 mt-0.5">
                             Individual Trader: <span className="text-amber-900 font-black">{job.targetTradespersonName || job.claimedDeal.traderName || "Selected Specialist"}</span>
                           </p>
                         </div>
                       </div>
-                      {(job.claimedDeal.targetRate || job.claimedDeal.discountedPrice) && (
-                        <div className="flex items-center justify-between sm:flex-col sm:items-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-amber-200">
-                          <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">Guaranteed Deal Price</span>
-                          <span className="text-lg sm:text-xl font-black text-slate-900">
-                            £{job.claimedDeal.targetRate || job.claimedDeal.discountedPrice}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 border-2 border-blue-200 rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-3 shadow-xs">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm font-black text-sm">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 border-2 border-blue-200 rounded-2xl p-3 flex items-center justify-between gap-2 shadow-xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm font-black text-xs">
                           🎯
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-black text-blue-950 uppercase tracking-wider">
-                              Direct 1-on-1 Quote Request
-                            </span>
-                            <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-md uppercase border border-blue-200">
-                              Private
-                            </span>
-                          </div>
-                          <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
-                            Sent Exclusively To: <span className="text-blue-900 font-black">{job.targetTradespersonName || "Individual Trader"}</span>
+                          <span className="text-[11px] font-black text-blue-950 uppercase tracking-wider">
+                            Direct 1-on-1 Quote Request
+                          </span>
+                          <p className="text-xs font-bold text-slate-800 mt-0.5">
+                            Exclusively To: <span className="text-blue-900 font-black">{job.targetTradespersonName || "Individual Trader"}</span>
                           </p>
                         </div>
                       </div>
                     </div>
                   ) : null}
 
-                  {/* Location & Time */}
-                  <div className="flex flex-wrap items-center gap-4 pt-1">
-                    <div className="flex items-center gap-1.5 text-slate-600 font-bold text-xs">
-                      <MapPin className="w-4 h-4 text-slate-400" />
-                      <span className="uppercase tracking-wide">
-                        {getOutwardPostcode(job.postcode)} • {job.city || "Area Hidden"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-slate-600 font-bold text-xs">
-                      <Clock className="w-4 h-4 text-slate-400" />
-                      <span className="uppercase tracking-wide">
-                        {formatRelativeTime(job.createdAt)}
-                      </span>
-                    </div>
-                  </div>
+                  {/* Combined Location, Time & Action Icons Row */}
+                  <div className="flex items-center justify-between gap-2 pt-1 text-slate-600 font-bold text-xs">
+                    {/* Left: Location, Time & Badges */}
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <div className="flex items-center gap-1 text-slate-600 font-bold text-xs">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="uppercase tracking-wide">
+                          {formatJobLocation(job)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-slate-600 font-bold text-xs">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="uppercase tracking-wide">
+                          {formatRelativeTime(job.createdAt)}
+                        </span>
+                      </div>
 
-                  <div className="h-px bg-slate-200 my-3" />
-
-                  {/* Footer: Urgency & Quotes CTA */}
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      {job.urgency === "emergency" ? (
+                      {job.urgency === "emergency" && (
                         <div className="text-[10px]">
                           <EmergencyTimer postedDate={job.createdAt?.seconds ? new Date(job.createdAt.seconds * 1000) : job.createdAt} />
                         </div>
-                      ) : (
-                        <span className="bg-blue-50 text-blue-800 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider border border-blue-200">
-                          {(() => {
-                            if (job.urgency === "specific_date" || job.urgency === "SPECIFIC_DATE") {
-                              if (job.jobDate) {
-                                const d = job.jobDate?.seconds ? new Date(job.jobDate.seconds * 1000) : new Date(job.jobDate);
-                                if (!isNaN(d.getTime())) return `Date: ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-                              }
-                              return "Specific Date";
-                            }
-                            if (job.urgency === "asap" || job.urgency === "ASAP") return "ASAP / Urgent";
-                            if (job.urgency === "flexible" || job.urgency === "FLEXIBLE") return "Flexible Timing";
-                            return (job.urgency || "Flexible").replace(/_/g, " ").toUpperCase();
-                          })()}
-                        </span>
                       )}
+
                       {job.estimatedCompletionTime && (
-                        <span className="bg-emerald-50 text-emerald-800 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider flex items-center gap-1 border border-emerald-200">
+                        <span className="bg-emerald-50 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1 border border-emerald-200">
                           <Clock className="w-3 h-3 text-emerald-600" />
                           {job.estimatedCompletionTime} {job.estimatedCompletionTimeUnit}
                         </span>
                       )}
+
                       {(job.photos?.length > 0 || job.videos?.length > 0) && (
                         <button
                           onClick={(e) => {
@@ -599,230 +596,172 @@ export default function MyJobs() {
                             e.stopPropagation();
                             setSelectedJobMedia(job);
                           }}
-                          className="bg-orange-50 text-orange-700 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider flex items-center gap-1 hover:bg-orange-100 transition-colors border border-orange-200"
+                          className="bg-orange-50 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1 hover:bg-orange-100 transition-colors border border-orange-200"
                         >
                           {job.photos?.length > 0 ? <ImageIcon className="w-3 h-3" /> : <VideoIcon className="w-3 h-3" />}
                           { (job.photos?.length || 0) + (job.videos?.length || 0) } Media
                         </button>
                       )}
                     </div>
-                    
-                    <div className="flex items-center gap-3 ml-auto">
-                      <Link 
-                        to={`/job/${job.id}#quote-form-section`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="hover:opacity-90 transition-opacity"
-                      >
-                        <span className={cn(
-                          "px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-2xs transition-all",
-                          (quoteCounts[job.id] || 0) >= 5
-                            ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
-                            : (quoteCounts[job.id] || 0) > 0
-                            ? "bg-blue-600 text-white hover:bg-blue-700"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300"
-                        )}>
-                          <span>{(quoteCounts[job.id] || 0)} Quotes</span>
-                          {(quoteCounts[job.id] || 0) > 0 && <ChevronRight className="w-3.5 h-3.5" />}
-                        </span>
-                      </Link>
-                      
-                      <div className="relative flex items-center gap-1">
-                        {(job.status === "cancelled" || job.status === "completed") && (
-                          <>
-                            <div className="relative">
-                              <AnimatePresence>
-                                {confirmRepostId === job.id && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: 5 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: 5 }}
-                                    className="absolute bottom-full right-1/2 translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs font-medium rounded-lg shadow-lg whitespace-nowrap pointer-events-none"
-                                  >
-                                    Click again to Repost
-                                    <div className="absolute top-full left-1/2 -ml-1 -mt-1 w-2 h-2 bg-slate-800 transform rotate-45" />
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirmRepostId === job.id) {
-                                    handleRepost(job);
-                                    setConfirmRepostId(null);
-                                  } else {
-                                    setConfirmRepostId(job.id);
-                                    setConfirmDeleteId(null);
-                                    setTimeout(() => setConfirmRepostId(null), 3000);
-                                  }
-                                }}
-                                disabled={isProcessing === job.id}
-                                className={cn(
-                                  "p-2 rounded-xl transition-colors",
-                                  confirmRepostId === job.id ? "bg-blue-100 text-blue-600" : "hover:bg-blue-50 text-slate-400 hover:text-blue-500"
-                                )}
-                                title={confirmRepostId === job.id ? "Confirm Repost" : "Repost Job"}
-                              >
-                                {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <RotateCcw className="w-5 h-5" />}
-                              </button>
-                            </div>
-                            
-                            <div className="relative">
-                              <AnimatePresence>
-                                {confirmDeleteId === job.id && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: 5 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: 5 }}
-                                    className="absolute bottom-full right-1/2 translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs font-medium rounded-lg shadow-lg whitespace-nowrap pointer-events-none"
-                                  >
-                                    Click again to Delete
-                                    <div className="absolute top-full left-1/2 -ml-1 -mt-1 w-2 h-2 bg-slate-800 transform rotate-45" />
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirmDeleteId === job.id) {
-                                    setJobToDelete(job.id); // This will open the existing delete modal, wait, let's just do it directly.
-                                    // Actually, since there is a modal already, maybe they want double click INSTEAD of modal?
-                                    // Let's just execute delete directly.
-                                    executeDelete(job.id);
-                                    setConfirmDeleteId(null);
-                                  } else {
-                                    setConfirmDeleteId(job.id);
-                                    setConfirmRepostId(null);
-                                    setTimeout(() => setConfirmDeleteId(null), 3000);
-                                  }
-                                }}
-                                disabled={isProcessing === job.id}
-                                className={cn(
-                                  "p-2 rounded-xl transition-colors",
-                                  confirmDeleteId === job.id ? "bg-red-100 text-red-600" : "hover:bg-red-50 text-slate-400 hover:text-red-500"
-                                )}
-                                title={confirmDeleteId === job.id ? "Confirm Delete" : "Delete Job"}
-                              >
-                                {isProcessing === job.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-                              </button>
-                            </div>
-                          </>
-                        )}
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActionId(actionId === job.id ? null : job.id);
-                          }}
-                          className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600 transition-colors"
-                        >
-                          <Settings className="w-5 h-5" />
-                        </button>
-                        
-                        <AnimatePresence>
-                          {actionId === job.id && (
-                            <>
-                              <div className="fixed inset-0 z-10" onClick={() => setActionId(null)} />
+
+                    {/* Right: Trash & Gear Action Buttons */}
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                        {/* Quick Delete button */}
+                        <div className="relative">
+                          <AnimatePresence>
+                            {confirmDeleteId === job.id && (
                               <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-2xl shadow-xl border border-black z-20 py-2 overflow-hidden"
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 5 }}
+                                className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] font-medium rounded-lg shadow-lg whitespace-nowrap pointer-events-none z-30"
                               >
-                                {job.status !== "completed" && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      navigate(`/post-job`, { state: { editJob: job } });
-                                    }}
-                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3"
-                                  >
-                                    <Edit2 className="w-4 h-4 text-slate-400" />
-                                    Edit Job
-                                  </button>
-                                )}
-                                
-                                {(job.status === "posted" || job.status === "accepted" || job.status === "pending_admin_review") && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (confirmCancelId === job.id) {
-                                        handleCancel(job.id);
-                                        setConfirmCancelId(null);
-                                      } else {
-                                        setConfirmCancelId(job.id);
-                                        setTimeout(() => setConfirmCancelId(null), 3000);
-                                      }
-                                    }}
-                                    disabled={isProcessing === job.id}
-                                    className={cn("w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-3 disabled:opacity-50",
-                                      confirmCancelId === job.id ? "text-red-600 hover:bg-red-50" : "text-amber-600 hover:bg-amber-50"
-                                    )}
-                                  >
-                                    {isProcessing === job.id ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : confirmCancelId === job.id ? (
-                                      <AlertTriangle className="w-4 h-4 text-red-600" />
-                                    ) : (
-                                      <XCircle className="w-4 h-4" />
-                                    )}
-                                    {confirmCancelId === job.id ? "Confirm Cancel" : "Cancel Job"}
-                                  </button>
-                                )}
-                                
-                                {(job.status === "cancelled" || job.status === "completed") && (
-                                  <>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (confirmRepostId === job.id) {
-                                        handleRepost(job);
-                                        setConfirmRepostId(null);
-                                      } else {
-                                        setConfirmRepostId(job.id);
-                                        setConfirmDeleteId(null);
-                                        setTimeout(() => setConfirmRepostId(null), 3000);
-                                      }
-                                    }}
-                                    disabled={isProcessing === job.id}
-                                    className={cn("w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-3 disabled:opacity-50",
-                                      confirmRepostId === job.id ? "text-blue-700 bg-blue-50" : "text-blue-600 hover:bg-blue-50"
-                                    )}
-                                  >
-                                    {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : confirmRepostId === job.id ? <RotateCcw className="w-4 h-4 text-blue-700" /> : <RotateCcw className="w-4 h-4" />}
-                                    {confirmRepostId === job.id ? "Click again to Repost" : "Repost / Request Quote"}
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (confirmDeleteId === job.id) {
-                                        executeDelete(job.id);
-                                        setConfirmDeleteId(null);
-                                      } else {
-                                        setConfirmDeleteId(job.id);
-                                        setConfirmRepostId(null);
-                                        setTimeout(() => setConfirmDeleteId(null), 3000);
-                                      }
-                                    }}
-                                    disabled={isProcessing === job.id}
-                                    className={cn("w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-3 disabled:opacity-50",
-                                      confirmDeleteId === job.id ? "text-red-700 bg-red-50" : "text-red-600 hover:bg-red-50"
-                                    )}
-                                  >
-                                    {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : confirmDeleteId === job.id ? <AlertTriangle className="w-4 h-4 text-red-700" /> : <Trash2 className="w-4 h-4" />}
-                                    {confirmDeleteId === job.id ? "Click again to Delete" : "Delete Job"}
-                                  </button>
-                                  </>
-                                )}
-                                
+                                Click again to Delete
+                                <div className="absolute top-full right-3 -mt-1 w-2 h-2 bg-slate-800 transform rotate-45" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirmDeleteId === job.id) {
+                                executeDelete(job.id);
+                                setConfirmDeleteId(null);
+                              } else {
+                                setConfirmDeleteId(job.id);
+                                setConfirmRepostId(null);
+                                setTimeout(() => setConfirmDeleteId(null), 3000);
+                              }
+                            }}
+                            disabled={isProcessing === job.id}
+                            className={cn(
+                              "p-1.5 rounded-lg transition-colors",
+                              confirmDeleteId === job.id ? "bg-red-100 text-red-600" : "hover:bg-red-50 text-slate-500 hover:text-red-500"
+                            )}
+                            title={confirmDeleteId === job.id ? "Confirm Delete" : "Delete Job"}
+                          >
+                            {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </div>
+
+                        {/* Settings Gear button with Action Menu */}
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActionId(actionId === job.id ? null : job.id);
+                            }}
+                            className="p-1.5 hover:bg-white rounded-lg text-slate-500 hover:text-slate-700 transition-colors"
+                            title="Job Settings & Options"
+                          >
+                            <Settings className="w-4 h-4" />
+                          </button>
+                          
+                          <AnimatePresence>
+                            {actionId === job.id && (
+                              <>
+                                <div className="fixed inset-0 z-10" onClick={() => setActionId(null)} />
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-2xl shadow-xl border border-black z-20 py-2 overflow-hidden"
+                                >
+                                  {job.status !== "completed" && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/post-job`, { state: { editJob: job } });
+                                      }}
+                                      className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                                    >
+                                      <Edit2 className="w-4 h-4 text-slate-400" />
+                                      Edit Job
+                                    </button>
+                                  )}
+                                  
+                                  {(job.status === "posted" || job.status === "open" || job.status === "accepted" || job.status === "pending_admin_review" || job.status === "quoting") && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirmCancelId === job.id) {
+                                          handleCancel(job.id);
+                                          setConfirmCancelId(null);
+                                        } else {
+                                          setConfirmCancelId(job.id);
+                                          setTimeout(() => setConfirmCancelId(null), 3000);
+                                        }
+                                      }}
+                                      className="w-full px-4 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-3"
+                                    >
+                                      <XCircle className="w-4 h-4 text-red-500" />
+                                      {confirmCancelId === job.id ? "Confirm Cancel" : "Cancel Job"}
+                                    </button>
+                                  )}
                                 </motion.div>
                               </>
                             )}
                           </AnimatePresence>
                         </div>
+
+                        {/* Quick Repost button for cancelled/completed */}
+                        {(job.status === "cancelled" || job.status === "completed") && (
+                          <div className="relative">
+                            <AnimatePresence>
+                              {confirmRepostId === job.id && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: 5 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: 5 }}
+                                  className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] font-medium rounded-lg shadow-lg whitespace-nowrap pointer-events-none z-30"
+                                >
+                                  Click again to Repost
+                                  <div className="absolute top-full right-3 -mt-1 w-2 h-2 bg-slate-800 transform rotate-45" />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirmRepostId === job.id) {
+                                  handleRepost(job);
+                                  setConfirmRepostId(null);
+                                } else {
+                                  setConfirmRepostId(job.id);
+                                  setConfirmDeleteId(null);
+                                  setTimeout(() => setConfirmRepostId(null), 3000);
+                                }
+                              }}
+                              disabled={isProcessing === job.id}
+                              className={cn(
+                                "p-1.5 rounded-lg transition-colors",
+                                confirmRepostId === job.id ? "bg-blue-100 text-blue-600" : "hover:bg-blue-50 text-slate-500 hover:text-blue-500"
+                              )}
+                              title={confirmRepostId === job.id ? "Confirm Repost" : "Repost Job"}
+                            >
+                              {isProcessing === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        )}
                       </div>
+
+                      {job.status === "accepted" && job.acceptedTradespersonId && (
+                        <Link
+                          to={`/chat/${job.id}_${job.acceptedTradespersonId}`}
+                          state={{ jobTitle: job.title }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors shrink-0"
+                          title="Chat with Tradesperson"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
+              </div>
+            ))}
             </div>
           )}
         </div>

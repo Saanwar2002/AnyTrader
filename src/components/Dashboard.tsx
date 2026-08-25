@@ -414,9 +414,9 @@ export default function Dashboard() {
                     </div>
                   ) : null}
 
-                  {/* Status Badge */}
+                  {/* Status Badge & Quotes Received Tab */}
                   <div className={cn(
-                    "absolute right-6 z-10 flex items-center gap-2",
+                    "absolute right-6 z-10 flex items-center gap-2 flex-wrap justify-end",
                     job.claimedDeal || job.targetTradespersonName || job.targetTradespersonId ? "top-14" : "top-6"
                   )}>
                     {job.urgency === 'emergency' && (
@@ -430,22 +430,54 @@ export default function Dashboard() {
                         COMPLETED{job.completedAt ? ` ON\n${new Date(job.completedAt?.seconds ? job.completedAt.seconds * 1000 : job.completedAt).toLocaleDateString('en-GB')}` : ''}
                       </span>
                     ) : (
-                      <span className={cn(
-                        "px-4 py-1.5 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
-                        job.status === "posted" ? ((quoteCounts[job.id] || 0) >= 5 ? "bg-yellow-50 text-yellow-700 border border-black" : "bg-blue-50 text-blue-600") : 
-                        job.status === "accepted" ? "bg-green-50 text-green-600" :
-                        "bg-red-50 text-red-600"
-                      )}>
-                        {job.status === 'posted' ? ((quoteCounts[job.id] || 0) >= 5 ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace("_", " ")}
-                      </span>
+                      <>
+                        {/* Seeking Quotes Badge with Pulsing Green or Solid Red Border */}
+                        {(() => {
+                          const qCount = quoteCounts[job.id] || job.quoteCount || 0;
+                          const isFull = qCount >= 5;
+                          return (
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-[10px] font-black shadow-2xs uppercase tracking-wider transition-all",
+                              job.status === "posted"
+                                ? isFull
+                                  ? "border-2 border-red-500 text-red-700 bg-red-50"
+                                  : "border-2 border-emerald-500 text-emerald-800 bg-emerald-50 pulse-green-border"
+                                : job.status === "accepted"
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                : "bg-red-100 text-red-800 border border-red-200"
+                            )}>
+                              {job.status === 'posted' ? (isFull ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace("_", " ")}
+                            </span>
+                          );
+                        })()}
+
+                        {/* Quotes Received Tab moved right next to Seeking Quotes */}
+                        <Link 
+                          to={`/job/${job.id}#quote-form-section`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:opacity-90 transition-opacity"
+                        >
+                          <span className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 border transition-all",
+                            (quoteCounts[job.id] || job.quoteCount || 0) >= 5
+                              ? "bg-amber-100 text-amber-900 border-amber-300"
+                              : (quoteCounts[job.id] || job.quoteCount || 0) > 0
+                              ? "bg-blue-100 text-blue-800 border-blue-300"
+                              : "bg-slate-100 text-slate-700 border-slate-300"
+                          )}>
+                            <span>{(quoteCounts[job.id] || job.quoteCount || 0)} Quotes</span>
+                            {(quoteCounts[job.id] || job.quoteCount || 0) > 0 && <ChevronRight className="w-3 h-3" />}
+                          </span>
+                        </Link>
+                      </>
                     )}
                   </div>
 
                   <div className="p-6 space-y-3">
-                    {/* Category & Subcategory */}
-                    <div className="flex items-center gap-2">
+                    {/* Category & Subcategory - Single Line Row */}
+                    <div className="flex items-center gap-2 pr-32 overflow-hidden min-w-0">
                       <div className={cn(
-                        "w-4 h-4 rounded-lg flex items-center justify-center",
+                        "w-4 h-4 rounded-lg flex items-center justify-center shrink-0",
                         job.urgency === "emergency" ? "bg-red-100" : "bg-orange-50"
                       )}>
                         {(() => {
@@ -464,10 +496,10 @@ export default function Dashboard() {
                         })()}
                       </div>
                       <p className={cn(
-                        "text-[9px] font-black uppercase tracking-widest",
+                        "text-[9px] font-black uppercase tracking-widest truncate whitespace-nowrap min-w-0 flex-1",
                         job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
                       )}>
-                        {job.category} • {job.subcategory}
+                        {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
                       </p>
                     </div>
 
@@ -525,7 +557,14 @@ export default function Dashboard() {
                       <div className="flex items-center gap-1 text-slate-400">
                         <MapPin className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-bold uppercase tracking-wide">
-                          {getOutwardPostcode(job.postcode)} • {job.city || "Area Hidden"}
+                          {(() => {
+                            const outcode = getOutwardPostcode(job.postcode || job.area);
+                            const city = job.city && job.city !== "Area Hidden" && job.city.toLowerCase() !== "home" && job.city.toLowerCase() !== "property" && job.city.toUpperCase() !== outcode ? job.city : "";
+                            if (outcode !== "Area Hidden") {
+                              return city ? `${outcode} • ${city}` : outcode;
+                            }
+                            return city || "Area on Request";
+                          })()}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 text-slate-400">
@@ -593,16 +632,6 @@ export default function Dashboard() {
                             <MessageSquare className="w-5 h-5" />
                           </Link>
                         )}
-                        <Link
-                          to={`/job/${job.id}#quote-form-section`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 group/quotes hover:opacity-80 transition-opacity"
-                        >
-                          <p className="text-orange-500 font-black text-xs">
-                            {job.quoteCount || quoteCounts[job.id] || 0} quotes
-                          </p>
-                          <ChevronRight className="w-5 h-5 text-slate-800 transition-colors" />
-                        </Link>
                       </div>
                     </div>
                   </div>

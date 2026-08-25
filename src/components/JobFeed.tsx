@@ -6,7 +6,7 @@ import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { Briefcase, Clock, MapPin, ChevronRight, Search, Filter, Wrench, X, Image as ImageIcon, Video as VideoIcon, ChevronDown, ChevronUp, Info, Star, Save, Zap, Loader2, PoundSterling, Calendar, FileText, AlertCircle, Mic } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { cn, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 import { URGENCY_LEVELS } from "@/src/constants";
 import { useCategories } from "../lib/CategoryProvider";
 import MediaGalleryModal from "./MediaGalleryModal";
@@ -1137,22 +1137,47 @@ export default function JobFeed() {
                             #{job.jobNo}
                           </span>
                         )}
-                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                        {/* Category & Subcategory Single Line Row */}
+                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 truncate whitespace-nowrap max-w-full">
                           {(() => {
                             const category = categories.find(c => c.name === job.category);
                             if (category) {
                               const Icon = iconMap[category.icon];
-                              return Icon ? <Icon className="w-3 h-3" /> : <span className="text-[10px]">{category.icon}</span>;
+                              return Icon ? <Icon className="w-3 h-3 shrink-0" /> : <span className="text-[10px] shrink-0">{category.icon}</span>;
                             }
-                            return <Wrench className="w-3 h-3" />;
+                            return <Wrench className="w-3 h-3 shrink-0" />;
                           })()}
-                          {job.category}
+                          <span className="truncate">{job.category} {job.subcategory ? `• ${job.subcategory}` : ''}</span>
                         </span>
-                        {job.subcategory && (
-                          <span className="text-[10px] font-bold uppercase text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-black">
-                            {job.subcategory}
-                          </span>
-                        )}
+
+                        {/* Seeking Quotes Badge with Pulsing Green or Solid Red Border */}
+                        {(() => {
+                          const qCount = job.quoteCount || 0;
+                          const isFull = qCount >= 5;
+                          return (
+                            <span className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all",
+                              isFull
+                                ? "border-2 border-red-500 text-red-700 bg-red-50"
+                                : "border-2 border-emerald-500 text-emerald-800 bg-emerald-50 pulse-green-border"
+                            )}>
+                              {isFull ? 'Max Quotes Reached' : 'Seeking Quotes'}
+                            </span>
+                          );
+                        })()}
+
+                        {/* Quotes Received Tab moved right next to Seeking Quotes */}
+                        <span className={cn(
+                          "px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 border transition-all",
+                          (job.quoteCount || 0) >= 5
+                            ? "bg-amber-100 text-amber-900 border-amber-300"
+                            : (job.quoteCount || 0) > 0
+                            ? "bg-blue-100 text-blue-800 border-blue-300"
+                            : "bg-slate-100 text-slate-700 border-slate-300"
+                        )}>
+                          <span>{(job.quoteCount || 0)} Quotes</span>
+                        </span>
+
                         {(profile?.services?.some((s: string) => 
                           job.title.toLowerCase().includes(s.toLowerCase()) || 
                           job.description.toLowerCase().includes(s.toLowerCase()) ||
@@ -1222,7 +1247,7 @@ export default function JobFeed() {
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-600">
                     <div className="flex items-center gap-1.5">
                       <MapPin className="w-4 h-4 text-slate-400" />
-                      <span>{getOutwardPostcode(job.postcode)}</span>
+                      <span className="uppercase tracking-wide">{formatJobLocation(job)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-slate-400" />

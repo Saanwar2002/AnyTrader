@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
-import { db, handleFirestoreError, OperationType, collection, query, where, onSnapshot, addDoc, doc, deleteDoc, updateDoc } from "@/src/firebase";
-import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store, Users, FileText, Zap, ShieldAlert, ShieldCheck, KeyRound } from "lucide-react";
+import { db, handleFirestoreError, OperationType, collection, query, where, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp } from "@/src/firebase";
+import { Plus, Building2, Wrench, Home, Briefcase, MapPin, Search, Edit, Trash2, Clock, Camera, ArrowLeft, CheckCircle2, Store, Users, FileText, Zap, ShieldAlert, ShieldCheck, KeyRound, QrCode } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { cn } from "@/src/lib/utils";
+import { cn, generateJobNumber, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
+import { lookupPostcode } from "@/src/services/postcodeService";
 import { motion, AnimatePresence } from "motion/react";
 import { PropertyPassportModal } from "./PropertyPassportModal";
 import { ClaimPropertyPassportModal } from "./property/ClaimPropertyPassportModal";
@@ -11,7 +12,7 @@ import { EstateAgentQRGeneratorModal } from "./property/EstateAgentQRGeneratorMo
 import { toast } from "sonner";
 
 export default function Portfolio() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,16 @@ export default function Portfolio() {
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Form State
+  const [propertyName, setPropertyName] = useState("");
+  const [addressLine1, setAddressLine1] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [city, setCity] = useState("");
+  const [propertyType, setPropertyType] = useState("residential");
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [accessInstructions, setAccessInstructions] = useState("");
+
   const today = new Date().toISOString().split("T")[0];
   const expiringCp12Count = properties.filter(p => !p.gasSafetyExpiry || p.gasSafetyExpiry <= today).length;
   const expiringEicrCount = properties.filter(p => !p.eicrExpiry || p.eicrExpiry <= today).length;
@@ -40,29 +51,91 @@ export default function Portfolio() {
     let count = 0;
 
     try {
+      const extractPostcode = (str: string) => {
+        if (!str) return "";
+        const match = str.match(/\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b/i);
+        if (match) return match[1].toUpperCase();
+        const outMatch = str.match(/\b([A-Z]{1,2}[0-9][A-Z0-9]?)\b/i);
+        return outMatch ? outMatch[1].toUpperCase() : "";
+      };
+
       for (const prop of properties) {
         const needGas = !prop.gasSafetyExpiry || prop.gasSafetyExpiry <= today;
         const needEicr = !prop.eicrExpiry || prop.eicrExpiry <= today;
+        const resolvedAddressLine = prop.address?.line1 || (typeof prop.address === "string" ? prop.address : prop.name || "UK Address");
+        let resolvedPostcode = (
+          prop.address?.postcode ||
+          prop.postcode ||
+          prop.zip ||
+          prop.zipCode ||
+          extractPostcode(resolvedAddressLine) ||
+          profile?.postcode ||
+          profile?.address?.postcode ||
+          localStorage.getItem("anytrader_user_postcode") ||
+          ""
+        ).trim().toUpperCase();
+
+        let resolvedCity = (
+          prop.address?.city ||
+          prop.address?.town ||
+          prop.city ||
+          prop.town ||
+          profile?.city ||
+          profile?.address?.city ||
+          ""
+        ).trim();
+
+        if (resolvedPostcode) {
+          try {
+            const lookup = await lookupPostcode(resolvedPostcode);
+            if (lookup) {
+              resolvedPostcode = lookup.postcode;
+              if (!resolvedCity) resolvedCity = lookup.city;
+            }
+          } catch (e) {
+            console.warn("Bulk dispatch postcode lookup fallback:", e);
+          }
+        }
+
+        const resolvedOutcode = getOutwardPostcode(resolvedPostcode);
+        const displayLocation = resolvedOutcode !== "Area Hidden"
+          ? (resolvedCity && resolvedCity.toUpperCase() !== resolvedOutcode ? `${resolvedOutcode} • ${resolvedCity.toUpperCase()}` : resolvedOutcode)
+          : (resolvedCity ? resolvedCity.toUpperCase() : "Area on Request");
+
+        const fullAddr = `${resolvedAddressLine}${prop.address?.line2 ? ', ' + prop.address.line2 : ''}${resolvedCity ? ', ' + resolvedCity : ''}${resolvedPostcode ? ' ' + resolvedPostcode : ''}`;
 
         if (needGas) {
           await addDoc(collection(db, "jobs"), {
             ownerId: user.uid,
             userId: user.uid,
             homeownerId: user.uid,
-            title: `CP12 Gas Safety Inspection (${prop.name || prop.address?.line1 || 'Property'})`,
+            title: `CP12 Gas Safety Inspection (${prop.name || resolvedAddressLine})`,
             category: "Heating & Gas",
-            description: `Bulk compliance dispatch: Annual Gas Safety CP12 Inspection required.\nProperty: ${prop.name || ''} - ${prop.address?.line1 || ''}\nBoiler Spec: ${prop.boilerInfo?.brand || 'Standard Boiler'} ${prop.boilerInfo?.model || ''}`,
+            subcategory: "Gas Safety Certificate (CP12)",
+            description: `Bulk compliance dispatch: Annual Gas Safety CP12 Inspection required.\nLocation Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\nBoiler Spec: ${prop.boilerInfo?.brand || 'Standard Boiler'} ${prop.boilerInfo?.model || ''}\n\n(Exact address details will be released upon quote acceptance)`,
             budget: "110",
             agreedAmount: "110",
-            status: "open",
+            status: "posted",
             urgency: "urgent",
+            postcode: resolvedPostcode,
+            city: resolvedCity,
+            area: displayLocation,
+            fullAddress: fullAddr,
             propertyId: prop.id,
             linkedPropertyId: prop.id,
-            propertyName: prop.name || "Property",
-            address: prop.address || { line1: prop.name || "UK Address" },
+            assetId: prop.id,
+            propertyName: prop.name || resolvedAddressLine,
+            assetName: prop.name || resolvedAddressLine,
+            address: prop.address || { line1: resolvedAddressLine, postcode: resolvedPostcode, city: resolvedCity },
             passportSpecsAttached: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            jobNo: generateJobNumber(),
+            quoteCount: 0,
+            quotesCount: 0,
+            viewsCount: 0,
+            clientDeleted: false,
+            createdAt: serverTimestamp(),
+            postedDate: serverTimestamp(),
+            updatedAt: serverTimestamp()
           });
           count++;
         }
@@ -72,20 +145,33 @@ export default function Portfolio() {
             ownerId: user.uid,
             userId: user.uid,
             homeownerId: user.uid,
-            title: `EICR Electrical Inspection (${prop.name || prop.address?.line1 || 'Property'})`,
+            title: `EICR Electrical Inspection (${prop.name || resolvedAddressLine})`,
             category: "Electrical",
-            description: `Bulk compliance dispatch: 5-Year EICR Electrical Safety Certificate Inspection required.\nProperty: ${prop.name || ''} - ${prop.address?.line1 || ''}`,
+            subcategory: "EICR Electrical Safety Certificate",
+            description: `Bulk compliance dispatch: 5-Year EICR Electrical Safety Certificate Inspection required.\nLocation Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\n\n(Exact address details will be released upon quote acceptance)`,
             budget: "180",
             agreedAmount: "180",
-            status: "open",
+            status: "posted",
             urgency: "urgent",
+            postcode: resolvedPostcode,
+            city: resolvedCity,
+            area: displayLocation,
+            fullAddress: fullAddr,
             propertyId: prop.id,
             linkedPropertyId: prop.id,
-            propertyName: prop.name || "Property",
-            address: prop.address || { line1: prop.name || "UK Address" },
+            assetId: prop.id,
+            propertyName: prop.name || resolvedAddressLine,
+            assetName: prop.name || resolvedAddressLine,
+            address: prop.address || { line1: resolvedAddressLine, postcode: resolvedPostcode, city: resolvedCity },
             passportSpecsAttached: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            jobNo: generateJobNumber(),
+            quoteCount: 0,
+            quotesCount: 0,
+            viewsCount: 0,
+            clientDeleted: false,
+            createdAt: serverTimestamp(),
+            postedDate: serverTimestamp(),
+            updatedAt: serverTimestamp()
           });
           count++;
         }
@@ -127,14 +213,6 @@ export default function Portfolio() {
     );
   };
 
-  // Form state
-  const [propertyName, setPropertyName] = useState("");
-  const [addressLine1, setAddressLine1] = useState("");
-  const [propertyType, setPropertyType] = useState("residential");
-  const [contactName, setContactName] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [accessInstructions, setAccessInstructions] = useState("");
-
   useEffect(() => {
     if (!user) return;
     
@@ -172,10 +250,34 @@ export default function Portfolio() {
     } else {
       if (!user) return;
       try {
+        let finalPostcode = postcode.trim().toUpperCase() || profile?.postcode || "";
+        let finalCity = city.trim() || profile?.city || "";
+
+        if (!finalPostcode) {
+          toast.error("Please enter a valid UK postcode so local trade services can be routed to your property.");
+          return;
+        }
+
+        if (finalPostcode && !finalCity) {
+          try {
+            const lookup = await lookupPostcode(finalPostcode);
+            if (lookup) {
+              finalPostcode = lookup.postcode;
+              finalCity = lookup.city;
+            }
+          } catch (e) {
+            console.warn("Postcode lookup fallback:", e);
+          }
+        }
+
         if (editingPropertyId) {
           await updateDoc(doc(db, "properties", editingPropertyId), {
             name: propertyName,
             "address.line1": addressLine1,
+            "address.postcode": finalPostcode,
+            "address.city": finalCity,
+            postcode: finalPostcode,
+            city: finalCity,
             propertyType: propertyType,
             contactName,
             contactPhone,
@@ -188,10 +290,12 @@ export default function Portfolio() {
             name: propertyName,
             address: {
               line1: addressLine1,
-              city: "",
-              postcode: "",
-              country: ""
+              city: finalCity,
+              postcode: finalPostcode,
+              country: "UK"
             },
+            postcode: finalPostcode,
+            city: finalCity,
             propertyType: propertyType,
             contactName,
             contactPhone,
@@ -206,6 +310,8 @@ export default function Portfolio() {
         setStep(1);
         setPropertyName("");
         setAddressLine1("");
+        setPostcode("");
+        setCity("");
         setPropertyType("residential");
         setContactName("");
         setContactPhone("");
@@ -220,6 +326,8 @@ export default function Portfolio() {
     setEditingPropertyId(null);
     setPropertyName("");
     setAddressLine1("");
+    setPostcode(profile?.postcode || "");
+    setCity(profile?.city || "");
     setPropertyType("residential");
     setContactName("");
     setContactPhone("");
@@ -231,6 +339,8 @@ export default function Portfolio() {
   const handleEditClick = (property: any) => {
     setPropertyName(property.name || "");
     setAddressLine1(property.address?.line1 || "");
+    setPostcode(property.address?.postcode || property.postcode || "");
+    setCity(property.address?.city || property.city || "");
     setPropertyType(property.propertyType || "residential");
     setContactName(property.contactName || "");
     setContactPhone(property.contactPhone || "");
@@ -635,11 +745,55 @@ export default function Portfolio() {
                       <input 
                         type="text" 
                         value={addressLine1}
-                        onChange={e => setAddressLine1(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setAddressLine1(val);
+                          // Auto extract postcode if user pasted a full address containing a postcode
+                          const match = val.match(/\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b/i);
+                          if (match && !postcode) {
+                            setPostcode(match[1].toUpperCase());
+                            lookupPostcode(match[1]).then(data => {
+                              if (data && data.city) setCity(data.city);
+                            });
+                          }
+                        }}
                         required
-                        placeholder="Enter address"
+                        placeholder="e.g. 12 High Street"
                         className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
                       />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="block text-[15px] font-medium text-slate-900">Postcode <span className="text-red-500">*</span></label>
+                        <input 
+                          type="text" 
+                          value={postcode}
+                          onChange={async (e) => {
+                            const val = e.target.value.toUpperCase();
+                            setPostcode(val);
+                            if (val.length >= 3) {
+                              const data = await lookupPostcode(val);
+                              if (data && data.city) {
+                                setCity(data.city);
+                              }
+                            }
+                          }}
+                          required
+                          placeholder="e.g. HD5 9BW"
+                          className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px] uppercase font-bold"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[15px] font-medium text-slate-900">City / Town</label>
+                        <input 
+                          type="text" 
+                          value={city}
+                          onChange={e => setCity(e.target.value)}
+                          placeholder="e.g. Huddersfield"
+                          className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">

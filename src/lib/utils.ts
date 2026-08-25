@@ -29,26 +29,97 @@ export function generateJobNumber(): string {
 
 /**
  * Safely extracts the outward part (first part) of a UK postcode.
- * Handles cases with or without spaces and different outcode lengths.
+ * Handles cases with or without spaces, embedded in addresses, and different outcode lengths.
+ * Enforces valid UK outward patterns ([A-Z]{1,2}[0-9][A-Z0-9]?) to prevent non-postcode strings (e.g. "HOME", "Property") from displaying as postcodes.
  */
 export function getOutwardPostcode(postcode: string | null | undefined): string {
   if (!postcode) return "Area Hidden";
-  const trimmed = postcode.trim();
-  
-  // If it has a space, the part before the space is the outcode
-  if (trimmed.includes(" ")) {
-    return trimmed.split(" ")[0].toUpperCase();
+  const str = String(postcode).trim();
+  if (!str || str.toLowerCase() === "area hidden" || str.toLowerCase() === "undefined" || str.toLowerCase() === "null") {
+    return "Area Hidden";
   }
   
-  // If no space, the inward part is always the last 3 characters
-  // A full UK postcode is at least 5 characters (e.g., S1 1AA)
-  const cleaned = trimmed.toUpperCase();
-  if (cleaned.length >= 5) {
-    return cleaned.slice(0, -3);
+  // 1. Try to match a standard UK postcode format within the string (e.g., SW1A 1AA, HD5 9BW, M1 1AE, 12 High St Huddersfield HD5 9BW)
+  const fullMatch = str.match(/\b([A-Z]{1,2}[0-9][A-Z0-9]?)\s*([0-9][A-Z]{2})\b/i);
+  if (fullMatch && fullMatch[1]) {
+    return fullMatch[1].toUpperCase();
+  }
+
+  // 2. Try to match a standalone UK outcode pattern (e.g., "HD5", "SW1A", "M1", "EC1A")
+  const outcodeMatch = str.match(/\b([A-Z]{1,2}[0-9][A-Z0-9]?)\b/i);
+  if (outcodeMatch && outcodeMatch[1]) {
+    return outcodeMatch[1].toUpperCase();
+  }
+
+  // 3. If it has a space, check if the first part is a valid UK outcode
+  if (str.includes(" ")) {
+    const firstPart = str.split(" ")[0].trim().toUpperCase();
+    if (/^[A-Z]{1,2}[0-9][A-Z0-9]?$/i.test(firstPart)) {
+      return firstPart;
+    }
   }
   
-  // If it's shorter than 5 chars and has no space, it's likely already an outcode
-  return cleaned;
+  // 4. Clean non-alphanumeric characters
+  const cleaned = str.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+  // If it's a full compacted postcode (e.g., "HD59BW" -> 6 chars, "SW1A1AA" -> 7 chars, "M11AA" -> 5 chars)
+  if (cleaned.length >= 5 && cleaned.length <= 7 && /[0-9][A-Z]{2}$/i.test(cleaned)) {
+    const candidate = cleaned.slice(0, -3);
+    if (/^[A-Z]{1,2}[0-9][A-Z0-9]?$/i.test(candidate)) {
+      return candidate;
+    }
+  }
+  
+  // If the entire cleaned string is a valid outward code
+  if (/^[A-Z]{1,2}[0-9][A-Z0-9]?$/i.test(cleaned)) {
+    return cleaned;
+  }
+  
+  return "Area Hidden";
+}
+
+/**
+ * Formats a job's outward postcode and city for clean, privacy-preserving display across cards, feeds, and dashboards.
+ * E.g., "HD5 • HUDDERSFIELD" or "HD5" or "HUDDERSFIELD".
+ */
+export function formatJobLocation(job: any): string {
+  if (!job) return "Area on Request";
+  
+  // Extract postcode candidate from multiple possible properties
+  const pcCandidate = 
+    job.postcode || 
+    job.address?.postcode || 
+    job.area || 
+    job.fullAddress || 
+    (typeof job.address === "string" ? job.address : "");
+
+  const outcode = getOutwardPostcode(pcCandidate);
+  
+  // Extract city
+  const rawCity = 
+    job.city || 
+    job.address?.city || 
+    job.address?.town || 
+    "";
+    
+  const city = rawCity && 
+    rawCity !== "Area Hidden" && 
+    rawCity.toLowerCase() !== "home" && 
+    rawCity.toLowerCase() !== "property" && 
+    rawCity.toUpperCase() !== outcode
+      ? rawCity.toUpperCase()
+      : "";
+
+  if (outcode && outcode !== "Area Hidden") {
+    return city ? `${outcode} • ${city}` : outcode;
+  }
+
+  // If no outcode, check if area is already formatted like "HD5 • HUDDERSFIELD" or "Huddersfield"
+  if (job.area && job.area !== "Area Hidden" && job.area !== "Area on Request") {
+    return job.area.toUpperCase();
+  }
+
+  return city || "Area on Request";
 }
 
 /**

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { cn, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import MediaGalleryModal from "./MediaGalleryModal";
 import { SEO } from "./SEO";
@@ -881,9 +881,25 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                 )}
 
                 <div className="space-y-1.5 pr-24">
-                  <span className="text-[10px] font-extrabold uppercase text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                    {job.category}
-                  </span>
+                  <div className="flex items-center gap-2 max-w-full overflow-hidden flex-wrap">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-500 bg-slate-100 px-2 py-0.5 rounded truncate whitespace-nowrap max-w-full">
+                      {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
+                    </span>
+                    {(() => {
+                      const qCount = job.quoteCount || 0;
+                      const isFull = qCount >= 5;
+                      return (
+                        <span className={cn(
+                          "text-[9px] font-black uppercase px-2 py-0.5 rounded-full transition-all",
+                          isFull
+                            ? "border-2 border-red-500 text-red-700 bg-red-50"
+                            : "border-2 border-emerald-500 text-emerald-800 bg-emerald-50 pulse-green-border"
+                        )}>
+                          {isFull ? 'Max Quotes Reached' : 'Seeking Quotes'}
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <h3 className="font-extrabold text-slate-900 text-sm line-clamp-1 group-hover:text-emerald-700 transition-colors">
                     {job.title}
                   </h3>
@@ -906,7 +922,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                 <div className="flex items-center justify-between border-t border-slate-100 mt-3 pt-3">
                   <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase">
                     <MapPin className="w-3 h-3" />
-                    <span>{getOutwardPostcode(job.postcode)}</span>
+                    <span>{formatJobLocation(job)}</span>
                   </div>
 
                   <Link
@@ -1002,7 +1018,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                   <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
                     <div className="flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
-                      {getOutwardPostcode(job.postcode)}
+                      <span>{formatJobLocation(job)}</span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform" />
                   </div>

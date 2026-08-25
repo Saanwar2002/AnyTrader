@@ -1,5 +1,92 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 📱 Capacitor Native Wrapper Optimization Audit (Completed August 25, 2026)
+*   **Context & User Request**: Verified and optimized all recent work for iOS/Android native Capacitor app wrapping.
+*   **Key Architecture & Changes**:
+    1.  **Safe Area Inset CSS Variables (`src/index.css`)**:
+        *   Defined `--sat`, `--sab`, `--sal`, `--sar` using `env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`, etc., alongside `viewport-fit=cover` in `index.html`.
+    2.  **Defensive Native WKWebView Navigation & Pop-Up Guards**:
+        *   Updated WhatsApp sharing and external links (`MoveInPackHub.tsx`, `googleCalendarService.ts`) with `try { window.open(...) }` and `window.location.href` fallback to prevent WKWebView popup blocking issues on native iOS/Android builds.
+    3.  **Capacitor-Safe Printable Checklist**:
+        *   Protected `window.print()` in `MoveInPackHub.tsx` with error boundary handling and on-screen modal rendering so users in native Capacitor web views can view, copy, or print without runtime webview errors.
+    4.  **Touch Target & Form Zoom Prevention**:
+        *   Maintained 16px minimum font size on inputs to prevent forced iOS webview auto-zoom and enforced minimum 44px touch targets on buttons.
+
+## 🖨️ Move-In Pack Print Button Fix & Printable Schedule Modal (Completed August 25, 2026)
+*   **Context & User Request**: Fixed the issue where clicking the print button in the Move-In Pack section (`MoveInPackHub.tsx`) was not working on mobile devices or sandboxed iframe environments due to unhandled `window.print()` behavior and missing print CSS styles.
+*   **Key Architecture & Changes**:
+    1.  **Dedicated Printable Schedule Modal (`MoveInPackHub.tsx`)**:
+        *   Created `showPrintModal` state that opens a clean, full-screen printable document view containing property details, postcode, EPC grade, handover date, progress stats, and all move-in trade tasks with checkboxes.
+    2.  **Global `@media print` CSS Rules (`index.css`)**:
+        *   Added global print stylesheets hiding non-printable UI (`#mobile-bottom-nav`, `header`, `footer`, `.print:hidden`) and expanding scrollable containers (`overflow: visible !important`) to prevent content cut-off when printing.
+    3.  **Fallback & Notification**:
+        *   Updated `handlePrint` to display an instant informative toast and launch the printable modal, ensuring users on mobile devices or iframes get a clean printable document on screen and can save/print as PDF.
+
+## 🎨 AI Home Health & Seasonal Care UI Streamlining (Completed August 25, 2026)
+*   **Context & User Request**: Simplified and streamlined the UI flow of the "AI Home Health & Seasonal Care" dashboard (`HomeHealthWidget.tsx`) to fit all 4 navigation tabs strictly in a single 4-in-a-row layout on mobile without icons, applied crisp thin white borders across all tabs/cards, and rearranged the specs button into a two-line "Edit Property Specs" format.
+*   **Key Architecture & Changes**:
+    1.  **4-In-A-Row Mobile Grid & Icon Removal (`HomeHealthWidget.tsx`)**:
+        *   Configured tab bar as `grid grid-cols-4 gap-1 sm:gap-2 p-1.5` on all screen sizes.
+        *   Removed SVG icons (`<Sparkles>`, `<Calendar>`, `<BarChart3>`, `<CreditCard>`) from all 4 tabs to maximize horizontal space.
+    2.  **Two-Line "Edit Property Specs" Button**:
+        *   Rearranged text on the secondary action button from `Edit Specs` to a clean two-line format: Line 1 `Edit Property`, Line 2 `Specs` with tight leading.
+    3.  **Thin White Border Styling**:
+        *   Enforced clean thin white borders (`border border-white`) across the outer container, property bar, tabs, action buttons, weather banner, forecast cards, planner cards, risk analytics panel, and FlexiPay financing cards.
+    3.  **Two-Line Clean Text Formatting**:
+        *   Tab 1: Line 1 `Seasonal [Badge]`, Line 2 `Care`.
+        *   Tab 2: Line 1 `Planner [Badge]`, Line 2 `Tasks`.
+        *   Tab 3: Line 1 `Risk &`, Line 2 `Insurance`.
+        *   Tab 4: Line 1 `FlexiPay`, Line 2 `Repair`.
+    4.  **Font Size Optimization**:
+        *   Set text size to `text-[9px] sm:text-xs` with `font-black` and `leading-tight` for high legibility across small mobile displays.
+    5.  **Redundant Badge Consolidation**:
+        *   Removed duplicate floating red badge from the top left Sparkles icon box while keeping the primary `{attentionCount} Actions Due` alert badge next to the main title.
+
+## 🛠️ Compulsory Postcode Input Enforcement Across Onboarding & Property Flows (Completed August 25, 2026)
+*   **Context & User Request**: Ensured UK postcode input fields are compulsory across all onboarding steps, adding/editing properties (`Portfolio.tsx` and `PropertyManager.tsx`), property passport specifications (`HomeHealthWidget.tsx`), and estate agency key tag handover forms (`EstateAgentQRGeneratorModal.tsx`).
+*   **Key Architecture & Changes**:
+    1.  **Portfolio Property Forms (`src/components/Portfolio.tsx`)**:
+        *   Added `required` attribute and `<span className="text-red-500">*</span>` indicator to Postcode field.
+        *   Enforced postcode validation in `handlePropertySubmit` with toast notification preventing creation or editing of properties without a valid UK postcode.
+    2.  **Property Manager Forms (`src/components/PropertyManager.tsx`)**:
+        *   Added Postcode (`required`) and City/Town inputs to the property setup form with automatic `lookupPostcode` integration.
+        *   Validates and saves `postcode` and `city` to Firestore on property creation and updates.
+    3.  **Property Passport Specifications (`src/components/HomeHealthWidget.tsx`)**:
+        *   Made `propertyPostcode` compulsory (`required`) in the Property Specs and Passport configuration modal.
+        *   Validated in `handleSaveSpecsAndProperty` with user toast warnings.
+    4.  **Estate Agency Key Handover Forms (`src/components/property/EstateAgentQRGeneratorModal.tsx`)**:
+        *   Marked `postcode` compulsory when generating property handover key tag QR codes.
+    5.  **User Onboarding (`src/components/Onboarding.tsx`)**:
+        *   Updated step 2 postcode field with explicit `required` indicator and asterisk.
+
+## 🛠️ Postcode Privacy Enforcement & Outward Code Resolution (Completed August 25, 2026)
+*   **Context & User Request**: Enforced platform-wide homeowner privacy rule: only the outward postcode (first part of UK postcode, e.g. `HD5`, `SW1A`, `M1`) is visible across job feeds, cards, dashboards, and job details prior to quote acceptance. Full street address, exact house number, and full postcodes are strictly withheld until a homeowner accepts a trader's quote.
+*   **Key Architecture & Changes**:
+    1.  **Strict Outward Postcode Parsing (`src/lib/utils.ts`)**:
+        *   Enhanced `getOutwardPostcode` to validate authentic UK outcode patterns (`^[A-Z]{1,2}[0-9][A-Z0-9]?$`) and reject generic strings or internal property nicknames (such as `"HOME"`, `"Property"`, `"Apartment"`).
+    2.  **Missing Function Imports Fixed (`PropertyPassportModal.tsx` & `Portfolio.tsx`)**:
+        *   Imported `getOutwardPostcode` from `@/src/lib/utils` across `PropertyPassportModal.tsx` and `Portfolio.tsx` so 1-tap and bulk compliance job creation executes without runtime errors.
+    3.  **Job Feed & Dashboard Location Privacy (`MyJobs.tsx`, `JobFeed.tsx`, `JobDetails.tsx`, `Dashboard.tsx`, `TradeJobs.tsx`)**:
+        *   All pre-acceptance views display only the outward postcode (e.g. `HD5` or `HD5 • Huddersfield`).
+        *   In `JobDetails.tsx`, full address details (`job.fullAddress`, `job.houseNumber`, `job.locationInstructions`) remain gated behind `canSeeFullDetails` (active only when the viewer is the homeowner or the trader whose quote was accepted).
+    4.  **Property Passport & Portfolio Job Posting Privacy**:
+        *   Updated `handleOneTapDispatch` in `PropertyPassportModal.tsx` and bulk compliance dispatch in `Portfolio.tsx` to automatically extract the outward code for public descriptions, keeping full address and direct phone contact details securely in Firestore fields revealed only upon quote acceptance.
+
+## 🛠️ Property Passport Job Posting, Outcode Location Display & Move-In Pack UX (Completed August 25, 2026)
+*   **Context & User Request**: Fixed job area display showing "Area Hidden" for jobs posted from Property Passports/Portfolios, resolved missing Cancel/Delete actions for newly posted jobs, renamed navigation tab to "Back To AnyTrader", made Move-In Pack guidance box yellow, and enabled printable QR code displays for estate agency walls and desks.
+*   **Key Architecture & Changes**:
+    1.  **Property Passport & Portfolio Bulk Dispatch Metadata**:
+        *   Updated `handleOneTapDispatch` in `src/components/PropertyPassportModal.tsx` and bulk compliance dispatch in `src/components/Portfolio.tsx` to populate all necessary location fields (`postcode`, `city`, `fullAddress`, `jobNo`) and set job status to `"posted"`.
+    2.  **Outcode & Area Resolution (`src/components/MyJobs.tsx` & `src/components/JobDetails.tsx`)**:
+        *   Refactored location formatting to extract valid outward postcodes (`getOutwardPostcode`) while falling back gracefully to property city or address, preventing "Area Hidden" from displaying for valid jobs.
+    3.  **Job Cancellation & Deletion**:
+        *   Enabled Cancel and Delete actions for homeowners across all active job statuses (`posted`, `open`, `accepted`, `quoting`, `pending_admin_review`, `cancelled`) with two-tap safety confirmation.
+    4.  **Navigation & Aesthetics**:
+        *   Updated navigation back link in `src/components/property/MoveInLanding.tsx` and `src/components/property/PublicPropertyPassportView.tsx` to read **"Back To AnyTrader"**.
+        *   Styled the Move-In Guidance Callout Box in `src/components/property/MoveInPackHub.tsx` with a high-contrast yellow theme (`bg-yellow-100 border-2 border-black`).
+    5.  **Estate Agency Printable QR Displays (`src/components/property/EstateAgentQRGeneratorModal.tsx`)**:
+        *   Integrated 4 printable display formats (Desk Stand, Wall/Window Poster, Key Fob Tag, A4 Handover Sheet) with direct browser print styling and WhatsApp sharing.
+
 ## 🏡 New Homebuyer Move-In Pack & Estate Agency QR Key Handover Flow (Completed August 24, 2026)
 *   **Context & User Request**: Implemented a comprehensive New Homebuyer Move-In Pack & Trade Recommendation ecosystem designed to capture high-value property sales and tenancy handovers friction-free directly from estate agent offices via QR codes on key tags and A4 handover certificates.
 *   **Key Architecture & Components**:

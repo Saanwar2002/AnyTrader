@@ -56,6 +56,7 @@ export default function MoveInPackHub({
   const [searchQuery, setSearchQuery] = useState("");
   const [customTasks, setCustomTasks] = useState<MoveInTask[]>([]);
   const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const [newCustomTitle, setNewCustomTitle] = useState("");
   const [newCustomCategory, setNewCustomCategory] = useState("Handyman & Property Maintenance");
   const [newCustomUrgency, setNewCustomUrgency] = useState<"asap" | "flexible">("flexible");
@@ -186,7 +187,15 @@ export default function MoveInPackHub({
   const progressPct = Math.round((completedCount / (totalCount || 1)) * 100);
 
   const handlePrint = () => {
-    window.print();
+    setShowPrintModal(true);
+    toast.info("Opening printable Move-In Checklist schedule...");
+    setTimeout(() => {
+      try {
+        window.print();
+      } catch (err) {
+        console.warn("window.print failed:", err);
+      }
+    }, 300);
   };
 
   const handleShareWhatsApp = () => {
@@ -194,7 +203,15 @@ export default function MoveInPackHub({
       `Property: *${propertyAddress?.line1 || propertyName}*\n` +
       `Progress: *${completedCount}/${totalCount} completed (${progressPct}%)*\n\n` +
       `Explore recommended move-in trades & 1-click quotes on AnyTrader:\n${window.location.origin}/move-in?postcode=${encodeURIComponent(postcode || "")}&address=${encodeURIComponent(propertyAddress?.line1 || "")}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    try {
+      const win = window.open(waUrl, "_blank", "noopener,noreferrer");
+      if (!win || win.closed || typeof win.closed === "undefined") {
+        window.location.href = waUrl;
+      }
+    } catch (e) {
+      window.location.href = waUrl;
+    }
   };
 
   return (
@@ -291,13 +308,13 @@ export default function MoveInPackHub({
         </div>
 
         {/* Informative Guidance Callout */}
-        <div className="p-4 bg-blue-50/80 rounded-2xl border border-blue-200 flex items-start gap-3.5">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+        <div className="p-4 bg-yellow-100 rounded-2xl border-2 border-black flex items-start gap-3.5 shadow-sm">
+          <div className="w-7 h-7 rounded-lg bg-yellow-400 border border-black text-slate-950 flex items-center justify-center shrink-0 mt-0.5">
             <Info className="w-4 h-4" />
           </div>
-          <div className="text-xs text-blue-950 leading-relaxed">
-            <p className="font-extrabold text-blue-900">How Move-In Trade Bundles Work:</p>
-            <p className="font-medium text-blue-800 mt-0.5">
+          <div className="text-xs text-slate-950 leading-relaxed">
+            <p className="font-black text-slate-950">How Move-In Trade Bundles Work:</p>
+            <p className="font-bold text-slate-800 mt-0.5">
               These industry-recommended trade essentials are tailored for new home buyers and tenants. You are in full control: 
               tap <strong>"⚡ Post This Job"</strong> at any time to open our 1-click pre-filled wizard, or <strong>"Mark as Done"</strong> if already resolved.
             </p>
@@ -594,6 +611,131 @@ export default function MoveInPackHub({
               </div>
             </form>
           </motion.div>
+        </div>
+      )}
+
+      {/* Printable Move-In Pack Schedule Modal */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 print:p-0 print:bg-white print:fixed print:inset-0 print:z-[9999] print:block">
+          <div className="relative w-full max-w-4xl bg-white rounded-3xl border-2 border-black shadow-2xl overflow-hidden flex flex-col max-h-[92vh] print:max-h-none print:border-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+            {/* Modal Header Bar (Hidden when printing) */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-600 rounded-xl text-white">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm tracking-tight">Printable Move-In Trade Checklist</h3>
+                  <p className="text-[11px] text-slate-400">Official Statutory Handover & Day-One Trade Schedule</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      window.print();
+                    } catch (e) {
+                      toast.error("Could not trigger system print dialog.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-xl flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print / Save PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(false)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white font-black text-sm transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Body */}
+            <div className="p-6 sm:p-10 overflow-y-auto space-y-6 text-slate-900 font-sans print:p-6 print:overflow-visible text-xs leading-relaxed">
+              {/* Header Document Brand & Property Info */}
+              <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-black text-base tracking-tight text-blue-900 uppercase">AnyTrader</span>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-amber-200 text-amber-900 rounded-md border border-amber-400">
+                      Official Move-In Schedule
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-black text-slate-900">
+                    {propertyAddress?.line1 || propertyName}
+                  </h2>
+                  <p className="text-xs font-bold text-slate-600 mt-0.5">
+                    Postcode: <strong className="text-slate-900">{postcode || propertyAddress?.postcode || "N/A"}</strong> | EPC Grade: <strong className="text-slate-900">{epcRating}</strong>
+                    {agentName ? ` | Estate Agent: ${agentName}` : ""}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Date Issued</p>
+                  <p className="text-xs font-black text-slate-900">{new Date().toLocaleDateString("en-GB", { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                  <p className="text-[10px] text-emerald-600 font-bold mt-1">
+                    Progress: {completedCount} / {totalCount} Done ({progressPct}%)
+                  </p>
+                </div>
+              </div>
+
+              {/* Checklist Items Table */}
+              <div className="space-y-3">
+                <h4 className="font-black text-xs uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-1">
+                  Essential Trade Tasks & Recommendations ({allAvailableTasks.length} Items)
+                </h4>
+
+                <div className="divide-y divide-slate-200 border border-slate-300 rounded-2xl overflow-hidden">
+                  {allAvailableTasks.map((task, idx) => {
+                    const isDone = completedTaskIds.includes(task.id);
+                    const isSkipped = skippedTaskIds.includes(task.id);
+                    return (
+                      <div key={task.id} className={cn("p-3 flex items-start gap-3", isDone ? "bg-emerald-50/50" : "bg-white")}>
+                        <div className="mt-0.5 shrink-0">
+                          <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center font-black text-[10px]", isDone ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-400 text-transparent")}>
+                            ✓
+                          </div>
+                        </div>
+
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={cn("font-black text-xs", isDone ? "line-through text-slate-500" : "text-slate-900")}>
+                              {idx + 1}. {task.title}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-500 shrink-0">
+                              Est. {task.priceRange}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-600 font-medium">
+                            <span className="font-extrabold text-slate-800">{task.category}</span>
+                            <span>•</span>
+                            <span>Priority: {task.priority}</span>
+                            {isSkipped && <span className="text-amber-700 font-bold">(Skipped)</span>}
+                          </div>
+
+                          <p className="text-[11px] text-slate-600 pt-0.5">
+                            {task.whyRecommended}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Document Watermark & Footer */}
+              <div className="pt-4 border-t border-slate-300 flex items-center justify-between text-[10px] text-slate-500 font-medium print:block">
+                <p>Generated via AnyTrader Digital Property Passport Ecosystem • Zero Lead Fee Trade Platform</p>
+                <p>https://anytrader.co.uk</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

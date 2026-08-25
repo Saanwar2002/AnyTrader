@@ -3,7 +3,7 @@ import { db, collection, query, where, orderBy, onSnapshot, handleFirestoreError
 import { useAuth } from "./AuthProvider";
 import { Briefcase, Clock, MapPin, Loader2, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { cn, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 
 export default function TradeJobs() {
   const { user } = useAuth();
@@ -148,10 +148,11 @@ export default function TradeJobs() {
                 "p-8 space-y-4",
                 job.urgency === "emergency" ? "bg-red-50/30" : ""
               )}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-2">
+                  {/* Category & Subcategory - Single Line Row */}
+                  <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
                     <div className={cn(
-                      "w-5 h-5 rounded-lg flex items-center justify-center",
+                      "w-5 h-5 rounded-lg flex items-center justify-center shrink-0",
                       job.urgency === "emergency" ? "bg-red-100" : "bg-orange-50"
                     )}>
                       <Briefcase className={cn(
@@ -160,33 +161,54 @@ export default function TradeJobs() {
                       )} />
                     </div>
                     <p className={cn(
-                      "text-[10px] font-black uppercase tracking-widest",
+                      "text-[10px] font-black uppercase tracking-widest truncate whitespace-nowrap min-w-0 flex-1",
                       job.urgency === "emergency" ? "text-red-500" : "text-orange-500"
                     )}>
                       {job.category} {job.subcategory ? `• ${job.subcategory}` : ''}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  {/* Badges Row */}
+                  <div className="flex flex-wrap items-center gap-2">
                     {job.jobNo && (
-                      <span className="bg-slate-900 text-white px-3 py-1 rounded-full text-[10px] font-black shadow-sm uppercase tracking-widest">
+                      <span className="bg-slate-900 text-white px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-sm uppercase tracking-widest">
                         #{job.jobNo}
                       </span>
                     )}
                     {job.urgency === 'emergency' && (
-                      <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1">
+                      <span className="bg-red-100 text-red-600 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center gap-1">
                         <AlertCircle className="w-3 h-3" />
                         Emergency
                       </span>
                     )}
+                    {(() => {
+                      const qCount = job.quoteCount || (job.quotes ? job.quotes.length : 0);
+                      const isFull = qCount >= 5;
+                      return (
+                        <span className={cn(
+                          "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all",
+                          job.status === "posted"
+                            ? isFull
+                              ? "border-2 border-red-500 text-red-700 bg-red-50"
+                              : "border-2 border-emerald-500 text-emerald-800 bg-emerald-50 pulse-green-border"
+                            : job.status === "in_progress" ? "bg-blue-50 text-blue-600"
+                            : job.status === "accepted" ? "bg-indigo-50 text-indigo-600"
+                            : job.status === "completed" ? "bg-green-50 text-green-600"
+                            : "bg-slate-50 text-slate-600"
+                        )}>
+                          {job.status === 'posted' ? (isFull ? 'Max Quotes Reached' : 'Seeking Quotes') : job.status.replace(/_/g, " ")}
+                        </span>
+                      );
+                    })()}
                     <span className={cn(
-                      "px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wider",
-                      job.status === "in_progress" ? "bg-blue-50 text-blue-600" : 
-                      job.status === "accepted" ? "bg-indigo-50 text-indigo-600" :
-                      job.status === "completed" ? "bg-green-50 text-green-600" :
-                      "bg-slate-50 text-slate-600"
+                      "px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 border transition-all",
+                      (job.quoteCount || (job.quotes ? job.quotes.length : 0)) >= 5
+                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                        : (job.quoteCount || (job.quotes ? job.quotes.length : 0)) > 0
+                        ? "bg-blue-100 text-blue-800 border-blue-300"
+                        : "bg-slate-100 text-slate-700 border-slate-300"
                     )}>
-                      {job.status.replace(/_/g, " ")}
+                      <span>{(job.quoteCount || (job.quotes ? job.quotes.length : 0))} Quotes</span>
                     </span>
                   </div>
                 </div>
@@ -204,7 +226,7 @@ export default function TradeJobs() {
                   <div className="flex items-center gap-1.5 text-slate-400">
                     <MapPin className="w-4 h-4" />
                     <span className="text-xs font-bold uppercase tracking-wide">
-                      {getOutwardPostcode(job.postcode)} • {job.city || "Area Hidden"}
+                      {formatJobLocation(job)}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-400">

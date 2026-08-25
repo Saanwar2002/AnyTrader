@@ -6,6 +6,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PropertyPassportModal } from "./PropertyPassportModal";
+import { lookupPostcode } from "@/src/services/postcodeService";
+import { toast } from "sonner";
 
 export function PropertyManager() {
   const { user } = useAuth();
@@ -22,6 +24,8 @@ export function PropertyManager() {
   // Form state
   const [propertyName, setPropertyName] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [city, setCity] = useState("");
   const [propertyType, setPropertyType] = useState("residential");
 
   useEffect(() => {
@@ -44,11 +48,36 @@ export function PropertyManager() {
   const handleAddProperty = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    let finalPostcode = postcode.trim().toUpperCase();
+    let finalCity = city.trim();
+
+    if (!finalPostcode) {
+      toast.error("Please enter a valid UK postcode so local trade services can be routed to your property.");
+      return;
+    }
+
+    if (finalPostcode && !finalCity) {
+      try {
+        const lookup = await lookupPostcode(finalPostcode);
+        if (lookup) {
+          finalPostcode = lookup.postcode;
+          finalCity = lookup.city;
+        }
+      } catch (err) {
+        console.warn("Postcode lookup failed:", err);
+      }
+    }
+
     try {
       if (editingPropertyId) {
         await updateDoc(doc(db, "properties", editingPropertyId), {
           name: propertyName,
           "address.line1": addressLine1,
+          "address.postcode": finalPostcode,
+          "address.city": finalCity,
+          postcode: finalPostcode,
+          city: finalCity,
           propertyType: propertyType,
           updatedAt: new Date().toISOString()
         });
@@ -58,10 +87,12 @@ export function PropertyManager() {
           name: propertyName,
           address: {
             line1: addressLine1,
-            city: "",
-            postcode: "",
-            country: ""
+            city: finalCity,
+            postcode: finalPostcode,
+            country: "UK"
           },
+          postcode: finalPostcode,
+          city: finalCity,
           propertyType: propertyType,
           status: "active",
           createdAt: new Date().toISOString(),
@@ -73,6 +104,8 @@ export function PropertyManager() {
       setStep(1);
       setPropertyName("");
       setAddressLine1("");
+      setPostcode("");
+      setCity("");
       setPropertyType("residential");
     } catch (error) {
       handleFirestoreError(error, editingPropertyId ? OperationType.UPDATE : OperationType.CREATE, "properties");
@@ -83,6 +116,8 @@ export function PropertyManager() {
     setEditingPropertyId(null);
     setPropertyName("");
     setAddressLine1("");
+    setPostcode("");
+    setCity("");
     setPropertyType("residential");
     setStep(1);
     setIsAdding(true);
@@ -91,6 +126,8 @@ export function PropertyManager() {
   const handleEditClick = (property: any) => {
     setPropertyName(property.name || "");
     setAddressLine1(property.address?.line1 || "");
+    setPostcode(property.postcode || property.address?.postcode || "");
+    setCity(property.city || property.address?.city || "");
     setPropertyType(property.propertyType || "residential");
     setEditingPropertyId(property.id);
     setIsAdding(true);
@@ -300,9 +337,44 @@ export function PropertyManager() {
                     value={addressLine1}
                     onChange={e => setAddressLine1(e.target.value)}
                     required
-                    placeholder="Enter address"
+                    placeholder="Enter street address"
                     className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[15px] font-medium text-slate-900">
+                      Postcode <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={postcode}
+                      onChange={async (e) => {
+                        const val = e.target.value.toUpperCase();
+                        setPostcode(val);
+                        if (val.length >= 3) {
+                          const data = await lookupPostcode(val);
+                          if (data && data.city) {
+                            setCity(data.city);
+                          }
+                        }
+                      }}
+                      required
+                      placeholder="e.g. M14 5TP"
+                      className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px] uppercase font-bold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[15px] font-medium text-slate-900">City / Town</label>
+                    <input 
+                      type="text" 
+                      value={city}
+                      onChange={e => setCity(e.target.value)}
+                      placeholder="e.g. Manchester"
+                      className="w-full px-4 py-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm placeholder:text-slate-400 text-[15px]"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">

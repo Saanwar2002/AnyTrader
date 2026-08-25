@@ -165,14 +165,15 @@ export function EstateAgentQRGeneratorModal({ initialProperty, onClose }: Estate
 
               <div>
                 <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
-                  Postcode
+                  Postcode <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   placeholder="e.g. M14 6XX"
                   value={postcode}
-                  onChange={(e) => setPostcode(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-black rounded-xl text-xs font-bold text-slate-900 focus:outline-none"
+                  onChange={(e) => setPostcode(e.target.value.toUpperCase())}
+                  required
+                  className="w-full px-3 py-2 bg-white border border-black rounded-xl text-xs font-bold text-slate-900 focus:outline-none uppercase"
                 />
               </div>
             </>

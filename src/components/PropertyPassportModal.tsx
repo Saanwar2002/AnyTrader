@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { db, doc, updateDoc, collection, query, where, onSnapshot, addDoc, handleFirestoreError, OperationType } from "@/src/firebase";
+import { db, doc, updateDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { shareToWhatsApp, copyPrivacyShareLink } from "@/src/utils/shareUtils";
+import { generateJobNumber, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
+import { lookupPostcode } from "@/src/services/postcodeService";
 import { X, ArrowLeft, Home, ShieldCheck, AlertTriangle, Calendar, FileText, Wrench, CheckCircle2, Share2, Sparkles, Plus, Edit2, TrendingUp, Info, Copy, Check, Users, Zap, ExternalLink, Clock, KeyRound, Printer, QrCode } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { TransferOwnershipModal } from "./property/TransferOwnershipModal";
 import { BuyerPackModal } from "./property/BuyerPackModal";
+import { EstateAgentQRGeneratorModal } from "./property/EstateAgentQRGeneratorModal";
 import { calculatePropertyHealthScore } from "./property/propertyUtils";
 
 interface PropertyPassportModalProps {
@@ -16,7 +19,7 @@ interface PropertyPassportModalProps {
 }
 
 export function PropertyPassportModal({ property, onClose, onUpdated }: PropertyPassportModalProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [activeTab, setActiveTab] = useState<"passport" | "certs" | "history" | "predictive" | "tenant">("passport");
   const [isEditing, setIsEditing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -28,6 +31,7 @@ export function PropertyPassportModal({ property, onClose, onUpdated }: Property
   // Transfer & Buyer Pack modal state
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showBuyerPackModal, setShowBuyerPackModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
 
   // Passport state
   const [epcRating, setEpcRating] = useState(property.epcRating || "C");
@@ -77,6 +81,7 @@ export function PropertyPassportModal({ property, onClose, onUpdated }: Property
     idKey?: string;
     title: string;
     category: string;
+    subcategory?: string;
     description: string;
     budget: string;
     urgency?: string;
@@ -84,25 +89,101 @@ export function PropertyPassportModal({ property, onClose, onUpdated }: Property
     if (!user || !property?.id) return;
     setDispatchingJobId(jobDetails.idKey || jobDetails.title);
     try {
+      // Helper to extract UK postcode from address line if not explicitly stored
+      const extractPostcode = (str: string) => {
+        if (!str) return "";
+        const match = str.match(/\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b/i);
+        if (match) return match[1].toUpperCase();
+        const outMatch = str.match(/\b([A-Z]{1,2}[0-9][A-Z0-9]?)\b/i);
+        return outMatch ? outMatch[1].toUpperCase() : "";
+      };
+
+      const resolvedAddressLine = property.address?.line1 || (typeof property.address === "string" ? property.address : property.name || "UK Address");
+      let resolvedPostcode = (
+        property.address?.postcode ||
+        property.postcode ||
+        property.zip ||
+        property.zipCode ||
+        extractPostcode(resolvedAddressLine) ||
+        profile?.postcode ||
+        profile?.address?.postcode ||
+        localStorage.getItem("anytrader_user_postcode") ||
+        ""
+      ).trim().toUpperCase();
+
+      let resolvedCity = (
+        property.address?.city ||
+        property.address?.town ||
+        property.city ||
+        property.town ||
+        profile?.city ||
+        profile?.address?.city ||
+        ""
+      ).trim();
+
+      // Look up outward postcode & city metadata if postcode is provided
+      if (resolvedPostcode) {
+        try {
+          const lookup = await lookupPostcode(resolvedPostcode);
+          if (lookup) {
+            resolvedPostcode = lookup.postcode;
+            if (!resolvedCity) resolvedCity = lookup.city;
+          }
+        } catch (e) {
+          console.warn("Postcode lookup fallback:", e);
+        }
+      }
+
+      const resolvedOutcode = getOutwardPostcode(resolvedPostcode);
+      const displayLocation = resolvedOutcode !== "Area Hidden"
+        ? (resolvedCity && resolvedCity.toUpperCase() !== resolvedOutcode ? `${resolvedOutcode} • ${resolvedCity.toUpperCase()}` : resolvedOutcode)
+        : (resolvedCity ? resolvedCity.toUpperCase() : "Area on Request");
+
+      const fullAddr = `${resolvedAddressLine}${property.address?.line2 ? ', ' + property.address.line2 : ''}${resolvedCity ? ', ' + resolvedCity : ''}${resolvedPostcode ? ' ' + resolvedPostcode : ''}`;
+
       await addDoc(collection(db, "jobs"), {
         ownerId: user.uid,
         userId: user.uid,
         homeownerId: user.uid,
         title: jobDetails.title,
         category: jobDetails.category,
-        description: `${jobDetails.description}\n\n--- PRE-LOADED PROPERTY PASSPORT SPECS ---\n- Address: ${property.address?.line1 || property.name}\n- Boiler Spec: ${boilerBrand || 'Standard'} ${boilerModel || ''} (${boilerAge || 'N/A'} yrs old)\n- Roof Condition: ${roofCondition || 'Good'}\n- EPC Rating: Grade ${epcRating || 'C'}\n- Contact/Access Notes: ${property.contactPhone || "Call Landlord"}`,
+        subcategory: jobDetails.subcategory || "Property Maintenance",
+        description: `${jobDetails.description}\n\n--- PRE-LOADED PROPERTY PASSPORT SPECS ---\n- Location Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\n- Boiler Spec: ${boilerBrand || 'Standard'} ${boilerModel || ''} (${boilerAge || 'N/A'} yrs old)\n- Roof Condition: ${roofCondition || 'Good'}\n- EPC Rating: Grade ${epcRating || 'C'}\n\n(Full property street address & direct contact details will be automatically revealed to the assigned tradesperson once a quote is accepted)`,
         budget: jobDetails.budget || "120",
         agreedAmount: jobDetails.budget || "120",
-        status: "open",
+        status: "posted",
         urgency: jobDetails.urgency || "urgent",
+        postcode: resolvedPostcode,
+        city: resolvedCity,
+        area: displayLocation,
+        fullAddress: fullAddr,
         propertyId: property.id,
         linkedPropertyId: property.id,
-        propertyName: property.name || "Property",
-        address: property.address || { line1: property.name || "UK Address" },
+        assetId: property.id,
+        propertyName: property.name || resolvedAddressLine || "Property",
+        assetName: property.name || resolvedAddressLine || "Property",
+        address: property.address || { line1: resolvedAddressLine, postcode: resolvedPostcode, city: resolvedCity },
         passportSpecsAttached: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        jobNo: generateJobNumber(),
+        quoteCount: 0,
+        quotesCount: 0,
+        viewsCount: 0,
+        clientDeleted: false,
+        createdAt: serverTimestamp(),
+        postedDate: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
+
+      // Backfill property address if it was missing
+      if (resolvedPostcode && (!property.address?.postcode || !property.address?.city)) {
+        updateDoc(doc(db, "properties", property.id), {
+          "address.postcode": resolvedPostcode,
+          "address.city": resolvedCity,
+          postcode: resolvedPostcode,
+          city: resolvedCity
+        }).catch(err => console.warn("Failed to backfill property address:", err));
+      }
+
       toast.success("⚡ 1-Tap Trade Dispatch Successful! Job posted to local verified trades.");
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, "jobs");
@@ -213,6 +294,14 @@ export function PropertyPassportModal({ property, onClose, onUpdated }: Property
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowQRModal(true)}
+                className="p-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl flex items-center gap-1.5 shadow-sm transition"
+                title="Print Estate Agent QR Displays (Desk Stands, Wall Posters, Key Tags)"
+              >
+                <QrCode className="w-4 h-4" />
+                <span className="hidden sm:inline">Estate Agent QR</span>
+              </button>
               <button
                 onClick={() => setShowBuyerPackModal(true)}
                 className="p-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition"
@@ -921,6 +1010,13 @@ export function PropertyPassportModal({ property, onClose, onUpdated }: Property
           property={property}
           completedJobs={completedJobs}
           onClose={() => setShowBuyerPackModal(false)}
+        />
+      )}
+
+      {showQRModal && (
+        <EstateAgentQRGeneratorModal
+          initialProperty={property}
+          onClose={() => setShowQRModal(false)}
         />
       )}
     </AnimatePresence>

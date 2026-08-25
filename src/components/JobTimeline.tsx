@@ -6,7 +6,7 @@ import {
   ChevronLeft, Rocket, Wrench, FileText, CheckCircle2, 
   Clock, MapPin, List, ShieldCheck, Zap, User as UserIcon, ChevronRight
 } from "lucide-react";
-import { cn, getOutwardPostcode } from "@/src/lib/utils";
+import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 
 interface TimelineStep {
   id: string;
@@ -184,7 +184,7 @@ export default function JobTimeline() {
             </div>
             <div className="flex items-center gap-1.5 text-slate-600">
               <MapPin className="w-4 h-4 text-blue-500" />
-              <span className="text-xs font-bold uppercase">{getOutwardPostcode(job.postcode)}</span>
+              <span className="text-xs font-bold uppercase">{formatJobLocation(job)}</span>
             </div>
             <div className="flex items-center gap-1.5 text-slate-600">
               <List className="w-4 h-4 text-purple-500" />
