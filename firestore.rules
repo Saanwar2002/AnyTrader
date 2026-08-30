@@ -7,14 +7,20 @@ service cloud.firestore {
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
     function isAdmin() { 
       return isSignedIn() && (
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'saanwar2002@gmail.com') ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'ecosystem_manager'])
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'ecosystem_manager'])
       ); 
     }
     
     // --- Default Deny ---
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     match /test/connection {
@@ -62,7 +68,7 @@ service cloud.firestore {
       // Prevent privilege escalation while allowing full profile management & seeding
       allow update: if (
         isSignedIn() && (
-          (isOwner(userId) && request.resource.data.get('isAdmin', false) == false && !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager'])) || 
+          (isOwner(userId) && (isAdmin() || (request.resource.data.get('isAdmin', false) == false && !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager'])))) || 
           isAdmin() ||
           userId.matches('^mock-trader-.*$') || 
           userId.matches('^seed-.*$') || 
@@ -160,9 +166,25 @@ service cloud.firestore {
     }
 
     match /invitations/{invitationId} {
-      allow get: if isAdmin() || (isSignedIn() && request.auth.token.email != null && (resource == null || resource.data.email == request.auth.token.email.lower()));
-      allow list: if isAdmin() || (isSignedIn() && request.auth.token.email != null && (resource == null || resource.data.email == request.auth.token.email.lower()));
-      allow write: if isAdmin();
+      allow get, list: if isSignedIn() && (
+        isAdmin() || 
+        resource == null || 
+        (request.auth.token.email != null && resource.data.get('email', '').lower() == request.auth.token.email.lower()) ||
+        resource.data.get('invitedBy', '') == request.auth.uid
+      );
+      allow create: if isSignedIn() && (
+        isAdmin() || 
+        request.resource.data.get('invitedBy', '') == request.auth.uid
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.get('invitedBy', '') == request.auth.uid ||
+        (request.auth.token.email != null && resource.data.get('email', '').lower() == request.auth.token.email.lower())
+      );
+      allow delete: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.get('invitedBy', '') == request.auth.uid
+      );
     }
 
     match /emergency_broadcasts/{broadcastId} {
@@ -172,7 +194,7 @@ service cloud.firestore {
     }
 
     match /broadcasts/{broadcastId} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn() || isAdmin();
       allow write: if isAdmin();
     }
 
@@ -302,7 +324,7 @@ service cloud.firestore {
 
     // --- Home Portal (Tradesperson/Homeowner Logic) ---
     match /jobs/{jobId} {
-      allow read: if isSignedIn();
+      allow read, list: if true; // Public read so guest visitors & registered users can view posted jobs, feed & property passports
       allow create: if isSignedIn() && (
         request.resource.data.get('homeownerId', '') == request.auth.uid || 
         request.resource.data.get('userId', '') == request.auth.uid || 
@@ -310,7 +332,10 @@ service cloud.firestore {
         request.resource.data.get('posterId', '') == request.auth.uid || 
         request.resource.data.get('customerId', '') == request.auth.uid || 
         request.resource.data.get('isRecurringInstance', false) == true || 
-        isAdmin()
+        isAdmin() ||
+        request.resource.data.get('homeownerId', '').matches('^seed-.*$') ||
+        request.resource.data.get('homeownerId', '').matches('^sample_.*$') ||
+        request.resource.data.get('homeownerId', '').matches('^mock-.*$')
       );
       allow update: if isSignedIn() && (
         resource == null || 
@@ -321,19 +346,25 @@ service cloud.firestore {
         resource.data.get('customerId', '') == request.auth.uid || 
         resource.data.get('acceptedTradespersonId', '') == request.auth.uid || 
         request.resource.data.get('acceptedTradespersonId', '') == request.auth.uid || 
-        isAdmin()
+        isAdmin() ||
+        resource.data.get('homeownerId', '').matches('^seed-.*$') ||
+        resource.data.get('homeownerId', '').matches('^sample_.*$') ||
+        resource.data.get('homeownerId', '').matches('^mock-.*$')
       );
       allow delete: if isSignedIn() && (
         resource == null || 
         resource.data.get('homeownerId', '') == request.auth.uid || 
         resource.data.get('userId', '') == request.auth.uid || 
         resource.data.get('ownerId', '') == request.auth.uid || 
-        isAdmin()
+        isAdmin() ||
+        resource.data.get('homeownerId', '').matches('^seed-.*$') ||
+        resource.data.get('homeownerId', '').matches('^sample_.*$') ||
+        resource.data.get('homeownerId', '').matches('^mock-.*$')
       );
     }
 
     match /jobs/{jobId}/quotes/{quoteId} {
-      allow read, list: if isSignedIn();
+      allow read, list: if true;
       allow create: if isSignedIn() && (
         request.resource.data.get('tradespersonId', '') == request.auth.uid || 
         request.resource.data.get('proId', '') == request.auth.uid || 
@@ -364,11 +395,23 @@ service cloud.firestore {
       allow read: if isSignedIn() && (resource == null || resource.data.consultantId == request.auth.uid || isAdmin());
       allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
     }
-    // Helper function for consultancy ownership
+    // Helper function for consultancy and trade ownership
     function isConsultancyOwner() {
       return isSignedIn() && (
-        (resource != null && (resource.data.businessId == request.auth.uid || resource.data.consultantId == request.auth.uid || resource.data.userId == request.auth.uid)) ||
-        (request.resource != null && (request.resource.data.businessId == request.auth.uid || request.resource.data.consultantId == request.auth.uid || request.resource.data.userId == request.auth.uid)) ||
+        (resource != null && (
+          resource.data.get('businessId', '') == request.auth.uid || 
+          resource.data.get('consultantId', '') == request.auth.uid || 
+          resource.data.get('userId', '') == request.auth.uid ||
+          resource.data.get('traderId', '') == request.auth.uid ||
+          resource.data.get('creatorId', '') == request.auth.uid
+        )) ||
+        (request.resource != null && (
+          request.resource.data.get('businessId', '') == request.auth.uid || 
+          request.resource.data.get('consultantId', '') == request.auth.uid || 
+          request.resource.data.get('userId', '') == request.auth.uid ||
+          request.resource.data.get('traderId', '') == request.auth.uid ||
+          request.resource.data.get('creatorId', '') == request.auth.uid
+        )) ||
         isAdmin()
       );
     }
@@ -434,12 +477,51 @@ service cloud.firestore {
       allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
     }
     match /invoices/{id} {
-      allow read: if isSignedIn() && (resource == null || isConsultancyOwner() || resource.data.clientId == request.auth.uid);
-      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
+      allow read: if isSignedIn() && (
+        resource == null || 
+        isConsultancyOwner() || 
+        resource.data.get('traderId', '') == request.auth.uid || 
+        resource.data.get('consultantId', '') == request.auth.uid || 
+        resource.data.get('userId', '') == request.auth.uid || 
+        resource.data.get('businessId', '') == request.auth.uid || 
+        resource.data.get('clientId', '') == request.auth.uid || 
+        resource.data.get('homeownerId', '') == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.get('traderId', '') == request.auth.uid || 
+        request.resource.data.get('consultantId', '') == request.auth.uid || 
+        request.resource.data.get('userId', '') == request.auth.uid || 
+        request.resource.data.get('businessId', '') == request.auth.uid ||
+        isAdmin()
+      );
+      allow update, delete: if isSignedIn() && (
+        resource == null || 
+        isConsultancyOwner() || 
+        resource.data.get('traderId', '') == request.auth.uid || 
+        resource.data.get('consultantId', '') == request.auth.uid || 
+        resource.data.get('userId', '') == request.auth.uid || 
+        resource.data.get('businessId', '') == request.auth.uid ||
+        isAdmin()
+      );
     }
     match /expenses/{id} {
-      allow read: if isSignedIn() && (resource == null || isConsultancyOwner());
-      allow write: if isSignedIn() && (resource == null || isConsultancyOwner());
+      allow read: if isSignedIn() && (
+        resource == null || 
+        isConsultancyOwner() || 
+        resource.data.get('consultantId', '') == request.auth.uid || 
+        resource.data.get('traderId', '') == request.auth.uid || 
+        resource.data.get('userId', '') == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isSignedIn() && (
+        resource == null || 
+        isConsultancyOwner() || 
+        request.resource.data.get('consultantId', '') == request.auth.uid || 
+        request.resource.data.get('traderId', '') == request.auth.uid || 
+        request.resource.data.get('userId', '') == request.auth.uid ||
+        isAdmin()
+      );
     }
     match /portfolioItems/{id} {
       allow read: if true;
@@ -466,8 +548,8 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     match /bidding_jobs/{jobId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.tradespersonId == request.auth.uid || isAdmin());
-      allow write: if isSignedIn() && (request.resource.data.tradespersonId == request.auth.uid || isAdmin());
+      allow read, list: if isSignedIn();
+      allow write: if isSignedIn();
     }
     match /affiliates/{affiliateId} {
       allow read: if isSignedIn();

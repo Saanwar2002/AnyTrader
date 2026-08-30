@@ -34,9 +34,16 @@ export default function BusinessTeamManagement() {
   const [error, setError] = useState<string | null>(null);
 
   // Constants for Tier checking
-  const isEligible = profile?.subscriptionType === 'Business Professional' || 
-                    profile?.subscriptionType === 'Enterprise Powerhouse' || 
-                    profile?.subscriptionType === 'Platinum Enterprise';
+  const subType = (profile?.subscriptionType || "").toLowerCase();
+  const role = (profile?.role || "").toLowerCase();
+  const isEligible = role === 'business' || 
+                    role === 'tradesperson' ||
+                    subType === 'business' || 
+                    subType === 'gold' || 
+                    subType === 'platinum' || 
+                    subType === 'enterprise' || 
+                    subType.includes('business') || 
+                    subType.includes('enterprise');
 
   useEffect(() => {
     if (!user || !isEligible) {

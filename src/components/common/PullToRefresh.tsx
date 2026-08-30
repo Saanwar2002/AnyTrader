@@ -32,12 +32,18 @@ export function PullToRefresh({
   const isTopRef = useRef(false);
   const hasTriggeredHapticRef = useRef(false);
 
+  const getScrollTop = () => {
+    const container = containerRef.current;
+    if (container && container.scrollHeight > container.clientHeight && container.clientHeight > 0 && container.scrollTop > 0) {
+      return container.scrollTop;
+    }
+    return window.pageYOffset || document.documentElement.scrollTop || window.scrollY || 0;
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
     if (disabled || isRefreshing) return;
 
-    const container = containerRef.current;
-    // Check if scrolled to top
-    const scrollTop = container ? container.scrollTop : window.scrollY;
+    const scrollTop = getScrollTop();
     
     if (scrollTop <= 1) {
       isTopRef.current = true;
@@ -52,8 +58,7 @@ export function PullToRefresh({
   const handleTouchMove = (e: React.TouchEvent) => {
     if (disabled || !isTopRef.current || isRefreshing) return;
 
-    const container = containerRef.current;
-    const scrollTop = container ? container.scrollTop : window.scrollY;
+    const scrollTop = getScrollTop();
     if (scrollTop > 1) {
       isTopRef.current = false;
       if (pullDistance > 0) setPullDistance(0);
@@ -128,7 +133,7 @@ export function PullToRefresh({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className={cn("relative overflow-y-auto overscroll-none touch-pan-y", className)}
+      className={cn("relative w-full touch-pan-y", className)}
     >
       {/* Pull Indicator Badge */}
       <AnimatePresence>

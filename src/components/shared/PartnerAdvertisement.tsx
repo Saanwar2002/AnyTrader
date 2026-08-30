@@ -16,6 +16,7 @@ import { useAuth } from "../AuthProvider";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { INITIAL_MOCK_TRADERS, Tradesperson } from "../../services/seedService";
+import { IllustratedAdTicker } from "./IllustratedAdTicker";
 
 const iconMap: Record<string, any> = {
   Zap, Briefcase, ShieldCheck, Star, Gift, ShieldAlert, Award, 
@@ -307,11 +308,13 @@ const DEFAULT_TRADESPERSON_ADVERTS: PartnerAdItem[] = [
 export default function PartnerAdvertisement({ 
   role = "tradesperson", 
   category,
-  activeCategories = []
+  activeCategories = [],
+  className
 }: { 
   role?: string; 
   category?: string; 
   activeCategories?: string[];
+  className?: string;
 }) {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -631,16 +634,20 @@ export default function PartnerAdvertisement({
   };
 
   return (
-    <div 
-      className="mt-3 mb-5 relative group/banner select-none"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className={cn("-mt-5 sm:-mt-4 mb-5 select-none", className)}>
+      {/* Illustrated Marquee Ticker directly above advertising container - No boxes or containers */}
+      <IllustratedAdTicker role={role} />
+
       {/* Main Banner Card Container with Natural Height & High-Contrast Black Border */}
-      <div className="relative overflow-hidden rounded-2xl w-full min-h-[150px] sm:min-h-[140px] bg-slate-900 border border-black shadow-md z-10">
+      <div 
+        className="mt-1.5 relative group/banner select-none"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="relative overflow-hidden rounded-2xl w-full min-h-[150px] sm:min-h-[140px] bg-slate-900 border border-black shadow-md z-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentAd.id}
@@ -885,6 +892,7 @@ export default function PartnerAdvertisement({
           </Link>
         </div>
       )}
+      </div>
     </div>
   );
 }

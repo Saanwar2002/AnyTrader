@@ -4926,10 +4926,9 @@ export default function AnyTraderAdmin() {
                             onChange={(e) => setTempConfig({...tempConfig, aiModel: e.target.value})}
                             className="w-full bg-white border-2 border-black rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
                           >
-                            <option value="gemini-1.5-flash">Gemini 1.5 Flash (Legacy Fast)</option>
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Current Fast)</option>
-                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced)</option>
-                            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (Beta)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Reliable - Default)</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (Complex Reasoning & Planning)</option>
+                            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Ultra Fast Response)</option>
                           </select>
                           <p className="text-[10px] text-slate-500 mt-2">
                             Controls the master language model for quoting, parsing, and moderation.

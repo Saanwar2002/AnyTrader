@@ -274,12 +274,12 @@ export function HeaderSmartTicker() {
 
   return (
     <div 
-      className="flex-1 mx-1 min-w-0 max-w-full select-none pointer-events-none"
+      className="flex flex-1 mx-1 sm:mx-2 min-w-0 max-w-full select-none pointer-events-none"
       aria-label="Platform Feature Spotlight"
     >
       <div 
         className={cn(
-          "w-full h-10 sm:h-11 px-1.5 rounded-[14px] border border-black shadow-xs flex items-center transition-colors duration-500 overflow-hidden relative",
+          "w-full h-10 sm:h-11 px-1.5 sm:px-2 rounded-[14px] border border-black shadow-xs flex items-center transition-colors duration-500 overflow-hidden relative",
           activeSticker.cardBg
         )}
       >
@@ -301,36 +301,36 @@ export function HeaderSmartTicker() {
                 transition={{
                   repeat: Infinity,
                   ease: "linear",
-                  duration: 10.5,
+                  duration: 10,
                 }}
                 className="flex items-center whitespace-nowrap shrink-0 will-change-transform"
               >
                 {/* Loop Segment 1 */}
-                <div className="flex items-center gap-2 pr-10 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 pr-8 sm:pr-10 shrink-0">
                   <span 
                     className={cn(
-                      "text-[8.5px] sm:text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded-[5px] border border-black/40 leading-none shrink-0",
+                      "text-[7.5px] sm:text-[9.5px] font-black uppercase px-1 sm:px-1.5 py-0.5 rounded-[5px] border border-black/40 leading-none shrink-0",
                       activeSticker.tagColor
                     )}
                   >
                     {activeSticker.tag}
                   </span>
-                  <span className={cn("text-[11.5px] sm:text-[13px] font-black tracking-tight leading-none", activeSticker.titleColor)}>
+                  <span className={cn("text-[10.5px] sm:text-[13px] font-black tracking-tight leading-none", activeSticker.titleColor)}>
                     {activeSticker.title}
                   </span>
                 </div>
 
                 {/* Loop Segment 2 (Seamless loop duplicate) */}
-                <div className="flex items-center gap-2 pr-10 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 pr-8 sm:pr-10 shrink-0">
                   <span 
                     className={cn(
-                      "text-[8.5px] sm:text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded-[5px] border border-black/40 leading-none shrink-0",
+                      "text-[7.5px] sm:text-[9.5px] font-black uppercase px-1 sm:px-1.5 py-0.5 rounded-[5px] border border-black/40 leading-none shrink-0",
                       activeSticker.tagColor
                     )}
                   >
                     {activeSticker.tag}
                   </span>
-                  <span className={cn("text-[11.5px] sm:text-[13px] font-black tracking-tight leading-none", activeSticker.titleColor)}>
+                  <span className={cn("text-[10.5px] sm:text-[13px] font-black tracking-tight leading-none", activeSticker.titleColor)}>
                     {activeSticker.title}
                   </span>
                 </div>

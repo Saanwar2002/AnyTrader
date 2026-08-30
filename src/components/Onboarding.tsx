@@ -887,7 +887,7 @@ export default function Onboarding() {
                     <Briefcase className="w-7 h-7" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="font-black text-lg text-slate-900 block tracking-tight">Trade & Field Services</span>
+                    <span className="font-black text-lg text-slate-900 block tracking-tight">Trades & Services</span>
                     <span className="text-sm text-slate-500 block leading-tight">Plumbers, electricians, cleaners</span>
                   </div>
                   <div className={cn(

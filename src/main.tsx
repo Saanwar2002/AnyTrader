@@ -13,7 +13,7 @@ import { registerSW } from 'virtual:pwa-register';
 if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
   // Clear legacy or outdated versioned caches and any legacy api-cache entries on startup
   if ('caches' in window) {
-    const activeCachePrefix = 'anytrader-v1.0.2';
+    const activeCachePrefix = 'anytrader-v1.0.4';
     caches.keys().then((cacheNames) => {
       cacheNames.forEach((cacheName) => {
         if (

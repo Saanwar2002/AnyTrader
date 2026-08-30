@@ -19,7 +19,7 @@ export default defineConfig(({mode}) => {
           clientsClaim: true,
           skipWaiting: true,
           navigateFallbackDenylist: [/^\/api/],
-          cacheId: 'anytrader-v1.0.2',
+          cacheId: 'anytrader-v1.0.4',
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -91,7 +91,6 @@ export default defineConfig(({mode}) => {
           name: 'AnyTrader UK',
           short_name: 'AnyTrader',
           description: 'Hire a tradesperson as easily as ordering a taxi.',
-          version: '1.0.0',
           start_url: '/',
           scope: '/',
           display: 'standalone',

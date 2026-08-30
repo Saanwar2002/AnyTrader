@@ -158,14 +158,15 @@ export async function getHybridTraderRecommendations(
     const userPrefix = (userPostcode || "").trim().split(" ")[0]?.toUpperCase() || "";
 
     // 3. Score candidates for Featured Slot vs Organic Pool
-    const scoredCandidates = candidatePool.map((tp) => {
+    const scoredCandidates = candidatePool.map((tpObj) => {
+      const tp: any = tpObj;
       const rating = tp.rating || 4.8;
       const reviews = tp.reviewsCount || tp.totalReviews || tp.totalJobsCompleted || 12;
       const isVerified = tp.verificationStatus === "verified" || tp.isVerified === true;
       const isGasSafe = tp.isGasSafeRegistered || tp.certifications?.some((c: any) => c.name?.toLowerCase().includes("gas safe"));
       const isNiceic = tp.isNiceicApproved || tp.certifications?.some((c: any) => c.name?.toLowerCase().includes("niceic"));
-      const isVideo = !!tp.verificationVideoUrl || tp.isVideoVerified;
-      const isProSubscribed = tp.subscriptionType === "business" || tp.tier === "premium" || (tp as any).isTradeOsPro;
+      const isVideo = Boolean(tp.videoVerificationUrl || tp.verificationVideoUrl || tp.isVideoVerified || tp.videoVerificationStatus === "verified" || tp.hasVerifiedVideoProSubscription);
+      const isProSubscribed = Boolean(tp.subscriptionType === "business" || tp.tier === "premium" || (tp as any).isTradeOsPro || tp.hasVerifiedVideoProSubscription);
 
       const tpPostcode = (tp.postcode || "").trim().toUpperCase();
       const isAreaMatch = !!(userPrefix && tpPostcode.startsWith(userPrefix));
@@ -197,7 +198,7 @@ export async function getHybridTraderRecommendations(
       : scoredCandidates[0];
 
     if (featuredPick) {
-      const tp = featuredPick.tp;
+      const tp: any = featuredPick.tp;
       recommendations.push({
         uid: tp.uid || tp.id || "trader-featured-1",
         name: tp.name || tp.displayName || tp.businessName || "Apex Pro Services",
@@ -237,7 +238,7 @@ export async function getHybridTraderRecommendations(
       });
 
       const organicPick = sortedOrganic[0];
-      const tp = organicPick.tp;
+      const tp: any = organicPick.tp;
 
       recommendations.push({
         uid: tp.uid || tp.id || "trader-organic-2",

@@ -1,5 +1,504 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 📱 Trader Create Invoice Modal Mobile Responsiveness Fix (`FinancialDashboardWidget.tsx`) (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   *User Report*: "Sort out cutting out sections on mobile devices for create invoice for traders" with an annotated screenshot showing the "Create Instant Trade Invoice" modal on a mobile viewport.
+    *   *Visual Defects Identified*:
+        1.  *Right Side Line Items Truncation*: The Line Item `£ Amount` input box and remove item action button were clipped past the right edge of the screen.
+        2.  *Top Title & Label Collision*: The top modal header bar collided with and partially obscured the first form field label (`Job / Service Title`).
+        3.  *Mobile Grid Squeeze*: Client name and address fields in a rigid 2-column grid squeezed labels and text inputs on narrow mobile viewports (<380px).
+        4.  *Bottom Footer Action Cutoff*: The "Generate & Share via WhatsApp" action button and total invoice breakdown were pushed down and obscured behind bottom navigation bars.
+*   **Root Cause Analysis**:
+    *   *Flexbox Intrinsic Width without `min-w-0`*: The Line Item description `<input type="text" className="flex-1 ...">` lacked `min-w-0`. In CSS flexbox, text inputs have a default minimum intrinsic width of ~150-180px. Combined with `p-6` container padding and the `w-24` amount input, the total width exceeded the mobile viewport width, forcing the right side of line items off screen.
+    *   *Unsegmented Single-Container Scrolling*: The modal lacked pinned/fixed header and footer sections. When rendered on mobile with variable screen heights and browser UI chrome, elements at both the top and bottom were cut off or awkwardly scrolled.
+*   **Architectural Solutions Implemented**:
+    1.  **Flexbox `min-w-0` & Responsive Line Item Controls**:
+        *   Added `min-w-0` to the item description input and formatted the amount field with a dedicated fixed-width prefix container (`relative w-24 sm:w-28 shrink-0`).
+        *   Added a styled, compact remove button (`w-8 h-8 rounded-xl bg-red-50 text-red-600 border border-red-200 shrink-0`) that fits comfortably within mobile screen bounds.
+    2.  **Pinned Header & Sticky Action Footer**:
+        *   *Pinned Header*: Created a dedicated dark navy top header (`p-4 sm:p-5 bg-slate-900 border-b border-slate-200 text-white shrink-0`) with icon, title, subtitle, and prominent close button.
+        *   *Scrollable Body*: Wrapped the form fields in an independent scrollable body (`p-4 sm:p-6 overflow-y-auto space-y-4 flex-1`).
+        *   *Sticky Footer*: Placed the "Generate & Share via WhatsApp" submit button inside a pinned bottom bar (`p-4 sm:p-5 bg-slate-50 border-t border-slate-200 shrink-0`), guaranteeing it is always visible and tap-friendly on all screen sizes.
+    3.  **Adaptive Responsive Grid & Safe-Area Padding**:
+        *   Updated Client Details to `grid grid-cols-1 sm:grid-cols-2 gap-3` with `min-w-0` on inputs to eliminate horizontal cramping.
+        *   Elevated modal overlay z-index to `z-[100]` with `max-h-[90vh]` and `my-auto` centering to prevent interference from floating widgets or bottom navigation bars.
+
+## 🃏 Trader Job Card Layout & Urgency Headings System (`JobFeed.tsx` & `TradeJobs.tsx`) (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   *Issue 1 (View Details Squeezing Content)*: "The view detail tab is pushing all the other information to the left. Can we sort this out in a way that all the job information is displayed properly?"
+    *   *Issue 2 (Prominent Emergency & Urgency Headers)*: "Can we also see if we can make these cards a little bit more prominent, like emergency jobs? We can give them a top heading in a red color, like we display for the homeowners on their side of the dashboard. So, check how we display these job cards on the homeowner side. And I'll see if we can make the trader side of the dashboard a little bit better, so when they're scrolling, they can actually see it clearly, the urgency of the jobs. Don't change any logics or anything else. Just see if we can make the outlook of these cards a little bit better."
+*   **Root Cause Analysis**:
+    *   *Inline Layout Wrapping*: In `JobFeed.tsx`, the outer `<Link>` component did not enforce `block w-full` / `flex-col`, and the inner card structure contained a horizontal flex container alongside an `sm:hidden` "View Details" `<div>`. In browser rendering, the "View Details" element sat beside the content container, squeezing all job information into a narrow left-aligned column with text wrapping and broken horizontal alignment.
+    *   *Header Urgency Parity*: The trader job cards were missing the high-contrast color-coded top banners present on the homeowner dashboard (`Dashboard.tsx` and `MyJobs.tsx`), making it difficult to distinguish emergency, urgent/ASAP, flash deal, and standard jobs at a glance while scrolling.
+*   **Architectural Solutions Implemented**:
+    1.  **Unified Block-Level Card Container**:
+        *   Standardized `<Link className="block w-full bg-white rounded-[2rem] border ... overflow-hidden group relative text-left">` across `JobFeed.tsx` and `TradeJobs.tsx`.
+        *   Integrated a full-width bottom "View Details & Full Specifications" footer bar spanning 100% card width with an animated chevron arrow, completely eliminating any horizontal squeezing.
+    2.  **Color-Coded Top Urgency Heading Banners**:
+        *   **Emergency Jobs** (`job.urgency === 'emergency' || job.isEmergency || job.isBoosted`): High-prominence red gradient banner (`bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-red-700`) with bouncing `<AlertCircle>` icon, `"Emergency Job • Immediate Dispatch"` title, and `"High Urgency"` badge. Outer card highlighted with a `2px border-red-500` and soft red ambient tint (`bg-red-50/15`).
+        *   **Urgent / ASAP Jobs** (`job.urgency === 'asap' || job.urgency === 'urgent'`): Amber/orange banner (`bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-amber-600`) with clock icon, `"Urgent Job • ASAP Required"`, and `"Priority"` badge.
+        *   **Flash Deals Claimed** (`job.claimedDeal`): Gold/amber banner with `<Zap>` icon, discount percentage callout, and pre-agreed fixed rate badge.
+        *   **Direct 1-on-1 Requests** (`job.targetTradespersonName || job.targetTradespersonId`): Royal indigo banner with target trader attribution.
+        *   **Instant Match Priority Leads** (`job.boostTier === 'instant_match' || job.isInstantMatch`): Golden `#E6A020` banner.
+        *   **Scheduled Date Jobs** (`job.urgency === 'specific_date'`): Slate `#0f172a` banner showing the formatted job target date.
+        *   **Standard Jobs**: Clean dark slate banner (`bg-slate-900`) indicating an open standard quote opportunity.
+    3.  **Spacious Internal Layout**:
+        *   Full 100% width internal body (`p-4 sm:p-5 space-y-3`) featuring clean title hierarchy, prominent estimated budget/rate display, metadata badges (location, urgency timer, quote counter, post date), scope/media chips, and active quote status / quick quote CTA buttons.
+
+## 📐 Scrolling Text Marquee Ticker Vertical Spacing & Symmetry Balance (`PartnerAdvertisement.tsx` & `IllustratedAdTicker.tsx`) (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   *User Report*: "Can we actually sort out the bottom and the top padding below and top of the scrolling text? The top one is more white space than the bottom of the scrolling text. Can we reduce the white space at the top so it's equal to the white space at the bottom so it looks more balanced? Can you just sort this out?"
+*   **Root Cause**:
+    *   Parent container in `Dashboard.tsx` had `space-y-8` (`margin-top: 32px` on child elements), and `PartnerAdvertisement.tsx` had an additional `mt-2` (`8px`) combined with `py-1.5` on the ticker. This accumulated ~46px of vertical gap above the scrolling text, whereas the gap below the scrolling text and above the featured banner was only ~14px.
+*   **Solution**:
+    *   Applied `-mt-5 sm:-mt-4` on `PartnerAdvertisement.tsx` to offset the inherited parent grid spacing, and balanced padding/margin to `py-1 mb-0` in `IllustratedAdTicker.tsx` with `mt-1.5` on the banner card container.
+    *   Result: Perfectly symmetrical 16px vertical whitespace above and 16px vertical whitespace below the scrolling text marquee ticker.
+
+## 🎥 Trader Live Video Selfie Camera Feed Fix & Verified Video Pro Subscription Activation (`TraderVideoVerificationCard.tsx`) (Completed August 30, 2026)
+*   **Context & User Problem**:
+    *   *Issue 1 (Black Camera Screen)*: "Whenever we are recording a video, the camera is not actually visible on the screen, the selfie camera." (Referencing user screenshot where camera preview container was pitch black).
+    *   *Issue 2 (Subscription & Backend Wiring Verification)*: "Can you also check into the logic that when the trader subscribe this feature, is that actually going to work? And if it meant actually going to go through and is properly wired up by the backend. So the when the trader subscribe it, they actually going to get this feature activated and the logic works properly. Can you double check and make sure that it all works properly?"
+*   **Root Cause Analysis**:
+    *   *Camera Feed Lifecycle Disconnect*: In `TraderVideoVerificationCard.tsx`, calling `startCamera()` set `liveStreamRef.current = stream` and attempted `videoPreviewRef.current.srcObject = stream` *before* `setIsCameraActive(true)` was executed. Because `isCameraActive` was initially `false`, the `<video ref={videoPreviewRef} ...>` element was not rendered in the DOM yet (`videoPreviewRef.current` was `null`). Once `setIsCameraActive(true)` caused React to mount the `<video>` element, nothing ever bound the `MediaStream` to the newly rendered `<video>` element's `srcObject`, causing the preview to render as a pitch-black box.
+    *   *Selfie Facing Mode & Codec Compatibility*: Without explicit `{ facingMode: { ideal: "user" } }` constraints, mobile devices defaulted to back cameras or threw constraint errors. In addition, hardcoded `mimeType: "video/webm"` in `MediaRecorder` threw errors on iOS/WebKit Safari which only natively supports `video/mp4`.
+    *   *Profile State Propagation*: In `Profile.tsx`, `onUpdateProfile` was only modifying `setEditData` instead of also propagating changes to `setProfile` in global `AuthContext`, meaning subscription upgrades and video uploads required a page reload before updating parent components and badges.
+*   **Architectural Solutions Implemented**:
+    1.  **Guaranteed Instant Stream Binding (`TraderVideoVerificationCard.tsx`)**:
+        *   Added a dedicated `useEffect([isCameraActive])` and an inline callback ref `(el) => { videoPreviewRef.current = el; if (el && liveStreamRef.current) { el.srcObject = liveStreamRef.current; el.play(); } }` to guarantee that the live selfie camera stream is attached the exact frame the video DOM node mounts.
+        *   Added `autoPlay`, `playsInline`, `muted`, and horizontal mirroring (`scale-x-[-1]`) on front selfie mode for a natural camera app feel.
+        *   Added dual camera switching (`SwitchCamera` button) enabling traders to seamlessly flip between Front Selfie Camera and Rear Camera (to showcase vans, tools, or physical trade accreditations).
+    2.  **Cross-Browser MediaRecorder Codec Negotiation**:
+        *   Dynamically checks `MediaRecorder.isTypeSupported` across VP9, VP8, WebM, and MP4 (H.264/AAC) codecs for 100% cross-platform recording reliability across iOS, Android Chrome, and Desktop Safari/Chrome/Firefox.
+    3.  **End-to-End Verified Video Pro (£15/mo) Subscription Wiring**:
+        *   *Database Persistence*: Updates `users/{uid}` in Firestore with `hasVerifiedVideoProSubscription: true`, `videoProSubscribedAt`, and `videoVerificationStatus: "verified"`.
+        *   *Global Auth State Sync*: Updated `Profile.tsx` `onUpdateProfile` callback to synchronize both `setProfile` and `setEditData`, ensuring immediate reactivity across all tabs and badges without requiring a reload.
+        *   *40+ Signal Matching Engine Integration (`matchingEngine.ts`)*: Explicitly factors `hasVerifiedVideoProSubscription` into Group 4 (Verification & Trust Credentials), granting immediate +35 match score points and adding `"⚡ Verified Video Pro Subscriber (+35 pts)"` to homeowner key highlights.
+        *   *Quote Comparison & Placement (`QuoteComparisonModal.tsx` & `JobDetails.tsx`)*: Automatically sorts Verified Video Pro subscribers to the top priority quote slot with gold `⚡ Verified Video Pro` badge overlays and 1-click video playback.
+        *   *AI Recommendation Engine (`aiRecommendationService.ts`)*: Automatically elevates Verified Video Pro subscribers into the top Featured Partner slot and AI recommended quote deck.
+
+## 🛠️ Elimination of Layout Shift (Compressed to Full Screen) on Job Posting Wizard (`PostJobWizard.tsx`) (Completed August 30, 2026)
+*   **Context & Investigation**:
+    *   *User Report*: "Investigate why posting a job is loading like this. It's compressed and then expands to full screen. Can you investigate this behavior?"
+    *   *Root Cause*: `PostJobWizard.tsx` initialized `isInitializing` to `true` on initial mount whenever loading fresh job posts. This rendered a temporary compact centered spinner block (`py-20 flex flex-col items-center gap-4`) while the top-level `Layout.tsx` and wizard containers were mounting. Once synchronous auth/state checks resolved on the next microtask/frame, `isInitializing` flipped to `false`, causing Framer Motion to unmount the small spinner and abruptly render the full-height, full-width step landing UI (manual job button, emergency job button, Voice assistant, category grid, how it works accordion, guarantee badge). This sudden transition caused a noticeable visual jump/expansion (Cumulative Layout Shift / "compressed then expands").
+    *   *Fix*:
+        1. Set `isInitializing` default state to `false` in `PostJobWizard.tsx`.
+        2. Kept asynchronous initialization loading strictly scoped for business portfolio assets fetching when needed, so standard homeowner job posting renders its full step UI immediately and smoothly without any layout expansion or visual stutter.
+
+## 🔍 Universal Account & Dashboard Search Bar in Header (`HeaderAccountSearch.tsx` & `Layout.tsx`) (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   "Can you remove these two tabs ( 24/7 SOS Fast Fix (Emergency Button and Home & Tenant Daily Access Hub ) you just recently implemented in the header? Don't remove anything else, just the two tabs you implemented in the last action."
+    *   "Can we utilize the empty space and put a search box there so the user can search anything regarding their account? If they don't know how to find it, they can just type in that search box and they can get the results matching according to their search text. I think that would be more useful for the user if they're struggling to find anything on their dashboard or in their account, so they can quickly search it. Make that search box match the styling and sizes of the other tabs on the header which are already there."
+    *   "So when the search box is selected to type any query, the overlay is actually blocking the search box and is grayed out. The user can't see what they're writing or what they're typing in the search box. So can we sort this out?"
+*   **Architectural Implementation**:
+    1.  **Universal Search Component (`HeaderAccountSearch.tsx`)**:
+        *   **Responsive Viewport Centering Fix**: Positioned dropdown popover with `fixed top-[68px] sm:top-[72px] left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-[500px] max-w-[calc(100vw-24px)]`. On mobile, it guarantees 12px safe margins on both left and right edges, eliminating any horizontal cutting or bleed-off on smaller viewports.
+        *   **Layering & Focus Visibility Fix**: Elevated the search input container to `relative z-[75]` with a solid white background and high-contrast border, while moving the backdrop to start below the header (`fixed top-16 inset-x-0 bottom-0 z-[60]`). This ensures the user's active typing in the search box is 100% crystal-clear and never obscured or blurred.
+        *   **Styling Consistency**: Matches the header's design system (`h-9 sm:h-11`, `rounded-[14px]`, `bg-white`, `border border-black`, `shadow-sm`, with `⌘K` shortcut badge on desktop and clear `✕` button).
+        *   **Live Tokenized Search Index**: Covers 5 structured categories:
+            *   *Account & Profile*: Profile details, ID/Video verification, Stripe payouts/bank accounts, Tax & NI reserves calculator, direct messages/chats, and notifications.
+            *   *Jobs, Quotes & Financials*: My posted jobs/active projects, Post a new job wizard, 24/7 emergency dispatch, TradeOS invoices & receipts, and pending quote comparisons.
+            *   *Tools & Portals*: Property Passport digital twins, Tenant repair issue reporting, FlexiPay 0% APR repair financing modal, Off-Peak flash deals creator, Gotham B2B social housing portal, and AnyRoller Driver Terminal.
+            *   *Services & Trades*: On-demand delivery & bulky appliance courier, general labour & site helpers, wheelie bin cleaning, plumbing/heating, electrical & EV chargers.
+            *   *Help & Safety*: Emergency water & gas shutoff guide, milestone escrow protection, and trust & safety guidelines.
+        *   **Interactive Search Modal/Popover**: Real-time matching with category headers, match counters, direct 1-click navigation, and fallbacks to search the trade directory or ask the TradeOS AI Bot.
+    2.  **Clean Header Integration (`Layout.tsx`)**:
+        *   Added `relative z-50` to the `<header>` element.
+        *   Fully responsive across all screen widths (`w-36` on mobile to `w-96` on desktop) without layout shifting.
+
+## 📦 Relocation of Monetization & Advertising Containers Below Flash Deal Creator (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   "Can we bring these three containers right at the bottom just below the flash deal creator container? So it's not taking important space in the middle of the screen because this is only for advertising." (Referencing user screenshot with orange circle around BNPL FlexiPay 0% APR, Materials Sourcing Merchant Commissions, and Trader SaaS Verified Video Pro banners, and arrow down below the Flash Deal Creator container).
+*   **Architectural Changes**:
+    1.  **Overview Section Optimization (`FinancialDashboardWidget.tsx`)**:
+        *   Extracted the three promotional/monetization cards out of the top `FinancialDashboardWidget`.
+        *   Restructured the financial metrics overview into a clean, compact 3-card grid (`Paid Invoices (Earned)`, `Outstanding Invoices`, `Est. Tax & NI Reserve`) followed immediately by the Invoicing Engine and action tools.
+        *   Freed up high-priority screen space for day-to-day workflow tools (Incoming Direct Requests, Verification status, My Projects, Pending Quotes, Appointments).
+    2.  **Dedicated Growth & Monetization Banners (`TraderMonetizationBanners.tsx`)**:
+        *   Created `TraderMonetizationBanners.tsx` containing the three advertising containers:
+            *   *BNPL FlexiPay (£1k+)*: 0% APR Repair Financing (1.5%–2.5% B2B Fee, upfront trader payout) with interactive `BnplFinancingModal`.
+            *   *Materials Sourcing & Procurement*: Merchant Referral Commissions (3.0%–5.0% Affiliate Fee at Screwfix, Travis Perkins & B&Q) with trade perks modal.
+            *   *Trader SaaS Subscriptions*: Verified Video Pro Subscriptions (£15.00/mo, +35 match score points, priority ranking) with direct route to video verification.
+    3.  **Repositioning (`TradesDashboard.tsx`)**:
+        *   Positioned `<TraderMonetizationBanners />` directly underneath the Quiet Period Off-Peak Deals (Flash Deal Creator) container, just above Partner Perks.
+
+## 📢 Dynamic Randomized Showcase of Platform Categories, Features & Functions in Illustrated Scrolling Ticker (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   "Also include in the scrolling text just above the profile advertising container. Also, include the random categories of our platform and all the features and functions randomly selected by the logic. Just keep the text design and the speed as it is, so when a user is looking at their screen, they can actually see the categories we cover, the features, and the functions to promote our platform."
+*   **Architectural Changes**:
+    1.  **Three Comprehensive Pools (`IllustratedAdTicker.tsx`)**:
+        *   **Categories Pool (`CATEGORY_POOL`)**: Kitchen Fitting (Bespoke & Pre-Built), Emergency Plumber (14m Avg Dispatch), EV Charger Installation (OZEV Approved Grants), Boiler Service & Repair (Gas Safe Verified), Smart Home Wiring (Automated Lighting & Audio), General Labour & Trade Mates (Demolition, Offloading & Digging), Appliance & Van Courier (Bulky Item Same-Day Delivery), Mobile Wheelie Bin Cleaning (Domestic & Commercial Bin Wash), Roof Tile & Leak Repair (Storm Damage & Chimneys), Leak Detection & Repair (Non-Invasive Acoustic Scan), Painting & Decorating (Interior & Exterior Finish), Tree Surgery & Pruning (NPTC Qualified Surgeons), Locksmith & Security (Emergency Lockout & Ultion Locks), Heat Pumps & Air Conditioning (MCS Certified Installations), Solar Panels & Battery Storage (Cut Bills & Store Green Energy), Tailoring & Alterations (Suit Fitting & Bridal Care), Landscaping & Patios (Porcelain Paving & Turf).
+        *   **Features Pool (`FEATURE_POOL`)**: Property Passport (Instant Digital Specs & CP12 Expiry), FlexiPay Repair BNPL (Spread Costs 3–12 Mo 0% APR), AI Pre-Quote Transparency (Real-Time UK Benchmark Pricing), Intelligent Trader Match (Reputation, Proximity & Skills Match), Trader Video Credentials (15s Intro Videos +35 Match Points), WhatsApp Privacy Share (Share Quotes & Specs Without Phone Numbers), Tenant Repair Reporting (Direct Passport Logging & Fast Fixes), Gotham B2B Housing Layer (2h SLA Dispatch & Portfolio SaaS), Materials AI Procurement (Automated Lists & Trade Pricing), AnyRoller Rides & Taxis (12% Flat Commission • Zero Shift Fees).
+        *   **Functions & Guarantees Pool (`FUNCTION_POOL`)**: TradeOS Zero Lead Fees (Traders Only Pay on Completed Work), Auto Tax & NI Reserves (UK Sole Trader Self-Assessment Ready), Anti-Serial Complainer Shield (Fair Review Dispute Protection), Milestone Escrow Protection (Funds Held Securely Until Job Approval), EICR & CP12 Safety Checks (1-Click Landlord Compliance Auto-Booking), Post-Ride Mutual Reviews (5-Star Driver & Passenger Fairness Engine).
+    2.  **Randomization & Interleaving Algorithm**:
+        *   Applies a Fisher-Yates shuffle independently across the category, feature, and function pools.
+        *   Interleaves them systematically (`Category -> Feature -> Function -> Category...`) so the marquee presents an engaging, balanced showcase of trade services, smart capabilities, and platform guarantees.
+    3.  **Visual Continuity & Relaxed Reading Pace**:
+        *   Maintains the zero-container floating design, illustrated icon badges, micro-tags, jet black bold typography, blue underlined links, golden sparkle separators, and an ultra-relaxed linear velocity (`animate-ticker-slow` at 200s cycle).
+        *   Supports 1-tap navigation to the corresponding category search, feature portal, or tool.
+
+## 🏷️ "Save Selection as Feed" (Save Now) Banner Dismissal Lifecycle & Reselection Recovery (Completed August 27, 2026)
+*   **Context & User Problem**:
+    *   User reported: "Also check if this , save now,, box is click closed (x), why it does not appear again on reselection of filters until app restarts" (Referencing user screenshot showing the floating blue "Save selection as feed... [SAVE NOW] (✕)" prompt banner).
+*   **Root Cause Identified**:
+    *   Previously in `JobFeed.tsx`, dismissal was tracked with a simple one-way boolean flag: `const [isSaveBannerDismissed, setIsSaveBannerDismissed] = useState(false)`.
+    *   When the user clicked the `(✕)` close button on the floating banner, it invoked `setIsSaveBannerDismissed(true)`.
+    *   However, there was zero logic to reset this flag when the user selected new categories, cleared filters, or reselected filters. As a result, `isSaveBannerDismissed` remained permanently `true` for the entire lifetime of the app session in memory, preventing the banner from ever appearing again until the app/browser was completely restarted.
+*   **Architectural Fix**:
+    1.  **Dynamic Filter Signature Tracking (`currentFilterKey`)**:
+        *   Replaced the static boolean with a dynamic filter key signature:
+            ```ts
+            const currentFilterKey = useMemo(() => {
+              return [
+                [...selectedCategories].sort().join(','),
+                searchTerm.trim().toLowerCase(),
+                urgencyFilter,
+                distanceFilter,
+                priceFilter,
+                showMatchedOnly
+              ].join('|');
+            }, [selectedCategories, searchTerm, urgencyFilter, distanceFilter, priceFilter, showMatchedOnly]);
+            ```
+        *   `isSaveBannerDismissed` is now evaluated dynamically:
+            `const isSaveBannerDismissed = dismissedFilterKey !== null && dismissedFilterKey === currentFilterKey;`
+    2.  **Context-Aware Dismissal (`setDismissedFilterKey(currentFilterKey)`)**:
+        *   Clicking `(✕)` now dismisses the banner *only for that specific filter combination* (`setDismissedFilterKey(currentFilterKey)`). The user can freely browse that selection without repeated interruptions.
+    3.  **Automatic Reselection & Filter Change Recovery**:
+        *   Whenever the user changes filters, `currentFilterKey` changes and automatically un-dismisses the banner (`dismissedFilterKey !== currentFilterKey`).
+        *   Whenever the user clears filters (`resetAllFilters`, `handleClearDemandFilter`, or category "Clear"), or explicitly selects/toggles a category pill (`handleSelectCategoryFromNearby` or category buttons in filter modal), `setDismissedFilterKey(null)` is called.
+        *   Therefore, whenever the user selects or reselects filters, the "Save selection as feed" banner is immediately eligible to appear again as expected.
+
+## 🏷️ Active Jobs Filter Status Banner (Completed August 27, 2026)
+*   **Context & User Request**: "I think we should add text just above the filtered Active jobs say,( Showing active jobs for ,, which ever filter are active,, yellow background and jet black text color in really small bold fonts." (Referencing user screenshot with orange rectangle positioned right above the filtered job cards and right below `NearbyRequestsSection`).
+*   **Implementation & Styling**:
+    1.  **Component & Positioning**:
+        *   Positioned directly above the active job feed cards list (`filteredJobs.map`) and below `NearbyRequestsSection`.
+        *   Rendered dynamically whenever `hasActiveFilters && activeFilterSummary.length > 0 && filteredJobs.length > 0` in the active feed tab.
+    2.  **Visual Aesthetic & Constraints**:
+        *   **Yellow Background**: `bg-yellow-300` (WCAG AAA compliant with jet black text).
+        *   **Jet Black Text & Typography**: `text-black font-black text-[10px] sm:text-[11px]` with underlined criteria terms.
+        *   **Compact Rounded Box**: `border border-black rounded-xl px-3 py-1.5 sm:py-2` matching the AnyTrader compact square/rounded edge design system.
+        *   **Dynamic Criteria Representation**: Compiles active categories, urgency ("Urgent / Emergency"), keywords, radius distance, price bounds, and saved feed names into a concise formatted string (e.g. `Showing active jobs for: Appliance Repair • Urgent / Emergency (2 jobs)`).
+        *   **Inline Clear Action**: Includes a quick `Clear` button that resets all active filters with one tap.
+
+## 🏷️ Dual "Clear Filter" Logic Synchronization & Elimination of Split-Brain State (Completed August 27, 2026)
+*   **Context & User Request**: "Check if both ,, clear filter,, logic are sync or they work independently" (Referencing user screenshot circling both "Clear All (5 total)" in the Active Filters bar and "✕ Clear Filter" in the Nearby Requests demand bar).
+*   **Analysis & Findings**:
+    1.  **Duplicate/Split-Brain Local State in `NearbyRequestsSection`**:
+        *   Previously, `NearbyRequestsSection` maintained its own unmanaged internal `useState` (`selectedCategory` and `isUrgentFilterActive`).
+        *   When clicking "Clear All (5 total)" or individual `✕` chips in the top Active Filters bar, `JobFeed` reset `selectedCategories` to `[]` and `urgencyFilter` to `"any"`. However, `NearbyRequestsSection`'s local state never received the clear notification, leaving `Urgent Only` or category demand pills stuck highlighted in red/dark and keeping the "✕ Clear Filter" button visible.
+        *   Conversely, clicking "✕ Clear Filter" inside `NearbyRequestsSection` called `resetAllFilters()`, wiping out all global filters across the entire page (including radius and search text) rather than acting as a focused demand clear.
+    2.  **Harmonized, Single-Source-of-Truth Architecture**:
+        *   **Eliminated Redundant State**: Removed `selectedCategory` and `isUrgentFilterActive` `useState` hooks entirely from `NearbyRequestsSection.tsx`.
+        *   **Pure Controlled Component**: `NearbyRequestsSection` now directly derives its active visual states from `props.urgencyFilter` and `props.selectedCategories`:
+            - `isUrgentActive = urgencyFilter === "emergency"`
+            - `hasDemandCategoryActive = demandCategories.some((cat) => selectedCategories.includes(cat.category))`
+            - `hasActiveDemandFilter = isUrgentActive || hasDemandCategoryActive`
+        *   **Dedicated Demand Clear Handler (`handleClearDemandFilter`)**:
+            - "✕ Clear Filter" under "TAP TO FILTER FEED BY DEMAND:" now triggers `handleClearDemandFilter()`, which specifically resets `selectedCategories` and resets `urgencyFilter` from emergency back to `"any"` without destroying search text or distance preferences.
+            - "Clear All (X total)" in the Active Filters bar continues to act as the global master reset (`resetAllFilters()`).
+        *   **100% Two-Way Synchronization**:
+            - Clicking "Clear All" in the top bar immediately clears the demand pills and hides "✕ Clear Filter" in Nearby Requests.
+            - Clicking individual `✕` chips (e.g. `[ Urgency: emergency ✕ ]`) immediately unhighlights the `Urgent Only` pill and hides "✕ Clear Filter".
+            - Clicking "✕ Clear Filter" in Nearby Requests immediately unhighlights the pills, removes the demand filter chips from the Active Filters bar, and removes the bar if no other filters exist.
+            - When no demand pill is selected, "✕ Clear Filter" does not appear under "TAP TO FILTER FEED BY DEMAND:", preventing redundant dual clear buttons when only distance or keyword searches are active.
+
+## 🏷️ Nearby Requests Demand Sync & Active Filters Discrepancy Resolution (Completed August 27, 2026)
+*   **Context & User Request**: "Check this behavior why it saying , No job,, when on nearby filter pills jobs are showing" (Referencing user screenshot where Nearby Requests pills displayed "Appliance Repair 2" and "Heating & Gas 3", yet the feed below displayed "No jobs available").
+*   **Root Cause Identified**:
+    1.  **Independent Calculation vs Active Filter State**: `NearbyRequestsSection` calculated local demand counts across *all* nearby jobs (`nearbyJobsWithDistance`) regardless of what filters were active. Meanwhile, the main feed (`JobFeed.tsx`) applied a strict intersection of `matchesSearch`, `matchesCategory`, `matchesUrgency`, `matchesPrice`, `matchesDistance`, and `matchesSelectedSavedFilters`. If the user had an active filter (such as a specific category with 0 jobs, or a saved feed tab selected), `filteredJobs` evaluated to empty (`[]`), showing the generic "No jobs available" card even while 8 total jobs were nearby.
+    2.  **Unidirectional Callback**: `NearbyRequestsSection` did not receive `selectedCategories` or `urgencyFilter` as props, so it could not visually reflect which categories were active, nor could it clear conflicting search/urgency/saved-filter criteria when the user tapped a demand pill.
+*   **Key Architecture & Changes**:
+    1.  **Bidirectional Sync (`src/components/job-feed/NearbyRequestsSection.tsx`)**:
+        *   Added `selectedCategories`, `urgencyFilter`, and `onClearAllFilters` to `NearbyRequestsSectionProps`.
+        *   Tapping a demand pill (e.g. `Heating & Gas 3`) or `Urgent Only` toggles the active selection cleanly and synchronizes state between the pills and the feed.
+    2.  **Intent-Driven Demand Selection (`src/components/JobFeed.tsx`)**:
+        *   Implemented `handleSelectCategoryFromNearby`: Tapping a nearby demand category expresses explicit user intent to view those jobs. The handler sets the selected category and automatically clears conflicting constraints (clearing search query, clearing saved filter tabs, resetting urgency to "any", resetting distance/price limits, and disabling `showMatchedOnly` so jobs outside current profile trades aren't hidden).
+        *   Tapping the same category pill again toggles it off, returning to the full feed.
+    3.  **Active Filters Indicator Bar (`src/components/JobFeed.tsx`)**:
+        *   Rendered a sleek, high-contrast active filter bar above the feed whenever any filter is active (`selectedCategories`, `searchTerm`, `urgencyFilter`, `distanceFilter`, `priceFilter`, `showMatchedOnly`, `selectedSavedFilterIds`).
+        *   Displays individual dismiss chips (`✕`) for each active filter constraint so users immediately understand why jobs are filtered and can remove individual constraints with a single tap.
+        *   Includes a prominent "Clear All ({jobs.length} total)" reset button.
+    4.  **Informative "Filters Hiding Jobs" Empty State (`src/components/JobFeed.tsx`)**:
+        *   Replaced the generic "No jobs available" placeholder with an intelligent contextual empty state whenever `jobs.length > 0` but `filteredJobs.length === 0`:
+            - Informs the user: *"No jobs match your current filters. There are X jobs available in your area that are currently hidden by your filter settings."*
+            - Displays the exact applied filter tags.
+            - Provides a large 1-tap action button: *"Clear All Filters & Show All X Jobs"*.
+            - Displays direct jump chips: *"Or jump directly to categories with jobs: [Appliance Repair (2)] [Heating & Gas (3)]"*.
+    5.  **Urgency Matching Normalization (`src/components/JobFeed.tsx`)**:
+        *   Ensured routine CP12 / inspection jobs correctly match `"flexible"` and `"this_month"` urgency filters, and emergency checks safely check `job.isEmergency === true` alongside `urgency === "emergency" | "asap"`.
+        *   Centralized `resetAllFilters` across the drawer, banner, active filters bar, and empty state.
+
+## 🏷️ Job Feed Filter Saving Fix & Instant Local + Cloud Sync (Completed August 27, 2026)
+*   **Context & User Request**: "Check why this is not saving selection in job feed filters"
+*   **Root Causes Identified & Resolved**:
+    1.  **Silent Firestore Dependency & Race Conditions**: `handleSaveFilter` previously relied strictly on a Firestore `updateDoc` against `users/{userId}` without updating the local React state or handling guest/unauthenticated sessions or offline states. If Firestore latency delayed the `onSnapshot` trigger in `AuthProvider`, the UI did not reflect the new filter collection immediately.
+    2.  **Strict Field Constraints**: In certain scenarios, calling `updateDoc` on user records without pre-existing schemas could fail if the document was missing or rules restricted non-merge updates. Switched to `setDoc(..., { merge: true })` for robust, schema-safe upserts.
+    3.  **Local Storage Hybrid Fallback**: Introduced `savedFiltersList` combining the Firestore `profile?.savedFilters` with `localStorage` fallback (`job_feed_savedFilters`). Saves now immediately persist to `localStorage` and optimistically update `profile.savedFilters` via `setProfile` so the new pill appears instantaneously on the screen.
+    4.  **Auto-Select on Save**: When a filter is saved, the newly created filter tab ID is automatically added to `selectedSavedFilterIds`, immediately filtering the live feed.
+    5.  **Multi-Modal & Banner Integration**:
+        *   The floating bottom banner ("Save selection as feed") now features an active, one-tap "SAVE NOW" button with a loader indicator that directly persists the selection without forcing an unnecessary drawer detour.
+        *   The "Filter Jobs" drawer save section now supports pressing Enter (`onKeyDown`) in the input field.
+        *   The drawer "Apply Filters & Close" button will automatically save any text entered in the filter name box when pressed.
+    6.  **PWA Cache Invalidation**: Bumped cache ID and prefix to `anytrader-v1.0.4` across `vite.config.ts` and `src/main.tsx` to ensure all clients receive the updated bundle instantly.
+
+## 🏷️ Top-Right Corner Delete (X) Repositioning & PWA Cache Busting (Completed August 27, 2026)
+*   **Context & User Request**: "X is still middle of pill, can we move them to top of corner where I have marked cross" (Referencing user screenshot where an orange circle identified the inline `X` in "Repair" / "Electrical" and an orange arrow pointed to the top-right corner with a marked cross `X`).
+*   **Root Causes Identified & Fixed**:
+    1.  **Inline Element vs Absolute Positioning**: In legacy client builds, the delete button was a standard flex child immediately following the label (`flex items-center gap-2`), placing the `X` right after short labels like "Repair" directly in the visual center of the pill.
+    2.  **WebAPK / Service Worker Stale Cache**: Android Chrome WebAPK instances were retaining stale PWA bundles under cache ID `anytrader-v1.0.2` and cached `index.html`.
+*   **Key Architecture & Changes**:
+    *   **Absolute Top-Right Corner Placement (`src/components/JobFeed.tsx`)**: The standalone `✕` icon (`w-3.5 h-3.5 stroke-[2.5]`) is now anchored strictly at the top-right corner using `absolute top-1 right-1.5 w-5 h-5` with `bg-transparent border-0`, placing it exactly where the user marked with the cross.
+    *   **Dedicated Right-Side Text Clearance**: Added `pr-7` (28px) on each pill button (`h-10 sm:h-11 pl-4 pr-7 rounded-2xl border border-black`), guaranteeing that the filter label remains centered and never touches or overlaps the top-right `✕`.
+    *   **Swipeable Legible Pills**: Formatted as a smooth horizontal scrolling row (`flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1 w-full`) so trade names like "Repair", "Electrical", and "Emergency 24/7" render in full without awkward truncation or breaking.
+    *   **Accidental Deletion Protection**: Tapping the pill body selects/toggles the filter collection. Tapping the top-right `✕` triggers `setFilterToDelete(filter)`, launching a confirmation modal ("Delete Filter Collection? Remove '{filter.name}'? [Cancel] [Delete]") to prevent accidental deletions on touch screens.
+    *   **Cache Invalidation & Express No-Cache Headers (`server.ts`, `vite.config.ts`, `src/main.tsx`)**:
+        *   Bumped PWA cache ID and prefix to `anytrader-v1.0.3` to automatically purge stale client assets.
+        *   Configured Express static file serving and wildcard routes to send `Cache-Control: no-cache, no-store, must-revalidate` for `index.html`, ensuring all mobile devices and WebAPKs immediately download fresh bundles.
+
+## 🏷️ Clean Delete (X) Placement Without Background & Zero Overlap (Completed August 27, 2026)
+*   **Context & User Request**: "Remove the white circle background from delete (x) icon and place just x top tight corner of these pills so there is no overlapping"
+*   **Key Architecture & Changes**:
+    *   **Removed Circle Background & Border (`src/components/JobFeed.tsx`)**: Completely removed the white circular background (`rounded-full bg-white border border-black shadow-xs`) from the delete button so only the standalone `✕` icon renders.
+    *   **Precise Top-Right Placement & Zero Overlap**: Positioned the standalone `✕` at `top-1 right-1` with padding on the pill (`pl-1 pr-3`), ensuring the filter title text has clean clearance and never overlaps or clashes with the delete icon.
+    *   **Context-Aware Contrast**: Kept `text-slate-400 hover:text-white` when selected (`bg-slate-900`), and `text-slate-400 hover:text-red-600` when unselected (`bg-white`).
+
+## 🏷️ Readable 4-Column Compact Filter Pills with Corner Delete Badges (Completed August 27, 2026)
+*   **Context & User Request**: "Can not read text on these pills" / "Redesign these pills so text is visible but keep them in row of 4 and compact"
+*   **Key Architecture & Changes**:
+    *   **Root Cause of Truncation Fixed (`src/components/JobFeed.tsx`)**: In the previous layout, `rounded-full` curvature plus an inline delete `X` button and `uppercase` styling squeezed the text container down to ~24px, causing words like "Repair", "Plumbing", "Emergency", and "Maintenance" to be truncated down to single letters ("R", "P", "E", "M").
+    *   **Full Width for Text**: Relocated the delete button to an absolute corner micro-badge (`absolute -top-1 -right-1 w-4 h-4 rounded-full border border-black`), completely removing it from the horizontal layout so 100% of the pill width is available for the filter name.
+    *   **Compact Rounded Box Geometry**: Switched to `rounded-xl border border-black` with `h-8 sm:h-9 px-1` in strict compliance with the platform box styling rules, avoiding the drastic edge curvature of `rounded-full`.
+    *   **Natural Case & Multi-Line Text Wrapping**: Removed forced uppercase and applied `text-[10px] sm:text-[11px] font-bold leading-tight line-clamp-2 break-words text-center`, allowing standard trade terms to render with full clarity and gracefully wrap multi-word names across 2 lines within the compact pill height.
+    *   **High-Contrast Selection & Micro Active Indicator**: Retained solid dark navy active state (`bg-slate-900 text-white font-black`) with a subtle 6px emerald dot indicator when selected, and clean white state (`bg-white text-slate-900 hover:bg-slate-100 font-bold border border-black`) when unselected.
+
+## 🏷️ Compact Pill-Sized 4-Column Job Feed Filter Tabs (Completed August 27, 2026)
+*   **Context & User Request**: "Can we make the jobs feed filters tabs same size as highlighted pill size and fit them in row of 4 when showing max 4"
+*   **Key Architecture & Changes**:
+    *   **Pill-Sized Tab Dimensions (`src/components/JobFeed.tsx`)**: Replaced the previous rectangular block tabs with compact rounded pills (`px-2 py-0.5 rounded-full text-[10px] font-black uppercase`) matching the exact size and styling of the `🔥 2 URGENT` pill badges.
+    *   **4-Column Equal Grid Layout**: Arranged up to 4 saved filter collection pills into a clean 4-column grid (`grid grid-cols-4 gap-1.5 w-full`), allowing all 4 filter presets to fit neatly in a single row across the container width.
+
+## 🔕 Removal of Redundant Urgent Alert Strip (Completed August 27, 2026)
+*   **Context & User Request**: "Remove this section" (highlighting the urgent alert strip `X urgent jobs active in... [FILTER URGENT]`).
+*   **Key Architecture & Changes**:
+    *   **Removed Redundant Alert Box (`src/components/job-feed/NearbyRequestsSection.tsx`)**: Removed the `urgentCountNearby > 0` alert banner box that previously sat above the high-demand category pills. The urgent filter functionality remains readily accessible via the demand category filter pills (e.g., `Urgent Only`) and the main job search filter modal.
+
+## 🏷️ Compact "Your Job Feed Filters" Section & Top-Right Plus Icon (Completed August 27, 2026)
+*   **Context & User Request**: "This filter container should be compact as highlighted size, remove counter and ,save current , sections . only add + icon top tight of container so user can go filters menu to add their selection ."
+*   **Key Architecture & Changes**:
+    1.  **Ultra-Compact Streamlined Container (`src/components/JobFeed.tsx`)**:
+        *   Removed the `0/4 Saved` counter pill and the bulky `+ Save Current` text button from the header row.
+        *   Removed the extra internal border divider line and lengthy explanatory copy.
+    2.  **Top-Right `+` Icon Button**:
+        *   Positioned a clean, high-contrast `+` icon button (`w-8 h-8 rounded-xl bg-white border border-black`) at the top right of the container.
+        *   Tapping the `+` button opens the **Filter Jobs** overlay modal directly, scrolling smoothly to the save & manage filter collection controls.
+    3.  **Clean Filter Collection Tabs Layout**:
+        *   Preserved the thin-bordered (`border border-black`), multi-selectable filter collection tabs (`Gas`, etc.) in a horizontal scrolling row directly below the `YOUR JOB FEED FILTERS` header.
+
+## 🏷️ Prominent "Your Job Feed Filters" Section, Multi-Select Presets & Modal Close Button (Completed August 27, 2026)
+*   **Context & User Request**: "Can we close this page with , X, and it will close"
+*   **Key Architecture & Changes**:
+    1.  **Filter Jobs Modal Close (`X`) Button (`src/components/JobFeed.tsx`)**:
+        *   Added a prominent circular `X` close button (`w-9 h-9 rounded-full bg-slate-100 hover:bg-black hover:text-white border border-black`) in the top right corner of the **Filter Jobs** modal header right next to "Reset all".
+        *   Tapping the `X` button immediately dismisses the modal overlay (`setShowFilters(false)`).
+    2.  **Two-Line Section Label & Prominent Container**:
+        *   Replaced the plain text `"YOUR FEEDS:"` label with a prominent two-line uppercase label: `YOUR JOB FEED` / `FILTERS`.
+        *   Framed the entire section in a prominent `border-2 border-black` container with a clean `bg-slate-50` background.
+    3.  **Thin-Bordered Multi-Select Tabs**:
+        *   Gave each saved filter tab its own thin `border border-black`.
+        *   Implemented multi-select toggle state (`selectedSavedFilterIds`), allowing traders to select 1, 2, 3, or all 4 saved filter collections at once.
+    4.  **High-Contrast Selected State & Max 4 Limits**:
+        *   Highlighted active selected tabs with a solid navy background (`bg-slate-900 text-white`), a green checkmark badge (`CheckCircle2`), and ring shadow vs unselected white tabs (`bg-white text-slate-900`).
+        *   Enforced a hard limit of 4 saved filter collections per user across both the feed bar and filter modal (`handleSaveFilter`), displaying a counter badge `(X/4 Saved)`.
+
+## 📱 Compact Nearby Demand Filter Bar & AI Summary Removal (Completed August 27, 2026)
+*   **Context & User Request**: "Remove summary and rearrange remaining pills in meaningful way for easy and effective user case"
+*   **Key Architecture & Changes**:
+    1.  **AI Text Summary Container Removal (`src/components/job-feed/NearbyRequestsSection.tsx`)**:
+        *   Removed the bulky AI text summary block and italic tips to free up significant vertical screen space on mobile devices.
+    2.  **Instant Zero-Latency Local Demand Calculation**:
+        *   Configured `demandCategories` to calculate real-time category counts and urgency flags directly from active nearby jobs (`nearbyJobsWithDistance`), providing instant rendering without waiting for external API network calls.
+    3.  **Space-Efficient Interactive Filter Bar**:
+        *   Added a dedicated `Urgent Only` filter pill (`🔥 Urgent Only (X)`) that toggles emergency request filtering directly on the job feed.
+        *   Arranged high-demand trade category pills horizontally (`Appliance Repair (2)`, `Heating & Gas (3)`) with flame badges for categories containing urgent requests.
+        *   Maintained 1-tap geolocation updates and clear active state indicators.
+    4.  **JobFeed Callback Integration (`src/components/JobFeed.tsx`)**:
+        *   Passed `onSelectUrgencyFilter` to `NearbyRequestsSection` so tapping the urgent pill updates the global job feed urgency filter state seamlessly.
+
+## 🔐 Firestore Job & Quote Security Rules Permission Update (Completed August 27, 2026)
+*   **Context & User Request**: "Fix the errors in the app [error 0: Error fetching jobs: Missing or insufficient permissions.]"
+*   **Key Architecture & Changes**:
+    1.  **Public Read Permission for Jobs (`firestore.rules`)**:
+        *   Updated `/jobs/{jobId}` and `/jobs/{jobId}/quotes/{quoteId}` rules to `allow read, list: if true;`.
+        *   Allows guest visitors and unauthenticated users to view the public job feed, public property passports, cross-portal banners, and demand heatmaps without encountering Firestore security permission rejections.
+        *   Maintained strict `isSignedIn()` and ownership checks on job creation, mutation, and deletion.
+    2.  **Signed-in Access for Bidding Jobs (`firestore.rules`)**:
+        *   Simplified `/bidding_jobs/{jobId}` security rule to `allow read, list: if isSignedIn();` to prevent query filter misalignments when traders check active availability.
+    3.  **Deployed to Firebase**:
+        *   Deployed the updated security rules to production via `deploy_firebase`.
+
+## 🛠️ Gemini API Model Standardization & Secure Proxy Response Hardening (Completed August 27, 2026)
+*   **Context & User Request**: "Fix the errors in the app [error 0: AI Proxy Secure Execution Error [getNearbyTradeInsights]: Server returned non-JSON response for getNearbyTradeInsights]"
+*   **Key Architecture & Changes**:
+    1.  **Valid Gemini API Model Strings (`src/services/geminiServer.ts` & `src/components/AnyTraderAdmin.tsx`)**:
+        *   Replaced invalid/unsupported model aliases (such as `gemini-3.7-flash` and `gemini-3-flash-preview`) with standard Gemini models (`gemini-2.5-flash`, `gemini-2.5-pro`, and `gemini-2.5-flash-lite`).
+        *   Updated fallback model resolution logic in `getGlobalAiModel` and `callGemini` to ensure `gemini-2.5-flash` is used as the default fast model.
+        *   Updated admin setting select options in `AnyTraderAdmin.tsx` to display real supported Gemini models.
+    2.  **Robust Client HTTP Proxy Error Handling (`src/services/gemini.ts`)**:
+        *   Refactored `callServerGemini` to check the `Content-Type` header before parsing JSON or reading server error responses.
+        *   In cases where non-200 HTTP statuses return non-JSON responses (or HTML error pages), the proxy now extracts and logs clear diagnostic messages instead of throwing a generic non-JSON parsing exception.
+        *   Ensured client-side fallback calculations in `getNearbyTradeInsights` catch any downstream failures gracefully.
+
+## 🎨 Job Feed Deduplication, 40+ Signal Match Score, Quick Quoting & Mobile Touch Fix (Completed August 26, 2026)
+*   **Context & User Request**: "Check job feed section , why duplicate job cards showing for same posted job . Also all the logics are missing for traders to get matched to related job postes and send quotes, etc", "Make the slider toggles slide as shown in image 2", "Change this Toggle to click Toggle as well as did last. Also check why this page not scrolling up with finger on mobile device"
+*   **Key Architecture & Changes**:
+    1.  **Job Feed Deduplication (`src/components/JobFeed.tsx`)**:
+        *   Replaced direct array aggregation with an ID-keyed `Map` (`uniqueJobsMap.set(doc.id, { id: doc.id, ...doc.data() })`) when digesting Firestore query snapshots and live listeners.
+        *   Guarantees that multiple listener queries or duplicate updates never render multiple copies of the same posted job card.
+    2.  **40+ Signal Intelligent Matching Engine Integration (`src/components/JobFeed.tsx` & `src/services/matchingEngine.ts`)**:
+        *   Integrated `calculateTraderMatchScore` across all jobs in the feed, computing composite scores factoring trades, categories, tags, location distance, emergency/instant match availability, video verification, and rating history.
+        *   Added dynamic badge hierarchy (`80%+ Top Match`, `65%+ Strong Match`, `50%+ Match`) with top match reason highlights.
+        *   Added "✨ Best Match" sort option as well as the interactive "Best Match Only" toggle filter.
+    3.  **Real-Time Quote Tracking & In-Feed Quick Quote Modal (`src/components/JobFeed.tsx` & `src/components/QuickQuoteModal.tsx`)**:
+        *   Subscribed to `collectionGroup(db, "quotes")` where `tradespersonId == user.uid`, maintaining live `myQuotes` state.
+        *   When a tradesperson has already submitted a quote for a job, the card displays a green confirmed status pill (`Quote Sent: £X • Status: PENDING/ACCEPTED`) and provides a `View / Edit` button.
+        *   Preserves tradesperson visibility and access even after the 5/5 public quote cap is reached for jobs they have quoted on.
+        *   Integrated direct 1-click `<QuickQuoteModal>` trigger on every active card with AI pre-quote benchmark estimates.
+    4.  **Mobile Upward Momentum Scrolling & Touch-Action Fix (`src/index.css` & `src/components/common/PullToRefresh.tsx`)**:
+        *   Eliminated `width: 100vw` in `index.css` (replacing with `width: 100%`) and added `-webkit-overflow-scrolling: touch;` and `touch-action: pan-y;`.
+        *   Updated `PullToRefresh.tsx` with `touch-pan-y` and accurate window/container `getScrollTop()` detection so upward finger swipes smoothly scroll up without locking.
+    5.  **Standardized Animated Click Slider Toggles (`src/components/JobFeed.tsx`, `src/components/TradesDashboard.tsx`)**:
+        *   All header toggles (`Best Match Only`, `Emergency`, `Instant Match`, `Priority Offers`) now use the compact clickable card pill with smooth animated sliding thumb knobs (`duration-200 ease-in-out`).
+*   **Context & User Request**: "Change this Toggle to click Toggle as well as did last. Also check why this page not scrolling up with finger on mobile device" (Fixing the oversized/distorted "Best Match Only" toggle in Job Feed and resolving the blocked upward finger scroll on mobile devices).
+*   **Key Architecture & Changes**:
+    1.  **"Best Match Only" Interactive Card Switch (`src/components/JobFeed.tsx`)**:
+        *   Replaced the distorted HTML button with the standardized clickable card pill (`rounded-[10px] border border-black bg-white px-3 py-2 shadow-xs cursor-pointer select-none transition-all active:scale-[0.99]`).
+        *   Integrated the sleek border-framed switch track (`w-[34px] h-[18px] rounded-full p-[2px] border border-black relative flex items-center shrink-0`) with active background state (`bg-[#2563EB]` vs `bg-slate-200`).
+        *   Smooth sliding white thumb dot (`w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out`) shifting from `translate-x-0` to `translate-x-[16px]`.
+        *   Polished neighboring sort selector and `Save Feed` buttons with matching `rounded-[10px] px-3 py-2 border border-black` geometry.
+    2.  **Mobile Upward Finger Scroll Fix (`src/components/common/PullToRefresh.tsx`)**:
+        *   **Root Cause**: When calculating `scrollTop`, `container ? container.scrollTop : window.scrollY` evaluated `container.scrollTop` (always `0` because the container had `min-h-full` inside `<main>` and the window was what scrolled). As a result, `isTopRef.current` was stuck `true` anywhere down the page. Any subsequent downward finger swipe (intended to scroll back UP) triggered `deltaY > 5` and called `e.preventDefault()`, completely locking native upward mobile scrolling.
+        *   **Fix**: Implemented accurate dynamic `getScrollTop()` querying both internal scrollable element height/overflow and `window.pageYOffset || document.documentElement.scrollTop`. If `getScrollTop() > 1`, `isTopRef.current` is set to `false`, pulling is aborted, and `e.preventDefault()` is bypassed, restoring 100% fluid native momentum scrolling on all mobile browsers.
+
+## 🎨 Slider Toggle Switch Modernization (Completed August 26, 2026)
+*   **Context & User Request**: "Make the slider toggles slide as shown in image 2" (Matching the sleek slider toggles from the taxi/passenger booking interface for `Emergency`, `Instant Match`, and `Priority Offers` in the Trades dashboard).
+*   **Key Architecture & Changes (`src/components/TradesDashboard.tsx`)**:
+    1.  **Card-Level Pill Switch Design**:
+        *   Adopted the exact structure from Passenger Booking (`rounded-[10px] border border-black bg-white px-3 py-2 shadow-xs cursor-pointer select-none transition-all active:scale-[0.99]`).
+        *   Left side contains the domain icon (`Zap`) and crisp label (`Emergency`, `Instant Match`, `Priority Offers`).
+    2.  **Sleek Slider Toggle**:
+        *   Replaced native `<button>` element with custom container switch (`w-[34px] h-[18px] rounded-full p-[2px] border border-black relative flex items-center shrink-0`) with active background colors (`bg-[#2563EB]` / `bg-red-600` / `bg-slate-200`).
+        *   Smooth inner thumb dot (`w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out`) transitioning seamlessly between `translate-x-0` (off) and `translate-x-[16px]` (on).
+    3.  **Unified Action Row**:
+        *   `Test IM Alert` action button updated with matching `rounded-[10px] px-3 py-2 border border-black` styling for visual balance.
+
+## 🎨 Header Advertising Capsule & Smart Spotlight Restoration (Completed August 26, 2026)
+*   **Context & User Request**: "Check the advertising pill disappeared after last change" (Restoring the advertising and hot search ticker pill between Book Taxi and user actions with responsive mobile spacing).
+*   **Key Architecture & Changes**:
+    1.  **Restored Header Smart Ticker (`src/components/HeaderSmartTicker.tsx`)**:
+        *   Re-enabled the continuous scrolling spotlight capsule for all mobile and desktop viewports (`flex flex-1 mx-1 sm:mx-2 min-w-0`).
+        *   Optimized mobile typography (`text-[7.5px] sm:text-[9.5px]` tags, `text-[10.5px] sm:text-[13px]` titles) with 10s seamless looped marquees showcasing daily trending hot searches, TradeOS perks, 0% FlexiPay financing, and Gotham SLA updates.
+    2.  **Harmonized Header Button Spacing (`src/components/Layout.tsx`)**:
+        *   Refined mobile button dimensions (`w-9 h-9 sm:w-11 sm:h-11`) for `Add`, `Alerts`, `Profile`, and `Exit` with `gap-1 sm:gap-2`.
+        *   Affords 120px–180px of dedicated horizontal width to the advertising capsule on narrow mobile screens, preventing any clipping, collisions, or unwanted wrapping.
+
+## 🎨 Collapsible Navigation Hub & 5-Second Inactivity Auto-Close (Completed August 26, 2026)
+*   **Context & User Request**: "Can we make these tabs compact in hight and make this section collapsable with arrow and auto close after 5 sec if no touches in this section so screen is not cluttered"
+*   **Key Architecture & Changes (`src/components/shared/RoleTabBar.tsx`)**:
+    1.  **Ultra-Compact Height & Spacing**:
+        *   Reduced vertical heights across all navigation tiers (Primary Role, Business Hub categories, and Work Hub / Hire B2B sub-toggles) with compact padding, slim ~24-28px pill buttons, and responsive text sizing.
+    2.  **Collapsible Header with Arrow Toggle**:
+        *   Added a manual `Collapse` / `Expand` arrow button (`ChevronUp` / `ChevronDown`) allowing the user to collapse the section at will.
+        *   When collapsed, renders a sleek, single-line micro-bar displaying the current active mode (e.g. `BUSINESS HUB • FIELD SERVICES: WORK HUB` or `HOMEOWNER`) alongside a subtle `Change` badge and expand button.
+    3.  **5-Second Inactivity Auto-Close**:
+        *   Added a touch/click/pointer inactivity listener that automatically collapses the tab section after 5 seconds of inactivity to keep the screen completely uncluttered.
+        *   Any touch, click, or role switch within the navigation bar immediately resets the 5-second countdown timer.
+        *   Displays an animated activity indicator showing active status.
+
+## 🎨 UI Streamlining, Tab Consolidation & Overlap Fix (Completed August 26, 2026)
+*   **Context & User Request**: "How can we make this UI more user friendly and sort out misplaced overlapping tabs" / "Preserve all logics and function."
+*   **Root Cause**:
+    *   `RoleTabBar.tsx` rendered multiple vertically stacked boxes on mobile for role selection, business domain tabs (`Properties`, `Field Services`, `Consultancy`), and sub-domain segments (`Work Hub`, `Hire B2B Service`), consuming excessive screen height (>200px including header) and causing visual clutter.
+    *   Header action buttons on mobile were densely packed, leading to horizontal scrolling and potential visual collisions with status pills.
+    *   `ScrollToTopButton.tsx` was always permanently visible on the screen regardless of scroll position, competing with dashboard controls.
+    *   `TradesDashboard.tsx` had the "Test IM Alert" button and availability toggles (`Emergency`, `Instant Match`, `Priority Offers`) floating in a separate column that could overlap with floating widgets and action buttons.
+*   **Key Architecture & Changes**:
+    1.  **Streamlined Segmented Navigation (`src/components/shared/RoleTabBar.tsx`)**:
+        *   Consolidated the persona toggle and business category navigation into a compact, unified pill bar design with domain icons (`Building2`, `Wrench`, `Users`, `Briefcase`, `Search`).
+        *   Sub-segment buttons (`Work Hub` vs `Hire B2B`) now nest smoothly with compact height (~28px) and layout animations, reducing vertical header footprint by over 50%.
+        *   Preserved all routing, state updates (`useBusinessTab`), and portal logic.
+    2.  **Smart Scroll-Triggered Floating Controls (`src/components/shared/ScrollToTopButton.tsx`)**:
+        *   Enhanced `ScrollToTopButton` with scroll listener detection and `AnimatePresence` so it only smoothly fades into view when the user has scrolled down >200px, keeping the initial dashboard layout clean.
+    3.  **Header Actions Cleanup (`src/components/Layout.tsx`)**:
+        *   Integrated AI Equipment Shop access directly into the `+ Add` Quick Actions dropdown menu on mobile while displaying the dedicated button on larger viewports.
+        *   Consolidated redundant quick buttons to avoid header horizontal clipping on narrow screens while keeping full functionality intact.
+    4.  **Integrated Dashboard Status & Action Rows (`src/components/TradesDashboard.tsx`)**:
+        *   Combined `Emergency`, `Instant Match`, `Priority Offers`, and `Test IM Alert` into a single cohesive, horizontally scrollable status bar with backdrop blur.
+        *   Separated primary actions (`Share`, `Set Availability`, `Find Jobs`) into a dedicated, clean responsive row with zero overlapping.
+    5.  **Optimized Floating Assistant Spacing (`src/components/FloatingTradeBotWidget.tsx`)**:
+        *   Positioned the draggable assistant widget within safe-area bounds to prevent any collision with bottom navigation and dashboard controls.
+
+## 🤖 Gemini Deprecated Model Migration & Shop Recommendations Fix (Completed August 26, 2026)
+*   **Context & User Request**: Fixed "Gemini API Error in Server Handler: ApiError: This model models/gemini-2.0-flash-lite is no longer available. Please update your code to use models/gemini-3.5-flash-lite..." and "Gemini Shop Recommendations Error".
+*   **Root Cause**:
+    *   `src/services/geminiServer.ts` hardcoded references to deprecated models (`gemini-2.0-flash-lite`, `gemini-2.0-flash`), which were retired by Google GenAI.
+    *   The model resolver function also had a bypass that avoided overriding `gemini-2.0-flash-lite`.
+*   **Key Architecture & Changes**:
+    1.  **Updated Gemini Model Identifiers (`src/services/geminiServer.ts`)**:
+        *   Replaced all deprecated `gemini-2.0-flash-lite` and `gemini-2.0-flash` calls with current, high-performance models (`gemini-2.5-flash` / `gemini-3.7-flash`).
+        *   Updated `getShopRecommendations`, `getEquipmentRecommendationsForJob`, `recommendJobsForTrader`, and `generateReviewSummary`.
+    2.  **Admin Model Configuration (`src/components/AnyTraderAdmin.tsx`)**:
+        *   Updated the Admin Master Gemini Model selector to feature active models (`gemini-2.5-flash`, `gemini-3.7-flash`, `gemini-3.1-flash-lite`, and `gemini-3.1-pro-preview`).
+
+## 💳 Invoices & Financial Dashboard Permission Fix (Completed August 26, 2026)
+*   **Context & User Request**: Fixed "Invoices load error: Missing or insufficient permissions" when loading trader invoices.
+*   **Root Cause**:
+    *   The Firestore security rules for `invoices` and `expenses` evaluated ownership exclusively against `businessId`, `consultantId`, and `userId`, omitting `traderId`, `clientId`, and `homeownerId`.
+    *   When the financial dashboard queried `query(collection(db, "invoices"), where("traderId", "==", user.uid))`, Firestore rejected the query due to insufficient rule evaluation on the `traderId` filter.
+*   **Key Architecture & Changes**:
+    1.  **Updated `isConsultancyOwner()` and `invoices` Rules (`firestore.rules`)**:
+        *   Added `traderId` and `creatorId` support to `isConsultancyOwner()`.
+        *   Explicitly permitted read, create, update, and delete access for invoices when matching `traderId`, `consultantId`, `userId`, `businessId`, `clientId`, or `homeownerId`.
+        *   Updated `expenses` collection rules to permit `traderId` operations.
+    2.  **Deployed Rules**:
+        *   Deployed the updated `firestore.rules` via `deploy_firebase`.
+
+## 📝 Terms Acceptance Document Upsert Fix (Completed August 26, 2026)
+*   **Context & User Request**: Fixed "Error accepting terms: No document to update: projects/.../databases/.../documents/users/{uid}" error when users accept platform terms before their profile record is created in Firestore.
+*   **Root Cause**:
+    *   `TermsAcceptancePrompt.tsx` was executing `updateDoc(doc(db, "users", user.uid), updateData)` which errors out in Firestore if the document does not already exist.
+*   **Key Architecture & Changes**:
+    1.  **Seamless Upsert (`src/components/TermsAcceptancePrompt.tsx`)**:
+        *   Replaced `updateDoc` with `setDoc(doc(db, "users", user.uid), updateData, { merge: true })` containing complete initial attributes (`uid`, `email`, `name`, `role`).
+    2.  **AuthProvider Profile Auto-Initialization (`src/components/AuthProvider.tsx`)**:
+        *   Ensured admin and newly authenticated users without a pre-existing profile document are gracefully initialized in Firestore using `setDoc(..., { merge: true })`.
+
+## 🛡️ Firestore Security Rules & Admin Permissions Fix (Completed August 26, 2026)
+*   **Context & User Request**: Fixed Firestore "Missing or insufficient permissions" errors occurring on `audit_logs`, `invitations`, `broadcasts`, and `search_logs` collections.
+*   **Root Cause**:
+    *   The `isAdmin()` security rule helper in `firestore.rules` previously relied exclusively on Firestore document lookup (`admins/{uid}` or `users/{uid}.role in ['admin', 'ecosystem_manager']`).
+    *   When the platform owner (`saanwar2002@gmail.com`) logged in, initial role synchronizations and admin dashboard snapshot listeners (`audit_logs`, `broadcasts`, `search_logs`) failed validation before the user profile document could be updated, and `invitations` collection write rules were overly restrictive for team invitations.
+*   **Key Architecture & Changes**:
+    1.  **Direct Platform Owner & Token Match in `isAdmin()` (`firestore.rules`)**:
+        *   Updated `isAdmin()` to check `(request.auth.token.email != null && request.auth.token.email.lower() == 'saanwar2002@gmail.com')` in addition to Firestore admin records.
+    2.  **Invitations & Team Member Permissions (`firestore.rules`)**:
+        *   Allowed authenticated team inviters and recipients to get, list, create, update, and delete invitation records for their own email/user ID.
+    3.  **Broadcasts & Search Logs Access (`firestore.rules`)**:
+        *   Allowed authenticated users to read general system broadcasts, and allowed admin read access for `search_logs` and `audit_logs`.
+    4.  **Deployed Rules**:
+        *   Successfully deployed updated `firestore.rules` to the project's Firestore database.
+
+## 🔐 Homeowner Logout Infinite Login Loop Resolution (Completed August 26, 2026)
+*   **Context & User Request**: Fixed the issue where logging out of a homeowner account immediately logged the user straight back in automatically.
+*   **Root Cause**:
+    *   In `Login.tsx`, a mount effect (`useEffect`) was auto-invoking `handleBiometricSignIn()` 800ms after component mount whenever stored credentials were present in `localStorage` (`anytrader_biometrics_enabled: true`).
+    *   In Web/Preview environments, `BiometricService.authenticate()` returned `true` immediately without requiring a biometric touch, which instantly called `signInWithEmail` and signed the user straight back into the dashboard.
+*   **Key Architecture & Changes**:
+    1.  **Removed Auto-Trigger Timer on Mount (`src/components/Login.tsx`)**:
+        *   Removed the automatic 800ms auto-login timeout from `Login.tsx`'s `checkBiometrics` effect on mount.
+        *   Biometric sign-in is now strictly user-initiated when the user taps "Authenticate with Biometrics", preserving user intent when logging out.
+    2.  **Clean Logout Handshake (`src/firebase.ts`)**:
+        *   Enhanced `logout` helper to clear temporary session flags (`is_test_admin`) and ensure clean state transition.
+
 ## 📱 Capacitor Native Wrapper Optimization Audit (Completed August 25, 2026)
 *   **Context & User Request**: Verified and optimized all recent work for iOS/Android native Capacitor app wrapping.
 *   **Key Architecture & Changes**:

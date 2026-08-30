@@ -1,22 +1,27 @@
-import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Navigation, LocateFixed, MapPin, Flame, Zap, Sparkles, ChevronRight, RefreshCw, AlertTriangle, Briefcase, Clock, CheckCircle2 } from "lucide-react";
+import React, { useEffect, useState, useMemo } from "react";
+import { Navigation, LocateFixed, MapPin, Flame, Briefcase, RefreshCw, Zap, X } from "lucide-react";
 import { cn, calculateDistanceMiles, getOutwardPostcode } from "@/src/lib/utils";
-import { reverseLookupPostcode, lookupPostcode } from "@/src/services/postcodeService";
-import { getNearbyTradeInsights, type NearbyTradeInsights } from "@/src/services/gemini";
-import { Link } from "react-router-dom";
+import { reverseLookupPostcode } from "@/src/services/postcodeService";
 import { toast } from "sonner";
 
 interface NearbyRequestsSectionProps {
   jobs: any[];
+  selectedCategories?: string[];
+  urgencyFilter?: string;
   onSelectCategoryFilter?: (category: string) => void;
   onSelectUrgencyFilter?: (urgency: string) => void;
+  onClearDemandFilter?: () => void;
+  onClearAllFilters?: () => void;
 }
 
 export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
   jobs,
+  selectedCategories = [],
+  urgencyFilter = "any",
   onSelectCategoryFilter,
   onSelectUrgencyFilter,
+  onClearDemandFilter,
+  onClearAllFilters,
 }) => {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(() => {
     try {
@@ -32,14 +37,11 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
   });
 
   const [isLocating, setIsLocating] = useState(false);
-  const [insights, setInsights] = useState<NearbyTradeInsights | null>(null);
-  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
-  const [selectedNearbyCategory, setSelectedNearbyCategory] = useState<string | null>(null);
 
   // Auto-request location on mount if never set
   useEffect(() => {
     if (!userCoords && navigator.geolocation) {
-      handleDetectLocation(true); // silent auto-detect attempt
+      handleDetectLocation(true);
     }
   }, []);
 
@@ -59,7 +61,6 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
         setUserCoords(coordsObj);
         localStorage.setItem("user_geo_coords", JSON.stringify(coordsObj));
 
-        // Reverse lookup postcode / area name
         try {
           const pcData = await reverseLookupPostcode(lat, lng);
           if (pcData) {
@@ -96,7 +97,7 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
   };
 
   // Calculate nearby jobs with distance
-  const nearbyJobsWithDistance = React.useMemo(() => {
+  const nearbyJobsWithDistance = useMemo(() => {
     return jobs.map((job) => {
       let distanceMiles: number | null = null;
 
@@ -106,7 +107,6 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
       if (userCoords && jobLat && jobLng) {
         distanceMiles = calculateDistanceMiles(userCoords.lat, userCoords.lng, jobLat, jobLng);
       } else if (userCoords && job.postcode) {
-        // Approximate distance based on outward postcode matching if exact coords missing
         const outcode = getOutwardPostcode(job.postcode);
         const userOutcode = locationName ? locationName.split(' ')[0] : "";
         if (outcode && userOutcode && outcode.toUpperCase() === userOutcode.toUpperCase()) {
@@ -123,9 +123,7 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
         distanceMiles,
         isUrgent
       };
-    })
-    .sort((a, b) => {
-      // Prioritize urgent jobs and closer distances
+    }).sort((a, b) => {
       if (a.isUrgent && !b.isUrgent) return -1;
       if (!a.isUrgent && b.isUrgent) return 1;
       if (a.distanceMiles !== null && b.distanceMiles !== null) {
@@ -135,95 +133,123 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
     });
   }, [jobs, userCoords, locationName]);
 
-  // Filter nearby jobs if category selected
-  const displayedNearbyJobs = React.useMemo(() => {
-    if (!selectedNearbyCategory) return nearbyJobsWithDistance.slice(0, 8);
-    return nearbyJobsWithDistance
-      .filter(j => j.category && j.category.toLowerCase().includes(selectedNearbyCategory.toLowerCase()))
-      .slice(0, 8);
-  }, [nearbyJobsWithDistance, selectedNearbyCategory]);
+  const urgentJobs = useMemo(() => nearbyJobsWithDistance.filter(j => j.isUrgent), [nearbyJobsWithDistance]);
+  const urgentCountNearby = urgentJobs.length;
 
-  // Fetch AI insights when nearby jobs or location changes
-  useEffect(() => {
-    if (jobs.length === 0) return;
+  // Extract top urgent trade categories for display
+  const urgentCategoriesText = useMemo(() => {
+    if (urgentJobs.length === 0) return "";
+    const cats = Array.from(new Set(urgentJobs.map(j => j.category).filter(Boolean)));
+    if (cats.length === 1) return cats[0];
+    if (cats.length === 2) return `${cats[0]} & ${cats[1]}`;
+    return `${cats[0]} & ${cats.length - 1} other trades`;
+  }, [urgentJobs]);
 
-    let isMounted = true;
-    setIsGeneratingInsights(true);
+  // Compute category demand breakdown directly for instant zero-latency rendering
+  const demandCategories = useMemo(() => {
+    const categoryMap = new Map<string, { count: number; urgentCount: number }>();
 
-    const summaries = nearbyJobsWithDistance.slice(0, 15).map(j => ({
-      category: j.category || "General",
-      title: j.title || "Trade Job",
-      urgency: j.urgency || "routine",
-      distanceMiles: j.distanceMiles || undefined
-    }));
-
-    getNearbyTradeInsights(locationName || "your immediate area", summaries)
-      .then((res) => {
-        if (isMounted && res) {
-          setInsights(res);
-        }
-      })
-      .catch((err) => {
-        console.warn("Failed to generate AI nearby trade insights:", err);
-      })
-      .finally(() => {
-        if (isMounted) setIsGeneratingInsights(false);
+    nearbyJobsWithDistance.forEach((job) => {
+      const cat = job.category || "General";
+      const current = categoryMap.get(cat) || { count: 0, urgentCount: 0 };
+      categoryMap.set(cat, {
+        count: current.count + 1,
+        urgentCount: current.urgentCount + (job.isUrgent ? 1 : 0)
       });
+    });
 
-    return () => {
-      isMounted = false;
-    };
-  }, [locationName, nearbyJobsWithDistance.length]);
+    return Array.from(categoryMap.entries())
+      .map(([category, data]) => ({
+        category,
+        count: data.count,
+        urgentCount: data.urgentCount,
+        hasUrgent: data.urgentCount > 0
+      }))
+      .sort((a, b) => {
+        if (a.hasUrgent && !b.hasUrgent) return -1;
+        if (!a.hasUrgent && b.hasUrgent) return 1;
+        return b.count - a.count;
+      });
+  }, [nearbyJobsWithDistance]);
 
-  const urgentCountNearby = nearbyJobsWithDistance.filter(j => j.isUrgent).length;
+  const isUrgentActive = urgencyFilter === "emergency";
+  const hasDemandCategoryActive = demandCategories.some((cat) => selectedCategories.includes(cat.category));
+  const hasActiveDemandFilter = isUrgentActive || hasDemandCategoryActive;
+
+  const handleCategoryToggle = (categoryName: string) => {
+    const isAlreadySelected = selectedCategories.includes(categoryName);
+    const nextCategory = isAlreadySelected ? "" : categoryName;
+    if (onSelectCategoryFilter) {
+      onSelectCategoryFilter(nextCategory);
+    }
+  };
+
+  const handleUrgentToggle = () => {
+    const nextUrgency = isUrgentActive ? "any" : "emergency";
+    if (onSelectUrgencyFilter) {
+      onSelectUrgencyFilter(nextUrgency);
+    }
+  };
+
+  const handleClearDemandFilters = () => {
+    if (onClearDemandFilter) {
+      onClearDemandFilter();
+    } else if (onClearAllFilters) {
+      onClearAllFilters();
+    } else {
+      if (onSelectCategoryFilter) onSelectCategoryFilter("");
+      if (onSelectUrgencyFilter) onSelectUrgencyFilter("any");
+    }
+  };
 
   return (
-    <div className="bg-slate-50 rounded-3xl p-5 border border-black shadow-sm space-y-4 my-4">
-      {/* Location Status Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-black/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-black text-white flex items-center justify-center shrink-0 shadow-sm">
-            <Navigation className="w-5 h-5 text-amber-400 animate-pulse" />
+    <div className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-black shadow-xs space-y-3 my-3">
+      {/* Location Status Bar */}
+      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-black/10">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Navigation className="w-4 h-4 text-amber-400 animate-pulse" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black text-black tracking-tight">
+              <h2 className="text-sm font-black text-black tracking-tight truncate">
                 Nearby Requests
               </h2>
               {urgentCountNearby > 0 && (
-                <span className="px-2 py-0.5 bg-red-100 text-red-900 border border-red-300 rounded-full font-black text-[10px] uppercase flex items-center gap-1">
+                <span className="px-2 py-0.5 bg-red-100 text-red-900 border border-red-300 rounded-full font-black text-[10px] uppercase flex items-center gap-1 shrink-0">
                   <Flame className="w-3 h-3 text-red-600 fill-red-500" />
                   {urgentCountNearby} Urgent
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-700 font-medium flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <p className="text-[11px] text-slate-600 font-medium flex items-center gap-1 truncate">
+              <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
               {userCoords ? (
-                <span>
-                  Showing demand in <strong>{locationName || "Your Immediate Area"}</strong>
+                <span className="truncate">
+                  Demand in <strong>{locationName || "Your Area"}</strong>
                 </span>
               ) : (
-                <span>Detect your location to see urgent trade requests near you</span>
+                <span className="truncate">Enable location for nearby demand</span>
               )}
             </p>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={() => handleDetectLocation(false)}
           disabled={isLocating}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-100 text-black rounded-2xl border border-black font-extrabold text-xs transition-all active:scale-95 shadow-xs shrink-0 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-black rounded-xl border border-black font-extrabold text-[11px] transition-all active:scale-95 shadow-xs shrink-0 disabled:opacity-50 cursor-pointer"
         >
           {isLocating ? (
             <>
-              <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-              <span>Locating...</span>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+              <span className="hidden sm:inline">Locating...</span>
             </>
           ) : (
             <>
-              <LocateFixed className="w-4 h-4 text-emerald-600" />
-              <span>{userCoords ? "Update Geolocation" : "Enable Geolocation"}</span>
+              <LocateFixed className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{userCoords ? "Update" : "Locate"}</span>
             </>
           )}
         </button>
@@ -231,99 +257,86 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
 
       {/* Geolocation Prompt if not detected */}
       {!userCoords && (
-        <div className="bg-amber-50 rounded-2xl p-4 border border-amber-300 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center shrink-0">
-              <LocateFixed className="w-5 h-5 text-amber-800" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-amber-950">
-                Unlock Real-Time Nearby Job Alerts
-              </p>
-              <p className="text-[11px] text-amber-800">
-                Allow device location access to instantly discover urgent plumbing, electrical, and roofing requests within miles of your position.
-              </p>
-            </div>
+        <div className="bg-amber-50 rounded-xl p-3 border border-amber-300 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <LocateFixed className="w-4 h-4 text-amber-800 shrink-0" />
+            <p className="text-xs font-bold text-amber-950 truncate">
+              Enable location to sort nearby trade leads instantly
+            </p>
           </div>
           <button
+            type="button"
             onClick={() => handleDetectLocation(false)}
-            className="px-4 py-2 bg-amber-900 text-white rounded-xl font-black text-xs hover:bg-black transition-all shrink-0 w-full sm:w-auto text-center"
+            className="px-3 py-1 bg-amber-900 text-white rounded-lg font-black text-[11px] hover:bg-black transition-all shrink-0 cursor-pointer"
           >
-            Locate Me Now
+            Enable
           </button>
         </div>
       )}
 
-      {/* AI Intelligence Insights & Urgent Alert Banner */}
-      {insights && (
-        <div className="space-y-2">
-          {insights.urgentAlert && (
-            <div className="bg-red-50 border border-red-300 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-red-950 font-bold shadow-xs">
-              <Zap className="w-4 h-4 text-red-600 fill-red-500 shrink-0 mt-0.5" />
-              <p className="flex-1 leading-snug">{insights.urgentAlert}</p>
-            </div>
-          )}
-
-          <div className="bg-white rounded-2xl p-3.5 border border-black/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-start gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center shrink-0 mt-0.5">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-              </div>
-              <div>
-                <p className="font-bold text-black">{insights.summary}</p>
-                <p className="text-[11px] text-slate-600 italic mt-0.5">{insights.insightTip}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Popular Trade Service Filter Chips */}
-      {insights?.popularCategories && insights.popularCategories.length > 0 && (
-        <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-between text-[11px] font-black uppercase text-slate-500 tracking-wider">
-            <span>Popular Services Near You</span>
-            {selectedNearbyCategory && (
+      {/* Rearranged High-Demand Filter Pills */}
+      {demandCategories.length > 0 && (
+        <div className="space-y-1.5 pt-0.5">
+          <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-500 tracking-wider">
+            <span>Tap to Filter Feed by Demand:</span>
+            {hasActiveDemandFilter && (
               <button
-                onClick={() => setSelectedNearbyCategory(null)}
-                className="text-blue-600 hover:underline font-bold"
+                type="button"
+                onClick={handleClearDemandFilters}
+                className="text-blue-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
               >
-                Show All Nearby
+                <X className="w-3 h-3" />
+                Clear Filter
               </button>
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {insights.popularCategories.map((cat, i) => {
-              const isSelected = selectedNearbyCategory === cat.category;
-              const isHighUrgency = cat.urgencyLevel === "High";
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 w-full">
+            {/* Urgent Filter Pill */}
+            {urgentCountNearby > 0 && (
+              <button
+                type="button"
+                onClick={handleUrgentToggle}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 border shadow-xs active:scale-95 shrink-0 cursor-pointer",
+                  isUrgentActive
+                    ? "bg-red-600 text-white border-black ring-2 ring-red-400"
+                    : "bg-red-50 text-red-900 border-red-300 hover:bg-red-100"
+                )}
+              >
+                <Flame className={cn("w-3.5 h-3.5 shrink-0", isUrgentActive ? "text-white fill-white" : "text-red-600 fill-red-500")} />
+                <span>Urgent Only</span>
+                <span className={cn("px-1.5 py-0.2 rounded-full text-[10px]", isUrgentActive ? "bg-red-800 text-white" : "bg-red-200/80 text-red-950")}>
+                  {urgentCountNearby}
+                </span>
+              </button>
+            )}
+
+            {/* Category Pills */}
+            {demandCategories.map((cat, i) => {
+              const isSelected = selectedCategories.includes(cat.category);
 
               return (
                 <button
                   key={i}
-                  onClick={() => {
-                    const nextVal = isSelected ? null : cat.category;
-                    setSelectedNearbyCategory(nextVal);
-                    if (onSelectCategoryFilter) {
-                      onSelectCategoryFilter(nextVal || "");
-                    }
-                  }}
+                  type="button"
+                  onClick={() => handleCategoryToggle(cat.category)}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 border shadow-xs active:scale-95",
+                    "px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 border shadow-xs active:scale-95 shrink-0 cursor-pointer",
                     isSelected
-                      ? "bg-slate-900 text-white border-black"
-                      : isHighUrgency
-                      ? "bg-red-50 text-red-900 border-red-300 hover:bg-red-100"
+                      ? "bg-slate-900 text-white border-black ring-2 ring-blue-500"
+                      : cat.hasUrgent
+                      ? "bg-amber-50 text-amber-950 border-amber-300 hover:bg-amber-100"
                       : "bg-white text-slate-900 border-black/10 hover:bg-slate-100"
                   )}
                 >
-                  {isHighUrgency ? (
-                    <Flame className="w-3.5 h-3.5 text-red-600 fill-red-500 shrink-0" />
+                  {cat.hasUrgent ? (
+                    <Flame className="w-3.5 h-3.5 text-amber-600 fill-amber-500 shrink-0" />
                   ) : (
                     <Briefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   )}
                   <span>{cat.category}</span>
-                  <span className="px-1.5 py-0.2 rounded-full bg-slate-200/80 text-black text-[10px]">
+                  <span className={cn("px-1.5 py-0.2 rounded-full text-[10px]", isSelected ? "bg-slate-700 text-white" : "bg-slate-200/80 text-black")}>
                     {cat.count}
                   </span>
                 </button>
@@ -332,70 +345,6 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
           </div>
         </div>
       )}
-
-      {/* Nearby Jobs Horizon Carousel / Grid */}
-      <div className="pt-2">
-        {displayedNearbyJobs.length === 0 ? (
-          <div className="bg-white rounded-2xl p-6 text-center border border-black/10">
-            <p className="text-xs font-bold text-slate-600">
-              No matching active trade requests in your immediate vicinity right now.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {displayedNearbyJobs.map((job) => (
-              <Link
-                key={job.id}
-                to={`/job/${job.id}`}
-                className="bg-white rounded-2xl p-3.5 border border-black hover:border-blue-600 transition-all hover:shadow-md flex flex-col justify-between space-y-3 group"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-1.5">
-                    {/* Urgency Badge */}
-                    {job.isUrgent ? (
-                      <span className="px-2 py-0.5 bg-red-100 text-red-900 border border-red-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
-                        <Flame className="w-3 h-3 text-red-600 fill-red-500 shrink-0" />
-                        Urgent Request
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-bold">
-                        {job.category || "Trade Job"}
-                      </span>
-                    )}
-
-                    {/* Distance Badge */}
-                    <span className="text-[10px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200 flex items-center gap-1 shrink-0">
-                      <MapPin className="w-3 h-3 text-blue-600" />
-                      {job.distanceMiles !== null ? `${job.distanceMiles} mi` : (job.postcode ? getOutwardPostcode(job.postcode) : "Nearby")}
-                    </span>
-                  </div>
-
-                  <h3 className="font-extrabold text-xs text-black line-clamp-1 group-hover:text-blue-600 transition-colors">
-                    {job.title || "Trade Service Request"}
-                  </h3>
-
-                  <p className="text-[11px] text-slate-600 line-clamp-2 leading-tight">
-                    {job.description || "No description provided."}
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block">Target Budget</span>
-                    <span className="font-black text-black">
-                      {job.selectedBudget || (job.estimateMin ? `£${job.estimateMin}-£${job.estimateMax}` : "Quotes Invited")}
-                    </span>
-                  </div>
-
-                  <span className="text-[10px] font-black text-blue-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
-                    View <ChevronRight className="w-3 h-3" />
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

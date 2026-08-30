@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import React, { useEffect, useState, useRef } from "react";
 import { TradeBot } from "./TradeBot";
 import { FloatingTradeBotWidget } from "./FloatingTradeBotWidget";
-import { HeaderSmartTicker } from "./HeaderSmartTicker";
 import { Logo } from "./Logo";
 import { AnimatePresence, motion } from "motion/react";
 import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
@@ -20,6 +19,7 @@ import RoleTabBar from "./shared/RoleTabBar";
 import { useBusinessTab } from "@/src/store/businessTabStore";
 import { TermsAcceptancePrompt } from "./TermsAcceptancePrompt";
 import { ScrollToTopButton } from "./shared/ScrollToTopButton";
+import { HeaderAccountSearch } from "./HeaderAccountSearch";
 
 const getIconComponent = (iconName: string) => {
   const icons: any = { Wrench, Hammer, HardHat, Shield, Zap, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, Briefcase, PenTool, Box };
@@ -513,25 +513,25 @@ export default function Layout() {
           <CrossPortalBanner />
 
           {/* Header */}
-          <header className={cn("bg-slate-50/95 backdrop-blur-md", !isAnonymous && !showMaintenanceBanner && "pt-[env(safe-area-inset-top,0px)]")}>
-          <div className="max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-2 sm:gap-4">
+          <header className={cn("bg-slate-50/95 backdrop-blur-md relative z-50", !isAnonymous && !showMaintenanceBanner && "pt-[env(safe-area-inset-top,0px)]")}>
+          <div className="max-w-7xl mx-auto px-1.5 sm:px-4 h-16 flex items-center justify-between gap-1 sm:gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
               {activePortal === "anyroller" && (
                 <button 
                   onClick={() => {
                     triggerHaptic();
                     setIsMenuOpen(true);
                   }}
-                  className="p-2 -ml-2 text-slate-500 hover:text-slate-900 transition-colors"
+                  className="p-1.5 sm:p-2 -ml-1 sm:-ml-2 text-slate-500 hover:text-slate-900 transition-colors"
                 >
-                  <Menu className="w-6 h-6" />
+                  <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
               {platformConfig?.showBookTaxiButton === false && activePortal === "anytrader" ? (
-                <div className="flex items-center gap-3 text-left">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 text-left">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 shrink-0">
                     <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                    <span className="text-[8px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+                    <span className="text-[7.5px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
                   </div>
                   <div className="hidden sm:block">
                     <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
@@ -556,13 +556,13 @@ export default function Layout() {
                       setTimeout(() => navigate("/"), 50);
                     }
                   }}
-                  className="flex items-center gap-3 group text-left"
+                  className="flex items-center gap-2 sm:gap-3 group text-left shrink-0"
                 >
                   {activePortal === "anytrader" ? (
                     <>
-                      <div className="w-11 h-11 sm:w-14 sm:h-14 bg-yellow-300 border-[2px] sm:border-[3px] border-black rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
+                      <div className="w-10 h-10 sm:w-14 sm:h-14 bg-yellow-300 border-[2px] sm:border-[3px] border-black rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
                         <Car className="w-4 h-4 sm:w-5 sm:h-5 text-black relative z-10 mb-0.5" />
-                        <span className="text-[7px] sm:text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
+                        <span className="text-[6.5px] sm:text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
                         <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
                       </div>
                       <div className="hidden sm:block">
@@ -572,9 +572,9 @@ export default function Layout() {
                     </>
                   ) : (
                     <>
-                      <div className="w-11 h-11 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
                         <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                        <span className="text-[8px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+                        <span className="text-[7.5px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
                       </div>
                       <div className="hidden sm:block">
                         <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
@@ -629,18 +629,22 @@ export default function Layout() {
               )}
             </div>
 
-            {/* Role-Based Smart Status Ticker & Platform Ad Capsule */}
-            <HeaderSmartTicker />
+            {/* Middle Section: Universal Account & Dashboard Search Bar */}
+            {activePortal === "anytrader" && (
+              <div className="flex items-center justify-center min-w-0 mx-auto px-0.5 sm:px-2">
+                <HeaderAccountSearch />
+              </div>
+            )}
 
-            <div className="flex items-center justify-end gap-1.5 sm:gap-2.5 shrink-0 pl-1 sm:pl-0">
+            <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0">
               {/* AI Smart Shop Button & Popover */}
             {(profile?.role === "tradesperson" || profile?.subscriptionType === "business") && (
-              <div className="relative" ref={popoverRef}>
+              <div className="relative hidden sm:flex" ref={popoverRef}>
                 <button 
                   onClick={loadShopRecommendations}
                   id="header-shop-btn"
                   className={cn(
-                    "w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-blue-600 hover:bg-blue-50 transition-all relative active:scale-95 shrink-0",
+                    "w-9 h-9 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-blue-600 hover:bg-blue-50 transition-all relative active:scale-95 shrink-0",
                     showShopPopover && "bg-blue-50 border-blue-600"
                   )}
                   title="Trade Equipment Shop"
@@ -755,10 +759,10 @@ export default function Layout() {
                      <button 
                        onClick={() => setShowQuickActions(!showQuickActions)}
                        id="header-quick-actions-btn"
-                       className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-blue-600 border border-black shadow-sm flex flex-col items-center justify-center text-white hover:bg-blue-700 transition-all active:scale-95 shrink-0"
+                       className="w-9 h-9 sm:w-11 sm:h-11 rounded-[14px] bg-blue-600 border border-black shadow-sm flex flex-col items-center justify-center text-white hover:bg-blue-700 transition-all active:scale-95 shrink-0"
                      >
                        <Plus className={cn("w-4 h-4 sm:w-5 sm:h-5 transition-transform", showQuickActions && "rotate-45")} />
-                       <span className="text-[7.5px] font-black uppercase text-white tracking-tight leading-none mt-0.5">Add</span>
+                       <span className="text-[7px] sm:text-[7.5px] font-black uppercase text-white tracking-tight leading-none mt-0.5">Add</span>
                      </button>
                      
                      <AnimatePresence>
@@ -767,7 +771,7 @@ export default function Layout() {
                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
                            animate={{ opacity: 1, y: 0, scale: 1 }}
                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                           className="absolute top-14 left-0 sm:left-auto sm:right-0 w-52 bg-white max-h-[80vh] overflow-y-auto rounded-2xl shadow-xl border border-black py-2 z-[60] origin-top-left sm:origin-top-right"
+                           className="absolute top-14 left-0 sm:left-auto sm:right-0 w-56 bg-white max-h-[80vh] overflow-y-auto rounded-2xl shadow-xl border border-black py-2 z-[60] origin-top-left sm:origin-top-right"
                          >
                            <Link onClick={() => setShowQuickActions(false)} to="/post-job" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Briefcase className="w-4 h-4"/></div>
@@ -777,6 +781,10 @@ export default function Layout() {
                              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0"><Search className="w-4 h-4"/></div>
                              <span className="text-sm font-bold text-slate-800">Find Work</span>
                            </Link>
+                           <button onClick={() => { setShowQuickActions(false); loadShopRecommendations(); }} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors w-full text-left">
+                             <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0"><ShoppingCart className="w-4 h-4"/></div>
+                             <span className="text-sm font-bold text-slate-800">AI Equipment Shop</span>
+                           </button>
                            <Link onClick={() => setShowQuickActions(false)} to="/availability" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
                              <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><Calendar className="w-4 h-4"/></div>
                              <span className="text-sm font-bold text-slate-800">Set Availability</span>
@@ -791,9 +799,9 @@ export default function Layout() {
                   </div>
                   
                   <Link 
-                    to="/availability"
+                    to="/availability" 
                     id="header-calendar-btn"
-                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-slate-50 hover:text-blue-600 transition-all active:scale-95 shrink-0"
+                    className="hidden md:flex w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-slate-50 hover:text-blue-600 transition-all active:scale-95 shrink-0"
                     title="Schedule & Availability"
                   >
                     <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
@@ -816,26 +824,26 @@ export default function Layout() {
             <Link 
               to="/notifications" 
               id="header-notifications-btn"
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-slate-50 transition-all relative active:scale-95 shrink-0"
+              className="w-9 h-9 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-slate-50 transition-all relative active:scale-95 shrink-0"
               title="Notifications"
             >
               <div className="relative">
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+                <Bell className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-black" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-black shadow-sm">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </div>
-              <span className="text-[7.5px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Alerts</span>
+              <span className="text-[7px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Alerts</span>
             </Link>
             <Link 
               to="/profile" 
               id="header-profile-btn"
-              className="h-10 sm:h-11 px-1.5 sm:px-2.5 rounded-[14px] bg-white border border-black shadow-sm flex items-center gap-1.5 hover:bg-slate-50 transition-all relative active:scale-95 shrink-0"
+              className="h-9 sm:h-11 px-1.5 sm:px-2.5 rounded-[14px] bg-white border border-black shadow-sm flex items-center gap-1.5 hover:bg-slate-50 transition-all relative active:scale-95 shrink-0"
               title="My Profile"
             >
-              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-[10px] overflow-hidden border border-black flex items-center justify-center text-black relative bg-slate-100 shrink-0">
+              <div className="w-5 h-5 sm:w-7 sm:h-7 rounded-[9px] sm:rounded-[10px] overflow-hidden border border-black flex items-center justify-center text-black relative bg-slate-100 shrink-0">
                 {user?.photoURL ? (
                   <img 
                     src={user.photoURL} 
@@ -848,10 +856,10 @@ export default function Layout() {
                 )}
               </div>
               <div className="flex flex-col text-left">
-                <span className="text-[7.5px] sm:text-[8px] font-black uppercase text-blue-600 tracking-tight leading-none">
+                <span className="text-[6.5px] sm:text-[8px] font-black uppercase text-blue-600 tracking-tight leading-none">
                   {profile?.role === 'tradesperson' ? 'Trader' : profile?.role === 'business' ? 'Business' : 'Home'}
                 </span>
-                <span className="text-[9.5px] sm:text-[10px] font-black text-black leading-tight max-w-[48px] sm:max-w-[70px] truncate">
+                <span className="text-[8.5px] sm:text-[10px] font-black text-black leading-tight max-w-[42px] sm:max-w-[70px] truncate">
                   {profile?.displayName?.split(' ')[0] || (profile?.role === 'tradesperson' ? 'Pro' : 'Account')}
                 </span>
               </div>
@@ -859,11 +867,11 @@ export default function Layout() {
             <button 
               onClick={() => setShowLogoutConfirm(true)}
               id="header-signout-btn"
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-red-50 hover:text-red-600 transition-all active:scale-95 shrink-0"
+              className="w-9 h-9 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-red-50 hover:text-red-600 transition-all active:scale-95 shrink-0"
               title="Sign Out"
             >
-              <LogOut className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-black hover:text-red-600 transition-colors" />
-              <span className="text-[7.5px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Exit</span>
+              <LogOut className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 text-black hover:text-red-600 transition-colors" />
+              <span className="text-[7px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Exit</span>
             </button>
           </div>
         </div>

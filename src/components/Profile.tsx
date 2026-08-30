@@ -2295,7 +2295,10 @@ export default function Profile() {
       {isBusinessProfile && (
         <TraderVideoVerificationCard 
           profile={profile} 
-          onUpdateProfile={(updates) => setEditData(prev => ({ ...prev, ...updates }))} 
+          onUpdateProfile={(updates) => {
+            setProfile((prev: any) => ({ ...prev, ...updates }));
+            setEditData(prev => ({ ...prev, ...updates }));
+          }} 
         />
       )}
 

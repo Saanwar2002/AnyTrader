@@ -262,7 +262,12 @@ const executeWebViewGoogleSignIn = async () => {
 };
 export const handleRedirectResult = () => getRedirectResult(auth);
 export const signInAsGuest = () => signInAnonymously(auth);
-export const logout = () => auth.signOut();
+export const logout = async () => {
+  try {
+    sessionStorage.removeItem("is_test_admin");
+  } catch (_) {}
+  return await auth.signOut();
+};
 export const signUpWithEmail = (email: string, pass: string) => createUserWithEmailAndPassword(auth, email, pass);
 export const signInWithEmail = (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass);
 export const sendVerificationEmail = (user: FirebaseUser) => sendEmailVerification(user);

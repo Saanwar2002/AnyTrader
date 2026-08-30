@@ -46,6 +46,7 @@ export default function TraderAdStudio() {
     try {
       await setDoc(doc(collection(db, "advertisements")), {
         advertiserUid: user.uid,
+        advertiserId: user.uid,
         advertiserName: profile?.name || "Trader",
         advertiserEmail: profile?.email || user.email,
         title: formData.get("title"),

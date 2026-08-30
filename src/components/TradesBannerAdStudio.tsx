@@ -88,6 +88,7 @@ export default function TradesBannerAdStudio() {
         targetRole: "homeowner",
         
         advertiserId: user.uid,
+        advertiserUid: user.uid,
         advertiserName: profile?.businessName || profile?.name || "Trader",
         advertiserEmail: profile?.email || "",
         isTraderAd: true,

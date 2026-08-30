@@ -13,7 +13,7 @@ import {
   MoreVertical, Edit2, Trash2, RotateCcw, XCircle, Briefcase, Zap, ChevronRight, X,
   AlertTriangle, Camera, FileText, Sparkles, RefreshCw, History, Download, AlertCircle,
   BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation,
-  MessageCircle, Mail, Check, Plus, ImageIcon, Mic, Play
+  MessageCircle, Mail, Check, Plus, ImageIcon, Mic, Play, CreditCard, Award
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import { Capacitor } from '@capacitor/core';
@@ -123,6 +123,7 @@ export default function JobDetails() {
   const [estimatedTimeline, setEstimatedTimeline] = useState("");
   const [paymentPreference, setPaymentPreference] = useState("fixed_price");
   const [quoteScope, setQuoteScope] = useState("complete_package");
+  const [isEditingSubmittedQuote, setIsEditingSubmittedQuote] = useState(false);
   
   // 4 Part 1 Improvements: Line Items, Deposit Terms, Guarantee & Warranty
   const [useLineItems, setUseLineItems] = useState(false);
@@ -644,92 +645,7 @@ const libraries: any[] = ['places', 'geometry'];
 
       const payoutBreakdown = calculatePayoutBreakdown(finalAmount, profile?.tier || 'payg');
 
-      if (existingQuote) {
-        const updateData: any = {
-          history: arrayUnion({
-            amount: existingQuote.amount,
-            message: existingQuote.message,
-            paymentPreference: existingQuote.paymentPreference,
-            quoteScope: existingQuote.quoteScope,
-            timestamp: new Date().toISOString(),
-            reason: "Manual Update"
-          }),
-          amount: finalAmount,
-          originalAmount: originalAmountVal,
-          isDiscountApplied,
-          discountPercentage: discountPercentageVal,
-          appliedFlashDealId: appliedFlashDealIdVal,
-          netPayoutValue: payoutBreakdown.netPayout,
-          stripeFeeAmount: payoutBreakdown.stripeFee,
-          platformCommission: payoutBreakdown.platformCommission,
-          paymentRail: payoutBreakdown.paymentRail,
-          message: quoteMessage,
-          startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
-          isImmediateStart,
-          estimatedTimeline,
-          paymentPreference,
-          quoteScope,
-          lineItems: useLineItems ? lineItems.filter(item => item.description && item.amount) : [],
-          depositTerm,
-          guaranteeTerm,
-          partsWarranty,
-          status: "pending",
-          updatedAt: serverTimestamp(),
-          requoteMessage: deleteField(),
-          jobTitle: job.title || ""
-        };
-        
-        if (job.jobNo !== undefined) {
-          updateData.jobNo = job.jobNo;
-        }
-
-        const quoteRef = doc(db, "jobs", id, "quotes", existingQuote.id);
-        await updateDoc(quoteRef, updateData);
-      } else {
-        const quoteRef = doc(collection(db, "jobs", id, "quotes"));
-        const quoteData: any = {
-          id: quoteRef.id,
-          jobId: id,
-          jobTitle: job.title || "",
-          tradespersonId: user.uid,
-          homeownerId: job.homeownerId,
-          amount: finalAmount,
-          originalAmount: originalAmountVal,
-          isDiscountApplied,
-          discountPercentage: discountPercentageVal,
-          appliedFlashDealId: appliedFlashDealIdVal,
-          netPayoutValue: payoutBreakdown.netPayout,
-          stripeFeeAmount: payoutBreakdown.stripeFee,
-          platformCommission: payoutBreakdown.platformCommission,
-          paymentRail: payoutBreakdown.paymentRail,
-          message: quoteMessage,
-          startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
-          isImmediateStart,
-          estimatedTimeline,
-          paymentPreference,
-          quoteScope,
-          lineItems: useLineItems ? lineItems.filter(item => item.description && item.amount) : [],
-          depositTerm,
-          guaranteeTerm,
-          partsWarranty,
-          status: "pending",
-          createdAt: serverTimestamp(),
-        };
-        
-        if (job.jobNo !== undefined) {
-          quoteData.jobNo = job.jobNo;
-        }
-        
-        await setDoc(quoteRef, quoteData);
-        const { increment } = await import("firebase/firestore");
-        await updateDoc(doc(db, "jobs", id), {
-            quoteCount: increment(1)
-        });
-      }
-
-      
       const isQuickTrack = finalAmount < 400;
-      
       const defaultMilestones = !isQuickTrack ? [
         { id: "m1", title: "Commencement & Materials", amount: Math.floor(finalAmount * 0.3), status: "pending_funding" },
         { id: "m2", title: "Mid-way Progress", amount: Math.floor(finalAmount * 0.4), status: "pending_funding" },
@@ -738,56 +654,74 @@ const libraries: any[] = ['places', 'geometry'];
         { id: "m1", title: "Service Delivery", amount: finalAmount, status: "pending_funding" }
       ];
 
-      const quoteRef = existingQuote ? doc(db, "jobs", id, "quotes", existingQuote.id) : doc(collection(db, "jobs", id, "quotes"));
-      
-      const quoteData: any = {
-          id: quoteRef.id,
-          jobId: id,
-          jobTitle: job.title || "",
-          tradespersonId: user.uid,
-          homeownerId: job.homeownerId,
-          amount: finalAmount,
-          originalAmount: originalAmountVal,
-          isDiscountApplied,
-          discountPercentage: discountPercentageVal,
-          appliedFlashDealId: appliedFlashDealIdVal,
-          message: quoteMessage,
-          startDate: isImmediateStart ? new Date().toISOString().split('T')[0] : quoteStartDate,
-          isImmediateStart,
-          estimatedTimeline,
-          paymentPreference,
-          quoteScope,
-          status: "pending",
-          paymentTrack: isQuickTrack ? "quick" : "project",
-          milestones: defaultMilestones,
-          updatedAt: serverTimestamp(),
-          createdAt: existingQuote ? existingQuote.createdAt : serverTimestamp()
+      const resolvedStartDate = isImmediateStart 
+        ? new Date().toISOString().split('T')[0] 
+        : (quoteStartDate || new Date().toISOString().split('T')[0]);
+
+      const targetQuoteRef = existingQuote 
+        ? doc(db, "jobs", id, "quotes", existingQuote.id) 
+        : doc(collection(db, "jobs", id, "quotes"));
+
+      const quoteDataPayload: any = {
+        id: targetQuoteRef.id,
+        jobId: id,
+        jobTitle: job.title || "",
+        tradespersonId: user.uid,
+        tradespersonName: profile?.businessName || profile?.name || "Tradesperson",
+        tradespersonPhone: profile?.phone || "",
+        tradespersonRating: profile?.rating || 5.0,
+        tradespersonCategory: profile?.trades?.[0] || profile?.trade || profile?.category || job.category || "",
+        homeownerId: job.homeownerId,
+        amount: finalAmount,
+        originalAmount: originalAmountVal,
+        isDiscountApplied,
+        discountPercentage: discountPercentageVal,
+        appliedFlashDealId: appliedFlashDealIdVal,
+        netPayoutValue: payoutBreakdown.netPayout,
+        stripeFeeAmount: payoutBreakdown.stripeFee,
+        platformCommission: payoutBreakdown.platformCommission,
+        paymentRail: payoutBreakdown.paymentRail,
+        message: quoteMessage.trim(),
+        startDate: resolvedStartDate,
+        isImmediateStart,
+        estimatedTimeline: estimatedTimeline || "1 Full day (8h)",
+        paymentPreference,
+        quoteScope,
+        lineItems: useLineItems ? lineItems.filter(item => item.description && item.amount) : [],
+        depositTerm,
+        guaranteeTerm,
+        partsWarranty,
+        status: "pending",
+        paymentTrack: isQuickTrack ? "quick" : "project",
+        milestones: defaultMilestones,
+        updatedAt: serverTimestamp(),
       };
 
-      if(existingQuote) {
-        quoteData.history = arrayUnion({
+      if (job.jobNo !== undefined) {
+        quoteDataPayload.jobNo = job.jobNo;
+      }
+
+      if (existingQuote) {
+        quoteDataPayload.history = arrayUnion({
           amount: existingQuote.amount,
           message: existingQuote.message,
+          paymentPreference: existingQuote.paymentPreference,
+          quoteScope: existingQuote.quoteScope,
           timestamp: new Date().toISOString(),
-          reason: "Quote Update"
+          reason: "Manual Update"
         });
-        quoteData.requoteMessage = deleteField();
-      }
-
-      await setDoc(quoteRef, quoteData, { merge: true });
-      
-      if (!existingQuote) {
+        quoteDataPayload.requoteMessage = deleteField();
+        await setDoc(targetQuoteRef, quoteDataPayload, { merge: true });
+      } else {
+        quoteDataPayload.createdAt = serverTimestamp();
+        await setDoc(targetQuoteRef, quoteDataPayload);
         const { increment } = await import("firebase/firestore");
         await updateDoc(doc(db, "jobs", id), {
-            quoteCount: increment(1)
+          quoteCount: increment(1),
+          lastQuoteDate: serverTimestamp()
         });
       }
 
-      if (job.jobNo !== undefined) {
-        quoteData.jobNo = job.jobNo;
-      }
-
-      
       // Notify homeowner
       await sendNotification(
         job.homeownerId,
@@ -808,10 +742,12 @@ const libraries: any[] = ['places', 'geometry'];
         });
 
         // Trigger Finalization Window for Materials
-        setFinalizingQuoteId(quoteRef.id);
+        setFinalizingQuoteId(targetQuoteRef.id);
         setIsFinalizingMaterials(true);
       }
 
+      toast.success(existingQuote ? "Quote updated successfully!" : "Quote submitted successfully!");
+      setIsEditingSubmittedQuote(false);
       setQuoteAmount("");
       setQuoteMessage("");
       setQuoteStartDate("");
@@ -4697,13 +4633,17 @@ const libraries: any[] = ['places', 'geometry'];
 
             {quotes.length === 0 && (!job.quoteCount || job.quoteCount === 0) && (
               <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center">
-                  <Clock className="w-8 h-8 text-slate-200 animate-pulse" />
+                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center border border-black">
+                  <Clock className="w-8 h-8 text-blue-600 animate-pulse" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-xl font-bold text-slate-900">Waiting for quotes...</h4>
-                  <p className="text-sm text-slate-500 max-w-[240px]">
-                    Verified tradespeople in your area are reviewing this job.
+                  <h4 className="text-xl font-bold text-slate-900">
+                    {isHomeowner ? "Waiting for quotes..." : "No quotes submitted yet"}
+                  </h4>
+                  <p className="text-sm text-slate-500 max-w-[280px] mx-auto">
+                    {isHomeowner
+                      ? "Verified tradespeople in your area are reviewing this job."
+                      : "Be the first verified tradesperson to submit a quote for this job below!"}
                   </p>
                 </div>
               </div>
@@ -4713,7 +4653,7 @@ const libraries: any[] = ['places', 'geometry'];
         )}
 
         {/* Sidebar Actions (Tradesperson view) */}
-        {!isHomeowner && profile?.role === "tradesperson" && job.status === "posted" && (!hasQuoted || needsRequote) && (
+        {!isHomeowner && job.status === "posted" && (
           (job.quoteCount || 0) >= 5 && !hasQuoted ? (
             <div className="bg-white p-8 rounded-3xl border border-black shadow-sm text-center space-y-4">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
@@ -4724,6 +4664,67 @@ const libraries: any[] = ['places', 'geometry'];
                 <p className="text-sm text-slate-500">
                   This job has already received the maximum number of quotes (5). If a quote is withdrawn or rejected, you may be able to submit one later.
                 </p>
+              </div>
+            </div>
+          ) : hasQuoted && !needsRequote && !isEditingSubmittedQuote ? (
+            /* Submitted Quote Summary Card for Tradesperson */
+            <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-300 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Your Quote Submitted
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                  Status: {myQuote?.status || "PENDING"}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-black space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase">Quote Amount</span>
+                  <span className="text-2xl font-black text-slate-900">£{myQuote?.amount}</span>
+                </div>
+                {myQuote?.paymentPreference && (
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <span>Payment Term:</span>
+                    <span className="capitalize">{myQuote.paymentPreference.replace('_', ' ')}</span>
+                  </div>
+                )}
+                {myQuote?.quoteScope && (
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <span>Scope:</span>
+                    <span className="capitalize">{myQuote.quoteScope.replace('_', ' ')}</span>
+                  </div>
+                )}
+                {myQuote?.message && (
+                  <div className="pt-2 border-t border-slate-200">
+                    <p className="text-xs text-slate-600 italic line-clamp-3">"{myQuote.message}"</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setIsEditingSubmittedQuote(true);
+                    if (myQuote) {
+                      setQuoteAmount(myQuote.amount?.toString() || "");
+                      setQuoteMessage(myQuote.message || "");
+                      if (myQuote.paymentPreference) setPaymentPreference(myQuote.paymentPreference);
+                      if (myQuote.quoteScope) setQuoteScope(myQuote.quoteScope);
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 text-white p-3 rounded-2xl text-xs font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit / Update Quote
+                </button>
+                {myQuote?.status === "pending" && (
+                  <button
+                    onClick={() => setWithdrawingQuote(myQuote)}
+                    className="border border-red-200 text-red-600 hover:bg-red-50 p-3 rounded-2xl text-xs font-bold transition-all"
+                  >
+                    Withdraw
+                  </button>
+                )}
               </div>
             </div>
           ) : (
@@ -4755,7 +4756,19 @@ const libraries: any[] = ['places', 'geometry'];
                   </div>
                 </div>
               )}
-              <h3 className="font-bold text-slate-900">{needsRequote ? "Update Your Quote" : "Submit a Quote"}</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-900">
+                  {needsRequote ? "Update Your Quote" : isEditingSubmittedQuote ? "Edit Your Quote" : "Submit a Quote"}
+                </h3>
+                {isEditingSubmittedQuote && (
+                  <button 
+                    onClick={() => setIsEditingSubmittedQuote(false)}
+                    className="text-[10px] font-bold text-slate-500 hover:text-slate-800 underline"
+                  >
+                    Cancel Editing
+                  </button>
+                )}
+              </div>
               {needsRequote && (
                 <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl space-y-1">
                   <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Homeowner Request</p>

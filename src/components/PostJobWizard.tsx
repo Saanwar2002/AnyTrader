@@ -171,7 +171,8 @@ export default function PostJobWizard() {
   
   const isB2B = (location.state as any)?.isB2B;
   const { activeTab } = useBusinessTab();
-  const [isInitializing, setIsInitializing] = useState(!editJob && !isPrefilledByAI);
+  // Only show initialization loading if fetching business assets asynchronously
+  const [isInitializing, setIsInitializing] = useState(false);
   
   const JobReminder = () => {
     if (!formData.category && !formData.title && !claimedDeal) return null;

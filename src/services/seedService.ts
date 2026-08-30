@@ -1,5 +1,7 @@
 import { collection, doc, setDoc, serverTimestamp, db, handleFirestoreError, OperationType } from "../firebase";
 
+export type Tradesperson = typeof INITIAL_MOCK_TRADERS[number];
+
 export const INITIAL_MOCK_TRADERS = [
   {
     uid: "seed-promoted-plumber",

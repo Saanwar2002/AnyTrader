@@ -2,17 +2,15 @@ import React, { useState, useEffect } from "react";
 import { db, collection, query, where, onSnapshot, addDoc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { shareToWhatsApp, copyPrivacyShareLink } from "@/src/utils/shareUtils";
-import { PoundSterling, TrendingUp, FileText, Plus, Share2, CheckCircle2, Clock, Calculator, ShieldCheck, Download, AlertCircle, CreditCard, ShoppingBag, Video, Award } from "lucide-react";
+import { PoundSterling, TrendingUp, FileText, Plus, Share2, CheckCircle2, Clock, Calculator, ShieldCheck, Download, AlertCircle, Award } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import BnplFinancingModal from "./BnplFinancingModal";
 
 export function FinancialDashboardWidget() {
   const { user, profile } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateInvoice, setShowCreateInvoice] = useState(false);
-  const [showBnplModal, setShowBnplModal] = useState(false);
 
   // Form state
   const [clientName, setClientName] = useState("");
@@ -123,7 +121,7 @@ export function FinancialDashboardWidget() {
   return (
     <div className="space-y-4">
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-4 bg-slate-900 text-white rounded-3xl border border-black shadow-md flex items-center justify-between">
           <div>
             <p className="text-[10px] font-black uppercase text-slate-400">Paid Invoices (Earned)</p>
@@ -151,54 +149,6 @@ export function FinancialDashboardWidget() {
           </div>
           <div className="p-3 bg-purple-200/60 text-purple-800 rounded-2xl">
             <Calculator className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Section 5.1 BNPL Financing Card */}
-        <div 
-          onClick={() => setShowBnplModal(true)}
-          className="p-4 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white rounded-3xl border border-black shadow-sm flex items-center justify-between cursor-pointer hover:from-slate-900 hover:to-indigo-950 transition group"
-        >
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-extrabold uppercase text-indigo-300">BNPL FlexiPay (£1k+)</span>
-              <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">1.5%–2.5% B2B Fee</span>
-            </div>
-            <p className="text-xl font-black text-amber-300 mt-1">0% APR Repair Financing</p>
-            <p className="text-[9px] text-indigo-200 font-medium">Financing partner pays 1.5–2.5% origination fee • 100% upfront trader payout</p>
-          </div>
-          <div className="p-3 bg-indigo-800 text-amber-300 rounded-2xl border border-indigo-700 group-hover:scale-105 transition shrink-0 ml-2">
-            <CreditCard className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Section 5.2 Materials Sourcing Merchant Affiliate Commission Card */}
-        <div className="p-4 bg-gradient-to-r from-amber-950 via-slate-900 to-amber-900 text-white rounded-3xl border border-black shadow-sm flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-extrabold uppercase text-amber-300">Materials Sourcing & Procurement</span>
-              <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">3.0%–5.0% Affiliate Fee</span>
-            </div>
-            <p className="text-xl font-black text-amber-300 mt-1">Merchant Referral Commissions</p>
-            <p className="text-[9px] text-amber-100 font-medium">Earn 3%–5% on fulfilled Screwfix, Travis Perkins & B&Q materials • 5% trader trade discount</p>
-          </div>
-          <div className="p-3 bg-amber-800/80 text-amber-300 rounded-2xl border border-amber-600 shrink-0 ml-2">
-            <ShoppingBag className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Section 5.3 Verified Trader Credential & Video Badge Subscription (£15/mo) */}
-        <div className="p-4 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white rounded-3xl border border-black shadow-sm flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-extrabold uppercase text-amber-300">Trader SaaS Subscriptions</span>
-              <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">£15.00 / month</span>
-            </div>
-            <p className="text-xl font-black text-amber-300 mt-1">Verified Video Pro Subscriptions</p>
-            <p className="text-[9px] text-indigo-100 font-medium">Grants traders +35 match score points • Priority quote positioning • HD video hosting</p>
-          </div>
-          <div className="p-3 bg-purple-800/80 text-amber-300 rounded-2xl border border-purple-600 shrink-0 ml-2">
-            <Video className="w-6 h-6" />
           </div>
         </div>
       </div>
@@ -259,135 +209,177 @@ export function FinancialDashboardWidget() {
       {/* Create Invoice Modal */}
       <AnimatePresence>
         {showCreateInvoice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-white rounded-3xl border border-black shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-lg bg-white rounded-3xl border border-black shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto"
             >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Create Instant Trade Invoice
-                </h3>
-                <button onClick={() => setShowCreateInvoice(false)} className="text-slate-400 hover:text-slate-700">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200 bg-slate-900 text-white shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-400 shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-black text-sm sm:text-base text-white truncate">
+                      Create Instant Trade Invoice
+                    </h3>
+                    <p className="text-[10px] text-slate-300 truncate">Professional invoice & Strategy 1 WhatsApp link</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateInvoice(false)}
+                  className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0 ml-2 cursor-pointer"
+                  title="Close modal"
+                >
                   ✕
                 </button>
               </div>
 
-              <form onSubmit={handleCreateInvoice} className="space-y-3">
-                <div>
-                  <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">Job / Service Title</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Boiler Servicing & Powerflush"
-                    value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-black text-xs font-bold bg-white"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
+              {/* Modal Body & Form */}
+              <form onSubmit={handleCreateInvoice} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
                   <div>
-                    <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">Client Name</label>
+                    <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">
+                      Job / Service Title <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       required
-                      placeholder="John Smith"
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-black text-xs font-bold bg-white"
+                      placeholder="e.g. Boiler Servicing & Powerflush"
+                      value={jobTitle}
+                      onChange={(e) => setJobTitle(e.target.value)}
+                      className="w-full p-2.5 sm:p-3 rounded-xl border border-black text-xs font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 placeholder:text-slate-400"
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">Client Address / Postcode</label>
-                    <input
-                      type="text"
-                      placeholder="SW1A 1AA"
-                      value={clientAddress}
-                      onChange={(e) => setClientAddress(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-black text-xs font-medium bg-white"
-                    />
-                  </div>
-                </div>
 
-                {/* Line Items */}
-                <div className="space-y-2 pt-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-extrabold uppercase text-slate-600">Line Items & Labour</label>
-                    <button type="button" onClick={handleAddItem} className="text-xs text-blue-600 font-bold hover:underline">
-                      + Add Item
-                    </button>
-                  </div>
-
-                  {items.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="min-w-0">
+                      <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">
+                        Client Name <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
-                        placeholder="Description"
-                        value={item.description}
-                        onChange={(e) => handleItemChange(idx, "description", e.target.value)}
-                        className="flex-1 p-2 rounded-xl border border-black text-xs bg-white"
+                        required
+                        placeholder="John Smith"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        className="w-full p-2.5 sm:p-3 rounded-xl border border-black text-xs font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 placeholder:text-slate-400"
                       />
-                      <input
-                        type="number"
-                        placeholder="£ Amount"
-                        value={item.amount}
-                        onChange={(e) => handleItemChange(idx, "amount", e.target.value)}
-                        className="w-24 p-2 rounded-xl border border-black text-xs font-bold bg-white text-right"
-                      />
-                      {items.length > 1 && (
-                        <button type="button" onClick={() => handleRemoveItem(idx)} className="text-red-500 p-1">
-                          ✕
-                        </button>
-                      )}
                     </div>
-                  ))}
+                    <div className="min-w-0">
+                      <label className="text-[10px] font-extrabold uppercase text-slate-600 block mb-1">
+                        Client Address / Postcode
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="SW1A 1AA / 12 High St"
+                        value={clientAddress}
+                        onChange={(e) => setClientAddress(e.target.value)}
+                        className="w-full p-2.5 sm:p-3 rounded-xl border border-black text-xs font-medium bg-white focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Line Items */}
+                  <div className="space-y-2.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-extrabold uppercase text-slate-600">Line Items & Labour</label>
+                      <button
+                        type="button"
+                        onClick={handleAddItem}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-extrabold flex items-center gap-1 hover:underline active:scale-95 transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Item
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {items.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="text"
+                            placeholder="Description"
+                            value={item.description}
+                            onChange={(e) => handleItemChange(idx, "description", e.target.value)}
+                            className="flex-1 min-w-0 p-2.5 rounded-xl border border-black text-xs font-medium bg-white focus:ring-2 focus:ring-blue-500 outline-none text-slate-900"
+                          />
+                          <div className="relative w-24 sm:w-28 shrink-0">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-extrabold text-slate-500">£</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={item.amount === 0 && !item.description ? "" : item.amount}
+                              onChange={(e) => handleItemChange(idx, "amount", e.target.value)}
+                              className="w-full pl-6 pr-2.5 py-2.5 rounded-xl border border-black text-xs font-bold bg-white text-right focus:ring-2 focus:ring-blue-500 outline-none text-slate-900"
+                            />
+                          </div>
+                          {items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(idx)}
+                              className="w-8 h-8 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center shrink-0 border border-red-200 transition active:scale-95 cursor-pointer"
+                              title="Remove item"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* VAT Toggle */}
+                  <div className="p-3 bg-slate-50 border border-black rounded-2xl flex items-center justify-between gap-3">
+                    <label className="text-xs font-extrabold text-slate-900 flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isVatRegistered}
+                        onChange={(e) => setIsVatRegistered(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-black focus:ring-blue-500"
+                      />
+                      <span>Include UK VAT (20%)</span>
+                    </label>
+                    {isVatRegistered && (
+                      <span className="text-xs font-black text-blue-600 whitespace-nowrap">
+                        +£{vatAmount.toFixed(2)} VAT
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Total Amount Summary */}
+                  <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl flex items-center justify-between">
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-blue-950 block">Total Invoice Amount</span>
+                      <span className="text-[10px] text-blue-700 font-bold">
+                        Subtotal: £{subtotal.toFixed(2)} {isVatRegistered ? `+ £${vatAmount.toFixed(2)} VAT` : '(No VAT)'}
+                      </span>
+                    </div>
+                    <span className="text-xl sm:text-2xl font-black text-blue-950 shrink-0 ml-2">£{totalAmount.toFixed(2)}</span>
+                  </div>
                 </div>
 
-                {/* VAT Toggle */}
-                <div className="p-3 bg-slate-50 border border-black rounded-2xl flex items-center justify-between">
-                  <label className="text-xs font-extrabold text-slate-900 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={isVatRegistered}
-                      onChange={(e) => setIsVatRegistered(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded border-black"
-                    />
-                    Include UK VAT (20%)
-                  </label>
-                  {isVatRegistered && <span className="text-xs font-black text-blue-600">+£{vatAmount.toFixed(2)} VAT</span>}
+                {/* Sticky Action Footer */}
+                <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 shrink-0">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-extrabold text-xs sm:text-sm rounded-xl border border-black shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>{isSubmitting ? "Generating..." : "Generate & Share via WhatsApp"}</span>
+                  </button>
                 </div>
-
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-between">
-                  <span className="text-xs font-black text-blue-950">Total Invoice Amount</span>
-                  <span className="text-lg font-black text-blue-950">£{totalAmount.toFixed(2)}</span>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl border border-black shadow-md transition"
-                >
-                  {isSubmitting ? "Generating..." : "Generate & Share via WhatsApp"}
-                </button>
               </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-
-      {/* BNPL Financing Modal */}
-      {showBnplModal && (
-        <BnplFinancingModal
-          isOpen={showBnplModal}
-          onClose={() => setShowBnplModal(false)}
-          initialAmount={2500}
-          jobTitle="Major Unexpected Homeowner Repair"
-        />
-      )}
     </div>
   );
 }

@@ -39,6 +39,7 @@ import MyQuotes from "./components/MyQuotes";
 import Conversations from "./components/Conversations";
 import Notifications from "./components/Notifications";
 import JobFeed from "./components/JobFeed";
+import JobDetails from "./components/JobDetails";
 import TraderCalendar from "./components/TraderCalendar";
 import Chat from "./components/Chat";
 import DriverTerminal from "./components/driver/DriverTerminal";
@@ -79,7 +80,6 @@ const EcosystemAdmin = lazyWithRetry(() => import("./components/EcosystemAdmin")
 const MasterAdminLayout = lazyWithRetry(() => import("./components/MasterAdminLayout"));
 const ReferralTracker = lazyWithRetry(() => import("./components/shared/ReferralTracker"));
 const RefRedirect = lazyWithRetry(() => import("./components/shared/ReferralTracker").then(m => ({ default: m.RefRedirect })));
-const JobDetails = lazyWithRetry(() => import("./components/JobDetails"));
 const JobTimeline = lazyWithRetry(() => import("./components/JobTimeline"));
 const PublicProfile = lazyWithRetry(() => import("./components/PublicProfile"));
 const Analytics = lazyWithRetry(() => import("./components/Analytics"));
@@ -92,6 +92,7 @@ const SavedJourneys = lazyWithRetry(() => import("./components/SavedJourneys"));
 const RecurringJobManager = lazyWithRetry(() => import("./components/RecurringJobManager").then(m => ({ default: m.RecurringJobManager })));
 const AdReport = lazyWithRetry(() => import("./components/AdReport"));
 const TraderAdStudio = lazyWithRetry(() => import("./components/TraderAdStudio"));
+const TraderOutreachAgent = lazyWithRetry(() => import("./components/TraderOutreachAgent"));
 const TenantReportPortal = lazyWithRetry(() => import("./components/TenantReportPortal").then(m => ({ default: m.TenantReportPortal })));
 const PublicPropertyPassportView = lazyWithRetry(() => import("./components/property/PublicPropertyPassportView"));
 const MoveInLanding = lazyWithRetry(() => import("./components/property/MoveInLanding"));
@@ -385,7 +386,9 @@ export default function App() {
                 <Route path="consultancy/clients" element={<BusinessDashboard />} />
                 <Route path="consultancy/billing" element={<BusinessDashboard />} />
                 <Route path="consultancy/portfolio" element={<BusinessDashboard />} />
+                <Route path="consultancy/proposals" element={<BusinessDashboard />} />
                 <Route path="consultancy/new" element={<BusinessDashboard />} />
+                <Route path="trader/outreach" element={<TraderOutreachAgent />} />
                 <Route path="portfolio" element={<Portfolio />} />
                 <Route path="move-in" element={<MoveInLanding />} />
                 <Route path="passport/view/:id" element={<PublicPropertyPassportView />} />

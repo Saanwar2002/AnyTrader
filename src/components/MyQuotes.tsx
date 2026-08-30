@@ -234,6 +234,12 @@ export default function MyQuotes() {
     { id: "withdrawn", label: "Withdrawn" },
   ];
 
+  const getFilterCount = (id: string) => {
+    if (id === "all") return quotes.length;
+    if (id === "recurring") return recurringSchedules.length;
+    return quotes.filter(q => q.status === id).length;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
@@ -260,21 +266,35 @@ export default function MyQuotes() {
           </div>
         )}
         
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar mt-2">
-          {statusFilters.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border",
-                filter === f.id 
-                  ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" 
-                  : "bg-white text-slate-600 border-black hover:border-blue-300"
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar mt-2 w-full max-w-full">
+          {statusFilters.map((f) => {
+            const count = getFilterCount(f.id);
+            const isActive = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={cn(
+                  "px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap shrink-0 transition-all border flex items-center gap-2 cursor-pointer",
+                  isActive 
+                    ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-200" 
+                    : "bg-white text-slate-700 border-black hover:bg-slate-50 hover:border-slate-800"
+                )}
+              >
+                <span>{f.label}</span>
+                <span
+                  className={cn(
+                    "px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-tight",
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-slate-100 text-slate-700 border border-slate-200"
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

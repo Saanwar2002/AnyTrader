@@ -102,7 +102,8 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
   // --- GROUP 4: Verification & Trust Credentials (15% Weight) ---
   let trustScore = 20;
   if (trader.isVerified) trustScore += 30;
-  if (trader.videoVerificationStatus === "verified" || trader.videoVerificationUrl) trustScore += 25;
+  const isVideoVerifiedOrPro = Boolean(trader.videoVerificationStatus === "verified" || trader.videoVerificationUrl || trader.hasVerifiedVideoProSubscription);
+  if (isVideoVerifiedOrPro) trustScore += 25;
   if (trader.publicLiabilityInsurance || trader.insuranceVerified) trustScore += 15;
   if (trader.idVerified) trustScore += 10;
 
@@ -112,7 +113,7 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
     score: Math.min(100, Math.round(trustScore)),
     factors: [
       { name: "Public Record & License Check", impact: trader.isVerified ? "Verified Professional" : "Standard Registered", points: trader.isVerified ? 40 : 15 },
-      { name: "Video Credential Verification", impact: trader.videoVerificationStatus === "verified" || trader.videoVerificationUrl ? "Verified Video Intro" : "Pending Video", points: (trader.videoVerificationStatus === "verified" || trader.videoVerificationUrl) ? 35 : 0 },
+      { name: "Video Credential Verification", impact: isVideoVerifiedOrPro ? (trader.hasVerifiedVideoProSubscription ? "⚡ Verified Video Pro" : "Verified Video Intro") : "Pending Video", points: isVideoVerifiedOrPro ? 35 : 0 },
       { name: "Public Liability Cover", impact: trader.insuranceVerified ? "Insured Up To £1M+" : "Self-Declared", points: 25 }
     ]
   };
@@ -150,7 +151,8 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
   const keyHighlights: string[] = [];
   if (hasExactCategory) keyHighlights.push(`Primary verified ${job.category} specialist`);
   if (traderOutcode === jobOutcode) keyHighlights.push(`Local trader in ${jobOutcode} area`);
-  if (trader.videoVerificationUrl) keyHighlights.push("Video Credential Selfie Verified");
+  if (trader.hasVerifiedVideoProSubscription) keyHighlights.push("⚡ Verified Video Pro Subscriber (+35 pts)");
+  else if (trader.videoVerificationUrl) keyHighlights.push("Video Credential Selfie Verified");
   if (rating >= 4.7) keyHighlights.push(`High satisfaction rating (${rating.toFixed(1)}/5)`);
 
   return {

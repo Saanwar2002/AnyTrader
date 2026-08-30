@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
-import { db, doc, updateDoc } from "@/src/firebase";
+import { db, doc, setDoc } from "@/src/firebase";
 import { 
   ShieldCheck, 
   Lock, 
@@ -60,8 +60,13 @@ export const TermsAcceptancePrompt: React.FC = () => {
     try {
       const timestamp = new Date().toISOString();
       const userAgentStr = typeof navigator !== "undefined" ? navigator.userAgent : "Web";
+      const isAdminEmail = user.email?.toLowerCase() === "saanwar2002@gmail.com";
 
-      const updateData = {
+      const updateData: any = {
+        uid: user.uid,
+        email: user.email || "",
+        name: profile?.name || user.displayName || "User",
+        role: profile?.role || (isAdminEmail ? "admin" : "homeowner"),
         termsAcceptedAt: timestamp,
         termsAcceptedVersion: CURRENT_TERMS_VERSION,
         termsAcceptedIp: userAgentStr,
@@ -70,10 +75,11 @@ export const TermsAcceptancePrompt: React.FC = () => {
         updatedAt: timestamp
       };
 
-      await updateDoc(doc(db, "users", user.uid), updateData);
+      // Use setDoc with merge: true so if the user doc is missing it is created seamlessly
+      await setDoc(doc(db, "users", user.uid), updateData, { merge: true });
 
       // Update local profile state
-      setProfile((prev) => prev ? { ...prev, ...updateData } : null);
+      setProfile((prev) => prev ? { ...prev, ...updateData } : updateData);
 
       toast.success("Terms & Conditions successfully accepted!", {
         description: `Agreed to Version ${CURRENT_TERMS_VERSION} on ${new Date().toLocaleDateString("en-GB")}`

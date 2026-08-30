@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
-import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, addDoc, collection, serverTimestamp, signInWithGoogle } from "@/src/firebase";
+import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, setDoc, addDoc, collection, serverTimestamp, signInWithGoogle } from "@/src/firebase";
 import { Loader2, ShieldAlert, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
@@ -334,7 +334,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }, 0);
             } else {
               if (isAdminEmail || isTestAdmin) {
-                setProfile({ role: "admin", name: firebaseUser.displayName || "Admin", uid: firebaseUser.uid });
+                const adminData = {
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email || "saanwar2002@gmail.com",
+                  name: firebaseUser.displayName || "Admin",
+                  role: "admin" as const,
+                  updatedAt: new Date().toISOString()
+                };
+                setProfile(adminData as any);
+                setDoc(doc(db, "users", firebaseUser.uid), {
+                  ...adminData,
+                  createdAt: serverTimestamp()
+                }, { merge: true }).catch(e => console.error("Error auto-initializing admin profile doc:", e));
               } else {
                 setProfile(null);
               }

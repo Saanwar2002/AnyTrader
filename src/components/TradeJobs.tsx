@@ -125,28 +125,71 @@ export default function TradeJobs() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {displayJobs.map((job) => (
+          {displayJobs.map((job) => {
+            const isEmergency = job.urgency === "emergency" || job.isEmergency === true || job.isBoosted;
+            const isUrgentAsap = !isEmergency && (job.urgency === "asap" || job.urgency === "urgent");
+            const isInstantMatch = !isEmergency && !isUrgentAsap && (job.boostTier === "instant_match" || job.isInstantMatch);
+
+            return (
             <Link
               key={job.id}
               to={`/job/${job.id}`}
-              className="block bg-white rounded-[2.5rem] shadow-sm hover:shadow-md transition-all overflow-hidden relative group border border-black"
+              className={cn(
+                "block bg-white rounded-[2rem] shadow-sm hover:shadow-md transition-all overflow-hidden relative group",
+                isEmergency 
+                  ? "border-2 border-red-500 shadow-red-500/10" 
+                  : isUrgentAsap || isInstantMatch
+                  ? "border-2 border-amber-400"
+                  : "border border-black"
+              )}
             >
-              {(job.boostTier === 'instant_match' || job.isInstantMatch) ? (
-                <div className="bg-[#E6A020] text-center py-2 text-slate-900 font-black text-3xl tracking-wide uppercase border-b border-[#D4921E]">
-                  Instant Match
+              {isInstantMatch ? (
+                <div className="bg-[#E6A020] text-slate-950 font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-[#D4921E] shadow-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                    <span className="truncate">Instant Match Priority Lead</span>
+                  </div>
+                  <span className="bg-slate-950 text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase shrink-0">
+                    Instant Lead
+                  </span>
                 </div>
-              ) : job.urgency === 'emergency' ? (
-                <div className="bg-red-600 text-center py-2 text-white font-black text-xl tracking-wide uppercase border-b border-red-700">
-                  Emergency
+              ) : isEmergency ? (
+                <div className="bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white font-black text-xs tracking-widest uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-red-700 shadow-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <AlertCircle className="w-4 h-4 shrink-0 animate-bounce" />
+                    <span className="truncate">Emergency Job • Immediate Dispatch</span>
+                  </div>
+                  <span className="bg-white/20 text-white text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border border-white/30 shrink-0">
+                    High Urgency
+                  </span>
+                </div>
+              ) : isUrgentAsap ? (
+                <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 font-black text-xs tracking-widest uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-amber-600 shadow-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Urgent Job • ASAP Required</span>
+                  </div>
+                  <span className="bg-slate-950 text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+                    Priority
+                  </span>
+                </div>
+              ) : job.urgency === "specific_date" && job.jobDate ? (
+                <div className="bg-slate-900 text-white font-black text-[11px] tracking-widest uppercase py-1.5 px-4 sm:px-5 flex items-center justify-between border-b border-slate-800">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span className="truncate">Scheduled Date: {new Date(job.jobDate).toLocaleDateString('en-GB')}</span>
+                  </div>
+                  <span className="text-slate-400 text-[10px] shrink-0">Open For Quotes</span>
                 </div>
               ) : (
-                <div className="bg-blue-500 text-center py-2 text-white font-black text-xl tracking-wide uppercase border-b border-blue-600">
-                  Normal Job
+                <div className="bg-slate-900 text-white font-black text-[11px] tracking-widest uppercase py-1.5 px-4 sm:px-5 flex items-center justify-between border-b border-slate-800">
+                  <span className="truncate">Standard Job Opportunity</span>
+                  <span className="text-slate-400 text-[10px] shrink-0">Open For Quotes</span>
                 </div>
               )}
               <div className={cn(
-                "p-8 space-y-4",
-                job.urgency === "emergency" ? "bg-red-50/30" : ""
+                "p-5 sm:p-6 space-y-3",
+                isEmergency ? "bg-red-50/15" : ""
               )}>
                 <div className="space-y-2">
                   {/* Category & Subcategory - Single Line Row */}
@@ -238,7 +281,8 @@ export default function TradeJobs() {
                 </div>
               </div>
             </Link>
-          ))}
+          );
+        })}
         </div>
       )}
     </div>

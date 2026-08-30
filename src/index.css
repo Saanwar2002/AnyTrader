@@ -127,18 +127,20 @@
   html, body {
     margin: 0;
     padding: 0;
-    width: 100vw;
+    width: 100%;
     min-height: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    -webkit-overflow-scrolling: touch;
     cursor: default;
-    overflow-x: clip;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-surface text-text-main font-sans antialiased;
-    overflow-x: clip;
+    overflow-x: hidden;
+    touch-action: pan-y;
   }
 
   /* Hide scrollbar globally */
@@ -215,7 +217,7 @@ body.keyboard-is-open {
 .animate-slow-scroll {
   display: flex;
   width: max-content;
-  animation: slowScrollMarquee 35s linear infinite;
+  animation: slowScrollMarquee 45s linear infinite;
 }
 
 .animate-slow-scroll:hover,
@@ -223,3 +225,17 @@ body.keyboard-is-open {
 .animate-slow-scroll:focus-within {
   animation-play-state: paused;
 }
+
+/* Dedicated relaxed, slow reading pace for Illustrated Ad Ticker */
+.animate-ticker-slow {
+  display: flex;
+  width: max-content;
+  animation: slowScrollMarquee 200s linear infinite;
+}
+
+.animate-ticker-slow:hover,
+.animate-ticker-slow:active,
+.animate-ticker-slow:focus-within {
+  animation-play-state: paused;
+}
+

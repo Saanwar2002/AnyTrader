@@ -34,14 +34,6 @@ export default function Login() {
       
       const enrolled = BiometricService.isEnabled();
       setBiometricsEnabled(enrolled);
-      
-      // Auto-trigger biometric verification if enrolled on device mount
-      if (enrolled && status.available) {
-        const timer = setTimeout(() => {
-          handleBiometricSignIn();
-        }, 800);
-        return () => clearTimeout(timer);
-      }
     }
     checkBiometrics();
   }, []);

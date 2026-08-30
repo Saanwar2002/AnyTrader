@@ -33,7 +33,7 @@ export function FloatingTradeBotWidget() {
   if (isTaxiSide || isTradeBotOpen) return null;
 
   return (
-    <div className="fixed bottom-24 right-2 sm:bottom-10 sm:right-4 z-[95] pointer-events-none select-none pb-[env(safe-area-inset-bottom,0px)]">
+    <div className="fixed bottom-[calc(4.8rem+env(safe-area-inset-bottom,0px))] right-2 sm:bottom-6 sm:right-4 z-[95] pointer-events-none select-none">
       <motion.div
         drag
         dragMomentum={false}
@@ -47,7 +47,7 @@ export function FloatingTradeBotWidget() {
         onDragEnd={() => {
           setTimeout(() => setIsDragging(false), 150);
         }}
-        className="pointer-events-auto flex flex-col items-end gap-1.5 cursor-grab active:cursor-grabbing"
+        className="pointer-events-auto flex flex-col items-end gap-1 cursor-grab active:cursor-grabbing"
       >
         {/* Permanent Vertical Compact Sticky Pulsing Pill */}
         <div className="relative group">

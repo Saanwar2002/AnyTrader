@@ -18,12 +18,13 @@ function getSafeAdminDb() {
       admin.initializeApp({ projectId: firebaseConfig.projectId });
     }
     const app = admin.apps[0];
+    if (!app) return null;
     const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
     return getFirestore(app, dbId);
   } catch (e) {
     try {
-      if (admin.apps.length > 0) {
-        return getFirestore(admin.apps[0], "(default)");
+      if (admin.apps.length > 0 && admin.apps[0]) {
+        return getFirestore(admin.apps[0]!, "(default)");
       }
     } catch (err) {
       return null;
@@ -72,7 +73,8 @@ async function getGlobalAiModel(): Promise<string> {
            }
          }
          if (snap && snap.exists) {
-            cachedAiModel = snap.data()?.aiModel || "gemini-2.5-flash";
+            const val = snap.data()?.aiModel;
+            cachedAiModel = (val && typeof val === 'string' && !val.includes("gemini-3")) ? val : "gemini-2.5-flash";
             lastCacheTime = Date.now();
             return cachedAiModel as string;
          }
@@ -90,11 +92,11 @@ async function callGemini(params: {
 }) {
   try {
     const ai = getGenAI();
-    let model = params.model || "gemini-2.5-flash";
+    let model = (params.model && !params.model.includes("gemini-3")) ? params.model : "gemini-2.5-flash";
     
     // Override with global model setting
     const globalModel = await getGlobalAiModel();
-    if (!params.model || (params.model.includes("flash") && params.model !== "gemini-2.0-flash-lite" && params.model !== "gemini-2.0-flash")) {
+    if (!params.model || params.model.includes("flash")) {
       model = globalModel;
     }
 
@@ -130,7 +132,7 @@ export async function polishBio(bio: string, trades: string, tags: string): Prom
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
     });
     return response.text?.trim() || bio;
   } catch (err) {
@@ -160,7 +162,7 @@ export async function getProMatches(role: any, candidatesContext: any[]): Promis
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -420,7 +422,7 @@ export async function getJobEstimate(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -525,7 +527,7 @@ export async function generateBroadcastDraft(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview"
+      model: "gemini-2.5-flash"
     });
     return response.text || "";
   } catch (error) {
@@ -560,7 +562,7 @@ export async function generateQuoteDraft(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview"
+      model: "gemini-2.5-flash"
     });
 
     return response.text || "I would be happy to help with this job. Please let me know if you have any questions.";
@@ -610,7 +612,7 @@ export async function summarizeDisputeChat(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -667,7 +669,7 @@ export async function getReviewSummary(reviews: any[]): Promise<string> {
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-2.0-flash"
+      model: "gemini-2.5-flash"
     });
     return response.text || "Consistently high-quality work with positive customer feedback.";
   } catch (error) {
@@ -718,7 +720,7 @@ export async function analyzeFraudRisk(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -781,7 +783,7 @@ export async function analyzeJobPhoto(imageUrls: string[]): Promise<{ category: 
 
     const result = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -829,7 +831,7 @@ export async function getClarifyingQuestions(
   try {
     const result = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -871,7 +873,7 @@ export async function getMaterialList(
   try {
     const result = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -920,7 +922,7 @@ export async function analyzeSecurityThreat(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -957,7 +959,7 @@ export async function improveJobDescription(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview"
+      model: "gemini-2.5-flash"
     });
     return response.text || description;
   } catch (error) {
@@ -986,7 +988,7 @@ export async function parseNaturalLanguageSearch(query: string): Promise<{
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -1025,7 +1027,7 @@ export async function checkSafetyAndPII(text: string): Promise<{
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -1068,7 +1070,7 @@ export async function getDisputeResolution(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -1138,7 +1140,7 @@ export async function getRecommendedJobs(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1186,7 +1188,7 @@ export async function getMaintenancePredictions(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview"
+      model: "gemini-2.5-flash"
     });
     const text = response.text || "[]";
     const jsonMatch = text.match(/\[.*\]/s);
@@ -1238,7 +1240,7 @@ export async function generateMarketingPost(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview"
+      model: "gemini-2.5-flash"
     });
     return response.text || "Just finished another great job! Check out my profile on AnyTrader for your next project.";
   } catch (error) {
@@ -1294,7 +1296,7 @@ export async function analyzeQuote(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -1354,7 +1356,7 @@ export async function getRejectionFeedback(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -1418,7 +1420,7 @@ export async function analyzeDocument(
 
     const aiResponse = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1489,7 +1491,7 @@ export async function suggestNewCategories(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1546,7 +1548,7 @@ export async function getMonetizationOpportunities(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1596,7 +1598,7 @@ export async function transcribeVoiceAudio(audioData: string, mimeType: string) 
                 data: audioData,
                 mimeType: mimeType
               }
-            }
+            } as any
           ]
         }
       ]
@@ -1658,7 +1660,7 @@ export async function processVoiceAudio(audioData: string, mimeType: string, cat
                 data: audioData,
                 mimeType: mimeType
               }
-            }
+            } as any
           ]
         }
       ]
@@ -1739,7 +1741,7 @@ export async function getEquipmentRecommendations(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-2.0-flash-lite",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -1784,7 +1786,7 @@ export async function getShopRecommendations(role: string, category: string) {
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-2.0-flash-lite",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json"
       }
@@ -1964,7 +1966,7 @@ Always perform live Google Searches when users ask about prices, regulations, or
     let stream;
     try {
       stream = await ai.models.generateContentStream({
-        model: model || "gemini-3.7-flash",
+        model: model || "gemini-2.5-flash",
         contents,
         config: {
           systemInstruction,
@@ -1974,7 +1976,7 @@ Always perform live Google Searches when users ask about prices, regulations, or
     } catch (searchError) {
       console.warn("TradeBot search grounding stream error, falling back to standard streaming:", searchError);
       stream = await ai.models.generateContentStream({
-        model: model || "gemini-3.7-flash",
+        model: model || "gemini-2.5-flash",
         contents,
         config: {
           systemInstruction
@@ -2041,7 +2043,7 @@ export async function* streamGeminiDiagnostic(
     const model = await getGlobalAiModel();
 
     const stream = await ai.models.generateContentStream({
-      model: model || "gemini-3.7-flash",
+      model: model || "gemini-2.5-flash",
       contents: prompt,
       config: systemInstruction ? { systemInstruction } : undefined
     });
@@ -2201,7 +2203,7 @@ export async function processTaxiVoiceCommand(text: string, locationContext: str
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -2242,7 +2244,7 @@ export async function getAiModelRecommendations(): Promise<AiModelRecommendation
     prompt: `As an AI Architect for a production SaaS application (a UK tradesperson marketplace), analyze our current usage and suggest 3 Gemini AI models. 
 Our platform uses AI for drafting quotes, analyzing reviews, parsing complex job descriptions from voice/text, automated moderation, risk analysis, and smart categorization.
 
-Return exactly 3 options that the admin could switch to. Suggest real Gemini models (e.g. "gemini-1.5-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview").
+Return exactly 3 options that the admin could switch to. Suggest real Gemini models (e.g. "gemini-1.5-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash").
 Compare their performance, capabilities, and cost. Set one as the recommended option.
 
 Return a JSON array where each object has these fields:
@@ -2311,7 +2313,7 @@ export async function getDynamicInstantMatchPricing(
   try {
     const result = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -2388,7 +2390,7 @@ export async function getNearbyTradeInsights(
   try {
     const response = await callGemini({
       prompt,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {

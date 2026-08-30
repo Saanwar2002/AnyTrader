@@ -19,12 +19,16 @@ async function callServerGemini(functionName: string, args: any[]): Promise<any>
       body: JSON.stringify({ functionName, args }),
     });
     
+    const contentType = response.headers.get("content-type") || "";
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || `Failed to execute secure server-side AI function (Status ${response.status})`);
+      let errorMsg = `Failed to execute secure server-side AI function (Status ${response.status})`;
+      if (contentType.includes("application/json")) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData && errData.error) errorMsg = errData.error;
+      }
+      throw new Error(errorMsg);
     }
     
-    const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
       const text = await response.text().catch(() => "");
       console.warn(`[AI Proxy] Non-JSON response received for ${functionName}:`, text.substring(0, 100));
@@ -33,7 +37,7 @@ async function callServerGemini(functionName: string, args: any[]): Promise<any>
 
     return await response.json();
   } catch (error: any) {
-    console.error(`AI Proxy Secure Execution Error [${functionName}]:`, error);
+    console.error(`AI Proxy Secure Execution Error [${functionName}]:`, error?.message || error);
     throw error;
   }
 }
@@ -591,7 +595,40 @@ export async function getNearbyTradeInsights(
   locationName: string,
   jobsSummary: Array<{ category: string; title: string; urgency: string; distanceMiles?: number }>
 ): Promise<NearbyTradeInsights> {
-  return callServerGemini("getNearbyTradeInsights", [locationName, jobsSummary]);
+  try {
+    return await callServerGemini("getNearbyTradeInsights", [locationName, jobsSummary]);
+  } catch (error: any) {
+    console.warn("Falling back to local calculation for getNearbyTradeInsights:", error?.message || error);
+    
+    const categoryCounts: Record<string, { count: number; hasUrgent: boolean }> = {};
+    let urgentCount = 0;
+
+    (jobsSummary || []).forEach(j => {
+      const cat = j.category || "General Maintenance";
+      if (!categoryCounts[cat]) categoryCounts[cat] = { count: 0, hasUrgent: false };
+      categoryCounts[cat].count += 1;
+      if (j.urgency === "emergency" || j.urgency === "same-day" || j.urgency === "within-24h") {
+        categoryCounts[cat].hasUrgent = true;
+        urgentCount += 1;
+      }
+    });
+
+    const sortedCats = Object.entries(categoryCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5)
+      .map(([category, info]) => ({
+        category,
+        count: info.count,
+        urgencyLevel: info.hasUrgent ? "High" : "Normal"
+      }));
+
+    return {
+      summary: `Active trade demand detected in ${locationName || "your immediate area"} with ${jobsSummary?.length || 0} nearby requests available.`,
+      popularCategories: sortedCats.length > 0 ? sortedCats : [{ category: "General Maintenance", count: jobsSummary?.length || 1, urgencyLevel: "Normal" }],
+      urgentAlert: urgentCount > 0 ? `⚡ ${urgentCount} urgent trade ${urgentCount === 1 ? 'request requires' : 'requests require'} immediate response near ${locationName}` : null,
+      insightTip: "Jobs posted within 5 miles receive quotes 40% faster on AnyTrader."
+    };
+  }
 }
 
 export async function polishBio(bio: string, trades: string, tags: string): Promise<string> {

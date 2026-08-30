@@ -25,6 +25,7 @@ import PartnerAdvertisement from "./shared/PartnerAdvertisement";
 import { getRegionalDemandData, RegionalDemand } from "@/src/services/demandHeatmapService";
 import { InstantMatchTraderAlert } from "./InstantMatchTraderAlert";
 import { FinancialDashboardWidget } from "./FinancialDashboardWidget";
+import { TraderMonetizationBanners } from "./TraderMonetizationBanners";
 import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
 import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
 
@@ -595,182 +596,221 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col sm:items-end gap-2 w-full">
-          {/* Test Alert Toggle */}
+      <div className="w-full bg-white/90 backdrop-blur-xs p-2 sm:p-2.5 rounded-2xl border border-black/10 shadow-xs mb-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0 w-full min-w-0 scrollbar-none">
+          {/* Emergency Toggle */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!user) return;
+              if (!confirmingEmergency) {
+                setConfirmingEmergency(true);
+                setShowEmergencyToast(true);
+                setTimeout(() => setShowEmergencyToast(false), 3000);
+                setTimeout(() => setConfirmingEmergency(false), 3000);
+                return;
+              }
+              setConfirmingEmergency(false);
+              setShowEmergencyToast(false);
+              try {
+                await updateDoc(doc(db, "users", user.uid), {
+                  isAvailableForEmergency: !profile?.isAvailableForEmergency
+                });
+              } catch (error) {
+                console.error("Error updating emergency status:", error);
+                alert("Unable to update emergency status.");
+              }
+            }}
+            className={cn(
+              "flex items-center justify-between gap-2.5 bg-white border border-black rounded-[10px] px-3 py-2 shadow-xs cursor-pointer select-none transition-all active:scale-[0.99] shrink-0",
+              profile?.isAvailableForEmergency ? "bg-red-50/70" : "hover:bg-slate-50"
+            )}
+          >
+            <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+              <Zap className={cn("w-4 h-4 shrink-0 transition-colors", profile?.isAvailableForEmergency ? "text-red-600 fill-red-600" : "text-slate-700")} />
+              <span className="text-[13px] tracking-tight font-extrabold text-slate-900">Emergency</span>
+            </div>
+            {/* Compact Slider Switch */}
+            <div className={cn(
+              "w-[34px] h-[18px] rounded-full p-[2px] transition-colors relative flex items-center shrink-0 border border-black",
+              confirmingEmergency ? "bg-amber-400" : (profile?.isAvailableForEmergency ? "bg-red-600" : "bg-slate-200")
+            )}>
+              <div className={cn(
+                "w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out shrink-0",
+                profile?.isAvailableForEmergency ? "translate-x-[16px]" : "translate-x-0"
+              )} />
+            </div>
+          </div>
+
+          {/* Instant Match Toggle */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!user) return;
+              
+              // If turning on and no pricing set, show setup
+              if (!profile?.isAvailableForInstantMatch && (!profile?.instantMatchPricing || !profile?.instantMatchPricing.callOutFee)) {
+                setImSetupData(profile?.instantMatchPricing || { callOutFee: "", hourlyRate: "", terms: "" });
+                setShowInstantMatchSetup(true);
+                return;
+              }
+
+              if (!confirmingIM) {
+                setConfirmingIM(true);
+                setShowIMToast(true);
+                setTimeout(() => setShowIMToast(false), 3000);
+                setTimeout(() => setConfirmingIM(false), 3000);
+                return;
+              }
+              setConfirmingIM(false);
+              setShowIMToast(false);
+              try {
+                await updateDoc(doc(db, "users", user.uid), {
+                  isAvailableForInstantMatch: !profile?.isAvailableForInstantMatch
+                });
+              } catch (error) {
+                console.error("Error updating Instant Match status:", error);
+                alert("Unable to update Instant Match status.");
+              }
+            }}
+            className={cn(
+              "flex items-center justify-between gap-2.5 bg-white border border-black rounded-[10px] px-3 py-2 shadow-xs cursor-pointer select-none transition-all active:scale-[0.99] shrink-0",
+              profile?.isAvailableForInstantMatch ? "bg-blue-50/70" : "hover:bg-slate-50"
+            )}
+          >
+            <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+              <Zap className={cn("w-4 h-4 shrink-0 transition-colors", profile?.isAvailableForInstantMatch ? "text-[#2563EB] fill-[#2563EB]" : "text-slate-700")} />
+              <span className="text-[13px] tracking-tight font-extrabold text-slate-900">Instant Match</span>
+            </div>
+            {/* Compact Slider Switch */}
+            <div className={cn(
+              "w-[34px] h-[18px] rounded-full p-[2px] transition-colors relative flex items-center shrink-0 border border-black",
+              confirmingIM ? "bg-amber-400" : (profile?.isAvailableForInstantMatch ? "bg-[#2563EB]" : "bg-slate-200")
+            )}>
+              <div className={cn(
+                "w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out shrink-0",
+                profile?.isAvailableForInstantMatch ? "translate-x-[16px]" : "translate-x-0"
+              )} />
+            </div>
+          </div>
+
+          {/* Exclusive Job Offers Toggle */}
+          {sysConfig?.paywallEnabled !== false && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!profile?.hasExclusiveAddon) {
+                  setShowExclusiveModal(true);
+                } else {
+                  try {
+                    const newState = profile?.isExclusiveActive === false ? true : false;
+                    await updateDoc(doc(db, "users", user!.uid), {
+                      isExclusiveActive: newState
+                    });
+                    
+                    // Brief toast explanation
+                    if (newState) {
+                       alert("Priority Offer Activated: You will now receive early-access notifications for new jobs matching your profile.");
+                    }
+                  } catch (error) {
+                    console.error("Error toggling exclusive status", error);
+                  }
+                }
+              }}
+              className={cn(
+                "flex items-center justify-between gap-2.5 bg-white border border-black rounded-[10px] px-3 py-2 shadow-xs cursor-pointer select-none transition-all active:scale-[0.99] shrink-0",
+                (profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? "bg-blue-50/70" : "hover:bg-slate-50"
+              )}
+            >
+              <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+                <Zap className={cn("w-4 h-4 shrink-0 transition-colors", (profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? "text-[#2563EB] fill-[#2563EB]" : "text-slate-700")} />
+                <span className="text-[13px] tracking-tight font-extrabold text-slate-900">Priority Offers</span>
+              </div>
+              {/* Compact Slider Switch */}
+              <div className={cn(
+                "w-[34px] h-[18px] rounded-full p-[2px] transition-colors relative flex items-center shrink-0 border border-black",
+                (profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? "bg-[#2563EB]" : "bg-slate-200"
+              )}>
+                <div className={cn(
+                  "w-[12px] h-[12px] bg-white rounded-full shadow-xs transition-transform duration-200 ease-in-out shrink-0",
+                  (profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? "translate-x-[16px]" : "translate-x-0"
+                )} />
+              </div>
+            </div>
+          )}
+
+          {/* Test Alert Button (Integrated into row with no overlap) */}
           <button
             type="button"
             onClick={() => setShowTestAlert(true)}
-            className="self-end flex items-center gap-1.5 bg-zinc-900 text-white px-2.5 h-7 rounded-2xl shadow-sm hover:bg-zinc-800 transition-colors shrink-0"
+            className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-2 rounded-[10px] shadow-xs transition-all shrink-0 active:scale-95 border border-black"
+            title="Test Instant Match Alert notification"
           >
-            <Zap className="w-3 h-3 text-red-500 fill-red-500" />
-            <span className="text-[10px] font-bold truncate">Test IM Alert</span>
+            <Zap className="w-4 h-4 text-red-500 fill-red-500 animate-pulse shrink-0" />
+            <span className="text-[13px] font-extrabold whitespace-nowrap">Test IM Alert</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Dashboard Action Row */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 mb-4">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Share Button */}
+          <button 
+            onClick={async () => {
+              if (!user) return;
+              const profileUrl = `${window.location.origin}/profile/${user.uid}`;
+              try {
+                if (navigator.share) {
+                  await navigator.share({
+                    title: `${profile?.name} on AnyTrader`,
+                    text: `Check out my profile on AnyTrader!`,
+                    url: profileUrl,
+                  });
+                } else {
+                  await navigator.clipboard.writeText(profileUrl);
+                  alert('Profile link copied to clipboard!');
+                }
+              } catch (err: any) {
+                if (err.name === 'AbortError') {
+                  console.log('Sharing canceled by user');
+                  return;
+                }
+                console.error('Error sharing:', err);
+              }
+            }}
+            className="bg-white text-slate-700 border border-black h-10 sm:h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-3.5 gap-2 shadow-xs shrink-0"
+          >
+            <Share2 className="w-4 h-4 text-blue-600" />
+            Share
           </button>
 
-          {/* Toggles Container */}
-          <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto -mx-1 px-1 sm:mx-0 sm:px-0 scrollbar-hide">
-            {/* Emergency Toggle */}
-            <div className={cn("flex items-center gap-1.5 px-2 h-8 rounded-2xl border border-black shadow-sm shrink-0 transition-colors", profile?.isAvailableForEmergency ? "bg-red-50" : "bg-white")}>
-              <Zap className={cn("w-3 h-3", profile?.isAvailableForEmergency ? "text-red-500" : "text-slate-400")} />
-              <span className="text-[10px] font-bold text-slate-700 truncate">Emergency</span>
-              <button 
-                type="button"
-                onClick={async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!user) return;
-                  if (!confirmingEmergency) {
-                    setConfirmingEmergency(true);
-                    setShowEmergencyToast(true);
-                    setTimeout(() => setShowEmergencyToast(false), 3000);
-                    setTimeout(() => setConfirmingEmergency(false), 3000);
-                    return;
-                  }
-                  setConfirmingEmergency(false);
-                  setShowEmergencyToast(false);
-                  try {
-                    await updateDoc(doc(db, "users", user.uid), {
-                      isAvailableForEmergency: !profile?.isAvailableForEmergency
-                    });
-                  } catch (error) {
-                    console.error("Error updating emergency status:", error);
-                    alert("Unable to update emergency status.");
-                  }
-                }}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingEmergency ? 'bg-amber-400' : (profile?.isAvailableForEmergency ? 'bg-red-500' : 'bg-slate-300')}`}
-              >
-                <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${profile?.isAvailableForEmergency ? 'translate-x-4' : 'translate-x-[2px]'}`} />
-              </button>
-            </div>
-
-            {/* Instant Match Toggle */}
-            <div className={cn("flex items-center gap-1.5 px-2 h-8 rounded-2xl border border-black shadow-sm shrink-0 transition-colors", profile?.isAvailableForInstantMatch ? "bg-amber-50" : "bg-white")}>
-              <Zap className={cn("w-3 h-3", profile?.isAvailableForInstantMatch ? "text-amber-500" : "text-slate-400")} />
-              <span className="text-[10px] font-bold text-slate-700 truncate">Instant Match</span>
-              <button 
-                type="button"
-                onClick={async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!user) return;
-                  
-                  // If turning on and no pricing set, show setup
-                  if (!profile?.isAvailableForInstantMatch && (!profile?.instantMatchPricing || !profile?.instantMatchPricing.callOutFee)) {
-                    setImSetupData(profile?.instantMatchPricing || { callOutFee: "", hourlyRate: "", terms: "" });
-                    setShowInstantMatchSetup(true);
-                    return;
-                  }
-
-                  if (!confirmingIM) {
-                    setConfirmingIM(true);
-                    setShowIMToast(true);
-                    setTimeout(() => setShowIMToast(false), 3000);
-                    setTimeout(() => setConfirmingIM(false), 3000);
-                    return;
-                  }
-                  setConfirmingIM(false);
-                  setShowIMToast(false);
-                  try {
-                    await updateDoc(doc(db, "users", user.uid), {
-                      isAvailableForInstantMatch: !profile?.isAvailableForInstantMatch
-                    });
-                  } catch (error) {
-                    console.error("Error updating Instant Match status:", error);
-                    alert("Unable to update Instant Match status.");
-                  }
-                }}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none touch-manipulation z-50 ${confirmingIM ? 'bg-amber-400' : (profile?.isAvailableForInstantMatch ? 'bg-amber-500' : 'bg-slate-300')}`}
-              >
-                <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${profile?.isAvailableForInstantMatch ? 'translate-x-4' : 'translate-x-[2px]'}`} />
-              </button>
-            </div>
-
-            {/* Exclusive Job Offers Toggle */}
-            {sysConfig?.paywallEnabled !== false && (
-              <div className={cn("flex items-center gap-1.5 px-2 h-8 rounded-2xl border border-black shadow-sm shrink-0 transition-colors overflow-hidden", (profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? "bg-yellow-50" : "bg-white")}>
-                <Zap className="w-3 h-3 text-yellow-500 fill-current" />
-                <span className="text-[10px] font-black uppercase text-yellow-900 tracking-tight">Priority Offers</span>
-                <button 
-                  type="button"
-                  onClick={async (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!profile?.hasExclusiveAddon) {
-                      setShowExclusiveModal(true);
-                    } else {
-                      try {
-                        const newState = profile?.isExclusiveActive === false ? true : false;
-                        await updateDoc(doc(db, "users", user!.uid), {
-                          isExclusiveActive: newState
-                        });
-                        
-                        // Brief toast explanation
-                        if (newState) {
-                           alert("Priority Offer Activated: You will now receive early-access notifications for new jobs matching your profile.");
-                        }
-                      } catch (error) {
-                        console.error("Error toggling exclusive status", error);
-                      }
-                    }
-                  }}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none z-10 ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'bg-yellow-500' : 'bg-slate-300'}`}
-                >
-                  <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false) ? 'translate-x-4' : 'translate-x-[2px]'}`} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Actions Container */}
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            {/* Share Button */}
-            <button 
-              onClick={async () => {
-                if (!user) return;
-                const profileUrl = `${window.location.origin}/profile/${user.uid}`;
-                try {
-                  if (navigator.share) {
-                    await navigator.share({
-                      title: `${profile?.name} on AnyTrader`,
-                      text: `Check out my profile on AnyTrader!`,
-                      url: profileUrl,
-                    });
-                  } else {
-                    await navigator.clipboard.writeText(profileUrl);
-                    alert('Profile link copied to clipboard!');
-                  }
-                } catch (err: any) {
-                  if (err.name === 'AbortError') {
-                    console.log('Sharing canceled by user');
-                    return;
-                  }
-                  console.error('Error sharing:', err);
-                }
-              }}
-              className="bg-white text-slate-700 border border-black h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm shrink-0"
-            >
-              <Share2 className="w-4 h-4 text-blue-600" />
-              Share
-            </button>
-
-            {/* Availability Button */}
-            <Link 
-              to="/availability"
-              className="bg-white text-slate-700 border border-black h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-4 gap-2 shadow-sm shrink-0"
-            >
-              <Calendar className="w-4 h-4 text-blue-600" />
-              Set Availability
-            </Link>
-          </div>
-
+          {/* Availability Button */}
           <Link 
-            to="/job-feed" 
-            className="bg-primary text-white h-11 px-6 rounded-2xl font-bold border border-primary hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex w-full sm:w-auto items-center justify-center gap-2 active:scale-95 shrink-0"
+            to="/availability"
+            className="bg-white text-slate-700 border border-black h-10 sm:h-11 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex flex-1 sm:flex-none items-center justify-center sm:justify-start px-3.5 gap-2 shadow-xs shrink-0"
           >
-            <Briefcase className="w-5 h-5" />
-            Find Jobs
+            <Calendar className="w-4 h-4 text-blue-600" />
+            Set Availability
           </Link>
         </div>
+
+        <Link 
+          to="/job-feed" 
+          className="bg-primary text-white h-10 sm:h-11 px-5 rounded-2xl font-bold border border-primary hover:bg-primary-hover transition-all shadow-md shadow-primary/20 flex w-full sm:w-auto items-center justify-center gap-2 active:scale-95 shrink-0"
+        >
+          <Briefcase className="w-4 h-4 sm:w-5 sm:h-5" />
+          Find Jobs
+        </Link>
       </div>
 
       {/* Stats Grid */}
@@ -1827,6 +1867,9 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
           )}
         </div>
       </div>
+
+      {/* Trader Monetization & Advertising Banners (Placed at bottom below Flash Deal Creator) */}
+      <TraderMonetizationBanners onOpenVideoVerification={() => navigate('/profile#verification')} />
 
       {/* Partner Perks Section */}
       <div className="mt-12">

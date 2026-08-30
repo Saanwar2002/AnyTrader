@@ -143,7 +143,7 @@ export async function createOrGetJobInvoice(
         job.homeownerId,
         `🧾 Invoice Ready: ${invoiceNumber}`,
         `Your invoice for "${job.title}" (£${totalAmount.toFixed(2)}) is now available to download.`,
-        "invoice",
+        "system",
         `/job/${jobId}`
       );
     }
@@ -152,7 +152,7 @@ export async function createOrGetJobInvoice(
         acceptedQuote.tradespersonId,
         `🧾 Invoice Generated: ${invoiceNumber}`,
         `An official ${isPro ? "Pro Branded" : "Free Standard"} invoice for "${job.title}" (£${totalAmount.toFixed(2)}) was generated.`,
-        "invoice",
+        "system",
         `/job/${jobId}`
       );
     }
