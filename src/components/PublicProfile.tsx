@@ -23,7 +23,7 @@ import { Logo } from "./Logo";
 import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
 import { INITIAL_MOCK_FLASH_DEALS, INITIAL_MOCK_TRADERS } from "@/src/services/seedService";
 import { DealCountdownBadge, shareDeal } from "@/src/lib/dealUtils";
-import { isDealSoldOut, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
+import { isDealSoldOut, getRemainingSlots, getDealCapacityInfo, formatDealBadgeText, formatDealScheduleText } from "@/src/lib/flashDeals";
 
 export default function PublicProfile() {
   const { id } = useParams();
@@ -951,7 +951,7 @@ export default function PublicProfile() {
                         </span>
                       )}
                       <span className="inline-flex items-center gap-1 text-[9.5px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full font-black uppercase">
-                        ⚡ Off-Peak {deal.dayOfWeek}
+                        {formatDealBadgeText(deal.dayOfWeek)}
                       </span>
                       {/* Prominent Booking Limit Pill in Header */}
                       {cap.isSoldOut ? (

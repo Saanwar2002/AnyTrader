@@ -26,6 +26,7 @@ import MediaGalleryModal from "./MediaGalleryModal";
 import QuoteComparisonModal from "./QuoteComparisonModal";
 import { SEO } from "./SEO";
 import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
+import { isDealApplicableOnDay, formatDealScheduleText } from "@/src/lib/flashDeals";
 import { 
   calculatePayoutBreakdown, 
   getStripeOnboardingLink, 
@@ -174,8 +175,8 @@ export default function JobDetails() {
     const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const selectedDayOfWeek = weekdays[dateObj.getDay()];
 
-    // Find if we have an active deal matching this day of the week
-    return myDeals.find(deal => deal.dayOfWeek === selectedDayOfWeek);
+    // Find if we have an active deal matching this day of the week or schedule
+    return myDeals.find(deal => isDealApplicableOnDay(deal.dayOfWeek, selectedDayOfWeek));
   };
 
   const handleAddLineItem = () => {
@@ -5042,7 +5043,7 @@ const libraries: any[] = ['places', 'geometry'];
                             Quiet Period Off-Peak Discount Matches!
                           </h4>
                           <p className="text-[10px] text-emerald-700 leading-tight mt-1">
-                            A <strong>{matchingDeal.discountPercentage}% discount</strong> on <strong>{matchingDeal.service}</strong> is applied since the start date is on a <strong>{matchingDeal.dayOfWeek}</strong>.
+                            A <strong>{matchingDeal.discountPercentage}% discount</strong> on <strong>{matchingDeal.service}</strong> is applied for the <strong>{formatDealScheduleText(matchingDeal.dayOfWeek)}</strong> schedule.
                           </p>
                           <div className="mt-1.5 flex items-center gap-2 text-[10px]">
                             <span className="text-slate-500">Original: <span className="line-through">£{parseFloat(quoteAmount) || 0}</span></span>

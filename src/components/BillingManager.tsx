@@ -61,8 +61,17 @@ export default function BillingManager() {
            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
       });
+      if (!res.ok) {
+        console.warn(`Fetch payment methods failed with status ${res.status}`);
+        return;
+      }
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.warn("Fetch payment methods response was not JSON:", await res.text());
+        return;
+      }
       const data = await res.json();
-      if (data.paymentMethods) {
+      if (data && Array.isArray(data.paymentMethods)) {
         setSavedCards(data.paymentMethods.map((pm: any, index: number) => ({
           ...pm,
           isDefault: index === 0 // Making the first one default for display purposes

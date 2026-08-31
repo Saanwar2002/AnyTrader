@@ -880,11 +880,11 @@ export default function PartnerAdvertisement({
       )}
 
       {/* Advertiser Quick Link for Tradespeople & Business Accounts */}
-      {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "business") && (
+      {(role === "tradesperson" || profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "business") && (
         <div className="flex justify-center mt-2">
           <Link 
             to="/trader/banner-ads" 
-            className="inline-flex items-center gap-1 bg-amber-300 hover:bg-amber-400 text-black border border-black px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-xs hover:shadow-none transition-all"
+            className="inline-flex items-center gap-1 bg-amber-300 hover:bg-amber-400 text-black border border-black px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-xs hover:shadow-none transition-all cursor-pointer"
             onClick={(e) => e.stopPropagation()}
           >
             <Sparkles className="w-2.5 h-2.5" />

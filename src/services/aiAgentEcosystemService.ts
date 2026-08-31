@@ -15,6 +15,7 @@ export interface AiAgentSettings {
   materialsArbitrageEnabled?: boolean;
   traderChurnPredictorEnabled?: boolean;
   demandSurgePredictorEnabled?: boolean;
+  profileOptimizationCoachEnabled?: boolean;
   autoExecuteComplianceDispatches?: boolean;
   autoExecuteDisputeSettlements?: boolean;
   autoPublishSocial: boolean;
@@ -230,6 +231,7 @@ export const DEFAULT_AI_AGENT_SETTINGS: AiAgentSettings = {
   materialsArbitrageEnabled: false,
   traderChurnPredictorEnabled: false,
   demandSurgePredictorEnabled: false,
+  profileOptimizationCoachEnabled: true,
   autoExecuteComplianceDispatches: false,
   autoExecuteDisputeSettlements: false,
   autoPublishSocial: false,

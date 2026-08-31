@@ -334,7 +334,7 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
                   Autonomous AI Operations & Marketing Ecosystem
                 </h2>
                 <p className="text-slate-300 text-sm font-medium">
-                  11 Specialized autonomous AI agents managing security, growth, materials arbitrage, churn, compliance, and dispute mediation.
+                  12 Specialized autonomous AI agents managing security, growth, materials arbitrage, churn, profile optimization, compliance, and dispute mediation.
                 </p>
               </div>
             </div>
@@ -700,6 +700,45 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
                 <span className="font-bold text-slate-500">Status:</span>
                 <span className={cn("font-black uppercase tracking-wider", settings.sentinelGuardEnabled ? "text-emerald-600" : "text-slate-400")}>
                   {settings.sentinelGuardEnabled ? "Active (Autonomous 2h Cron)" : "OFF (Dormant)"}
+                </span>
+              </div>
+            </div>
+
+            {/* Agent 1B: AI Profile Optimization & Readiness Coach */}
+            <div className="bg-white rounded-3xl p-6 border border-black shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200">
+                    <Sparkles className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-lg">Profile Optimization Coach</h3>
+                    <p className="text-xs text-slate-500 font-medium">Auto-Bio, Skill Parity & Readiness Engine</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleToggleAgent("profileOptimizationCoachEnabled")}
+                  className={cn(
+                    "w-14 h-8 rounded-full p-1 transition-colors duration-300 relative border border-black",
+                    settings.profileOptimizationCoachEnabled ? "bg-emerald-500" : "bg-slate-300"
+                  )}
+                >
+                  <motion.div
+                    animate={{ x: settings.profileOptimizationCoachEnabled ? 24 : 0 }}
+                    className="w-6 h-6 bg-white rounded-full shadow-md"
+                  />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Audits trader and homeowner profiles for professional wording, missing search keywords, video selfie credentials, and Stripe/payout readiness, dispatching 1-click optimization alerts.
+              </p>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-500">Status:</span>
+                <span className={cn("font-black uppercase tracking-wider", settings.profileOptimizationCoachEnabled ? "text-emerald-600" : "text-slate-400")}>
+                  {settings.profileOptimizationCoachEnabled ? "Active (On Signup & 14-Day Audit)" : "OFF (Dormant)"}
                 </span>
               </div>
             </div>

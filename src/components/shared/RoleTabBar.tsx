@@ -114,7 +114,7 @@ export default function RoleTabBar() {
       onPointerDown={resetAutoCloseTimer}
       onTouchStart={resetAutoCloseTimer}
       onClick={resetAutoCloseTimer}
-      className="w-full bg-slate-50/95 backdrop-blur-md border-b border-black/10 sticky top-16 z-40 shadow-xs transition-all duration-200"
+      className="w-full bg-slate-50/95 backdrop-blur-md border-b border-black/10 z-40 shadow-xs transition-all duration-200"
     >
       {/* Collapsed State Bar (Ultra-compact, 1-tap expand) */}
       {!isExpanded ? (

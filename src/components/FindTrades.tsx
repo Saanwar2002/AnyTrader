@@ -17,7 +17,7 @@ import { TraderDocumentViewerModal } from "./TraderDocumentViewerModal";
 import { SlowTrustBadgesCarousel } from "./SlowTrustBadgesCarousel";
 import { SEO } from "./SEO";
 import { seedMockTraders, INITIAL_MOCK_TRADERS, INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
-import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
+import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo, formatDealBadgeText, formatDealScheduleText } from "@/src/lib/flashDeals";
 import { shareDeal, DealCountdownBadge } from "@/src/lib/dealUtils";
 export { shareDeal, DealCountdownBadge };
 import { Capacitor } from '@capacitor/core';
@@ -813,7 +813,13 @@ export default function FindTrades() {
       .filter(tp => {
         const matchesSearch = matchTraderWithSearchQuery(tp, searchQuery, candidateDictionary);
         
-        const matchesCategory = selectedCategory === "All" || tp.trades?.includes(selectedCategory);
+        const matchesCategory = selectedCategory === "All" || 
+          tp.trades?.includes(selectedCategory) || 
+          tp.categories?.includes(selectedCategory) || 
+          tp.primaryTrade === selectedCategory || 
+          tp.category === selectedCategory || 
+          tp.services?.includes(selectedCategory) || 
+          tp.skills?.includes(selectedCategory);
         
         const matchesRating = minRating === null || (tp.rating || 0) >= minRating;
         
@@ -1596,7 +1602,7 @@ export default function FindTrades() {
                                 )}
                               </div>
                               <p className="text-[10px] text-slate-500 truncate">
-                                {tp.trades?.[0] || 'Tradesperson'} • £{tp.miniProfileSettings?.callOutFee || 0} call-out
+                                {tp.trades?.[0] || 'Tradesperson'} • £{tp.miniProfileSettings?.callOutFee ?? tp.miniProfilePricing?.callOutFee ?? tp.callOutFee ?? 0} call-out
                               </p>
                             </div>
                           </div>
@@ -2040,7 +2046,7 @@ export default function FindTrades() {
                             </span>
                           )}
                           <span className="inline-flex items-center gap-0.5 text-[9px] sm:text-[9.5px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-extrabold uppercase">
-                            ⚡ {deal.dayOfWeek}
+                            {formatDealBadgeText(deal.dayOfWeek)}
                           </span>
                           {/* Prominent Booking Limit Pill in Header */}
                           {cap.isSoldOut ? (
@@ -2453,7 +2459,7 @@ export default function FindTrades() {
                               {selectedMapTrader.rating?.toFixed(1) || '5.0'} ({selectedMapTrader.totalReviews || 0})
                             </span>
                             <span className="font-bold text-blue-700">
-                              £{selectedMapTrader.miniProfileSettings?.callOutFee || 0} call-out
+                              £{selectedMapTrader.miniProfileSettings?.callOutFee ?? selectedMapTrader.miniProfilePricing?.callOutFee ?? selectedMapTrader.callOutFee ?? 0} call-out
                             </span>
                           </div>
 
@@ -2643,19 +2649,19 @@ export default function FindTrades() {
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-white rounded-xl py-1.5 border border-[#2563eb] text-center shadow-xs">
                         <p className="text-[8.5px] font-black text-slate-800 uppercase tracking-wider mb-0.5">CALL-OUT FEE</p>
-                        <p className="text-xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.callOutFee || 0}</p>
+                        <p className="text-xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.callOutFee ?? tp.miniProfilePricing?.callOutFee ?? tp.callOutFee ?? 0}</p>
                       </div>
                       <div className="bg-white rounded-xl py-1.5 border border-[#2563eb] text-center shadow-xs">
                         <p className="text-[8.5px] font-black text-slate-800 uppercase tracking-wider mb-0.5">HOURLY RATE</p>
-                        <p className="text-xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.hourlyRate || 0}</p>
+                        <p className="text-xl font-black text-[#002b5c]">£{tp.miniProfileSettings?.hourlyRate ?? tp.miniProfilePricing?.hourlyRate ?? tp.hourlyRate ?? 0}</p>
                       </div>
                     </div>
 
-                    {tp.miniProfileSettings?.extraInfo && (
+                    {(tp.miniProfileSettings?.extraInfo || tp.miniProfilePricing?.extraInfo || tp.extraInfo) && (
                       <div className="bg-white rounded-xl p-2 border border-[#2563eb] text-center shadow-xs">
                         <p className="text-[8.5px] font-black text-slate-800 uppercase tracking-wider mb-0.5">EXTRA INFO</p>
                         <p className="text-xs font-bold text-slate-900 leading-tight break-words whitespace-pre-wrap line-clamp-2">
-                          "{tp.miniProfileSettings.extraInfo.length > 120 ? tp.miniProfileSettings.extraInfo.substring(0, 120) + '...' : tp.miniProfileSettings.extraInfo}"
+                          "{((tp.miniProfileSettings?.extraInfo || tp.miniProfilePricing?.extraInfo || tp.extraInfo) as string).length > 120 ? ((tp.miniProfileSettings?.extraInfo || tp.miniProfilePricing?.extraInfo || tp.extraInfo) as string).substring(0, 120) + '...' : (tp.miniProfileSettings?.extraInfo || tp.miniProfilePricing?.extraInfo || tp.extraInfo)}"
                         </p>
                       </div>
                     )}
@@ -2805,7 +2811,7 @@ export default function FindTrades() {
                               className="inline-flex items-center gap-1.5 bg-emerald-400 hover:bg-emerald-300 text-black font-black text-[11px] py-0.5 px-2 rounded-lg border border-black shadow-2xs my-0.5 w-fit max-w-full cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] z-10 group/deal leading-tight"
                             >
                               <span className="text-[11px] leading-none shrink-0">🍁</span>
-                              <span className="underline decoration-black/40 underline-offset-1 leading-none whitespace-nowrap text-[11px] font-black">{activeDeal.discountPercentage}% Off {activeDeal.dayOfWeek}s</span>
+                              <span className="underline decoration-black/40 underline-offset-1 leading-none whitespace-nowrap text-[11px] font-black">{activeDeal.discountPercentage}% Off ({formatDealScheduleText(activeDeal.dayOfWeek)})</span>
                               <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded leading-none tracking-tight shrink-0 ml-0.5">
                                 {cap.isUnlimited ? "Unlimited" : cap.isSoldOut ? "🔴 Sold Out" : `🔥 ${cap.remaining} of ${cap.max} Left`}
                               </span>
@@ -3464,10 +3470,10 @@ export default function FindTrades() {
                               <span className="text-[9.5px] sm:text-[10px] font-extrabold text-slate-800 truncate">{tp.name.split(' ')[0]}</span>
                             </div>
                             <p className="text-[10px] sm:text-xs font-extrabold text-slate-900 leading-tight">
-                              Call-Out: <span className="text-blue-700 font-black">£{tp.miniProfileSettings?.callOutFee || 0}</span>
+                              Call-Out: <span className="text-blue-700 font-black">£{tp.miniProfileSettings?.callOutFee ?? tp.miniProfilePricing?.callOutFee ?? tp.callOutFee ?? 0}</span>
                             </p>
                             <p className="text-[9.5px] sm:text-[10.5px] text-slate-700 font-bold leading-tight">
-                              Hourly: <span className="font-extrabold text-slate-900">£{tp.miniProfileSettings?.hourlyRate || 0}/hr</span>
+                              Hourly: <span className="font-extrabold text-slate-900">£{tp.miniProfileSettings?.hourlyRate ?? tp.miniProfilePricing?.hourlyRate ?? tp.hourlyRate ?? 0}/hr</span>
                             </p>
                           </div>
                         );

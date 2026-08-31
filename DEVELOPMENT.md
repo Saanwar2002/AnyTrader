@@ -1,5 +1,152 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🏷️ Trader Profile Max Limits Enforced: 15 Skills/Services & 15 Tags (`Profile.tsx`, `BioOfferingsCard.tsx`, `SlowTrustBadgesCarousel.tsx`) (Completed August 31, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "I think we should limit to max 15 skill/services so the profile section does not get too long. Also max 15 tags each trader profile"
+*   **Enforcements Implemented**:
+    1.  **Skills & Services Cap (Max 15)**:
+        - Enforced hard cap of 15 items in `tempServices` and `handleAddService` in `Profile.tsx`.
+        - Added disabled UI state and `(Count/15)` indicator in `BioOfferingsCard.tsx` when 15 skills/services are reached.
+        - Sliced `cleanedServices` and `unifiedOfferings` to `.slice(0, 15)` upon saving to Firestore and displaying on profile.
+    2.  **Profile Tags Cap (Max 15)**:
+        - Added `(Count/15)` counter and limit note to the edit profile modal in `Profile.tsx`.
+        - Sliced `tagsArray` and `cleanTags` to `.slice(0, 15)` in both `Profile.tsx` and `BioOfferingsCard.tsx`.
+    3.  **Marquee Ticker Sync (`SlowTrustBadgesCarousel.tsx`)**:
+        - Sliced `skillsList` to `.slice(0, 15)` to ensure ticker continuous animation remains focused and visually compact.
+
+## 📜 Trader Card Skills & Services Smooth GPU Marquee Ticker (`SlowTrustBadgesCarousel.tsx`) (Completed August 31, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "Check why text is not smooth scrolling, keep jumping"
+*   **Root Cause**:
+    *   The ticker previously used a JavaScript `requestAnimationFrame` loop setting `scrollRef.current.scrollLeft`. On mobile webviews and high-DPI screens, setting `scrollLeft` on every frame causes subpixel DOM layout recalculations, micro-stutters, and visual position jumping when resetting `scrollLeft`.
+*   **Fix Implemented**:
+    1.  **Pure CSS GPU Marquee**: Replaced JS `scrollLeft` manipulation with CSS `@keyframes slowScrollMarquee` (`transform: translateX(-50%)`).
+    2.  **60 FPS Hardware Acceleration**: Hardware-accelerated smooth scrolling rendered directly on the GPU compositor thread without triggering main-thread layout recalculations.
+    3.  **Pixel-Perfect Seamless Looping**: Rendered two identical skill groups side by side so transitioning from `-50%` back to `0%` is 100% mathematically continuous and invisible to the eye without any jump or stutter.
+
+
+## 🛠️ Payment Methods Non-JSON Error Guard Fix (`BillingManager.tsx`, `Profile.tsx`) (Completed August 31, 2026)
+*   **Context & User Issue**:
+    *   *Reported Error*: `Error fetching payment methods: Unexpected token 'R', "Rate exceeded." is not valid JSON`
+*   **Root Cause**:
+    *   When server proxy or rate-limiter returned non-JSON text errors (e.g. `429 Rate exceeded.`), client-side fetch calls in `BillingManager.tsx` and `Profile.tsx` invoked `.json()` directly without verifying response headers or HTTP status, causing a JSON SyntaxError.
+*   **Fix Implemented**:
+    *   Added `res.ok` status check and `content-type` validation (`application/json`) before attempting to parse response body in `BillingManager.tsx` and `Profile.tsx`.
+    *   Ensures non-JSON error responses (rate limits, HTML maintenance pages, or network errors) are safely logged without crashing JSON parsing or triggering client exceptions.
+
+## 🏷️ Specialist Trades, Skills & Services Double Delete Confirmation & Smaller Delete Buttons (`BioOfferingsCard.tsx`) (Completed August 31, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "Can we make these double confirmation for deleting in this section only ,, Not in edit mode,,. Also make the,, x ,, circle little smaller"
+*   **Double Confirmation & UI Improvements**:
+    1.  **Double Confirmation Flow when NOT in Edit Mode**:
+        *   When viewing the "SPECIALIST TRADES, SKILLS & SERVICES" card in normal profile view mode (`isEditingServices === false`), tapping the `x` delete button on any trade, skill, service, or tag pill triggers a double confirmation banner.
+        *   Displays an animated warning card: `Confirm Removal: Delete "<Skill Name>"?` with explicit `Yes, Delete` (red button with trash icon) and `Cancel` actions.
+        *   Prevents accidental single-tap deletion of important search-indexed skills.
+    2.  **1-Tap Rapid Removal in Edit Mode**:
+        *   When actively managing services in Edit Mode (`isEditingServices === true`), tapping `x` removes items directly with a single click without confirmation prompts, enabling fast batch editing.
+    3.  **Compact Resized `X` Circle Button, Input Flex Fix & Prominent Add/Manage Button**:
+        *   Re-styled the delete `x` circle on all pills from bloated grey containers down to a sleek, compact 14px circle (`w-3.5 h-3.5 rounded-full shrink-0`) with a clean 2px stroke icon, subtle border, and high-contrast hover feedback (`hover:bg-red-600 hover:text-white`).
+        *   Added `min-w-0` to the text input box and `shrink-0` to the `+ Add` button in `BioOfferingsCard.tsx` so the input shrinks fluidly on mobile viewports without forcing the `+ Add` button past the right card border.
+        *   Updated the `+ ADD / MANAGE` button to use a high-visibility, solid royal blue background (`bg-blue-600 hover:bg-blue-700 text-white font-black border border-black shadow-sm`) for clear visual call-to-action prominence.
+
+## 📇 5-Card Logical Profile Architecture Refactor & Data Sanitization (`Profile.tsx`, `TraderIdentityCard.tsx`, `TrustVerificationCard.tsx`, `BioOfferingsCard.tsx`, `RatesFaqsCard.tsx`, `GrowthNotificationsCard.tsx`, `HomeownerIdentityCard.tsx`, `SafetyEmergencyCard.tsx`) (Completed August 31, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "Can you look at traders profile section as in this image and suggest me how we can improve the layout so all sections are in logical order and easy to follow. As now sections are all over places. keep all the logics and feature as it is. Just need to improve the UI. Option. 5 cards but do not miss any section and make sure layout do not overlap or loose any logics. Why we have all these pills empty. Also give all pills, boxes thin jet black borders. Also check already added data not displayed"
+*   **5-Card Vertical Layout Architecture & Data Handling**:
+    1.  **Card 1: Identity & Role Credentials** (`TraderIdentityCard.tsx` / `HomeownerIdentityCard.tsx`):
+        *   Displays Avatar with direct upload trigger, Full Name, Trade Category Badges, Member ID, Subscription Tier (`TradeOS PRO` / `Free`), and direct profile editing modal controls.
+        *   All badges, status tags, and metric containers styled with uniform thin jet-black borders (`border-black`) and high-contrast typography (`text-black`).
+    2.  **Card 2: Trust, Video Verification & AI Coach** (`TrustVerificationCard.tsx`):
+        *   Houses the 4 Trust Badges (`Identity Verified`, `DBS Background Checked`, `Public Liability Insured`, `Video Intro Verified`), the `✨ AI Profile Optimization & Readiness Coach`, the Video Selfie Verification recorder/uploader, and full Document Accreditation with auto-check status and expiry tracking.
+        *   Standardized with `border-black` on all document cards, status chips, date inputs, and upload trigger boxes.
+    3.  **Card 3: Bio, Specialist Skills, Services & Work Portfolio** (`BioOfferingsCard.tsx`):
+        *   **Multi-Field Data Extraction & Fallbacks**: Comprehensive fallback aggregation for trades, tags, skills, offerings, and portfolio images from alternative Firestore schema keys (e.g. `trades`, `primaryTrade`, `categories`, `skills`, `productsAndServices`, `offeredServices`, `fixedServices`, `specialistServices`, `portfolio`, `portfolioPhotos`, `workPhotos`, `images`).
+        *   **Array Sanitization**: `Set`-based deduplication and trimming that eliminates blank, undefined, or empty string pills.
+        *   **Multi-Line Badges & Offerings**: Removed truncation ellipses (`truncate`) to ensure complete badge text (e.g., "Senior Citizen Discounts", "12-Month Workmanship Guarantee") wraps naturally without being cut off.
+        *   **Work Portfolio Gallery**: Unified with `actualPortfolioImages` resolving from any portfolio field with drag-and-drop sortable items and thin jet-black bordered placeholder.
+    4.  **Card 4: Standard Rates, Instant Match & Customer FAQs** (`RatesFaqsCard.tsx` & `SafetyEmergencyCard.tsx` for Homeowners):
+        *   Standard pricing cards (Hourly rate, Day rate, Emergency Callout fee), Instant Match radius and toggle, plus the Customer FAQs manager with quick preset questions. Supports `miniProfilePricing`, `miniProfileSettings`, `instantMatchPricing`, and `instantMatchSettings` field variants.
+        *   For homeowners, renders Emergency Contacts manager with thin jet-black borders and clean contact deletion/addition controls.
+    5.  **Card 5: Growth, Native Ads, Notifications & Recurring Services** (`GrowthNotificationsCard.tsx`):
+        *   Notification preferences (Quiet Hours, Push, Email), Recurring Job Schedules manager, and Sponsored Native Ads boost toggle with link to Banner Ad Studio.
+    *   Followed cleanly by the Grouped Menu List (Quick Links, Tools, Support) and the Sign Out action button.
+*   **Code Quality & Verification**:
+    *   Modularized into clean subcomponents under `src/components/profile/`.
+    *   Removed redundant legacy duplicate blocks from monolithic `Profile.tsx`.
+    *   All state bindings, callbacks, and Firestore logic preserved 1:1. Full production compilation verified.
+
+## ✨ AI Profile Optimization & Readiness Coach Agent (`aiProfileOptimizationService.ts`, `AiProfileOptimizerSection.tsx`, `Profile.tsx`, `Layout.tsx` & `AdminAiAgentsTab.tsx`) (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "Is it possible if we can create another logic or brain which look at a trader's profiles and it can match against the best performing profiles in their related categories and can suggest the improvements or the editing of the profiles to traders so the traders can update their profiles based on the suggestions..."
+*   **AI Coach Implementation**:
+    *   *Section Placement & Collapsible UI (`AiProfileOptimizerSection.tsx` & `Profile.tsx`)*:
+        *   Positioned directly above the Video Verification Selfie section in the Profile editor.
+        *   Heading: `✨ AI Profile Optimization & Readiness Coach`.
+        *   Collapsible and auto-closed by default to conserve screen space. Closed state displays a compact readiness bar with a Health Score % gauge (e.g. `82% Health Score`), live badge counters, and expand/collapse toggle.
+    *   *6-Vector Profile & Readiness Inspection*:
+        1.  **Professional Bio Refinement**: Uses Gemini to rewrite brief, informal, or jargon-heavy descriptions into simple, clear, accessible plain English for homeowners, with a 1-tap `⚡ Apply Professional Bio` button.
+        2.  **Category Skill Parity**: Compares listed skills against top-performing profiles in the trader's category to identify missing high-demand search keywords, with a 1-tap `➕ Add Recommended Skills` button.
+        3.  **Trust Credentials & Media Audit**: Checks video selfie verification, portfolio photo counts, and public liability insurance.
+        4.  **Account & Payment Readiness**: Audits Stripe Connect payout setup or default payment method for both traders and homeowners.
+        5.  **Settings Completeness**: Checks primary phone, email verification, and service postcode radius.
+        6.  **Paid Feature & Subscription Recommendations**: Suggests TradeOS PRO tier upgrades (5% commission vs 12%, early lead access, Founding Pro badge), Priority SMS Lead Alerts, and Featured Search Placement via Ad Studio to maximize job match rate.
+    *   *Anti-Alert Spam Throttle & Fortnightly Schedule*:
+        *   Audits are cached in Firestore (`aiProfileAudit.lastAuditedAt`) with a **strict 14-day (fortnightly) throttle**.
+        *   Prevents notification fatigue by delivering consolidated, high-impact suggestions at most once every 2 weeks (or on initial signup / manual re-audit).
+    *   *Dashboard Alerts & Live Animated Dot (`Layout.tsx` & `notifications` collection)*:
+        *   Dispatches in-app notifications when new unread suggestions exist.
+        *   Displays a live animated pulsing emerald dot on the Alerts button in the header and navigation bar.
+    *   *Audit Schedule & Triggers*:
+        *   Runs automatically on initial signup/profile setup.
+        *   Re-audits periodically every 14 days or on-demand when the user clicks `🔄 Re-Audit`.
+    *   *Admin Ecosystem Integration*:
+        *   Registered in `AdminAiAgentsTab.tsx` and `aiAgentEcosystemService.ts` as the 12th/13th ecosystem agent (`profileOptimizationCoachEnabled`).
+
+## ⚡ Flash Deal Flexible Schedule Engine (`flashDeals.ts`, `TradesDashboard.tsx`, `JobDetails.tsx`, `PublicProfile.tsx` & `FindTrades.tsx`) (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "What about if trader want to have flash deal active for all week or weekend only. Any options we can add"
+*   **Flexible Schedule Implementation**:
+    *   *Schedule Options Added*:
+        *   `🔥 All Week (Every Day · Mon - Sun)`
+        *   `💼 Weekdays Only (Mon - Fri)`
+        *   `⚡ Weekend Only (Sat & Sun)`
+        *   Individual days (`Monday`, `Tuesday`, `Wednesday`, `Thursday`, `Friday`, `Saturday`, `Sunday`)
+    *   *Schedule Matching Logic (`isDealApplicableOnDay`)*:
+        *   `All Week` deals match any target job/quote day.
+        *   `Weekdays` deals match Monday through Friday.
+        *   `Weekend` deals match Saturday and Sunday.
+        *   Individual day deals match specific days of the week.
+    *   *Dynamic Badge Formatting (`formatDealBadgeText` & `formatDealScheduleText`)*:
+        *   `⚡ All Week Deal`
+        *   `⚡ Weekdays (Mon-Fri)`
+        *   `⚡ Weekend Only`
+        *   `⚡ Off-Peak [Day]`
+    *   *System Integration*: Updated Flash Deal Builder (`TradesDashboard.tsx`), public profile view (`PublicProfile.tsx`), directory discovery feed (`FindTrades.tsx`), and automated quote discount calculation (`JobDetails.tsx`).
+
+## 🚀 "Promote Your Trade or Business Here" Banner Ad Studio & Advertising Flow Audit (`PartnerAdvertisement.tsx` & `TradesBannerAdStudio.tsx`) (Completed August 30, 2026)
+*   **Context & User Request**:
+    *   *User Report*: "Can you look into this feature if all logic and flow work correctly" with an annotated screenshot circling the `✨ PROMOTE YOUR TRADE OR BUSINESS HERE` button below the featured advertising banner and carousel indicators.
+*   **Flow & Logic Audit Findings**:
+    1.  *Link Trigger & Visibility*: The button sits in `PartnerAdvertisement.tsx` and links directly to `/trader/banner-ads` (`TradesBannerAdStudio.tsx`). The visibility condition was enhanced so that all users viewing the Tradesperson portal (or with tradesperson/business accounts) have immediate access.
+    2.  *Ad Campaign Lifecycle*:
+        *   Flat rate pricing model (£2.00/day) with duration options (3, 7, 14, 30 days) and zero per-lead fees.
+        *   Deduction from the trader's prepaid `adWalletBalance` in Firestore with merge safety.
+        *   Active duration calculation with start/end date tracking and real-time days remaining countdown.
+        *   Automatic placement at the top of homeowner feeds with intelligent trade category targeting.
+    3.  *Customer-Facing Banner Integrity & 1:1 Live Preview Synchronization*:
+        *   Customer-facing banners must never display the internal ad campaign purchase cost (e.g. `£2/Day Boost`) to homeowners. Removed the internal fee label from the preview banner in `TradesBannerAdStudio.tsx` and replaced it with verified booking credentials: `Verified Pro · SW3 · Free Quote` (or callout fee).
+        *   Synchronized the live preview container inside the campaign creation modal to be a **1:1 pixel-perfect match** of the live homeowner dashboard ad banner (`PartnerAdvertisement.tsx`):
+            *   *Card Container*: `rounded-2xl min-h-[150px] sm:min-h-[140px] bg-slate-900 border border-black shadow-md bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-3.5 sm:p-4 text-white`.
+            *   *Top Bar*: Trader avatar container with rounded-xl border, live image/fallback icon, and emerald green checkmark overlay + Personal name, Business & Trade category subtitle, and amber rating badge with review count (`★ 5.0 (24)`).
+            *   *Top Right Badge*: Black backdrop pill with glowing amber pulse dot: `● FEATURED PRO`.
+            *   *Middle Sparkle Perk*: Promoted perk highlight with `✨ Sparkles` icon (e.g. `✨ ✨ City & Guilds Master Approved` or `⚡ 24/7 Response Guaranteed`).
+            *   *Description / Tagline*: Dynamic 2-line text reflecting the trader's live custom promotional tagline as typed.
+            *   *Bottom Bar*: Emerald `CheckCircle2` trust indicator (`Verified Pro · SW3 · Free Quote`) paired with high-contrast `View Profile >` CTA button pill.
+    4.  *Interactive Live Ad Preview*: Added an interactive, real-time preview card inside the campaign builder modal so tradespeople see exactly how their business name, rating, tagline, badge, and "View Profile" action appear to homeowners prior to launching.
+    5.  *Ad Wallet Top-Up*: Added quick-select preset chips (£20, £50, £100, £200) alongside custom number input, linked with real-time balance subscription and seamless error handling.
+    6.  *Campaign Management*: Supports live Pause/Resume toggling, Tagline editing, Campaign deletion, and click performance tracking with non-blocking Firestore background analytics.
+    7.  *Direct Public Profile Dispatch*: When a homeowner taps a promoted trader banner card anywhere in the app, it dispatches zero-latency navigation to `/profile/:traderUid` with pre-hydrated trader state.
+
 ## 📱 Trader Create Invoice Modal Mobile Responsiveness Fix (`FinancialDashboardWidget.tsx`) (Completed August 30, 2026)
 *   **Context & User Request**:
     *   *User Report*: "Sort out cutting out sections on mobile devices for create invoice for traders" with an annotated screenshot showing the "Create Instant Trade Invoice" modal on a mobile viewport.

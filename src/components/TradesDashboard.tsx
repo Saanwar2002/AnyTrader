@@ -27,7 +27,15 @@ import { InstantMatchTraderAlert } from "./InstantMatchTraderAlert";
 import { FinancialDashboardWidget } from "./FinancialDashboardWidget";
 import { TraderMonetizationBanners } from "./TraderMonetizationBanners";
 import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
-import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo } from "@/src/lib/flashDeals";
+import { 
+  isDealSoldOut, 
+  isDealPaused, 
+  getRemainingSlots, 
+  getDealCapacityInfo, 
+  FLASH_DEAL_SCHEDULE_OPTIONS, 
+  formatDealBadgeText, 
+  formatDealScheduleText 
+} from "@/src/lib/flashDeals";
 
 const iconMap: Record<string, any> = {
   Briefcase, Clock, MessageSquare, CheckCircle2, ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus, ImageIcon, VideoIcon
@@ -1333,7 +1341,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
               setIsCreatingDeal(!isCreatingDeal);
               setDealService(profile?.trades?.[0] || "");
               setDealDiscount(20);
-              setDealDay("Tuesday");
+              setDealDay("All Week");
               setDealOrigPrice("");
               setDealDesc("");
             }}
@@ -1379,17 +1387,17 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Quiet Weekday</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Deal Schedule / Active Days</label>
                 <select
                   value={dealDay}
                   onChange={e => setDealDay(e.target.value)}
-                  className="w-full h-11 bg-white border border-black rounded-xl px-3 font-semibold text-xs text-slate-900 focus:outline-none"
+                  className="w-full h-11 bg-white border border-black rounded-xl px-3 font-bold text-xs text-slate-900 focus:outline-none"
                 >
-                  <option value="Monday">Monday</option>
-                  <option value="Tuesday">Tuesday</option>
-                  <option value="Wednesday">Wednesday</option>
-                  <option value="Thursday">Thursday</option>
-                  <option value="Friday">Friday</option>
+                  {FLASH_DEAL_SCHEDULE_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1491,7 +1499,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
 
             <div className="flex items-center justify-between pt-2">
               <span className="text-[10px] text-slate-500 font-bold italic">
-                Preview: {dealDiscount}% off {dealService || 'Service'} on {dealDay}s ({dealLimitType === 'unlimited' ? 'Unlimited' : `Cap: ${dealLimitType === 'custom' ? customLimitInput : dealMaxClaims} claims`})
+                Preview: {dealDiscount}% off {dealService || 'Service'} · {formatDealScheduleText(dealDay)} ({dealLimitType === 'unlimited' ? 'Unlimited' : `Cap: ${dealLimitType === 'custom' ? customLimitInput : dealMaxClaims} claims`})
               </span>
               <button
                 type="button"
@@ -1592,7 +1600,7 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="inline-flex items-center gap-1 text-[9.5px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-black uppercase">
-                          ⚡ Off-Peak {deal.dayOfWeek}
+                          {formatDealBadgeText(deal.dayOfWeek)}
                         </span>
                         <span className="bg-emerald-600 text-white font-black text-[9px] px-2.5 py-0.5 uppercase rounded-full shadow-2xs">
                           🍁 {deal.discountPercentage}% OFF

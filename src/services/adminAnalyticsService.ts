@@ -140,10 +140,34 @@ export function calculateFlashDealsTelemetry(deals: FlashDeal[], jobs: any[] = [
     categoryMap[cat].discountSum += Number(deal.discountPercentage) || 0;
 
     // Day of week tracking
-    const day = deal.dayOfWeek || "Monday";
-    if (dayMap[day]) {
-      dayMap[day].count++;
-      dayMap[day].claims += claims;
+    const rawDay = (deal.dayOfWeek || "Monday").trim().toLowerCase();
+    if (rawDay === "all week" || rawDay === "7 days / week" || rawDay === "7 days") {
+      ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].forEach(d => {
+        if (dayMap[d]) {
+          dayMap[d].count++;
+          dayMap[d].claims += claims;
+        }
+      });
+    } else if (rawDay === "weekdays" || rawDay === "mon - fri") {
+      ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].forEach(d => {
+        if (dayMap[d]) {
+          dayMap[d].count++;
+          dayMap[d].claims += claims;
+        }
+      });
+    } else if (rawDay === "weekend" || rawDay === "weekends" || rawDay === "sat - sun") {
+      ["Saturday", "Sunday"].forEach(d => {
+        if (dayMap[d]) {
+          dayMap[d].count++;
+          dayMap[d].claims += claims;
+        }
+      });
+    } else {
+      const matchedKey = Object.keys(dayMap).find(k => k.toLowerCase() === rawDay) || (dayMap[deal.dayOfWeek] ? deal.dayOfWeek : "Monday");
+      if (dayMap[matchedKey]) {
+        dayMap[matchedKey].count++;
+        dayMap[matchedKey].claims += claims;
+      }
     }
 
     // Trader tracking

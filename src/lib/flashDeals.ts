@@ -125,3 +125,63 @@ export const getDealCapacityInfo = (deal: any): DealCapacityInfo => {
     statusText: isSoldOut ? `Daily limit of ${max} reached` : `${remaining} of ${max} spots remaining today`
   };
 };
+
+export const FLASH_DEAL_SCHEDULE_OPTIONS = [
+  { value: "All Week", label: "🔥 All Week (Every Day · Mon - Sun)", shortLabel: "All Week" },
+  { value: "Weekdays", label: "💼 Weekdays Only (Mon - Fri)", shortLabel: "Weekdays" },
+  { value: "Weekend", label: "⚡ Weekend Only (Sat & Sun)", shortLabel: "Weekend" },
+  { value: "Monday", label: "📅 Monday", shortLabel: "Monday" },
+  { value: "Tuesday", label: "📅 Tuesday", shortLabel: "Tuesday" },
+  { value: "Wednesday", label: "📅 Wednesday", shortLabel: "Wednesday" },
+  { value: "Thursday", label: "📅 Thursday", shortLabel: "Thursday" },
+  { value: "Friday", label: "📅 Friday", shortLabel: "Friday" },
+  { value: "Saturday", label: "📅 Saturday", shortLabel: "Saturday" },
+  { value: "Sunday", label: "📅 Sunday", shortLabel: "Sunday" },
+];
+
+export const isDealApplicableOnDay = (dealDayOfWeek: string | undefined | null, targetDayName: string): boolean => {
+  if (!dealDayOfWeek) return true; // Default to applicable if not specified
+  const d = dealDayOfWeek.trim().toLowerCase();
+  const target = targetDayName.trim().toLowerCase();
+
+  if (
+    d === "all week" || 
+    d === "every day" || 
+    d === "all week (mon - sun)" || 
+    d === "all week (mon – sun)" ||
+    d === "any day" ||
+    d.includes("all week")
+  ) {
+    return true;
+  }
+
+  if (d === "weekdays" || d === "weekdays only" || d.includes("mon - fri") || d.includes("mon – fri")) {
+    return ["monday", "tuesday", "wednesday", "thursday", "friday"].includes(target);
+  }
+
+  if (d === "weekend" || d === "weekend only" || (d.includes("sat") && d.includes("sun"))) {
+    return ["saturday", "sunday"].includes(target);
+  }
+
+  return d === target || d.startsWith(target);
+};
+
+export const formatDealScheduleText = (dayOfWeek: string | undefined | null): string => {
+  if (!dayOfWeek) return "Flash Deal";
+  const d = dayOfWeek.trim().toLowerCase();
+  if (d === "all week" || d.includes("all week") || d === "every day") return "All Week";
+  if (d === "weekdays" || d === "weekdays only" || d.includes("mon - fri") || d.includes("mon – fri")) return "Weekdays";
+  if (d === "weekend" || d === "weekend only" || (d.includes("sat") && d.includes("sun"))) return "Weekends";
+  if (d.endsWith("s")) return dayOfWeek;
+  return `${dayOfWeek}s`;
+};
+
+export const formatDealBadgeText = (dayOfWeek: string | undefined | null): string => {
+  if (!dayOfWeek) return "⚡ Flash Deal";
+  const d = dayOfWeek.trim().toLowerCase();
+  if (d === "all week" || d.includes("all week") || d === "every day") return "⚡ All Week Deal";
+  if (d === "weekdays" || d === "weekdays only" || d.includes("mon - fri") || d.includes("mon – fri")) return "⚡ Weekdays (Mon-Fri)";
+  if (d === "weekend" || d === "weekend only" || (d.includes("sat") && d.includes("sun"))) return "⚡ Weekend Only";
+  return `⚡ Off-Peak ${dayOfWeek}`;
+};
+

@@ -18,6 +18,14 @@ import { usePortal } from "@/src/lib/PortalContext";
 import { CURRENT_APP_VERSION, checkUpdateNeeded, requestStoreReview } from "@/src/lib/version";
 import { AppUpdateModal } from "./common/AppUpdateModal";
 import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
+import { AiProfileOptimizerSection } from "./AiProfileOptimizerSection";
+import { TraderIdentityCard } from "./profile/TraderIdentityCard";
+import { TrustVerificationCard } from "./profile/TrustVerificationCard";
+import { BioOfferingsCard } from "./profile/BioOfferingsCard";
+import { RatesFaqsCard, FAQ_PRESETS } from "./profile/RatesFaqsCard";
+import { GrowthNotificationsCard } from "./profile/GrowthNotificationsCard";
+import { HomeownerIdentityCard } from "./profile/HomeownerIdentityCard";
+import { SafetyEmergencyCard } from "./profile/SafetyEmergencyCard";
 import { cn } from "@/src/lib/utils";
 import { 
   DndContext, 
@@ -317,16 +325,19 @@ const BiometricSettings: React.FC<{ user: any }> = ({ user }) => {
           </div>
           {available && (
             <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
               onClick={handleToggle}
               className={cn(
-                "w-14 h-8 rounded-full transition-colors relative flex-shrink-0",
-                enabled ? "bg-emerald-500" : "bg-slate-200"
+                "relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-black transition-colors duration-200 ease-in-out focus:outline-none",
+                enabled ? "bg-emerald-600" : "bg-slate-200"
               )}
             >
               <span
                 className={cn(
-                  "absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm",
-                  enabled ? "translate-x-6" : "translate-x-0"
+                  "pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs border border-black transition duration-200 ease-in-out",
+                  enabled ? "translate-x-5" : "translate-x-0.5"
                 )}
               />
             </button>
@@ -746,8 +757,17 @@ export default function Profile() {
            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
       });
+      if (!res.ok) {
+        console.warn(`Fetch payment methods failed with status ${res.status}`);
+        return;
+      }
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.warn("Fetch payment methods response was not JSON:", await res.text());
+        return;
+      }
       const data = await res.json();
-      if (data.paymentMethods) {
+      if (data && Array.isArray(data.paymentMethods)) {
         setSavedCards(data.paymentMethods);
       }
     } catch (err) {
@@ -982,12 +1002,23 @@ export default function Profile() {
         downloadUrl = await uploadStorageFile(file, `portfolio/${user.uid}/${Date.now()}_${file.name}`, { contentType: file.type });
       }
       
-      const newPortfolio = [...(profile.portfolio || []), downloadUrl];
+      const currentPortfolio = (profile.portfolio && profile.portfolio.length > 0)
+        ? profile.portfolio
+        : (profile.portfolioPhotos && profile.portfolioPhotos.length > 0)
+        ? profile.portfolioPhotos
+        : (profile.workPhotos && profile.workPhotos.length > 0)
+        ? profile.workPhotos
+        : (profile.images && profile.images.length > 0)
+        ? profile.images
+        : [];
+
+      const newPortfolioUpdated = [...currentPortfolio, downloadUrl];
       await updateDoc(doc(db, "users", user.uid), {
-        portfolio: newPortfolio
+        portfolio: newPortfolioUpdated,
+        portfolioPhotos: newPortfolioUpdated
       });
       
-      setProfile((prev: any) => ({ ...prev, portfolio: newPortfolio }));
+      setProfile((prev: any) => ({ ...prev, portfolio: newPortfolioUpdated, portfolioPhotos: newPortfolioUpdated }));
     } catch (err) {
       console.error("Error uploading portfolio image:", err);
       setError("Failed to upload portfolio image.");
@@ -999,11 +1030,22 @@ export default function Profile() {
   const removePortfolioImage = async (url: string) => {
     if (!user) return;
     try {
-      const newPortfolio = (profile.portfolio || []).filter((item: string) => item !== url);
+      const currentPortfolio = (profile.portfolio && profile.portfolio.length > 0)
+        ? profile.portfolio
+        : (profile.portfolioPhotos && profile.portfolioPhotos.length > 0)
+        ? profile.portfolioPhotos
+        : (profile.workPhotos && profile.workPhotos.length > 0)
+        ? profile.workPhotos
+        : (profile.images && profile.images.length > 0)
+        ? profile.images
+        : [];
+
+      const newPortfolio = currentPortfolio.filter((item: string) => item !== url);
       await updateDoc(doc(db, "users", user.uid), {
-        portfolio: newPortfolio
+        portfolio: newPortfolio,
+        portfolioPhotos: newPortfolio
       });
-      setProfile((prev: any) => ({ ...prev, portfolio: newPortfolio }));
+      setProfile((prev: any) => ({ ...prev, portfolio: newPortfolio, portfolioPhotos: newPortfolio }));
     } catch (err) {
       console.error("Error removing portfolio image:", err);
     }
@@ -1146,18 +1188,36 @@ export default function Profile() {
     setError(null);
     try {
       const tradesArray = editData.trades.split(",").map(t => t.trim()).filter(t => t !== "").slice(0, 15);
-      const tagsArray = editData.tags.split(",").map(t => t.trim()).filter(t => t !== "");
+      const tagsArray = editData.tags.split(",").map(t => t.trim()).filter(t => t !== "").slice(0, 15);
       
-      const finalData = {
+      const finalData: any = {
         ...editData,
         trades: tradesArray,
         tags: tagsArray,
         services: editData.services,
+        productsAndServices: editData.services,
         badges: editData.badges?.includes('local_business') 
           ? editData.badges 
           : [...(editData.badges || []), 'local_business'],
         searchFeedBadges: editData.searchFeedBadges || []
       };
+
+      if (editData.miniProfileSettings) {
+        finalData.miniProfilePricing = editData.miniProfileSettings;
+        if (editData.miniProfileSettings.hourlyRate !== undefined) finalData.hourlyRate = editData.miniProfileSettings.hourlyRate;
+        if (editData.miniProfileSettings.callOutFee !== undefined) finalData.callOutFee = editData.miniProfileSettings.callOutFee;
+        if (editData.miniProfileSettings.extraInfo !== undefined) finalData.extraInfo = editData.miniProfileSettings.extraInfo;
+      }
+      if (editData.instantMatchPricing) {
+        finalData.instantMatchSettings = editData.instantMatchPricing;
+        if (editData.instantMatchPricing.callOutFee !== undefined) finalData.emergencyCallOutFee = editData.instantMatchPricing.callOutFee;
+        if (editData.instantMatchPricing.hourlyRate !== undefined) finalData.emergencyHourlyRate = editData.instantMatchPricing.hourlyRate;
+        if (editData.instantMatchPricing.terms !== undefined) finalData.emergencyTerms = editData.instantMatchPricing.terms;
+        if (editData.instantMatchPricing.enabled !== undefined) {
+          finalData.isAvailableForEmergency = editData.instantMatchPricing.enabled;
+          finalData.isAvailableForInstantMatch = editData.instantMatchPricing.enabled;
+        }
+      }
       
       await updateDoc(doc(db, "users", user.uid), finalData);
       setProfile((prev: any) => ({ ...prev, ...finalData }));
@@ -1178,10 +1238,16 @@ export default function Profile() {
     if (!user) return;
     setIsSaving(true);
     try {
+      const cleaned = tempServices
+        .map((s: any) => (typeof s === "string" ? s.trim() : (s?.name || s?.title || s?.label || s?.service || "").trim()))
+        .filter((s: string) => s.length > 0)
+        .slice(0, 15);
+
       await updateDoc(doc(db, "users", user.uid), {
-        services: tempServices
+        services: cleaned,
+        productsAndServices: cleaned
       });
-      setProfile((prev: any) => ({ ...prev, services: tempServices }));
+      setProfile((prev: any) => ({ ...prev, services: cleaned, productsAndServices: cleaned }));
       setIsEditingServices(false);
     } catch (err) {
       console.error("Error saving services:", err);
@@ -1192,6 +1258,76 @@ export default function Profile() {
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRemoveTradeOrSkill = async (itemToRemove: string) => {
+    if (!user) return;
+    try {
+      const currentTrades = (Array.isArray(profile.trades) ? profile.trades : typeof profile.trades === "string" ? profile.trades.split(",") : [])
+        .map((t: any) => (typeof t === "string" ? t.trim() : (t?.name || t?.title || "").trim()))
+        .filter((t: string) => t.length > 0 && t.toLowerCase() !== itemToRemove.toLowerCase());
+
+      const currentSkills = (Array.isArray(profile.skills) ? profile.skills : [])
+        .map((s: any) => (typeof s === "string" ? s.trim() : (s?.name || s?.title || "").trim()))
+        .filter((s: string) => s.length > 0 && s.toLowerCase() !== itemToRemove.toLowerCase());
+
+      const currentCategories = (Array.isArray(profile.categories) ? profile.categories : [])
+        .map((c: any) => (typeof c === "string" ? c.trim() : (c?.name || c?.title || "").trim()))
+        .filter((c: string) => c.length > 0 && c.toLowerCase() !== itemToRemove.toLowerCase());
+
+      const currentServices = (Array.isArray(profile.services) ? profile.services : [])
+        .map((s: any) => (typeof s === "string" ? s.trim() : (s?.name || s?.title || "").trim()))
+        .filter((s: string) => s.length > 0 && s.toLowerCase() !== itemToRemove.toLowerCase());
+
+      const currentProductsAndServices = (Array.isArray(profile.productsAndServices) ? profile.productsAndServices : [])
+        .map((s: any) => (typeof s === "string" ? s.trim() : (s?.name || s?.title || "").trim()))
+        .filter((s: string) => s.length > 0 && s.toLowerCase() !== itemToRemove.toLowerCase());
+
+      const updates: any = {
+        trades: currentTrades,
+        skills: currentSkills,
+        categories: currentCategories,
+        services: currentServices,
+        productsAndServices: currentProductsAndServices
+      };
+
+      if (profile.primaryTrade && profile.primaryTrade.toLowerCase() === itemToRemove.toLowerCase()) {
+        updates.primaryTrade = currentTrades[0] || "";
+      }
+      if (profile.category && profile.category.toLowerCase() === itemToRemove.toLowerCase()) {
+        updates.category = currentTrades[0] || "";
+      }
+
+      await updateDoc(doc(db, "users", user.uid), updates);
+      setProfile((prev: any) => ({ ...prev, ...updates }));
+    } catch (err) {
+      console.error("Error removing trade/skill:", err);
+    }
+  };
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+    if (!user) return;
+    try {
+      const cleanTagVal = tagToRemove.replace(/^#+/, "").trim().toLowerCase();
+      const currentTags = (Array.isArray(profile.tags) ? profile.tags : typeof profile.tags === "string" ? profile.tags.split(",") : [])
+        .map((t: any) => (typeof t === "string" ? t.trim().replace(/^#+/, "") : (t?.name || t?.title || "").trim()))
+        .filter((t: string) => t.length > 0 && t.toLowerCase() !== cleanTagVal);
+
+      const currentSpecialisms = (Array.isArray(profile.specialisms) ? profile.specialisms : [])
+        .map((t: any) => (typeof t === "string" ? t.trim().replace(/^#+/, "") : (t?.name || t?.title || "").trim()))
+        .filter((t: string) => t.length > 0 && t.toLowerCase() !== cleanTagVal);
+
+      const updates: any = {
+        tags: currentTags,
+        specialisms: currentSpecialisms,
+        specialistTags: currentTags
+      };
+
+      await updateDoc(doc(db, "users", user.uid), updates);
+      setProfile((prev: any) => ({ ...prev, ...updates }));
+    } catch (err) {
+      console.error("Error removing tag:", err);
     }
   };
 
@@ -1253,7 +1389,21 @@ export default function Profile() {
   };
 
   const startEditingServices = () => {
-    setTempServices(profile?.services || []);
+    const raw = (Array.isArray(profile?.services) && profile.services.length > 0)
+      ? profile.services
+      : (Array.isArray(profile?.productsAndServices) && profile.productsAndServices.length > 0)
+      ? profile.productsAndServices
+      : (Array.isArray(profile?.offeredServices) && profile.offeredServices.length > 0)
+      ? profile.offeredServices
+      : (Array.isArray(profile?.specialistServices) && profile.specialistServices.length > 0)
+      ? profile.specialistServices
+      : [];
+
+    const stringList = raw
+      .map((s: any) => (typeof s === "string" ? s.trim() : (s?.name || s?.title || s?.label || s?.service || "").trim()))
+      .filter((s: string) => s.length > 0);
+
+    setTempServices(stringList);
     setIsEditingServices(true);
   };
 
@@ -1361,6 +1511,34 @@ export default function Profile() {
       }
     } finally {
       setIsSavingFaqs(false);
+    }
+  };
+
+  const handleToggleBadge = async (badgeId: string) => {
+    if (!user) return;
+    const currentBadges = profile?.professionalBadges || profile?.badges || [];
+    const updatedBadgesnest = currentBadges.includes(badgeId)
+      ? currentBadges.filter((b: string) => b !== badgeId)
+      : [...currentBadges, badgeId];
+
+    setProfile((prev: any) => ({
+      ...prev,
+      professionalBadges: updatedBadgesnest,
+      badges: updatedBadgesnest,
+    }));
+    setEditData((prev: any) => ({
+      ...prev,
+      badges: updatedBadgesnest,
+    }));
+
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        professionalBadges: updatedBadgesnest,
+        badges: updatedBadgesnest,
+      });
+      toast.success("Guarantees updated successfully!");
+    } catch (err) {
+      console.error("Error updating badges:", err);
     }
   };
 
@@ -1650,6 +1828,9 @@ export default function Profile() {
                     </div>
                   </div>
                   <button
+                    type="button"
+                    role="switch"
+                    aria-checked={profile?.requirePasscode === true}
                     onClick={async () => {
                       if (user?.uid) {
                         const newStatus = profile?.requirePasscode !== true;
@@ -1658,14 +1839,16 @@ export default function Profile() {
                       }
                     }}
                     className={cn(
-                      "w-12 h-7 rounded-full transition-colors relative flex-shrink-0",
-                      profile?.requirePasscode === true ? "bg-emerald-500" : "bg-slate-200"
+                      "relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-black transition-colors duration-200 ease-in-out focus:outline-none",
+                      profile?.requirePasscode === true ? "bg-emerald-600" : "bg-slate-200"
                     )}
                   >
-                    <span className={cn(
-                      "absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform shadow-sm",
-                      profile?.requirePasscode === true ? "translate-x-5" : "translate-x-0"
-                    )} />
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs border border-black transition duration-200 ease-in-out",
+                        profile?.requirePasscode === true ? "translate-x-5" : "translate-x-0.5"
+                      )}
+                    />
                   </button>
                 </div>
               </div>
@@ -2102,890 +2285,132 @@ export default function Profile() {
         </div>
       )}
 
-      <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 [&>div]:break-inside-avoid">
-      {/* Profile Card */}
-      <div className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-4 sm:p-6 mb-3 relative">
-        <div className="flex flex-col items-center">
-          <div className="relative mb-4">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-slate-900 flex items-center justify-center text-white text-2xl md:text-3xl font-bold overflow-hidden border-4 border-white/20 shadow-lg relative">
-              {profile.photoURL ? (
-                <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                profile.name?.charAt(0).toUpperCase() || "U"
-              )}
-              <BadgeOverlay 
-                badges={getTraderBadges(profile)} 
-                className="absolute -bottom-2 -left-2 -right-2 justify-center z-10" 
-              />
-            </div>
-            <label className="absolute bottom-0 right-0 w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors border border-black">
-              <Camera className="w-5 h-5 text-orange-500" />
-              <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
-            </label>
-          </div>
-          
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-slate-900 mb-1 flex items-center justify-center gap-2">
-              {profile.name}
-              {profile.referralBoostUntil && new Date(profile.referralBoostUntil) > new Date() && (
-                <div className="w-6 h-6 bg-yellow-400 rounded-lg flex items-center justify-center shadow-lg shadow-yellow-400/20" title="Profile Boost Active">
-                  <Zap className="w-4 h-4 text-slate-900 fill-slate-900" />
-                </div>
-              )}
-            </h2>
-            {isBusinessProfile && (
-              <div className="flex flex-col items-center gap-3 mb-8 mt-2">
-                <div className="flex items-stretch gap-3 bg-white p-2 rounded-[1.5rem] border border-black shadow-xl shadow-slate-200/50 w-full max-w-sm">
-                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-slate-900 rounded-2xl shadow-lg">
-                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                    <div className="flex flex-col items-start">
-                      <span className="font-black text-white text-lg leading-none">{profile.rating?.toFixed(1) || "5.0"}</span>
-                      <span className="text-slate-400 text-[9px] font-black uppercase tracking-tighter mt-0.5">{profile.totalReviews || 0} reviews</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-green-100/50 rounded-2xl border border-green-200/50">
-                    <div className="w-7 h-7 rounded-lg bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 shrink-0">
-                      <Users className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <div className="flex flex-col items-start">
-                      <span className="text-[8px] font-black text-green-900 uppercase tracking-widest leading-none mb-0.5">Recmd By</span>
-                      <span className="text-lg font-black text-green-900 leading-none">{profile.totalRecommendations || 0}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {activePortal === "anyroller" && profile.role !== "driver" && (
-              <div className="flex justify-center mt-3 mb-6">
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 rounded-2xl border border-black shadow-md">
-                  <Star className="w-5 h-5 text-slate-800 fill-slate-800" />
-                  <span className="font-black text-slate-900 text-lg">{profile.rating?.toFixed(1) || "5.0"}</span>
-                  <span className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Rider Rating</span>
-                </div>
-              </div>
-            )}
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-              {isBusinessProfile ? (
-                <>
-                  <p className="text-slate-500 text-sm font-medium">Professional Tradesperson</p>
-                  <span className="text-slate-300">•</span>
-                  <p className="text-slate-500 text-sm flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" />
-                    {profile.postcode || profile.location || "Location not set"}
-                  </p>
-                </>
-              ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-slate-500 text-[11px] sm:text-xs md:text-sm truncate w-full max-w-[200px] sm:max-w-xs">{profile.email}</p>
-                  {profile.homeownerRating && (
-                    <div className="flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                      <Star className="w-3 h-3 text-blue-600 fill-blue-600" />
-                      <span className="text-[10px] font-bold text-blue-700">
-                        Homeowner Rating: {profile.homeownerRating?.toFixed(1) || '5.0'} ({profile.totalHomeownerReviews || 0})
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-              <span className="text-slate-300">•</span>
-              <p className="text-slate-500 text-sm font-medium flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" />
-                Member since {new Date(profile.createdAt?.seconds * 1000 || Date.now()).getFullYear()}
-              </p>
-            </div>
-            <button 
-              onClick={() => setIsEditing(true)}
-              className="absolute top-5 right-8 p-2 rounded-full bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-            >
-              <Pencil className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Phase 1: Performance Stats */}
-        {isBusinessProfile && (
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-                <Briefcase className="w-5 h-5 text-slate-600" />
-              </div>
-              <p className="text-xl font-bold text-slate-900">{profile.totalJobsDone || 0}</p>
-              <p className="text-xs text-slate-500 font-medium">Jobs</p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-                <Clock className="w-5 h-5 text-slate-600" />
-              </div>
-              <p className="text-xl font-bold text-slate-900">{profile.acceptanceRate || 100}%</p>
-              <p className="text-xs text-slate-500 font-medium">Response</p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center mb-2">
-                <Shield className="w-5 h-5 text-slate-600" />
-              </div>
-              <p className="text-xl font-bold text-slate-900">{profile.trustScore || 95}</p>
-              <p className="text-xs text-slate-500 font-medium">Trust</p>
-            </div>
-          </div>
-        )}
-
-        {/* Badges & Achievements Section */}
-        {isBusinessProfile && (
-          <div className="mt-8">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Award className="w-4 h-4" />
-              Badges & Milestones
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {getTraderBadges(profile).map((badge) => (
-                <div 
-                  key={badge.id}
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-2xl border transition-all hover:shadow-md",
-                    badge.bgColor,
-                    badge.color,
-                    "border-current/10"
-                  )}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm shrink-0">
-                    {badge.icon}
-                  </div>
-                  <div>
-                    <p className="font-black text-xs uppercase tracking-tight">{badge.label}</p>
-                    <p className="text-[10px] opacity-70 font-medium leading-tight">{badge.description}</p>
-                  </div>
-                </div>
-              ))}
-              {getTraderBadges(profile).length === 0 && (
-                <div className="col-span-full py-6 text-center bg-slate-50 rounded-2xl border border-dashed border-black">
-                  <p className="text-xs text-slate-400 font-medium italic">Complete more jobs to earn badges!</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {isBusinessProfile && isBannerAdsEnabled && (
-          <div className="mt-8 mb-2">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Zap className="w-4 h-4" />
-              Promotion & Advertising
-            </h3>
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="relative z-10">
-                <h4 className="text-xl font-bold mb-1">Traders Banner Ad Studio</h4>
-                <p className="text-blue-100 text-sm max-w-sm">Promote your profile natively across the platform. Set a budget, reach more homeowners, and track your ad performance down to the penny.</p>
-              </div>
-              <div className="relative z-10 shrink-0 w-full md:w-auto">
-                <Link to="/trader/banner-ads" className="w-full md:w-auto bg-white text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-colors inline-block text-center shadow-lg">
-                  Open Ad Studio
-                </Link>
-              </div>
-              <div className="absolute top-0 right-0 opacity-10 pointer-events-none transform translate-x-1/3 -translate-y-1/4">
-                <Zap className="w-64 h-64" />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Phase 1: Certifications/Achievements */}
-      {isBusinessProfile && (
-        <TraderVideoVerificationCard 
-          profile={profile} 
-          onUpdateProfile={(updates) => {
-            setProfile((prev: any) => ({ ...prev, ...updates }));
-            setEditData(prev => ({ ...prev, ...updates }));
-          }} 
+      {isBusinessProfile ? (
+        <TraderIdentityCard
+          profile={profile}
+          onEditClick={() => setIsEditing(true)}
+          onPhotoUpload={handlePhotoUpload}
+          isUploading={isUploading}
+        />
+      ) : (
+        <HomeownerIdentityCard
+          profile={profile}
+          onEditClick={() => setIsEditing(true)}
+          onPhotoUpload={handlePhotoUpload}
+          isUploading={isUploading}
+          activePortal={activePortal}
         />
       )}
 
-      {/* Phase 1: Certifications/Achievements */}
+      {/* Card 2: Trust, Video Verification & AI Coach */}
       {isBusinessProfile && (
-        <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-4 mb-8">
-          <div 
-            className="flex items-center justify-between cursor-pointer px-2"
-            onClick={() => setIsAchievementsExpanded(!isAchievementsExpanded)}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500">
-                <Star className="w-5 h-5 fill-current" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900">Achievements</h3>
-            </div>
-            <motion.div
-              animate={{ rotate: isAchievementsExpanded ? 180 : 0 }}
-              transition={{ duration: 0.3 }}
-              className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-slate-100 transition-colors"
-            >
-              <ChevronDown className="w-5 h-5 text-slate-500" />
-            </motion.div>
-          </div>
-
-          <AnimatePresence>
-            {isAchievementsExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="overflow-hidden"
-              >
-                <div className="grid grid-cols-2 gap-4 pt-6">
-                  <div className="bg-blue-50 p-4 rounded-2xl flex items-center gap-3 border border-blue-100">
-                    <Shield className="w-8 h-8 text-blue-600" />
-                    <div>
-                      <p className="font-bold text-slate-900 text-lg">{profile.trustScore || 95} Trust Score</p>
-                      <p className="text-xs text-slate-600">Highly reliable professional</p>
-                    </div>
-                  </div>
-                  <div className="bg-orange-50 p-4 rounded-2xl flex items-center gap-3 border border-orange-100">
-                    <Star className="w-8 h-8 text-orange-500 fill-orange-500" />
-                    <div>
-                      <p className="font-bold text-slate-900 text-lg">Top Rated</p>
-                      <p className="text-xs text-slate-600">5.0 average rating</p>
-                    </div>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-2xl flex items-center gap-3 border border-green-100">
-                    <Check className="w-8 h-8 text-green-600" />
-                    <div>
-                      <p className="font-bold text-slate-900 text-lg">Verified</p>
-                      <p className="text-xs text-slate-600">Identity & Trade checked</p>
-                    </div>
-                  </div>
-                  <div className="bg-amber-50 p-4 rounded-2xl flex items-center gap-3 border border-amber-100">
-                    <Zap className="w-8 h-8 text-amber-600" />
-                    <div>
-                      <p className="font-bold text-slate-900 text-lg">Responsive</p>
-                      <p className="text-xs text-slate-600">100% response rate</p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <TrustVerificationCard
+          profile={profile}
+          user={user}
+          onUpdateProfile={(updates) => {
+            setProfile((prev: any) => ({ ...prev, ...updates }));
+            setEditData((prev: any) => ({ ...prev, ...updates }));
+          }}
+          isVerificationExpanded={isVerificationExpanded}
+          setIsVerificationExpanded={setIsVerificationExpanded}
+          verificationError={verificationError}
+          expiryDates={expiryDates}
+          setExpiryDates={setExpiryDates}
+          privacyConsent={privacyConsent}
+          setPrivacyConsent={setPrivacyConsent}
+          handleVerificationUpload={handleVerificationUpload}
+          isUploading={isUploading}
+        />
       )}
 
-      {/* Products and Services Section */}
+      {/* Card 3: Bio, Specialist Skills, Services & Work Portfolio */}
       {isBusinessProfile && (
-        <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8 relative">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-                <Briefcase className="w-5 h-5" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Products and Services</h3>
-            </div>
-            
-            {!isEditingServices ? (
-              <div className="flex gap-2">
-                <button 
-                  onClick={startEditingServices}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all text-[11px] font-black uppercase tracking-wider border border-blue-100"
-                >
-                  <Pencil className="w-3 h-3" />
-                  Edit List
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2 w-full sm:w-auto">
-                <button 
-                  onClick={handleSaveServices}
-                  disabled={isSaving}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all text-[11px] font-black uppercase tracking-wider shadow-sm disabled:opacity-50"
-                >
-                  {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                  Save
-                </button>
-                <button 
-                  onClick={cancelEditingServices}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all text-[11px] font-black uppercase tracking-wider border border-black"
-                >
-                  <X className="w-3 h-3" />
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
-
-          {!isEditingServices ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(profile.services && profile.services.length > 0) ? (
-                profile.services.map((service: string, index: number) => (
-                  <div key={index} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-black hover:border-blue-200 hover:bg-blue-50/50 transition-all">
-                    <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
-                    <span className="text-sm font-bold text-slate-700 leading-relaxed">{service}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="col-span-full text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-black">
-                  <p className="text-sm text-slate-400 italic mb-4">No services added yet. Add your services to attract more homeowners.</p>
-                  <button 
-                    onClick={startEditingServices}
-                    className="px-4 py-2 bg-white border border-black text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors"
-                  >
-                    Add Services
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-500">
-                Add all the specific services and products you offer. These will be visible on your public profile.
-              </p>
-              
-              <div className="flex gap-2 sticky top-0 bg-white/90 backdrop-blur-sm py-2 z-20 border-b border-slate-50">
-                <input 
-                  type="text"
-                  placeholder="e.g. Boiler cleaning, servicing & repair"
-                  className="flex-1 min-w-0 p-3 rounded-xl border border-black focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm"
-                  value={newService}
-                  onChange={(e) => setNewService(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newService.trim()) {
-                      e.preventDefault();
-                      setTempServices([...tempServices, newService.trim()]);
-                      setNewService("");
-                    }
-                  }}
-                  autoFocus
-                />
-                <button 
-                  onClick={() => {
-                    if (newService.trim()) {
-                      setTempServices([...tempServices, newService.trim()]);
-                      setNewService("");
-                    }
-                  }}
-                  className="px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm font-bold text-sm flex items-center justify-center gap-2 shrink-0"
-                >
-                  <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {tempServices.map((service: string, index: number) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-black group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                      <span className="text-sm font-medium text-slate-700">{service}</span>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        const updatedServices = tempServices.filter((_: any, i: number) => i !== index);
-                        setTempServices(updatedServices);
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                
-                {tempServices.length === 0 && (
-                  <div className="col-span-full text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-black">
-                    <p className="text-sm text-slate-400 italic">No services added yet.</p>
-                  </div>
-                )}
-              </div>
-              
-              {tempServices.length > 0 && (
-                <div className="flex justify-end pt-2">
-                  <button 
-                    onClick={() => {
-                      if (window.confirm("Are you sure you want to clear all services?")) {
-                        setTempServices([]);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-all text-[11px] font-black uppercase tracking-wider border border-red-100"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Clear All
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <BioOfferingsCard
+          profile={profile}
+          onEditProfile={() => setIsEditing(true)}
+          onOpenBioInfo={() => setShowBioInfo(true)}
+          onToggleBadge={handleToggleBadge}
+          onRemoveTrade={handleRemoveTradeOrSkill}
+          onRemoveTag={handleRemoveTag}
+          isEditingServices={isEditingServices}
+          servicesList={tempServices}
+          newServiceInput={newService}
+          setNewServiceInput={setNewService}
+          handleAddService={() => {
+            if (tempServices.length >= 15) {
+              alert("Maximum 15 skills & services allowed per trader profile.");
+              return;
+            }
+            if (newService.trim()) {
+              setTempServices([...tempServices, newService.trim()]);
+              setNewService("");
+            }
+          }}
+          handleRemoveService={(index) => {
+            setTempServices(tempServices.filter((_: any, i: number) => i !== index));
+          }}
+          handleClearAllServices={() => {
+            if (window.confirm("Are you sure you want to clear all services?")) {
+              setTempServices([]);
+            }
+          }}
+          startEditingServices={startEditingServices}
+          saveServices={handleSaveServices}
+          cancelEditingServices={cancelEditingServices}
+          portfolioImages={profile.portfolio || []}
+          handlePortfolioUpload={handlePortfolioUpload}
+          handleRemovePortfolioImage={removePortfolioImage}
+          handleDragEnd={handleDragEnd}
+          isUploadingPortfolio={isUploadingPortfolio}
+        />
       )}
 
-      {/* Phase 2: About & Specializations */}
-      <div className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-4 sm:p-6 mb-3">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-bold text-slate-900">About</h3>
-            {isBusinessProfile && (
-              <button 
-                onClick={() => setShowBioInfo(true)}
-                className="p-1 rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
-                title="How we use your bio"
-              >
-                <Info className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <button 
-            onClick={() => setIsEditing(true)}
-            className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="text-slate-600 text-sm leading-relaxed mb-6">{profile.bio || "No bio provided."}</p>
-        
-        {isBusinessProfile && (
-          <>
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-slate-900">Skills/Services</h4>
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
-              >
-                <Pencil className="w-3 h-3" />
-                Add/Edit Skills
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {profile.trades?.map((trade: string) => (
-                <span key={trade} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">
-                  {trade}
-                </span>
-              ))}
-              {profile.tags?.map((tag: string) => (
-                <span key={tag} className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-6 pt-6 border-t-4 border-dotted border-black">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-bold text-slate-900">Professional Badges</h4>
-                <button 
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
-                >
-                  <Pencil className="w-3 h-3" />
-                  Edit prof badges
-                </button>
-              </div>
-              {(!profile.badges || profile.badges.length === 0) ? (
-                <div className="bg-slate-50 border border-black rounded-xl p-4 text-center">
-                  <Award className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm text-slate-500 font-medium">No professional badges selected yet.</p>
-                  <button 
-                    onClick={() => setIsEditing(true)}
-                    className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700"
-                  >
-                    Add badges to stand out
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {profile.badges.map((badgeId: string) => {
-                    const badge = PROFESSIONAL_BADGES.find(b => b.id === badgeId);
-                    if (!badge) return null;
-                    const Icon = { ShieldCheck, Clock, FileText, Shield, CheckCircle, MapPin, Heart, Star }[badge.icon] as any;
-                    
-                    const colorClasses: Record<string, string> = {
-                      blue: "bg-blue-50 text-blue-700 border-blue-100",
-                      red: "bg-red-50 text-red-700 border-red-100",
-                      green: "bg-green-50 text-green-700 border-green-100",
-                      indigo: "bg-indigo-50 text-indigo-700 border-indigo-100",
-                      amber: "bg-amber-50 text-amber-700 border-amber-100",
-                      slate: "bg-slate-50 text-slate-700 border border-black",
-                      rose: "bg-rose-50 text-rose-700 border-rose-100"
-                    };
-
-                    return (
-                      <div 
-                        key={badgeId} 
-                        className={cn(
-                          "flex items-center gap-2.5 p-3 rounded-2xl border transition-all hover:shadow-md hover:shadow-slate-200/50",
-                          colorClasses[badge.color] || colorClasses.slate
-                        )}
-                      >
-                        <div className="shrink-0">
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <span className="text-xs font-black leading-tight">{badge.name}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 pt-6 border-t-4 border-dotted border-black">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-bold text-slate-900">Mini Profile Card Settings</h4>
-                <button 
-                  onClick={() => setIsEditingMiniProfile(true)}
-                  className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
-                >
-                  <Pencil className="w-3 h-3" />
-                  Edit settings
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Call-Out Fee</p>
-                    <p className="text-2xl font-black text-slate-900 leading-none">£{profile.miniProfileSettings?.callOutFee || 0}</p>
-                  </div>
-                  <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Hourly Rate</p>
-                    <p className="text-2xl font-black text-slate-900 leading-none">£{profile.miniProfileSettings?.hourlyRate || 0}</p>
-                  </div>
-                </div>
-                {profile.miniProfileSettings?.extraInfo && (
-                  <div className="bg-slate-50 border border-black p-4 rounded-2xl">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Extra Info</p>
-                    <p className="text-sm text-slate-700 font-medium">{profile.miniProfileSettings.extraInfo}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t-4 border-dotted border-black">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-bold text-slate-900">Instant Match Settings</h4>
-                <button 
-                  onClick={() => setIsEditingIM(true)}
-                  className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
-                >
-                  <Pencil className="w-3 h-3" />
-                  Edit Settings
-                </button>
-              </div>
-              
-              {!profile.isAvailableForInstantMatch ? (
-                <div className="bg-slate-50 border border-black rounded-xl p-4 text-center">
-                  <Zap className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm text-slate-500 font-medium">Instant Match is currently disabled.</p>
-                  <button 
-                    onClick={() => setIsEditingIM(true)}
-                    className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700"
-                  >
-                    Enable Instant Match
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Call-Out Fee</p>
-                      <p className="text-2xl font-black text-slate-900 leading-none">£{profile.instantMatchPricing?.callOutFee || 0}</p>
-                    </div>
-                    <div className="bg-slate-50 border border-black p-4 rounded-2xl flex flex-col items-center justify-center">
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Hourly Rate</p>
-                      <p className="text-2xl font-black text-slate-900 leading-none">£{profile.instantMatchPricing?.hourlyRate || 0}</p>
-                    </div>
-                  </div>
-                  {profile.instantMatchPricing?.terms && (
-                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl">
-                      <p className="text-[10px] text-amber-700/70 font-black uppercase tracking-widest mb-1">Terms & Conditions</p>
-                      <p className="text-sm font-bold text-amber-900">{profile.instantMatchPricing.terms}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Frequently Asked Questions (FAQs) Manager Section */}
-            <div id="faqs" className="mt-6 pt-6 border-t-4 border-dotted border-black">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <HelpCircle className="w-5 h-5 text-indigo-600" />
-                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">Frequently Asked Questions (FAQs)</h4>
-                </div>
-                <div className="flex items-center gap-2">
-                  {!isEditingFaqs ? (
-                    <button 
-                      type="button"
-                      onClick={() => setIsEditingFaqs(true)}
-                      className="flex items-center gap-1 text-blue-600 text-xs font-bold hover:underline cursor-pointer"
-                    >
-                      <Pencil className="w-3 h-3" />
-                      Manage FAQs
-                    </button>
-                  ) : (
-                    <button 
-                      type="button"
-                      onClick={handleSaveFaqs}
-                      disabled={isSavingFaqs}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
-                    >
-                      {isSavingFaqs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      Save FAQs
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                Answer common customer questions (like emergency callouts or free estimates) on your public profile to build trust and increase quote requests.
-              </p>
-
-              {/* Quick Preset Questions Bar */}
-              <div className="bg-slate-50 border border-black rounded-2xl p-4 mb-4">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>1-Click Preset Templates:</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {FAQ_PRESETS.map((preset, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleAddPresetFaq(preset)}
-                      className="text-[11px] font-bold bg-white text-slate-800 hover:text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-xl border border-black shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3 text-indigo-600" />
-                      {preset.question}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* List of FAQs */}
-              <div className="space-y-3">
-                {faqs.map((faq, index) => (
-                  <div key={faq.id || index} className="p-4 bg-white rounded-2xl border border-black shadow-xs space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
-                        Q{index + 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteFaq(faq.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                        title="Remove FAQ"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Question
-                      </label>
-                      <input
-                        type="text"
-                        value={faq.question}
-                        onChange={(e) => handleUpdateFaq(faq.id, "question", e.target.value)}
-                        placeholder="e.g. Do you offer emergency callouts?"
-                        className="w-full p-2.5 text-sm font-bold border border-black rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Answer
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={faq.answer}
-                        onChange={(e) => handleUpdateFaq(faq.id, "answer", e.target.value)}
-                        placeholder="e.g. Yes, we offer 24/7 emergency callout services with rapid local response times."
-                        className="w-full p-2.5 text-xs text-slate-800 border border-black rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                {faqs.length === 0 && (
-                  <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-black">
-                    <HelpCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs text-slate-500 font-medium">No FAQs added to your profile yet.</p>
-                    <button
-                      type="button"
-                      onClick={handleAddCustomFaq}
-                      className="mt-2 text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
-                    >
-                      + Add your first custom question & answer
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-between mt-4">
-                <button
-                  type="button"
-                  onClick={handleAddCustomFaq}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-black transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Custom Q&A
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveFaqs}
-                  disabled={isSavingFaqs}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                >
-                  {isSavingFaqs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Save All FAQs
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Portfolio Section (Tradespeople only) */}
+      {/* Card 4: Standard Rates, Instant Match & Customer FAQs */}
       {isBusinessProfile && (
-        <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
-                <ImageIcon className="w-5 h-5" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Work Portfolio</h3>
-            </div>
-            <label className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer hover:bg-blue-700 transition-all active:scale-95">
-              {isUploadingPortfolio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Upload Image
-              <input 
-                type="file" 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handlePortfolioUpload} 
-                disabled={isUploadingPortfolio} 
-              />
-            </label>
-          </div>
-
-          {profile.portfolio && profile.portfolio.length > 0 ? (
-            <DndContext 
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext 
-                items={profile.portfolio}
-                strategy={rectSortingStrategy}
-              >
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {profile.portfolio.map((url: string) => (
-                    <SortablePortfolioItem 
-                      key={url} 
-                      url={url} 
-                      onRemove={removePortfolioImage} 
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          ) : (
-            <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-black">
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
-                <ImageIcon className="w-6 h-6 text-slate-300" />
-              </div>
-              <p className="text-slate-500 text-sm font-medium">No portfolio images yet.</p>
-              <p className="text-slate-400 text-xs mt-1">Upload photos of your past work to build trust.</p>
-            </div>
-          )}
-        </div>
+        <RatesFaqsCard
+          profile={profile}
+          onEditMiniProfile={() => setIsEditingMiniProfile(true)}
+          onEditInstantMatch={() => setIsEditingIM(true)}
+          faqs={faqs}
+          isEditingFaqs={isEditingFaqs}
+          setIsEditingFaqs={setIsEditingFaqs}
+          isSavingFaqs={isSavingFaqs}
+          handleSaveFaqs={handleSaveFaqs}
+          handleAddPresetFaq={handleAddPresetFaq}
+          handleUpdateFaq={handleUpdateFaq}
+          handleDeleteFaq={handleDeleteFaq}
+          handleAddCustomFaq={handleAddCustomFaq}
+        />
       )}
 
-      {/* Safety & Emergency Section */}
+      {/* Homeowner Safety & Emergency Card */}
       {profile.role === "homeowner" && (
-        <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8" id="safety">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Safety & Emergency Contacts</h3>
-            </div>
-            {!isAddingEmergency ? (
-              <button 
-                onClick={() => setIsAddingEmergency(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-all text-[11px] font-black uppercase tracking-wider border border-orange-100"
-              >
-                <Plus className="w-3 h-3" />
-                Add Contact
-              </button>
-            ) : (
-              <button 
-                onClick={() => setIsAddingEmergency(false)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all text-[11px] font-black uppercase tracking-wider border border-black"
-              >
-                <X className="w-3 h-3" />
-                Cancel
-              </button>
-            )}
-          </div>
+        <SafetyEmergencyCard
+          profile={profile}
+          isAddingEmergency={isAddingEmergency}
+          setIsAddingEmergency={setIsAddingEmergency}
+          newEmergencyContact={newEmergencyContact}
+          setNewEmergencyContact={setNewEmergencyContact}
+          handleAddEmergencyContact={handleAddEmergencyContact}
+          handleRemoveEmergencyContact={handleRemoveEmergencyContact}
+          isSaving={isSaving}
+        />
+      )}
 
-          <div className="space-y-4">
-            {isAddingEmergency && (
-              <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input 
-                    type="text" 
-                    placeholder="Contact Name"
-                    className="p-3 bg-white border border-orange-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                    value={newEmergencyContact.name}
-                    onChange={(e) => setNewEmergencyContact({ ...newEmergencyContact, name: e.target.value })}
-                  />
-                  <input 
-                    type="tel" 
-                    placeholder="Phone Number"
-                    className="p-3 bg-white border border-orange-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                    value={newEmergencyContact.phone}
-                    onChange={(e) => setNewEmergencyContact({ ...newEmergencyContact, phone: e.target.value })}
-                  />
-                </div>
-                <button 
-                  onClick={handleAddEmergencyContact}
-                  disabled={isSaving || !newEmergencyContact.name || !newEmergencyContact.phone}
-                  className="w-full py-3 bg-orange-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 disabled:opacity-50"
-                >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Save Emergency Contact"}
-                </button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(profile.emergencyContacts || []).length === 0 ? (
-                <div className="col-span-full py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-black">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
-                    <Phone className="w-6 h-6 text-slate-300" />
-                  </div>
-                  <p className="text-slate-500 text-sm font-medium">No emergency contacts listed.</p>
-                  <p className="text-slate-400 text-xs mt-1">Add trusted contacts for emergency dispatch shared with drivers.</p>
-                </div>
-              ) : (
-                profile.emergencyContacts.map((contact: any, index: number) => (
-                  <div key={index} className="p-4 bg-slate-50 rounded-2xl border border-black flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-orange-500">
-                        <Phone className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{contact.name}</p>
-                        <p className="text-[10px] text-slate-500 font-bold">{contact.phone}</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => handleRemoveEmergencyContact(index)}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Card 5: Growth, Native Ads, Notifications & Recurring Services (Traders) */}
+      {isBusinessProfile && (
+        <GrowthNotificationsCard
+          isBusinessProfile={isBusinessProfile}
+          isBannerAdsEnabled={isBannerAdsEnabled}
+          notificationSettings={notificationSettings}
+          setNotificationSettings={setNotificationSettings}
+          handleSaveNotifications={handleSaveNotifications}
+          loadingRecurring={loadingRecurring}
+          recurringSchedules={recurringSchedules}
+          currentUserId={user?.uid}
+          userRole={profile.role}
+          handleUpdateRecurringStatus={handleUpdateRecurringStatus}
+        />
       )}
 
       {/* Phase 3: Grouped Menu List */}
@@ -3478,6 +2903,9 @@ export default function Profile() {
                                             </div>
                                           </div>
                                           <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={profile?.requirePasscode === true}
                                             onClick={async () => {
                                               if (user?.uid) {
                                                 const newStatus = profile?.requirePasscode !== true;
@@ -3485,14 +2913,16 @@ export default function Profile() {
                                               }
                                             }}
                                             className={cn(
-                                              "w-14 h-8 rounded-full transition-colors relative flex-shrink-0",
-                                              profile?.requirePasscode === true ? "bg-emerald-500" : "bg-slate-200"
+                                              "relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-black transition-colors duration-200 ease-in-out focus:outline-none",
+                                              profile?.requirePasscode === true ? "bg-emerald-600" : "bg-slate-200"
                                             )}
                                           >
-                                            <span className={cn(
-                                              "absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform shadow-sm",
-                                              profile?.requirePasscode === true ? "translate-x-6" : "translate-x-0"
-                                            )} />
+                                            <span
+                                              className={cn(
+                                                "pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs border border-black transition duration-200 ease-in-out",
+                                                profile?.requirePasscode === true ? "translate-x-5" : "translate-x-0.5"
+                                              )}
+                                            />
                                           </button>
                                         </div>
                                       </div>
@@ -3534,587 +2964,10 @@ export default function Profile() {
                     })}
             </div>
           </div>
-        )})}
+        );
+      })}
       {/* Grouped Menu List End */}
       </>
-
-        {/* Notification Settings Section */}
-        {isBusinessProfile && (
-          <div id="notifications" className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-3 break-inside-avoid">
-            <button 
-              onClick={() => setIsNotificationsExpanded(!isNotificationsExpanded)}
-              className="w-full p-6 border-b border-slate-50 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
-            >
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Set your Notification preferences</h2>
-                <p className="text-sm text-slate-500">Manage how and when you receive job lead alerts.</p>
-              </div>
-              <div className="flex items-center gap-4">
-                {isSaving && (
-                  <div className="flex items-center gap-2 text-blue-600">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-xs font-bold">Saving...</span>
-                  </div>
-                )}
-                <motion.div
-                  animate={{ rotate: isNotificationsExpanded ? 180 : 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                >
-                  <ChevronDown className="w-5 h-5 text-slate-400" />
-                </motion.div>
-              </div>
-            </button>
-            
-            <AnimatePresence>
-              {isNotificationsExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
-                >
-                  <div className="p-6 space-y-6">
-                    {/* Quiet Hours Toggle */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
-                          <Moon className="w-5 h-5 text-orange-600" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-900">Quiet Hours (Do Not Disturb)</h3>
-                          <p className="text-xs text-slate-500">Mute lead notifications during specific times.</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          const newSettings = { ...notificationSettings, quietHoursEnabled: !notificationSettings.quietHoursEnabled };
-                          setNotificationSettings(newSettings);
-                          handleSaveNotifications(newSettings);
-                        }}
-                        className={cn(
-                          "w-12 h-6 rounded-full transition-colors relative",
-                          notificationSettings.quietHoursEnabled ? "bg-blue-600" : "bg-slate-200"
-                        )}
-                      >
-                        <span className={cn(
-                          "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform",
-                          notificationSettings.quietHoursEnabled ? "translate-x-6" : "translate-x-0"
-                        )} />
-                      </button>
-                    </div>
-
-                    {/* Quiet Hours Time Range */}
-                    {notificationSettings.quietHoursEnabled && (
-                      <div className="grid grid-cols-2 gap-4 pl-13">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 text-center">Start Time</label>
-                          <div className="relative">
-                            <select
-                              value={notificationSettings.quietHoursStart}
-                              onChange={(e) => {
-                                const newSettings = { ...notificationSettings, quietHoursStart: e.target.value };
-                                setNotificationSettings(newSettings);
-                                handleSaveNotifications(newSettings);
-                              }}
-                              className="w-full p-4 bg-slate-50 border border-black rounded-2xl text-lg font-black text-slate-900 appearance-none focus:outline-none focus:ring-4 focus:ring-blue-600/10 transition-all text-center cursor-pointer"
-                            >
-                              {TIME_OPTIONS.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                              <ChevronDown className="w-5 h-5" />
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 text-center">End Time</label>
-                          <div className="relative">
-                            <select
-                              value={notificationSettings.quietHoursEnd}
-                              onChange={(e) => {
-                                const newSettings = { ...notificationSettings, quietHoursEnd: e.target.value };
-                                setNotificationSettings(newSettings);
-                                handleSaveNotifications(newSettings);
-                              }}
-                              className="w-full p-4 bg-slate-50 border border-black rounded-2xl text-lg font-black text-slate-900 appearance-none focus:outline-none focus:ring-4 focus:ring-blue-600/10 transition-all text-center cursor-pointer"
-                            >
-                              {TIME_OPTIONS.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                              <ChevronDown className="w-5 h-5" />
-                            </div>
-                          </div>
-                        </div>
-                        <p className="col-span-2 text-[10px] text-slate-400 italic">
-                          * Notifications received during these hours will still be visible in your "Find Work" feed when you wake up.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Other Channels */}
-                    <div className="space-y-4 pt-4 border-t border-slate-50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                            <Bell className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-slate-900">Push Notifications</h3>
-                            <p className="text-xs text-slate-500">Receive alerts on your device.</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const newSettings = { ...notificationSettings, pushEnabled: !notificationSettings.pushEnabled };
-                            setNotificationSettings(newSettings);
-                            handleSaveNotifications(newSettings);
-                          }}
-                          className={cn(
-                            "w-12 h-6 rounded-full transition-colors relative",
-                            notificationSettings.pushEnabled ? "bg-blue-600" : "bg-slate-200"
-                          )}
-                        >
-                          <span className={cn(
-                            "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform",
-                            notificationSettings.pushEnabled ? "translate-x-6" : "translate-x-0"
-                          )} />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center">
-                            <Mail className="w-5 h-5 text-slate-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-slate-900">Email Alerts</h3>
-                            <p className="text-xs text-slate-500">Get lead summaries via email.</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const newSettings = { ...notificationSettings, emailEnabled: !notificationSettings.emailEnabled };
-                            setNotificationSettings(newSettings);
-                            handleSaveNotifications(newSettings);
-                          }}
-                          className={cn(
-                            "w-12 h-6 rounded-full transition-colors relative",
-                            notificationSettings.emailEnabled ? "bg-blue-600" : "bg-slate-200"
-                          )}
-                        >
-                          <span className={cn(
-                            "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform",
-                            notificationSettings.emailEnabled ? "translate-x-6" : "translate-x-0"
-                          )} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
-        {/* Payment Methods (AnyRoller Rider Only) */}
-
-      {/* Verification Center (Tradespeople only) */}
-      {isBusinessProfile && (
-        <div id="verification" className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden mb-3 break-inside-avoid">
-          <button 
-            onClick={() => setIsVerificationExpanded(!isVerificationExpanded)}
-            className="w-full p-5 flex items-center justify-between hover:bg-slate-50 transition-colors"
-          >
-            <div className="flex items-center gap-4 text-left">
-              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
-                <Shield className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 leading-tight">Verification Center</h3>
-                <p className="text-xs text-slate-500 font-medium">Manage your professional credentials</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className={cn(
-                "text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider shadow-sm",
-                profile.verificationStatus === "verified" ? "bg-green-100 text-green-700 border border-green-200" :
-                profile.verificationStatus === "pending" ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-slate-100 text-slate-500 border border-black"
-              )}>
-                {profile.verificationStatus || "Unverified"}
-              </span>
-              <motion.div
-                animate={{ rotate: isVerificationExpanded ? 180 : 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-              >
-                <ChevronDown className="w-6 h-6 text-slate-400" />
-              </motion.div>
-            </div>
-          </button>
-
-          <AnimatePresence>
-            {isVerificationExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
-              >
-                <div className="p-5 pt-0 border-t border border-black">
-                  {user?.isAnonymous && (
-                    <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3 mt-6">
-                      <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-bold text-amber-900">Guest Account</p>
-                        <p className="text-xs text-amber-700 leading-relaxed">
-                          You are currently using a guest account. While you can test the verification process, we recommend signing up to save your verified status permanently.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {verificationError && (
-                    <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold flex items-center gap-2 mt-6">
-                      <AlertCircle className="w-4 h-4" />
-                      {verificationError}
-                    </div>
-                  )}
-
-                  <div className="space-y-4 mt-6">
-                    {/* Base Requirements for all trades */}
-            {["Identity Verification (Passport/Driving License)", "Public Liability Insurance"].map((cert, idx) => {
-              const existingDoc = profile.verificationDocs?.find((d: any) => d.type === cert);
-              return (
-                <div key={`base-${idx}`} className="p-4 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-700">{cert}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Required for all platform tradespeople</p>
-                      {existingDoc?.rejectionReason && (
-                        <p className="text-[10px] text-red-600 font-medium italic mt-1">Rejected: {existingDoc.rejectionReason}</p>
-                      )}
-                      {existingDoc?.autoCheck && existingDoc.status !== "rejected" && (
-                        <div className="mt-2 p-2 bg-white/50 rounded-lg border border-blue-100/50">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <Zap className="w-3 h-3 text-blue-500" />
-                            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider">Auto-Check Result</span>
-                          </div>
-                          <p className="text-[10px] text-slate-600 leading-tight">{existingDoc.autoCheck.message}</p>
-                        </div>
-                      )}
-                      {existingDoc?.expiryDate && (
-                        <p className={cn(
-                          "text-[10px] font-bold mt-1",
-                          new Date(existingDoc.expiryDate) < new Date() ? "text-red-600" : "text-slate-500"
-                        )}>
-                          Expires: {new Date(existingDoc.expiryDate).toLocaleDateString()}
-                          {new Date(existingDoc.expiryDate) < new Date() && " (EXPIRED)"}
-                        </p>
-                      )}
-                    </div>
-                    <span className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase",
-                      existingDoc?.status === "approved" ? "bg-green-100 text-green-700" :
-                      existingDoc?.status === "rejected" ? "bg-red-100 text-red-700" :
-                      existingDoc?.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-500"
-                    )}>
-                      {existingDoc?.status || "Required"}
-                    </span>
-                  </div>
-                  
-                  {(existingDoc?.status !== "approved" || (existingDoc?.expiryDate && new Date(existingDoc.expiryDate) < new Date())) && (
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Expiry Date</p>
-                        <input 
-                          type="date" 
-                          className="w-full p-2 rounded-xl border border-black text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                          value={expiryDates[cert] || ""}
-                          onChange={(e) => setExpiryDates(prev => ({ ...prev, [cert]: e.target.value }))}
-                          min={new Date().toISOString().split('T')[0]}
-                        />
-                      </div>
-
-                      <div className="flex items-start gap-2 p-2 bg-slate-100/50 rounded-xl">
-                        <input 
-                          type="checkbox" 
-                          id={`consent-base-${idx}`}
-                          className="mt-0.5 rounded border-black text-blue-600 focus:ring-blue-500"
-                          checked={privacyConsent[cert] || false}
-                          onChange={(e) => setPrivacyConsent(prev => ({ ...prev, [cert]: e.target.checked }))}
-                        />
-                        <label htmlFor={`consent-base-${idx}`} className="text-[10px] text-slate-500 leading-tight">
-                          I consent to the secure storage and processing of this document for verification purposes in accordance with UK GDPR.
-                        </label>
-                      </div>
-
-                      <div className="relative">
-                        <input 
-                          type="file" 
-                          id={`file-base-${idx}`}
-                          className="sr-only" 
-                          accept=".pdf,image/*" 
-                          onChange={(e) => handleVerificationUpload(e, cert)} 
-                          disabled={isUploading || !privacyConsent[cert]} 
-                        />
-                        <label 
-                          htmlFor={`file-base-${idx}`}
-                          className={cn(
-                            "w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-xs font-bold transition-all cursor-pointer",
-                            isUploading ? "bg-slate-50 border-black text-slate-400 cursor-wait" :
-                            privacyConsent[cert] 
-                              ? "border-black text-slate-500 hover:bg-white hover:border-blue-400 hover:text-blue-600" 
-                              : "border-black text-slate-300 cursor-not-allowed bg-slate-50"
-                          )}
-                        >
-                          {isUploading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Upload className="w-4 h-4" />
-                          )}
-                          {isUploading ? "Uploading..." : existingDoc ? "Update Document" : "Upload Document"}
-                          {user.isAnonymous && !isUploading && (
-                            <span className="ml-auto text-[8px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase">Test Mode</span>
-                          )}
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Trade-specific Requirements */}
-            {TRADE_CATEGORIES
-              .filter(t => profile.trades?.includes(t.name) && t.requiredCertifications)
-              .flatMap(t => t.requiredCertifications || [])
-              .map((cert, idx) => {
-                const existingDoc = profile.verificationDocs?.find((d: any) => d.type === cert);
-                return (
-                  <div key={idx} className="p-4 rounded-2xl border border-black bg-slate-50 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-bold text-slate-700">{cert}</p>
-                        {existingDoc?.rejectionReason && (
-                          <p className="text-[10px] text-red-600 font-medium italic mt-1">Rejected: {existingDoc.rejectionReason}</p>
-                        )}
-                        {existingDoc?.autoCheck && existingDoc.status !== "rejected" && (
-                          <div className="mt-2 p-2 bg-white/50 rounded-lg border border-blue-100/50">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <Zap className="w-3 h-3 text-blue-500" />
-                              <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider">Auto-Check Result</span>
-                            </div>
-                            <p className="text-[10px] text-slate-600 leading-tight">{existingDoc.autoCheck.message}</p>
-                          </div>
-                        )}
-                        {existingDoc?.expiryDate && (
-                          <p className={cn(
-                            "text-[10px] font-bold mt-1",
-                            new Date(existingDoc.expiryDate) < new Date() ? "text-red-600" : "text-slate-500"
-                          )}>
-                            Expires: {new Date(existingDoc.expiryDate).toLocaleDateString()}
-                            {new Date(existingDoc.expiryDate) < new Date() && " (EXPIRED)"}
-                          </p>
-                        )}
-                      </div>
-                      <span className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase",
-                        existingDoc?.status === "approved" ? "bg-green-100 text-green-700" :
-                        existingDoc?.status === "rejected" ? "bg-red-100 text-red-700" :
-                        existingDoc?.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-500"
-                      )}>
-                        {existingDoc?.status || "Required"}
-                      </span>
-                    </div>
-                    
-                    {(existingDoc?.status !== "approved" || (existingDoc?.expiryDate && new Date(existingDoc.expiryDate) < new Date())) && (
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">Expiry Date</p>
-                          <input 
-                            type="date" 
-                            className="w-full p-2 rounded-xl border border-black text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                            value={expiryDates[cert] || ""}
-                            onChange={(e) => setExpiryDates(prev => ({ ...prev, [cert]: e.target.value }))}
-                            min={new Date().toISOString().split('T')[0]}
-                          />
-                        </div>
-                        
-                        <div className="flex items-start gap-2 p-2 bg-slate-100/50 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            id={`consent-${cert}`}
-                            className="mt-0.5 rounded border-black text-blue-600 focus:ring-blue-500"
-                            checked={privacyConsent[cert] || false}
-                            onChange={(e) => setPrivacyConsent(prev => ({ ...prev, [cert]: e.target.checked }))}
-                          />
-                          <label htmlFor={`consent-${cert}`} className="text-[10px] text-slate-500 leading-tight">
-                            I consent to the secure storage and processing of this document for verification purposes in accordance with UK GDPR.
-                          </label>
-                        </div>
-
-                        <div className="relative">
-                          <input 
-                            type="file" 
-                            id={`file-${cert}`}
-                            className="sr-only" 
-                            accept=".pdf,image/*" 
-                            onChange={(e) => handleVerificationUpload(e, cert)} 
-                            disabled={isUploading || !privacyConsent[cert]} 
-                          />
-                          <label 
-                            htmlFor={`file-${cert}`}
-                            className={cn(
-                              "w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-xs font-bold transition-all cursor-pointer",
-                              isUploading ? "bg-slate-50 border-black text-slate-400 cursor-wait" :
-                              privacyConsent[cert] 
-                                ? "border-black text-slate-500 hover:bg-white hover:border-blue-400 hover:text-blue-600" 
-                                : "border-black text-slate-300 cursor-not-allowed bg-slate-50"
-                            )}
-                          >
-                            {isUploading ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Upload className="w-4 h-4" />
-                            )}
-                            {isUploading ? "Uploading..." : existingDoc ? "Update Document" : "Upload Document"}
-                            {user.isAnonymous && !isUploading && (
-                              <span className="ml-auto text-[8px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase">Test Mode</span>
-                            )}
-                          </label>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            
-            {(!profile.trades || profile.trades.length === 0) && (
-              <p className="text-sm text-slate-500 text-center py-4 italic">Select your trades to see verification requirements.</p>
-            )}
-
-            {/* Data Privacy Info */}
-            <div className="mt-8 p-4 bg-slate-900 rounded-2xl text-white space-y-3">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-blue-400" />
-                <h4 className="text-xs font-bold uppercase tracking-wider">Data Security & Privacy</h4>
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed">
-                Your identity documents are encrypted at rest and in transit. Access is strictly limited to authorized verification staff. We comply with UK GDPR and the Data Protection Act 2018. Documents are retained only as long as necessary to maintain your verified status.
-              </p>
-              <div className="flex gap-4 pt-1">
-                <button className="text-[10px] font-bold text-blue-400 hover:underline">Privacy Policy</button>
-                <button className="text-[10px] font-bold text-blue-400 hover:underline">Data Rights Request</button>
-              </div>
-            </div>
-          </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Recurring Services Section */}
-      <div className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-6 mb-3 break-inside-avoid">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-            <RefreshCw className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Recurring Services</h3>
-            <p className="text-xs text-slate-500">Manage your scheduled regular jobs</p>
-          </div>
-        </div>
-
-        {loadingRecurring ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-          </div>
-        ) : recurringSchedules.length > 0 ? (
-          <div className="space-y-4">
-            {recurringSchedules.map((schedule) => {
-              const otherPartyId = profile?.role === "homeowner" ? schedule.tradespersonId : schedule.homeownerId;
-              const isProposer = schedule.proposedBy === user?.uid;
-              const needsApproval = schedule.status === "pending_approval" && !isProposer;
-
-              return (
-                <div key={schedule.id} className="p-4 rounded-2xl border border-black bg-slate-50/50 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{schedule.title}</h4>
-                      <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
-                        {schedule.frequency} • £{schedule.amount}/visit
-                      </p>
-                    </div>
-                    <span className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase",
-                      schedule.status === "active" ? "bg-green-100 text-green-700" :
-                      schedule.status === "pending_approval" ? "bg-amber-100 text-amber-700" :
-                      schedule.status === "paused" ? "bg-slate-200 text-slate-600" : "bg-red-100 text-red-700"
-                    )}>
-                      {schedule.status.replace("_", " ")}
-                    </span>
-                  </div>
-
-                  {needsApproval ? (
-                    <div className="flex gap-2 pt-1">
-                      <button 
-                        onClick={() => handleUpdateRecurringStatus(schedule.id, "active", otherPartyId, schedule.title)}
-                        className="flex-1 bg-green-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
-                      >
-                        <CheckCircle className="w-3 h-3" />
-                        Accept
-                      </button>
-                      <button 
-                        onClick={() => handleUpdateRecurringStatus(schedule.id, "cancelled", otherPartyId, schedule.title)}
-                        className="flex-1 bg-white border border-red-200 text-red-600 py-2 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-1"
-                      >
-                        <XCircle className="w-3 h-3" />
-                        Decline
-                      </button>
-                    </div>
-                  ) : schedule.status === "active" ? (
-                    <div className="flex gap-2 pt-1">
-                      <button 
-                        onClick={() => handleUpdateRecurringStatus(schedule.id, "paused", otherPartyId, schedule.title)}
-                        className="flex-1 bg-white border border-black text-slate-600 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors flex items-center justify-center gap-1"
-                      >
-                        <Pause className="w-3 h-3" />
-                        Pause
-                      </button>
-                      <button 
-                        onClick={() => handleUpdateRecurringStatus(schedule.id, "cancelled", otherPartyId, schedule.title)}
-                        className="flex-1 bg-white border border-red-100 text-red-500 py-2 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-1"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Cancel
-                      </button>
-                    </div>
-                  ) : schedule.status === "paused" ? (
-                    <button 
-                      onClick={() => handleUpdateRecurringStatus(schedule.id, "active", otherPartyId, schedule.title)}
-                      className="w-full bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1"
-                    >
-                      <Play className="w-3 h-3" />
-                      Resume Service
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-black">
-            <RefreshCw className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">No recurring services scheduled yet.</p>
-            <p className="text-[10px] text-slate-400 mt-1">Complete a job in a recurring category to see suggestions.</p>
-          </div>
-        )}
-      </div>
-      </div> {/* End masonry wrapper */}
 
       {/* Sign Out Button */}
       <button 
@@ -4283,13 +3136,18 @@ export default function Profile() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Tags (comma separated)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Tags (comma separated)</label>
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {editData.tags ? editData.tags.split(',').filter((t: string) => t.trim() !== '').length : 0}/15
+                        </span>
+                      </div>
                       <input 
                         type="text"
                         className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all"
                         value={editData.tags}
                         onChange={(e) => setEditData({ ...editData, tags: e.target.value })}
-                        placeholder="Reliable, Fast, Expert, etc."
+                        placeholder="Reliable, Fast, Expert, etc. (Max 15 tags)"
                       />
                     </div>
                     <div>

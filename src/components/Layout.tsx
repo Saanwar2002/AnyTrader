@@ -459,12 +459,38 @@ export default function Layout() {
     location.pathname.startsWith("/saved-journeys") ||
     location.pathname.startsWith("/platform-fee-success");
 
+  const topHeaderContainerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState<number>(104);
+
+  useEffect(() => {
+    if (!topHeaderContainerRef.current) return;
+    const updateHeight = () => {
+      if (topHeaderContainerRef.current) {
+        setHeaderHeight(topHeaderContainerRef.current.offsetHeight);
+      }
+    };
+    updateHeight();
+
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(topHeaderContainerRef.current);
+
+    window.addEventListener("resize", updateHeight);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [isOnline, hasPendingChanges, showMaintenanceBanner, isAnonymous, activePortal, activeRole, location.pathname]);
+
   return (
-    <div className={cn("min-h-screen flex flex-col w-full overflow-x-clip relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
-      {/* Sticky Top Header & Navigation Bar Container */}
+    <div className={cn("min-h-screen flex flex-col w-full relative", isDriverTerminal ? "bg-[#0D0D0F] text-white" : "bg-surface")}>
+      {/* Fixed Top Header & Navigation Bar Container */}
       {!isDriverTerminal && !isTaxiSide && (
-        <div className="sticky top-0 z-50 w-full bg-slate-50 border-b border-black shadow-xs">
-          {/* Network & Local Sync Status Banner */}
+        <>
+          <div 
+            ref={topHeaderContainerRef}
+            className="fixed top-0 left-0 right-0 z-50 w-full bg-slate-50 border-b border-black shadow-xs"
+          >
+            {/* Network & Local Sync Status Banner */}
           {!isOnline ? (
             <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-medium shadow-sm transition-all bg-slate-100 text-slate-600 border-b border-black", (!showMaintenanceBanner && !isOnline) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500 animate-pulse" />
@@ -825,14 +851,19 @@ export default function Layout() {
               to="/notifications" 
               id="header-notifications-btn"
               className="w-9 h-9 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-slate-50 transition-all relative active:scale-95 shrink-0"
-              title="Notifications"
+              title="Notifications & Profile Alerts"
             >
               <div className="relative">
                 <Bell className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-black" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-black shadow-sm">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
+                  <>
+                    <span className="absolute -top-1 -right-1.5 flex h-3.5 w-3.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex items-center justify-center rounded-full h-3.5 w-3.5 bg-emerald-500 text-black text-[8px] font-black border border-black shadow-xs">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    </span>
+                  </>
                 )}
               </div>
               <span className="text-[7px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Alerts</span>
@@ -877,8 +908,11 @@ export default function Layout() {
         </div>
       </header>
 
-      <RoleTabBar />
-      </div>
+          <RoleTabBar />
+          </div>
+          {/* Top Header Height Spacer */}
+          <div style={{ height: `${headerHeight || 104}px` }} className="shrink-0 w-full pointer-events-none" />
+        </>
       )}
 
       {/* Logout Confirmation Modal */}
