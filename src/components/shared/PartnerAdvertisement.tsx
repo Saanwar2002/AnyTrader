@@ -664,8 +664,35 @@ export default function PartnerAdvertisement({
               backgroundColor: currentAd.bgColor && !currentAd.bgColor.startsWith("bg-") ? currentAd.bgColor : undefined 
             }}
           >
-            {/* Top Bar: Icon/Avatar + Trader/Brand Header + Explicit "AD" Badge */}
-            <div className="flex items-start justify-between gap-2.5">
+            {/* Golden Ribbon Badge tucked away in the top right corner (Matches exact reference design) */}
+            <div className="absolute top-0 right-3.5 sm:right-4 z-20 shrink-0 pointer-events-none drop-shadow-md">
+              <div 
+                className="w-12 sm:w-13 pt-2 pb-3.5 bg-gradient-to-b from-[#FDE68A] via-[#F59E0B] to-[#D97706] text-[#3B2500] flex flex-col items-center justify-center text-center shadow-lg font-black rounded-b-xs border-x border-b border-amber-300/40"
+                style={{
+                  clipPath: "polygon(0 0, 100% 0, 100% 100%, 50% 85%, 0 100%)",
+                }}
+              >
+                {(() => {
+                  const fullBadgeText = currentAd.badgeLabel || (isPromotedTrader ? "FEATURED PRO" : "PARTNER OFFER");
+                  const badgeParts = fullBadgeText.trim().split(/\s+/);
+                  const badgeTop = badgeParts[0] || "FEATURED";
+                  const badgeBottom = badgeParts.slice(1).join(" ") || "PRO";
+                  return (
+                    <>
+                      <span className="text-[7.5px] sm:text-[8px] font-black tracking-wider leading-none uppercase drop-shadow-[0_0.5px_0_rgba(255,255,255,0.4)]">
+                        {badgeTop}
+                      </span>
+                      <span className="text-[10px] sm:text-[11px] font-black tracking-tight leading-none mt-0.5 uppercase drop-shadow-[0_0.5px_0_rgba(255,255,255,0.4)]">
+                        {badgeBottom}
+                      </span>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Top Bar: Icon/Avatar + Trader/Brand Header */}
+            <div className="flex items-start justify-between gap-2.5 pr-16 sm:pr-20">
               <div className="flex items-start gap-2.5 min-w-0 flex-1">
                 {/* Brand / Trader Avatar Container */}
                 <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0 shadow-inner overflow-hidden mt-0.5">
@@ -742,14 +769,6 @@ export default function PartnerAdvertisement({
                     </>
                   )}
                 </div>
-              </div>
-
-              {/* Explicit High-Contrast "AD" / "SPONSORED" Badge */}
-              <div className="shrink-0 flex items-center">
-                <span className="inline-flex items-center gap-1 bg-black/80 backdrop-blur-md border border-white/30 text-white font-black text-[9px] tracking-wider px-2 py-0.5 rounded-md uppercase whitespace-nowrap shadow-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                  {currentAd.badgeLabel || (isPromotedTrader ? "FEATURED PRO" : "AD")}
-                </span>
               </div>
             </div>
 

@@ -635,59 +635,68 @@ export default function TradesBannerAdStudio() {
                     </span>
                   </div>
 
-                  {/* Preview Banner Container - Exactly matches live PartnerAdvertisement trader promo banner */}
-                  <div className="relative overflow-hidden rounded-2xl w-full min-h-[150px] sm:min-h-[140px] bg-slate-900 border border-black shadow-md p-3.5 sm:p-4 text-white bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex flex-col justify-between select-none">
-                    {/* Top Bar: Avatar with Verified Check + Personal/Business Name & Category + Star Rating Pill + FEATURED PRO Badge */}
-                    <div className="flex items-start justify-between gap-2.5">
-                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                        {/* Trader Avatar Container */}
-                        <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0 shadow-inner overflow-hidden mt-0.5">
-                          {profile?.avatarUrl ? (
-                            <img 
-                              src={profile.avatarUrl} 
-                              alt={profile?.name || "Trader Avatar"} 
-                              className="w-full h-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <User className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
-                          )}
-                          <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-black flex items-center justify-center shadow-xs">
-                            <Check className="w-2 h-2 text-white stroke-[3]" />
-                          </div>
-                        </div>
-
-                        {/* Title & Hierarchy: Personal Name -> Business & Category -> Rating */}
-                        <div className="min-w-0 flex-1">
-                          {/* 1. Personal Name */}
-                          <h4 className="text-xs sm:text-sm font-black text-white leading-tight truncate">
-                            {profile?.name || profile?.businessName || "Elena Rostova"}
-                          </h4>
-
-                          {/* 2. Business Name & Category */}
-                          <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">
-                            {[profile?.businessName, profile?.trade].filter(Boolean).join(" · ") || "Heritage Luxe Painting & Decorating"}
-                          </p>
-
-                          {/* 3. Star Rating directly under Business Name */}
-                          <div className="flex items-center mt-1">
-                            <span className="inline-flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0">
-                              <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
-                              {traderRating}
-                              <span className="text-[9px] opacity-80">({traderReviews})</span>
-                            </span>
-                          </div>
+                    {/* Preview Banner Container - Exactly matches live PartnerAdvertisement trader promo banner */}
+                    <div className="relative overflow-hidden rounded-2xl w-full min-h-[150px] sm:min-h-[140px] bg-slate-900 border border-black shadow-md p-3.5 sm:p-4 text-white bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex flex-col justify-between select-none">
+                      {/* Golden Ribbon Badge tucked away in the top right corner (Matches exact reference design) */}
+                      <div className="absolute top-0 right-3.5 sm:right-4 z-20 shrink-0 pointer-events-none drop-shadow-md">
+                        <div 
+                          className="w-12 sm:w-13 pt-2 pb-3.5 bg-gradient-to-b from-[#FDE68A] via-[#F59E0B] to-[#D97706] text-[#3B2500] flex flex-col items-center justify-center text-center shadow-lg font-black rounded-b-xs border-x border-b border-amber-300/40"
+                          style={{
+                            clipPath: "polygon(0 0, 100% 0, 100% 100%, 50% 85%, 0 100%)",
+                          }}
+                        >
+                          <span className="text-[7.5px] sm:text-[8px] font-black tracking-wider leading-none uppercase drop-shadow-[0_0.5px_0_rgba(255,255,255,0.4)]">
+                            FEATURED
+                          </span>
+                          <span className="text-[10px] sm:text-[11px] font-black tracking-tight leading-none mt-0.5 uppercase drop-shadow-[0_0.5px_0_rgba(255,255,255,0.4)]">
+                            PRO
+                          </span>
                         </div>
                       </div>
 
-                      {/* Explicit High-Contrast "FEATURED PRO" Badge */}
-                      <div className="shrink-0 flex items-center">
-                        <span className="inline-flex items-center gap-1 bg-black/80 backdrop-blur-md border border-white/30 text-white font-black text-[9px] tracking-wider px-2 py-0.5 rounded-md uppercase whitespace-nowrap shadow-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                          FEATURED PRO
-                        </span>
+                      {/* Top Bar: Avatar with Verified Check + Personal/Business Name & Category + Star Rating Pill */}
+                      <div className="flex items-start justify-between gap-2.5 pr-16 sm:pr-20">
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                          {/* Trader Avatar Container */}
+                          <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0 shadow-inner overflow-hidden mt-0.5">
+                            {profile?.avatarUrl ? (
+                              <img 
+                                src={profile.avatarUrl} 
+                                alt={profile?.name || "Trader Avatar"} 
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <User className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+                            )}
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-black flex items-center justify-center shadow-xs">
+                              <Check className="w-2 h-2 text-white stroke-[3]" />
+                            </div>
+                          </div>
+
+                          {/* Title & Hierarchy: Personal Name -> Business & Category -> Rating */}
+                          <div className="min-w-0 flex-1">
+                            {/* 1. Personal Name */}
+                            <h4 className="text-xs sm:text-sm font-black text-white leading-tight truncate">
+                              {profile?.name || profile?.businessName || "Elena Rostova"}
+                            </h4>
+
+                            {/* 2. Business Name & Category */}
+                            <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">
+                              {[profile?.businessName, profile?.trade].filter(Boolean).join(" · ") || "Heritage Luxe Painting & Decorating"}
+                            </p>
+
+                            {/* 3. Star Rating directly under Business Name */}
+                            <div className="flex items-center mt-1">
+                              <span className="inline-flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0">
+                                <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
+                                {traderRating}
+                                <span className="text-[9px] opacity-80">({traderReviews})</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
                     {/* Middle: Full-Width Promoted Perk Highlight & Description */}
                     <div className="my-2 flex-1 flex flex-col justify-center gap-1 min-w-0">
