@@ -160,13 +160,14 @@ export async function createOrGetJobInvoice(
     // Auto-sync for Pro users if configured
     if (isPro && tradespersonProfile?.autoSyncGoogleSheets) {
       await exportInvoicesToSheets([{
-        id: invoiceNumber,
-        date: new Date().toLocaleDateString("en-GB"),
-        client: invoiceData.homeownerName,
-        service: invoiceData.jobTitle,
-        amount: totalAmount,
-        status: invoiceData.status,
-        type: "Invoice"
+        dateCreated: new Date().toLocaleDateString("en-GB"),
+        ref: invoiceNumber,
+        clientName: invoiceData.homeownerName,
+        serviceDescription: invoiceData.jobTitle,
+        subtotal: invoiceData.subtotal,
+        vat: invoiceData.vatAmount,
+        total: totalAmount,
+        status: invoiceData.status
       }]);
     }
   } catch (notifErr) {

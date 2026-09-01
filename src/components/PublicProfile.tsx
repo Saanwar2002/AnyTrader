@@ -21,7 +21,7 @@ import { format } from "date-fns";
 import { SEO } from "./SEO";
 import { Logo } from "./Logo";
 import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
-import { INITIAL_MOCK_FLASH_DEALS, INITIAL_MOCK_TRADERS } from "@/src/services/seedService";
+import { INITIAL_MOCK_FLASH_DEALS, INITIAL_MOCK_TRADERS, generateTraderSeedReviews } from "@/src/services/seedService";
 import { DealCountdownBadge, shareDeal } from "@/src/lib/dealUtils";
 import { isDealSoldOut, getRemainingSlots, getDealCapacityInfo, formatDealBadgeText, formatDealScheduleText } from "@/src/lib/flashDeals";
 
@@ -36,33 +36,12 @@ export default function PublicProfile() {
   const initialSeedTrader = id ? INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id) : null;
   const initialProfileData = location.state?.initialProfile || initialSeedTrader || null;
   
-  const initialSeedReviews = initialSeedTrader ? [
-    {
-      id: "rev-seed-1",
-      reviewerName: "David Henderson",
-      rating: 5,
-      comment: `Outstanding service from ${initialSeedTrader.name}. Extremely professional, punctual, clean work and fair transparent pricing.`,
-      createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 3 }
-    },
-    {
-      id: "rev-seed-2",
-      reviewerName: "Claire Thompson",
-      rating: 5,
-      comment: `Superb communication from initial quote to job completion. Left everything tidy and verified all certificates. 10/10!`,
-      createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 12 }
-    },
-    {
-      id: "rev-seed-3",
-      reviewerName: "Oliver Wright",
-      rating: 5,
-      comment: `Responded very fast and solved the issue within an hour. Reliable and honest tradesperson. Will definitely hire again.`,
-      createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 25 }
-    }
-  ] : [];
+  const initialSeedReviews = initialSeedTrader ? generateTraderSeedReviews(initialSeedTrader.name) : [];
 
   const [profile, setProfile] = useState<any>(() => initialProfileData);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>(() => initialSeedReviews);
+  const [visibleReviewsCount, setVisibleReviewsCount] = useState<number>(5);
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(() => !initialProfileData);
   const [loadingReviews, setLoadingReviews] = useState(() => !initialSeedTrader);
@@ -303,30 +282,7 @@ export default function PublicProfile() {
       if (activeReviews.length === 0) {
         const mockTrader = INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id);
         if (mockTrader) {
-          const sampleReviews = [
-            {
-              id: "rev-seed-1",
-              reviewerName: "David Henderson",
-              rating: 5,
-              comment: `Outstanding service from ${mockTrader.name}. Extremely professional, punctual, clean work and fair transparent pricing.`,
-              createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 3 }
-            },
-            {
-              id: "rev-seed-2",
-              reviewerName: "Claire Thompson",
-              rating: 5,
-              comment: `Superb communication from initial quote to job completion. Left everything tidy and verified all certificates. 10/10!`,
-              createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 12 }
-            },
-            {
-              id: "rev-seed-3",
-              reviewerName: "Oliver Wright",
-              rating: 5,
-              comment: `Responded very fast and solved the issue within an hour. Reliable and honest tradesperson. Will definitely hire again.`,
-              createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 25 }
-            }
-          ];
-          setReviews(sampleReviews);
+          setReviews(generateTraderSeedReviews(mockTrader.name));
           setLoadingReviews(false);
           return;
         }
@@ -337,23 +293,7 @@ export default function PublicProfile() {
       console.error("Error fetching reviews:", error);
       const mockTrader = INITIAL_MOCK_TRADERS.find((t: any) => t.uid === id || t.id === id);
       if (mockTrader) {
-        const sampleReviews = [
-          {
-            id: "rev-seed-1",
-            reviewerName: "David Henderson",
-            rating: 5,
-            comment: `Outstanding service from ${mockTrader.name}. Extremely professional, punctual, clean work and fair transparent pricing.`,
-            createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 3 }
-          },
-          {
-            id: "rev-seed-2",
-            reviewerName: "Claire Thompson",
-            rating: 5,
-            comment: `Superb communication from initial quote to job completion. Left everything tidy and verified all certificates. 10/10!`,
-            createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 12 }
-          }
-        ];
-        setReviews(sampleReviews);
+        setReviews(generateTraderSeedReviews(mockTrader.name));
       } else {
         handleFirestoreError(error, OperationType.LIST, "reviews");
       }
@@ -608,7 +548,7 @@ export default function PublicProfile() {
       )}
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-2">
-        <div className="flex items-center gap-2 sm:gap-4 relative z-50 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-4 relative min-w-0">
           <button 
             type="button"
             onClick={handleCloseProfile} 
@@ -1354,7 +1294,7 @@ export default function PublicProfile() {
           </div>
         ) : reviews.length > 0 ? (
           <div className="space-y-4">
-            {reviews.map((review) => (
+            {reviews.slice(0, visibleReviewsCount).map((review) => (
               <div key={review.id} className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
@@ -1363,18 +1303,40 @@ export default function PublicProfile() {
                         key={i} 
                         className={cn(
                           "w-3.5 h-3.5",
-                          i < review.rating ? "text-orange-500 fill-current" : "text-slate-200"
+                          i < (review.rating || 5) ? "text-orange-500 fill-current" : "text-slate-200"
                         )} 
                       />
                     ))}
                   </div>
-                  <span className="text-xs text-slate-400">
-                    {new Date(review.createdAt?.seconds * 1000 || Date.now()).toLocaleDateString()}
+                  <span className="text-xs text-slate-400 font-medium">
+                    {review.createdAt?.seconds 
+                      ? new Date(review.createdAt.seconds * 1000).toLocaleDateString()
+                      : review.timeAgo || "Recently"}
                   </span>
                 </div>
+                {review.reviewerName && (
+                  <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">{review.reviewerName}</p>
+                )}
                 <p className="text-slate-600 text-sm leading-relaxed italic">"{review.comment}"</p>
               </div>
             ))}
+
+            {reviews.length > visibleReviewsCount ? (
+              <button
+                onClick={() => setVisibleReviewsCount(prev => prev + 5)}
+                className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-2xl text-xs font-bold transition-all border border-black flex items-center justify-center gap-2 mt-4 cursor-pointer shadow-sm active:scale-[0.99]"
+              >
+                <ChevronDown className="w-4 h-4 text-slate-700" />
+                <span>Show More Reviews (+5 of {reviews.length - visibleReviewsCount} remaining)</span>
+              </button>
+            ) : reviews.length > 5 ? (
+              <button
+                onClick={() => setVisibleReviewsCount(5)}
+                className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-2xl text-xs font-semibold transition-all border border-slate-300 flex items-center justify-center gap-1.5 mt-4 cursor-pointer"
+              >
+                <span>Show Fewer Reviews</span>
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="bg-white p-8 rounded-3xl border border-black text-center">

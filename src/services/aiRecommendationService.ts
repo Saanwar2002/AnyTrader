@@ -1,6 +1,7 @@
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { INITIAL_MOCK_TRADERS, Tradesperson } from "./seedService";
 import { db, collection, query, where, getDocs, limit } from "@/src/firebase";
+import { categoryMatchesSearch } from "@/src/lib/fuzzyMatch";
 
 export interface TraderRecommendationCard {
   uid: string;
@@ -37,7 +38,7 @@ export interface AiTradeBotActionPayload {
  * Searches for best matching category names from TRADE_CATEGORIES based on user text.
  */
 export function findMatchingTradeCategories(userText: string, maxResults: number = 3): string[] {
-  if (!userText || userText.trim().length === 0) return ["Plumbing", "Electrical", "Building & Construction"];
+  if (!userText || userText.trim().length === 0) return ["Building & Construction", "Handyman Services"];
   
   const textLower = userText.toLowerCase();
   const matchedCategories: { name: string; score: number }[] = [];
@@ -48,7 +49,12 @@ export function findMatchingTradeCategories(userText: string, maxResults: number
 
     // Direct name match
     if (textLower.includes(catNameLower)) {
-      score += 10;
+      score += 15;
+    }
+
+    // Fuzzy category/synonym match from fuzzyMatch.ts dictionary
+    if (categoryMatchesSearch(cat, userText)) {
+      score += 12;
     }
 
     // Subcategory matches
@@ -56,37 +62,175 @@ export function findMatchingTradeCategories(userText: string, maxResults: number
       cat.subcategories.forEach((sub: string) => {
         const subLower = sub.toLowerCase();
         if (textLower.includes(subLower)) {
-          score += 6;
+          score += 10;
         } else {
           // Check word overlap
           const words = subLower.split(/[\s/&-]+/);
           words.forEach((w) => {
             if (w.length > 3 && textLower.includes(w)) {
-              score += 2;
+              score += 3;
             }
           });
         }
       });
     }
 
-    // Keyword heuristics
-    if (textLower.includes("boiler") || textLower.includes("leak") || textLower.includes("pipe") || textLower.includes("radiator") || textLower.includes("tap")) {
-      if (cat.name === "Plumbing" || cat.name === "Gas & Heating") score += 8;
+    // Keyword heuristics across all key UK trade domains
+    // 1. Painting & Decorating
+    if (
+      textLower.includes("paint") || 
+      textLower.includes("painter") || 
+      textLower.includes("painting") || 
+      textLower.includes("decorat") || 
+      textLower.includes("wallpaper") || 
+      textLower.includes("gloss") || 
+      textLower.includes("emulsion") || 
+      textLower.includes("varnish") || 
+      textLower.includes("stain") || 
+      (textLower.includes("door") && (textLower.includes("paint") || textLower.includes("wood") || textLower.includes("finish") || textLower.includes("color") || textLower.includes("colour"))) ||
+      textLower.includes("skirting") || 
+      textLower.includes("woodwork") || 
+      textLower.includes("coving")
+    ) {
+      if (cat.name === "Painting & Decorating") score += 18;
     }
-    if (textLower.includes("fuse") || textLower.includes("light") || textLower.includes("wire") || textLower.includes("rewir") || textLower.includes("socket") || textLower.includes("circuit")) {
-      if (cat.name === "Electrical") score += 8;
+
+    // 2. Carpentry & Joinery
+    if (
+      textLower.includes("carpenter") || 
+      textLower.includes("joiner") || 
+      textLower.includes("carpentry") || 
+      textLower.includes("joinery") || 
+      textLower.includes("staircase") || 
+      textLower.includes("cupboard") || 
+      textLower.includes("cabinet") || 
+      textLower.includes("wardrobe") || 
+      textLower.includes("timber") || 
+      (textLower.includes("door") && (textLower.includes("hang") || textLower.includes("fit") || textLower.includes("frame") || textLower.includes("hinge")))
+    ) {
+      if (cat.name === "Carpentry & Joinery" || cat.name === "Door Fitting & Hanging") score += 15;
     }
-    if (textLower.includes("roof") || textLower.includes("tile") || textLower.includes("gutter") || textLower.includes("chimney")) {
-      if (cat.name === "Roofing & Guttering") score += 8;
+
+    // 3. Locksmith & Security
+    if (
+      textLower.includes("lock") || 
+      textLower.includes("locksmith") || 
+      textLower.includes("key") || 
+      textLower.includes("lockout") || 
+      textLower.includes("anti snap") || 
+      textLower.includes("ultion") || 
+      textLower.includes("latch") || 
+      textLower.includes("bolt")
+    ) {
+      if (cat.name === "Locksmith" || cat.name === "Security Systems") score += 15;
     }
-    if (textLower.includes("cake") || textLower.includes("bake") || textLower.includes("wedding cake") || textLower.includes("catering") || textLower.includes("food")) {
-      if (cat.name === "Cake Maker & Baker" || cat.name === "Catering & Private Chef") score += 8;
+
+    // 4. Plumbing
+    if (
+      textLower.includes("plumb") || 
+      textLower.includes("plumber") || 
+      textLower.includes("leak") || 
+      textLower.includes("pipe") || 
+      textLower.includes("tap") || 
+      textLower.includes("sink") || 
+      textLower.includes("toilet") || 
+      textLower.includes("drain") || 
+      textLower.includes("shower") || 
+      textLower.includes("unblock")
+    ) {
+      if (cat.name === "Plumbing" || cat.name === "Bathroom Fitting") score += 12;
     }
-    if (textLower.includes("clean") || textLower.includes("carpet") || textLower.includes("tenancy") || textLower.includes("mould") || textLower.includes("damp")) {
-      if (cat.name === "Domestic & Commercial Cleaning" || cat.name === "Specialist Cleaning") score += 8;
+
+    // 5. Gas & Heating
+    if (
+      textLower.includes("boiler") || 
+      textLower.includes("heating") || 
+      textLower.includes("radiator") || 
+      textLower.includes("gas") || 
+      textLower.includes("cp12") || 
+      textLower.includes("flue") || 
+      textLower.includes("thermostat") || 
+      textLower.includes("combi")
+    ) {
+      if (cat.name === "Gas & Heating" || cat.name === "Plumbing") score += 12;
     }
-    if (textLower.includes("garden") || textLower.includes("lawn") || textLower.includes("hedge") || textLower.includes("tree") || textLower.includes("fence")) {
-      if (cat.name === "Gardening & Landscaping") score += 8;
+
+    // 6. Electrical
+    if (
+      textLower.includes("fuse") || 
+      textLower.includes("light") || 
+      textLower.includes("wire") || 
+      textLower.includes("rewir") || 
+      textLower.includes("socket") || 
+      textLower.includes("circuit") || 
+      textLower.includes("electric") || 
+      textLower.includes("eicr") || 
+      textLower.includes("consumer unit")
+    ) {
+      if (cat.name === "Electrical" || cat.name === "Smart Home & Automation") score += 12;
+    }
+
+    // 7. Roofing & Guttering
+    if (
+      textLower.includes("roof") || 
+      textLower.includes("tile") || 
+      textLower.includes("gutter") || 
+      textLower.includes("chimney") || 
+      textLower.includes("leadwork") || 
+      textLower.includes("fascia") || 
+      textLower.includes("soffit")
+    ) {
+      if (cat.name === "Roofing & Guttering" || cat.name === "Roofing Services") score += 12;
+    }
+
+    // 8. Cleaning
+    if (
+      textLower.includes("clean") || 
+      textLower.includes("carpet") || 
+      textLower.includes("tenancy") || 
+      textLower.includes("mould") || 
+      textLower.includes("damp") || 
+      textLower.includes("bin")
+    ) {
+      if (cat.name === "Domestic & Commercial Cleaning" || cat.name === "Specialist Cleaning" || cat.name === "Carpet & Upholstery Cleaning") score += 12;
+    }
+
+    // 9. Gardening & Landscaping
+    if (
+      textLower.includes("garden") || 
+      textLower.includes("lawn") || 
+      textLower.includes("hedge") || 
+      textLower.includes("tree") || 
+      textLower.includes("fence") || 
+      textLower.includes("patio") || 
+      textLower.includes("paving") || 
+      textLower.includes("decking")
+    ) {
+      if (cat.name === "Gardening & Landscaping") score += 12;
+    }
+
+    // 10. Cake & Catering
+    if (
+      textLower.includes("cake") || 
+      textLower.includes("bake") || 
+      textLower.includes("wedding cake") || 
+      textLower.includes("catering") || 
+      textLower.includes("food")
+    ) {
+      if (cat.name === "Cake Maker & Baker" || cat.name === "Catering & Private Chef") score += 12;
+    }
+
+    // 11. Delivery & Transport
+    if (
+      textLower.includes("courier") || 
+      textLower.includes("van") || 
+      textLower.includes("transport") || 
+      textLower.includes("delivery") || 
+      textLower.includes("removal") || 
+      textLower.includes("bulky") || 
+      textLower.includes("appliance")
+    ) {
+      if (cat.name === "On-Demand Delivery & Bulky Goods Courier") score += 15;
     }
 
     if (score > 0) {
@@ -97,7 +241,7 @@ export function findMatchingTradeCategories(userText: string, maxResults: number
   matchedCategories.sort((a, b) => b.score - a.score);
   const result = matchedCategories.slice(0, maxResults).map((c) => c.name);
 
-  return result.length > 0 ? result : ["Plumbing", "Electrical", "Gas & Heating"];
+  return result.length > 0 ? result : ["Building & Construction", "Handyman Services"];
 }
 
 /**
@@ -109,52 +253,76 @@ export function findMatchingTradeCategories(userText: string, maxResults: number
 export async function getHybridTraderRecommendations(
   category: string,
   userPostcode?: string,
-  liveTradersPool?: Tradesperson[]
+  liveTradersPool?: Tradesperson[],
+  userQuery?: string
 ): Promise<TraderRecommendationCard[]> {
   try {
     let pool: Tradesperson[] = [];
 
-    // 1. If live pool provided, use it, otherwise fetch from Firestore or fallback to mock
-    if (liveTradersPool && liveTradersPool.length > 0) {
-      pool = liveTradersPool;
-    } else {
+    // 1. Fetch live traders from Firestore if available
+    let firestoreTraders: Tradesperson[] = [];
+    if (!liveTradersPool || liveTradersPool.length === 0) {
       try {
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("role", "in", ["tradesperson", "trader"]), limit(30));
         const snap = await getDocs(q);
         if (!snap.empty) {
-          pool = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Tradesperson));
+          firestoreTraders = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Tradesperson));
         }
       } catch (err) {
         console.warn("Firestore fetch for traders skipped:", err);
       }
-
-      if (pool.length === 0) {
-        pool = INITIAL_MOCK_TRADERS as Tradesperson[];
-      }
     }
 
-    // 2. Filter traders relevant to category
+    // Always merge seeded mock traders into pool so seed profiles (Elena Rostova, Lisa Park, etc.) are always accessible
+    const seedPool = INITIAL_MOCK_TRADERS as Tradesperson[];
+    if (liveTradersPool && liveTradersPool.length > 0) {
+      const existingUids = new Set(liveTradersPool.map(t => t.uid));
+      pool = [...liveTradersPool, ...seedPool.filter(s => !existingUids.has(s.uid))];
+    } else {
+      const existingUids = new Set(firestoreTraders.map(t => t.uid));
+      pool = [...firestoreTraders, ...seedPool.filter(s => !existingUids.has(s.uid))];
+    }
+
+    // 2. Filter traders relevant to category and/or userQuery
     const catLower = (category || "").toLowerCase();
-    const relevant = pool.filter((t) => {
+    const queryLower = (userQuery || "").toLowerCase();
+
+    const relevant = pool.filter((traderObj) => {
+      const t = traderObj as any;
       if (!catLower || catLower === "all") return true;
-      const trades = (t.trades || []).map((tr) => tr.toLowerCase());
+      const trades = (t.trades || []).map((tr: string) => tr.toLowerCase());
       const cat = (t.category || "").toLowerCase();
       const primary = (t.primaryTrade || "").toLowerCase();
       const bio = (t.bio || "").toLowerCase();
       const company = (t.businessName || t.companyName || "").toLowerCase();
+      const services = (t.services || []).map((s: string) => s.toLowerCase());
+      const tags = ((t as any).tags || []).map((tg: string) => tg.toLowerCase());
 
-      return (
-        trades.some((tr) => catLower.includes(tr) || tr.includes(catLower)) ||
+      const matchesCat = (
+        trades.some((tr: string) => catLower.includes(tr) || tr.includes(catLower)) ||
         cat.includes(catLower) ||
         catLower.includes(cat) ||
         primary.includes(catLower) ||
         company.includes(catLower) ||
-        bio.includes(catLower)
+        bio.includes(catLower) ||
+        services.some((s: string) => s.includes(catLower) || catLower.includes(s)) ||
+        tags.some((tg: string) => tg.includes(catLower) || catLower.includes(tg))
       );
+
+      const matchesQuery = queryLower ? (
+        trades.some((tr: string) => queryLower.includes(tr) || tr.includes(queryLower)) ||
+        services.some((s: string) => queryLower.includes(s) || s.includes(queryLower)) ||
+        tags.some((tg: string) => queryLower.includes(tg) || tg.includes(queryLower)) ||
+        company.includes(queryLower) ||
+        bio.includes(queryLower)
+      ) : false;
+
+      return matchesCat || matchesQuery;
     });
 
-    const candidatePool = relevant.length >= 2 ? relevant : pool;
+    // If relevant traders exist for this category/query, ONLY use relevant traders!
+    const candidatePool = relevant.length > 0 ? relevant : pool;
     const userPrefix = (userPostcode || "").trim().split(" ")[0]?.toUpperCase() || "";
 
     // 3. Score candidates for Featured Slot vs Organic Pool
@@ -194,7 +362,7 @@ export async function getHybridTraderRecommendations(
     // --- SLOT 1: FEATURED PRO ⚡ (Monetized / Pro Tier Partner) ---
     const featuredCandidates = scoredCandidates.filter((c) => c.isProSubscribed || (c.isVerified && c.rating >= 4.7));
     const featuredPick = featuredCandidates.length > 0
-      ? featuredCandidates[Math.floor(Date.now() / (1000 * 60 * 30)) % featuredCandidates.length] // 30-min rotation among paid/featured partners
+      ? featuredCandidates[Math.floor(Date.now() / (1000 * 60 * 30)) % featuredCandidates.length]
       : scoredCandidates[0];
 
     if (featuredPick) {
@@ -225,12 +393,10 @@ export async function getHybridTraderRecommendations(
     }
 
     // --- SLOT 2: ORGANIC FAIR ROTATION MATCH 🌟 ---
-    // Exclude featured pick and apply 15-minute fairness rotation seed across top qualifying local trades
     const organicPool = scoredCandidates.filter((c) => c.tp.uid !== featuredPick?.tp.uid);
     const rotationSeed = Math.floor(Date.now() / (1000 * 60 * 15)); // 15-min fair share rotation
     
     if (organicPool.length > 0) {
-      // Deterministic fair shuffle so every trader gets equal chance over the hour
       const sortedOrganic = [...organicPool].sort((a, b) => {
         const hashA = ((a.tp.uid || "a").charCodeAt(0) + rotationSeed) % 23;
         const hashB = ((b.tp.uid || "b").charCodeAt(0) + rotationSeed) % 23;

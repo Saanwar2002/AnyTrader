@@ -488,7 +488,7 @@ export default function Layout() {
         <>
           <div 
             ref={topHeaderContainerRef}
-            className="fixed top-0 left-0 right-0 z-50 w-full bg-slate-50 border-b border-black shadow-xs"
+            className="fixed top-0 left-0 right-0 z-[60] w-full bg-slate-50 border-b border-black shadow-xs"
           >
             {/* Network & Local Sync Status Banner */}
           {!isOnline ? (

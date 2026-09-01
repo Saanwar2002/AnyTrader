@@ -1,5 +1,44 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## ⭐ Review List Pagination & Top 5 Most Recent Display (`FindTrades.tsx`, `PublicProfile.tsx`, `Profile.tsx`, `seedService.ts`) (Completed September 1, 2026)
+*   **Context & User Request**:
+    *   *User Request*: "Also check how many reviews we can display under mini, full profile as traders can get lot of reviews overtime and it will long scrolling list , we can show top 5 most recent and show remaining with more tab only next 5 appearing if user keep scrolling the reviews up"
+*   **Fixes Implemented**:
+    1.  **Top 5 Most Recent Default Display**: Set initial reviews limit to 5 across Mini Profile Preview (`FindTrades.tsx`), Full Profile (`PublicProfile.tsx`), and Trader Business Profile (`Profile.tsx`).
+    2.  **Incremental "+5 Remaining" Pagination Tab**: Added a clean `Show More Reviews (+5 remaining)` button at the bottom of review lists when total reviews exceed the current visible count, expanding the list by 5 items per click.
+    3.  **Collapse Toggle**: Added a `Show Fewer Reviews` toggle button once all reviews are expanded so users can easily collapse back to the top 5.
+    4.  **Expanded Seed Reviews**: Added `generateTraderSeedReviews(traderName)` in `seedService.ts` to supply 10 realistic, date-sequenced client reviews for all sample trader profiles.
+
+## 📱 Trader Quick Preview Action Bar Layout Refactor (`FindTrades.tsx`) (Completed September 1, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "Can we move the ,, view full profile,, tab just below the ,, request quote,, tab. Make both tabs Slim and smart in hight"
+*   **Fixes Implemented**:
+    1.  **Vertical Action Stack**: Relocated the `View Full Profile` link button from inside the scrollable review area directly into the fixed bottom action bar, positioning it underneath `Request Quote`.
+    2.  **Slim & Smart Height Styling**: Refactored both action buttons to use slim, smart height dimensions (`py-2.5 px-5`, `text-xs`), rounded border corners (`rounded-xl`), crisp jet black borders (`border border-black`), and high-contrast styling (Dark Slate for Request Quote, Light Neutral for View Full Profile).
+    3.  **Scroll Padding Optimization**: Increased bottom scroll padding (`pb-36`) on the preview bottom sheet content to prevent reviews and content from being overlapped by the fixed dual-button bar.
+
+## 🤖 AI Bot Trade Categorization & Recommendation Engine Fix (`aiRecommendationService.ts`, `TradeBot.tsx`, `seedService.ts`) (Completed August 31, 2026)
+*   **Context & User Request**:
+    *   *User Report*: "Inquiry was about door painting and AI bot suggested profiles are heating and plumbing while platform has seeded painting profiles."
+*   **Root Cause**:
+    1.  **Missing Category Keyword Heuristics**: `findMatchingTradeCategories()` in `aiRecommendationService.ts` lacked heuristics for "Painting & Decorating" (e.g. keywords like `paint`, `painter`, `painting`, `decorat`, `wallpaper`, `gloss`, `door finish`), defaulting to `["Plumbing", "Electrical", "Gas & Heating"]` if no keyword scored.
+    2.  **Fallback Candidate Pool Dropping Matching Trades**: In `getHybridTraderRecommendations()`, if the relevant matching pool had fewer than 2 traders (`relevant.length < 2`), the code discarded `relevant` and fell back to the entire `pool` (which was dominated by plumbers and electricians).
+    3.  **Missing Seed Trader Integration**: Live Firestore trader queries did not merge with `INITIAL_MOCK_TRADERS`, making seeded specialist profiles (e.g., `Elena Rostova` - "Heritage Luxe Painting & Decorating") unavailable if Firestore returned results for other trades.
+*   **Fixes Implemented**:
+    1.  **Comprehensive Heuristic Keyword Engine (`aiRecommendationService.ts`)**:
+        - Integrated `categoryMatchesSearch()` from `fuzzyMatch.ts`.
+        - Added comprehensive keyword rules across all 93+ UK trade sectors (Painting & Decorating, Carpentry & Joinery, Locksmith, Plumbing, Heating, Electrical, Roofing, Cleaning, Gardening, Delivery, etc.).
+        - Ensured queries like "door painting", "internal door glossing", and "painter needed" score highest (+18) for **Painting & Decorating**.
+        - Updated default fallback category to `["Building & Construction", "Handyman Services"]` instead of Plumbing/Electrical.
+    2.  **Strict Candidate Pool Relevance**:
+        - Updated `getHybridTraderRecommendations()` so if `relevant.length > 0`, it strictly uses `relevant` candidates and never falls back to unmatching traders.
+        - Merged Firestore traders with `INITIAL_MOCK_TRADERS` so seeded profiles (e.g., `Elena Rostova`, `Lisa Park`) are always available.
+        - Passed `userQuery` down to `getHybridTraderRecommendations()` to match individual services and bio keywords.
+    3.  **Seeded Secondary Painter Profile (`seedService.ts`)**:
+        - Added `Lisa Park` ("Lisa Park Quality Decorating & Finishing") to `INITIAL_MOCK_TRADERS` so the platform has multiple verified painting & decorating profiles for Slot 1 (Featured Pro) and Slot 2 (Organic Local Match).
+    4.  **UI Initial Suggestions Updated (`TradeBot.tsx`)**:
+        - Updated initial greeting suggested categories to include `Painting & Decorating`.
+
 ## 🏷️ Trader Profile Max Limits Enforced: 15 Skills/Services & 15 Tags (`Profile.tsx`, `BioOfferingsCard.tsx`, `SlowTrustBadgesCarousel.tsx`) (Completed August 31, 2026)
 *   **Context & User Request**:
     *   *User Query*: "I think we should limit to max 15 skill/services so the profile section does not get too long. Also max 15 tags each trader profile"
@@ -2465,3 +2504,7 @@ The prefix is determined by the user's primary registration role:
   - **Carousel Claim Action Button & Auto-Modal Trigger (`FindTrades.tsx`)**: Added a 1-tap **"Claim ⚡"** button to Flash Deal cards in the Find Trades feed. Navigating from a deal card auto-opens the Request Quote modal on the trader's profile (`autoOpenQuoteModal: true`) with the deal pre-selected.
   - **Trader Main Trade Category Display Across All Quote Stages (`PublicProfile.tsx`, `PostJobWizard.tsx`, `EmergencyJobWizard.tsx`)**: Displayed the target trader's primary category/trade badge next to their profile name inside the Request Quote modal, the sticky top indicator banner across all stages of the standard Post Job Wizard, and the Emergency Job Posting Wizard banner, ensuring homeowners always have full visibility into the trader's trade and service categories.
   - **Job Posting Process Audit & Independence Bridge (`PostJobWizard.tsx`, `PublicProfile.tsx`)**: Conducted systematic architectural audit comparing open platform-wide posting vs direct 1-to-1 trader quote requests. Resolved schema persistence gap by explicitly storing `targetTradespersonId`, `targetTradespersonName`, `invitedTraderIds: [traderId]`, and `claimedDeal` object on the Firestore `jobs` document upon job creation and job invitations, guaranteeing full data independence and cross-portal tracking for both posting flows.
+  - **Header Z-Index & Page Back Button Stacking Context Fix (`Layout.tsx`, `PublicProfile.tsx`, `JobDetails.tsx`)**: Resolved stacking context issue where page back buttons (`<`) and section titles (`Tradesperson Profile` / `Trades...`) scrolled ON TOP OF the sticky top navigation header (`BOOK TAXI`, search bar, etc.) while card content went underneath. Elevated the fixed top header container (`topHeaderContainerRef`) in `Layout.tsx` to `z-[60]` and removed redundant `z-50` and `z-40` class declarations from page-level header wrapper elements in `PublicProfile.tsx` and `JobDetails.tsx`, guaranteeing all page content, back buttons, and titles scroll cleanly UNDER the top sticky header bar across all viewports.
+  - **Job Details Top Right Close Button (`JobDetails.tsx`)**: Added a prominent `[X]` close button to the top right of the dark blue sticky header bar in Job Details view across the Trader Dashboard, allowing users and traders to quickly dismiss or navigate back from the job details page with 1 tap.
+  - **Priority Offers Modal Close Button & Stacking Fix (`TradesDashboard.tsx`)**: Elevated the Unlock Priority Offers modal overlay to `z-[100]` with top safe area padding (`pt-[calc(4.5rem+env(safe-area-inset-top,0px))]`) and internal content scrolling (`max-h-[85vh] overflow-y-auto`). Styled the top-right `[X]` close button with `z-30` elevation and high contrast backdrop, ensuring it remains fully visible, unclipped by top headers, and easily dismissible.
+  - **Priority Job Offers Payment Validation & Activation Logic (`TradesDashboard.tsx`, `JobFeed.tsx`, `server.ts`)**: Validated full-stack payment lifecycle for Priority Offers (£15–£25/mo add-on). Supports Stripe Checkout Session creation with `isExclusiveAddon` metadata, server webhook synchronization, mock sandbox checkout auto-completion, client-side URL return handler (`exclusive_success=true`) with toast feedback and query cleanup, resilient client-side fallback activation, and dual check for `hasExclusiveAddon` and `isExclusiveActive` in `JobFeed.tsx` for early-access job visibility.

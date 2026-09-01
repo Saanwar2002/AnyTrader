@@ -27,14 +27,14 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "platform_categories"), (snapshot) => {
+    const unsub = onSnapshot(collection(db, "platform_categories"), (snapshot: any) => {
       if (snapshot.empty) {
         setCategories([...UNSORTED_TRADE_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name)));
         setLoading(false);
         return;
       }
       
-      const data = snapshot.docs.map(doc => {
+      const data = snapshot.docs.map((doc: any) => {
         const cat = doc.data() as any;
         return { 
           ...cat, 
@@ -44,9 +44,9 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       
       // Deduplicate by ID to prevent React key errors if stale data exists in Firestore
-      const uniqueData = Array.from(new Map(data.map(item => [item.id, item])).values());
+      const uniqueData = Array.from(new Map(data.map((item: any) => [item.id, item])).values());
       
-      setCategories(uniqueData.sort((a: any, b: any) => a.name.localeCompare(b.name)));
+      setCategories((uniqueData as Category[]).sort((a: Category, b: Category) => a.name.localeCompare(b.name)));
       setLoading(false);
     });
     return () => unsub();

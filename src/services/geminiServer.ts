@@ -65,7 +65,7 @@ async function getGlobalAiModel(): Promise<string> {
            snap = await db.collection("platform_config").doc("global").get();
          } catch (dbErr: any) {
            if (dbErr?.code === 5 || String(dbErr).includes("5 NOT_FOUND")) {
-             const app = admin.apps[0];
+             const app = admin.apps[0] as admin.app.App;
              const defaultDb = getFirestore(app, "(default)");
              snap = await defaultDb.collection("platform_config").doc("global").get();
            } else {
@@ -318,7 +318,7 @@ export async function getJobEstimate(
         snap = await db.collection("jobs").limit(60).get();
       } catch (dbErr: any) {
         if (dbErr?.code === 5 || String(dbErr).includes("5 NOT_FOUND")) {
-          const app = admin.apps[0];
+          const app = admin.apps[0] as admin.app.App;
           const defaultDb = getFirestore(app, "(default)");
           snap = await defaultDb.collection("jobs").limit(60).get();
         } else {

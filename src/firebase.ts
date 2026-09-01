@@ -311,7 +311,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
+      providerInfo: auth.currentUser?.providerData.map((provider: any) => ({
         providerId: provider.providerId,
         displayName: provider.displayName,
         email: provider.email,
@@ -357,7 +357,7 @@ export const submitReview = async (
   try {
     const isLowRating = rating <= 2 && type === "tradesperson_review";
     
-    await runTransaction(db, async (transaction) => {
+    await runTransaction(db, async (transaction: any) => {
       // 1. ALL READS FIRST
       const userRef = doc(db, "users", revieweeId);
       let userSnap = null;

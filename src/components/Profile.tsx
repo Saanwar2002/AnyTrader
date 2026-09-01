@@ -592,6 +592,7 @@ export default function Profile() {
   const [globalTiers, setGlobalTiers] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [visibleReviewsCount, setVisibleReviewsCount] = useState<number>(5);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
   const [usage, setUsage] = useState({ quotes: 0, acceptedQuotes: 0 });
@@ -2996,7 +2997,7 @@ export default function Profile() {
             </div>
           ) : reviews.length > 0 ? (
             <div className="space-y-4">
-              {reviews.map((review) => (
+              {reviews.slice(0, visibleReviewsCount).map((review) => (
                 <div key={review.id} className="bg-white p-6 rounded-[2rem] border border-black shadow-[0_4px_20px_rgb(0,0,0,0.05)] bg-gradient-to-b from-white to-slate-50/30 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
@@ -3017,6 +3018,23 @@ export default function Profile() {
                   <p className="text-slate-600 text-sm leading-relaxed italic">"{review.comment}"</p>
                 </div>
               ))}
+
+              {reviews.length > visibleReviewsCount ? (
+                <button
+                  onClick={() => setVisibleReviewsCount(prev => prev + 5)}
+                  className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-2xl text-xs font-bold transition-all border border-black flex items-center justify-center gap-2 mt-4 cursor-pointer shadow-sm active:scale-[0.99]"
+                >
+                  <ChevronDown className="w-4 h-4 text-slate-700" />
+                  <span>Show More Reviews (+5 of {reviews.length - visibleReviewsCount} remaining)</span>
+                </button>
+              ) : reviews.length > 5 ? (
+                <button
+                  onClick={() => setVisibleReviewsCount(5)}
+                  className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-2xl text-xs font-semibold transition-all border border-slate-300 flex items-center justify-center gap-1.5 mt-4 cursor-pointer"
+                >
+                  <span>Show Fewer Reviews</span>
+                </button>
+              ) : null}
             </div>
           ) : (
             <div className="bg-white p-5 rounded-[2rem] border border-black shadow-[0_4px_20px_rgb(0,0,0,0.05)] bg-gradient-to-b from-white to-slate-50/30 text-center">

@@ -259,6 +259,38 @@ export const INITIAL_MOCK_TRADERS = [
     recommendedCategories: ["Painting & Decorating"],
   },
   {
+    uid: "seed-promoted-painter-lisa",
+    email: "lisa.park@parkdecorating.co.uk",
+    name: "Lisa Park",
+    businessName: "Andy Parker Quality Trades & Decorating",
+    firstName: "Lisa",
+    lastName: "Park",
+    role: "tradesperson",
+    trades: ["Painting & Decorating", "Wallpapering"],
+    services: ["Interior Door & Trim Painting", "Exterior Wood & Masonry Painting", "Bespoke Feature Wallpapering", "Dustless Sanding & Satin Woodwork"],
+    tierId: "Pro",
+    subscriptionType: "pro",
+    subscriptionTier: "pro",
+    subscriptionStatus: "active",
+    verificationStatus: "verified",
+    postcode: "M20 3LJ",
+    bio: "Interior & exterior decorating specialist. Fast, clean, dustless sanding, and high-precision door & woodwork finishes.",
+    rating: 4.88,
+    totalReviews: 87,
+    totalRecommendations: 32,
+    totalJobsDone: 145,
+    completedJobsRevenue: 29000,
+    trustScore: 97,
+    responseRate: 98,
+    isAcceptingRequests: true,
+    isAvailableForEmergency: false,
+    createdAt: new Date().toISOString(),
+    avatarUrl: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=400&auto=format&fit=crop&q=80",
+    searchFeedBadges: ["verified", "top_rated", "guarantee"],
+    miniProfileSettings: { callOutFee: 0, hourlyRate: 40, extraInfo: "Dustless sanding equipment. Free door & room painting estimates." },
+    recommendedCategories: ["Painting & Decorating"],
+  },
+  {
     uid: "seed-promoted-tailor",
     email: "amira.hassan@savilestitch.co.uk",
     name: "Amira Hassan",
@@ -548,3 +580,90 @@ export const seedMockTraders = async () => {
     handleFirestoreError(error, OperationType.WRITE, "users");
   }
 };
+
+export function generateTraderSeedReviews(traderName: string = "Tradesperson") {
+  const name = traderName.split(" ")[0] || "tradesperson";
+  const now = Math.floor(Date.now() / 1000);
+  return [
+    {
+      id: "rev-1",
+      reviewerName: "David Henderson",
+      rating: 5,
+      comment: `Outstanding service from ${traderName}. Extremely professional, punctual, clean work and fair transparent pricing.`,
+      createdAt: { seconds: now - 86400 * 2 },
+      timeAgo: "2 days ago"
+    },
+    {
+      id: "rev-2",
+      reviewerName: "Claire Thompson",
+      rating: 5,
+      comment: `Superb communication from initial quote to job completion. Left everything tidy and verified all certificates. 10/10!`,
+      createdAt: { seconds: now - 86400 * 6 },
+      timeAgo: "6 days ago"
+    },
+    {
+      id: "rev-3",
+      reviewerName: "Oliver Wright",
+      rating: 5,
+      comment: `Responded very fast and solved the issue within an hour. Reliable and honest tradesperson. Will definitely hire again.`,
+      createdAt: { seconds: now - 86400 * 12 },
+      timeAgo: "2 weeks ago"
+    },
+    {
+      id: "rev-4",
+      reviewerName: "Marcus Sterling",
+      rating: 5,
+      comment: `Highly skilled and polite team. Completed the project ahead of schedule and stuck strictly to the agreed estimate.`,
+      createdAt: { seconds: now - 86400 * 18 },
+      timeAgo: "2 weeks ago"
+    },
+    {
+      id: "rev-5",
+      reviewerName: "Emma Watson",
+      rating: 4,
+      comment: `Very pleased with the quality of work. Great attention to detail and good advice provided on maintenance.`,
+      createdAt: { seconds: now - 86400 * 25 },
+      timeAgo: "3 weeks ago"
+    },
+    {
+      id: "rev-6",
+      reviewerName: "James O'Connor",
+      rating: 5,
+      comment: `Top tier trade professional! Fixed complex issues without any fuss. Highly recommended for any urgent or planned job.`,
+      createdAt: { seconds: now - 86400 * 35 },
+      timeAgo: "1 month ago"
+    },
+    {
+      id: "rev-7",
+      reviewerName: "Sarah Jenkins",
+      rating: 5,
+      comment: `Fantastic experience from start to finish. Arrived sharp on time and left the property spotless.`,
+      createdAt: { seconds: now - 86400 * 45 },
+      timeAgo: "1 month ago"
+    },
+    {
+      id: "rev-8",
+      reviewerName: "Robert Patel",
+      rating: 5,
+      comment: `Knowledgeable, polite, and efficient. Provided clear receipts and compliance documentation immediately.`,
+      createdAt: { seconds: now - 86400 * 60 },
+      timeAgo: "2 months ago"
+    },
+    {
+      id: "rev-9",
+      reviewerName: "Hannah Brooks",
+      rating: 5,
+      comment: `Couldn't be happier with the results! The workmanship is second to none. Will be using ${name} for all future repairs.`,
+      createdAt: { seconds: now - 86400 * 75 },
+      timeAgo: "2 months ago"
+    },
+    {
+      id: "rev-10",
+      reviewerName: "Liam Davies",
+      rating: 5,
+      comment: `Exceeded expectations in every way. Transparent costs, excellent communication, and impeccable finish.`,
+      createdAt: { seconds: now - 86400 * 90 },
+      timeAgo: "3 months ago"
+    }
+  ];
+}

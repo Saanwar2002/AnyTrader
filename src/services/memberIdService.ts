@@ -12,7 +12,7 @@ export async function generateMemberId(role: string): Promise<{ memberId: string
 
   const counterRef = doc(db, "platform_counters", "member_id");
 
-  return await runTransaction(db, async (transaction) => {
+  return (await runTransaction(db, async (transaction: any) => {
     const counterSnap = await transaction.get(counterRef);
     
     let nextSeq = 10001; // Start standard range at 10001
@@ -37,7 +37,7 @@ export async function generateMemberId(role: string): Promise<{ memberId: string
 
     const formattedId = `${prefix}-${nextSeq}`;
     return { memberId: formattedId, memberSequence: nextSeq };
-  });
+  })) as any;
 }
 
 /**
@@ -48,7 +48,7 @@ export async function assignFoundingId(userId: string): Promise<string | null> {
   const foundingCounterRef = doc(db, "platform_counters", "founding_trader_id");
   const userRef = doc(db, "users", userId);
 
-  return await runTransaction(db, async (transaction) => {
+  return (await runTransaction(db, async (transaction: any) => {
     const counterSnap = await transaction.get(foundingCounterRef);
     const userSnap = await transaction.get(userRef);
 
@@ -75,5 +75,5 @@ export async function assignFoundingId(userId: string): Promise<string | null> {
     });
 
     return formattedId;
-  });
+  })) as any;
 }

@@ -2173,95 +2173,114 @@ const libraries: any[] = ['places', 'geometry'];
               } else {
                 navigate("/");
               }
-            }} className="w-10 h-10 bg-white/10 border border-black/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group shrink-0">
+            }} className="w-10 h-10 bg-white/10 border border-black/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group shrink-0" title="Go Back">
               <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
             </button>
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
               <Briefcase className="w-6 h-6 text-white" />
             </div>
           </div>
-          {isHomeowner && (
-            <div className="relative">
-              <button 
-                onClick={() => setShowActions(!showActions)}
-                className="p-2 hover:bg-white/10 rounded-full text-white transition-colors"
-              >
-                <MoreVertical className="w-6 h-6" />
-              </button>
-              
-              <AnimatePresence>
-                {showActions && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowActions(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                      className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-black z-20 py-2"
-                    >
-                      {job.status !== "completed" && (
+          <div className="flex items-center gap-2">
+            {isHomeowner && (
+              <div className="relative">
+                <button 
+                  onClick={() => setShowActions(!showActions)}
+                  className="p-2 hover:bg-white/10 rounded-full text-white transition-colors"
+                  title="More Options"
+                >
+                  <MoreVertical className="w-6 h-6" />
+                </button>
+                
+                <AnimatePresence>
+                  {showActions && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowActions(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-black z-20 py-2"
+                      >
+                        {job.status !== "completed" && (
+                          <button
+                            onClick={() => navigate(`/post-job`, { state: { editJob: job } })}
+                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Edit Job
+                          </button>
+                        )}
+                        
+                        {(job.status === "posted" || job.status === "open" || job.status === "accepted" || job.status === "pending_admin_review" || job.status === "quoting") && (
+                          <button
+                            onClick={handleCancelJobClick}
+                            disabled={isProcessing}
+                            className={cn("w-full px-4 py-2 text-left text-sm font-semibold flex items-center gap-2 disabled:opacity-50",
+                              confirmCancel ? "text-red-600 hover:bg-red-50" : "text-amber-600 hover:bg-amber-50"
+                            )}
+                          >
+                            {isProcessing ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : confirmCancel ? (
+                              <AlertTriangle className="w-4 h-4 text-red-600" />
+                            ) : (
+                              <XCircle className="w-4 h-4" />
+                            )}
+                            {confirmCancel ? "Confirm Cancel" : "Cancel Job"}
+                          </button>
+                        )}
+                        
+                        {(job.status === "cancelled" || job.status === "completed") && (
+                          <button
+                            onClick={handleRepostJob}
+                            disabled={isProcessing}
+                            className="w-full px-4 py-2 text-left text-sm font-semibold text-green-600 hover:bg-green-50 flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                            Repost Job
+                          </button>
+                        )}
+                        
+                        <div className="h-px bg-slate-100 my-1" />
                         <button
-                          onClick={() => navigate(`/post-job`, { state: { editJob: job } })}
-                          className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Edit Job
-                        </button>
-                      )}
-                      
-                      {(job.status === "posted" || job.status === "open" || job.status === "accepted" || job.status === "pending_admin_review" || job.status === "quoting") && (
-                        <button
-                          onClick={handleCancelJobClick}
+                          onClick={handleDeleteJobClick}
                           disabled={isProcessing}
-                          className={cn("w-full px-4 py-2 text-left text-sm font-semibold flex items-center gap-2 disabled:opacity-50",
-                            confirmCancel ? "text-red-600 hover:bg-red-50" : "text-amber-600 hover:bg-amber-50"
-                          )}
+                          className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
                         >
                           {isProcessing ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : confirmCancel ? (
-                            <AlertTriangle className="w-4 h-4 text-red-600" />
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : confirmDelete ? (
+                              <AlertTriangle className="w-4 h-4 text-red-600" />
                           ) : (
-                            <XCircle className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" />
                           )}
-                          {confirmCancel ? "Confirm Cancel" : "Cancel Job"}
+                          {confirmDelete ? "Confirm Delete" : "Delete Job"}
                         </button>
-                      )}
-                      
-                      {(job.status === "cancelled" || job.status === "completed") && (
-                        <button
-                          onClick={handleRepostJob}
-                          disabled={isProcessing}
-                          className="w-full px-4 py-2 text-left text-sm font-semibold text-green-600 hover:bg-green-50 flex items-center gap-2 disabled:opacity-50"
-                        >
-                          {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                          Repost Job
-                        </button>
-                      )}
-                      
-                      <div className="h-px bg-slate-100 my-1" />
-                      <button
-                        onClick={handleDeleteJobClick}
-                        disabled={isProcessing}
-                        className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
-                      >
-                        {isProcessing ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : confirmDelete ? (
-                            <AlertTriangle className="w-4 h-4 text-red-600" />
-                        ) : (
-                            <Trash2 className="w-4 h-4" />
-                        )}
-                        {confirmDelete ? "Confirm Delete" : "Delete Job"}
-                      </button>
 
-                      {/* Delete Job option removed as requested (except for cancelled now) */}
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+                        {/* Delete Job option removed as requested (except for cancelled now) */}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Close Button (X) */}
+            <button
+              onClick={() => {
+                if (window.history.state && window.history.state.idx > 0) {
+                  navigate(-1);
+                } else {
+                  navigate("/");
+                }
+              }}
+              className="w-10 h-10 bg-white/10 border border-black/20 rounded-xl flex items-center justify-center hover:bg-white/20 hover:scale-105 transition-all group shrink-0 text-white"
+              title="Close Job Details"
+              aria-label="Close Job Details"
+            >
+              <X className="w-6 h-6 group-hover:scale-110 transition-transform" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2419,7 +2438,7 @@ const libraries: any[] = ['places', 'geometry'];
             )}
           </div>
         ) : (!isHomeowner && job.status === "accepted") ? (
-          <div className="bg-white min-h-screen px-4 pt-6 pb-6 relative z-40">
+          <div className="bg-white min-h-screen px-4 pt-6 pb-6 relative">
             {/* Header & Status */}
             <div className="space-y-3">
               <h1 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">
@@ -2593,7 +2612,7 @@ const libraries: any[] = ['places', 'geometry'];
             </div>
 
             {/* Bottom Actions */}
-            <div className="mt-8 pb-4 z-50">
+            <div className="mt-8 pb-4">
               <div className="w-full flex items-center gap-3">
                 <button 
                   onClick={handleStartJob}

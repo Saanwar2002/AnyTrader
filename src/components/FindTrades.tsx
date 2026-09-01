@@ -16,7 +16,7 @@ import { getTraderUnifiedTrustBadges } from "@/src/lib/trustBadges";
 import { TraderDocumentViewerModal } from "./TraderDocumentViewerModal";
 import { SlowTrustBadgesCarousel } from "./SlowTrustBadgesCarousel";
 import { SEO } from "./SEO";
-import { seedMockTraders, INITIAL_MOCK_TRADERS, INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
+import { seedMockTraders, INITIAL_MOCK_TRADERS, INITIAL_MOCK_FLASH_DEALS, generateTraderSeedReviews } from "@/src/services/seedService";
 import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo, formatDealBadgeText, formatDealScheduleText } from "@/src/lib/flashDeals";
 import { shareDeal, DealCountdownBadge } from "@/src/lib/dealUtils";
 export { shareDeal, DealCountdownBadge };
@@ -413,6 +413,13 @@ export default function FindTrades() {
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedTraderPreview, setSelectedTraderPreview] = useState<Tradesperson | null>(null);
   const [selectedMiniProfile, setSelectedMiniProfile] = useState<Tradesperson | null>(null);
+  const [previewVisibleReviewsCount, setPreviewVisibleReviewsCount] = useState<number>(5);
+
+  useEffect(() => {
+    if (selectedTraderPreview) {
+      setPreviewVisibleReviewsCount(5);
+    }
+  }, [selectedTraderPreview]);
   const resultsRef = React.useRef<HTMLDivElement>(null);
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
   const [isListening, setIsListening] = useState(false);
@@ -2968,7 +2975,7 @@ export default function FindTrades() {
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="flex-1 overflow-y-auto px-6 pb-24 no-scrollbar">
+              <div className="flex-1 overflow-y-auto px-6 pb-36 no-scrollbar">
                 <div className="flex gap-4 mb-6 pt-2">
                   <div className="w-24 h-24 bg-slate-800 rounded-2xl shrink-0 overflow-hidden shadow-sm border-2 border-white/20">
                     {selectedTraderPreview.avatarUrl ? (
@@ -3050,50 +3057,72 @@ export default function FindTrades() {
 
                 {/* Top Reviews Preview */}
                 <div className="mb-6">
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Star className="w-3 h-3 text-slate-400" /> Top Reviews
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="bg-slate-50 border-2 border-black p-4 rounded-2xl">
-                      <div className="flex items-center gap-1 mb-2">
-                        {Array(5).fill(0).map((_, i) => <Star key={i} className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />)}
-                      </div>
-                      <p className="text-sm text-slate-700 font-medium italic mb-2">"Arrived on time, fixed the issue incredibly fast, and left the place spotless. Highly recommended!"</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mark S. — 2 weeks ago</p>
-                    </div>
-                     <div className="bg-slate-50 border-2 border-black p-4 rounded-2xl">
-                      <div className="flex items-center gap-1 mb-2">
-                        {Array(5).fill(0).map((_, i) => <Star key={i} className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />)}
-                      </div>
-                      <p className="text-sm text-slate-700 font-medium italic mb-2">"Great communication before arriving and completely transparent about pricing. Will use again."</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sarah L. — 1 month ago</p>
-                    </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                      <Star className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Client Reviews ({selectedTraderPreview.totalReviews || 10})
+                    </h4>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Showing {Math.min(previewVisibleReviewsCount, generateTraderSeedReviews(selectedTraderPreview.name).length)} of {generateTraderSeedReviews(selectedTraderPreview.name).length}
+                    </span>
                   </div>
-                </div>
 
-                <div className="flex justify-center mt-8 pb-4">
-                   <Link 
-                     to={`/profile/${selectedTraderPreview.uid}`}
-                     state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
-                     className="bg-slate-100 text-slate-700 px-6 py-3 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors flex items-center gap-2 border-2 border-black"
-                   >
-                     View Full Profile <ChevronRight className="w-3 h-3" />
-                   </Link>
+                  <div className="space-y-3">
+                    {generateTraderSeedReviews(selectedTraderPreview.name)
+                      .slice(0, previewVisibleReviewsCount)
+                      .map((rev) => (
+                        <div key={rev.id} className="bg-slate-50 border-2 border-black p-4 rounded-2xl">
+                          <div className="flex items-center gap-1 mb-2">
+                            {Array(5).fill(0).map((_, i) => (
+                              <Star key={i} className={`w-3.5 h-3.5 ${i < rev.rating ? "text-orange-500 fill-orange-500" : "text-slate-200"}`} />
+                            ))}
+                          </div>
+                          <p className="text-sm text-slate-700 font-medium italic mb-2">"{rev.comment}"</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{rev.reviewerName} — {rev.timeAgo}</p>
+                        </div>
+                    ))}
+                  </div>
+
+                  {generateTraderSeedReviews(selectedTraderPreview.name).length > previewVisibleReviewsCount ? (
+                    <button
+                      onClick={() => setPreviewVisibleReviewsCount(prev => prev + 5)}
+                      className="w-full mt-3 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl text-xs font-bold transition-all border border-black flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                    >
+                      <ChevronDown className="w-4 h-4 text-slate-700" />
+                      <span>Show More Reviews (+5 remaining)</span>
+                    </button>
+                  ) : generateTraderSeedReviews(selectedTraderPreview.name).length > 5 ? (
+                    <button
+                      onClick={() => setPreviewVisibleReviewsCount(5)}
+                      className="w-full mt-3 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-xs font-semibold transition-all border border-slate-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Show Fewer Reviews</span>
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
               {/* Fixed Bottom Action Bar */}
-              <div className="absolute bottom-0 left-0 right-0 bg-white border-t-2 border-black p-4 pb-8 flex items-center gap-4 justify-between shadow-[0_-10px_20px_rgba(0,0,0,0.03)]">
-                <div className="hidden sm:block">
+              <div className="absolute bottom-0 left-0 right-0 bg-white border-t-2 border-black p-3.5 pb-6 sm:pb-4 flex items-center gap-4 justify-between shadow-[0_-10px_20px_rgba(0,0,0,0.06)] z-20">
+                <div className="hidden sm:block shrink-0">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Typical Range</p>
-                  <p className="text-lg font-black text-slate-900">£150 - £250</p>
+                  <p className="text-base font-black text-slate-900">£150 - £250</p>
                 </div>
-                <button 
-                  onClick={() => navigate(`/profile/${selectedTraderPreview.uid}`, { state: { openQuote: true, isB2B, linkedPropertyId: isB2B && selectedAsset ? selectedAsset.id : undefined, linkedPropertyName: isB2B && selectedAsset ? (selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1) : undefined } })}
-                  className="flex-1 bg-slate-900 text-white rounded-2xl py-4 px-6 text-sm font-black text-center shadow-lg shadow-slate-900/10 hover:-translate-y-0.5 transition-all w-full flex justify-center uppercase tracking-widest"
-                >
-                  Request Quote
-                </button>
+                <div className="flex-1 flex flex-col gap-2 w-full">
+                  <button 
+                    onClick={() => navigate(`/profile/${selectedTraderPreview.uid}`, { state: { openQuote: true, isB2B, linkedPropertyId: isB2B && selectedAsset ? selectedAsset.id : undefined, linkedPropertyName: isB2B && selectedAsset ? (selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1) : undefined } })}
+                    className="w-full bg-slate-900 text-white rounded-xl py-2.5 px-5 text-xs font-black text-center shadow-md shadow-slate-900/10 hover:bg-slate-800 active:scale-[0.99] transition-all flex items-center justify-center uppercase tracking-widest border border-black cursor-pointer"
+                  >
+                    Request Quote
+                  </button>
+                  <Link 
+                    to={`/profile/${selectedTraderPreview.uid}`}
+                    state={isB2B && selectedAsset ? { linkedPropertyId: selectedAsset.id, linkedPropertyName: selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1, isB2B } : undefined}
+                    className="w-full bg-slate-100 text-slate-900 rounded-xl py-2.5 px-5 text-xs font-bold text-center hover:bg-slate-200 active:scale-[0.99] transition-colors flex items-center justify-center gap-1.5 uppercase tracking-wider border border-black cursor-pointer"
+                  >
+                    <span>View Full Profile</span>
+                    <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </Link>
+                </div>
               </div>
             </motion.div>
           </>

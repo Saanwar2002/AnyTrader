@@ -36,11 +36,11 @@ if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
     onOfflineReady() {
       console.log('App ready to work offline');
     },
-    onRegisteredSW(_swUrl, registration) {
+    onRegisteredSW(_swUrl: string, registration?: ServiceWorkerRegistration) {
       if (registration) {
         // Periodically check for updates every hour
         setInterval(() => {
-          registration.update().catch((e) => console.warn('[SW] Periodic update check failed:', e));
+          registration.update().catch((e: any) => console.warn('[SW] Periodic update check failed:', e));
         }, 60 * 60 * 1000);
       }
     }

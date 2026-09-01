@@ -75,7 +75,7 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
 I'm trained on AnyTrader's UK platform data across 93+ trade sectors — connecting you with real verified local tradespeople, accurate £ GBP pricing, and safety standards (Gas Safe, Part P, Awaab's Law, FSA).
 
 How can I assist your project today?`,
-    suggestedCategories: ["Plumbing", "Electrical", "Gas & Heating", "Specialist Cleaning"]
+    suggestedCategories: ["Plumbing", "Electrical", "Painting & Decorating", "Gas & Heating"]
   };
 
   const [messages, setMessages] = useState<Message[]>([initialGreeting]);
@@ -104,7 +104,7 @@ How can I assist your project today?`,
     const primaryCategory = matchedCats[0] || "General Trades";
 
     // 2. Query hybrid trader recommendations in parallel
-    const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode).catch(() => []);
+    const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode, undefined, userMessage).catch(() => []);
 
     // 3. User context payload for Gemini
     const userContext = {

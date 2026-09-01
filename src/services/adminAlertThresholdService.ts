@@ -287,20 +287,20 @@ export function startAdminThresholdBreachListener(
   }, 2500);
 
   // 1. Listen for dynamic rule updates
-  const unsubRules = onSnapshot(doc(db, "platform_config", "alert_thresholds"), (snap) => {
+  const unsubRules = onSnapshot(doc(db, "platform_config", "alert_thresholds"), (snap: any) => {
     if (snap.exists()) {
       activeRules = { ...DEFAULT_THRESHOLD_RULES, ...snap.data() };
     }
-  }, (err) => console.debug("Alert rules listener note:", err));
+  }, (err: any) => console.debug("Alert rules listener note:", err));
 
   // 2. Listen to Users Collection (Check for rapid profile creations & clustering)
-  const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-    const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() as any }));
+  const unsubUsers = onSnapshot(collection(db, "users"), (snapshot: any) => {
+    const users = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() as any }));
     const now = Date.now();
     const fifteenMinutesAgo = now - (15 * 60 * 1000);
 
     // Filter profiles created within the last 15 minutes
-    const recentUsers = users.filter(u => {
+    const recentUsers = users.filter((u: any) => {
       if (!u.createdAt) return false;
       const createdMillis = typeof u.createdAt === "object" && u.createdAt.seconds 
         ? u.createdAt.seconds * 1000 
@@ -321,7 +321,7 @@ export function startAdminThresholdBreachListener(
           targetEntity: {
             userId: recentUsers[0]?.id || "cluster",
             userName: `${recentUsers.length} new accounts`,
-            userEmail: recentUsers.map(u => u.email).filter(Boolean).slice(0, 3).join(", "),
+            userEmail: recentUsers.map((u: any) => u.email).filter(Boolean).slice(0, 3).join(", "),
             ipOrDevice: recentUsers[0]?.ipAddress || "Subnet / Cluster",
             role: recentUsers[0]?.role || "homeowner"
           },
@@ -333,8 +333,8 @@ export function startAdminThresholdBreachListener(
           },
           evidence: {
             accountCount: recentUsers.length,
-            accountEmails: recentUsers.map(u => u.email).filter(Boolean),
-            accountRoles: recentUsers.map(u => u.role)
+            accountEmails: recentUsers.map((u: any) => u.email).filter(Boolean),
+            accountRoles: recentUsers.map((u: any) => u.role)
           },
           suggestedActions: [
             { label: "Freeze Recent Batch", action: "freeze_account", danger: true },
@@ -347,17 +347,17 @@ export function startAdminThresholdBreachListener(
         dispatchBreachNotification(breach, activeRules, onBreachDetected, isInitialLoad);
       }
     }
-  }, (err) => console.debug("Users threshold listener note:", err));
+  }, (err: any) => console.debug("Users threshold listener note:", err));
 
   // 3. Listen to Flash Deals Collection (Check for deal spam & predatory discount depths)
-  const unsubDeals = onSnapshot(collection(db, "flash_deals"), (snapshot) => {
-    const deals = snapshot.docs.map(d => ({ id: d.id, ...d.data() as any }));
+  const unsubDeals = onSnapshot(collection(db, "flash_deals"), (snapshot: any) => {
+    const deals = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() as any }));
     const now = Date.now();
     const oneHourAgo = now - (60 * 60 * 1000);
 
     // Group deals by trader
     const traderDeals1h: Record<string, any[]> = {};
-    deals.forEach(deal => {
+    deals.forEach((deal: any) => {
       const createdMillis = deal.createdAt ? (typeof deal.createdAt === "object" && deal.createdAt.seconds ? deal.createdAt.seconds * 1000 : new Date(deal.createdAt).getTime()) : 0;
       if (createdMillis >= oneHourAgo && deal.traderId) {
         if (!traderDeals1h[deal.traderId]) traderDeals1h[deal.traderId] = [];
@@ -436,7 +436,7 @@ export function startAdminThresholdBreachListener(
             evidence: {
               traderId,
               dealsCount: tDeals.length,
-              dealTitles: tDeals.map(d => d.service)
+              dealTitles: tDeals.map((d: any) => d.service)
             },
             suggestedActions: [
               { label: "Throttle Deal Publishing", action: "revoke_deal", danger: true },
@@ -449,18 +449,18 @@ export function startAdminThresholdBreachListener(
         }
       }
     });
-  }, (err) => console.debug("Deals threshold listener note:", err));
+  }, (err: any) => console.debug("Deals threshold listener note:", err));
 
   // 4. Listen to AI Agent Audit Logs (Check for rapid API calls & scraping bursts)
   const unsubAiLogs = onSnapshot(
     query(collection(db, "ai_agent_audit_logs"), orderBy("timestamp", "desc"), limit(40)),
-    (snapshot) => {
-      const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() as any }));
+    (snapshot: any) => {
+      const logs = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() as any }));
       const now = Date.now();
       const oneMinuteAgo = now - (60 * 1000);
 
       // Check log volume in last 60 seconds
-      const recentLogs = logs.filter(l => {
+      const recentLogs = logs.filter((l: any) => {
         const timeMillis = l.timestamp ? (typeof l.timestamp === "object" && l.timestamp.seconds ? l.timestamp.seconds * 1000 : new Date(l.timestamp).getTime()) : 0;
         return timeMillis >= oneMinuteAgo;
       });
@@ -490,7 +490,7 @@ export function startAdminThresholdBreachListener(
             evidence: {
               queriesIn60s: recentLogs.length,
               targetAgent: topAgent,
-              recentActions: recentLogs.slice(0, 4).map(l => l.actionTaken || l.action)
+              recentActions: recentLogs.slice(0, 4).map((l: any) => l.actionTaken || l.action)
             },
             suggestedActions: [
               { label: "Throttle AI Fleet", action: "throttle_ai", danger: true },
@@ -503,7 +503,7 @@ export function startAdminThresholdBreachListener(
         }
       }
     },
-    (err) => console.debug("AI logs listener note:", err)
+    (err: any) => console.debug("AI logs listener note:", err)
   );
 
   return () => {

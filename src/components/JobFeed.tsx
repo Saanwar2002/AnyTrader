@@ -680,8 +680,8 @@ export default function JobFeed() {
     const jobExclusiveUntil = job.exclusiveUntil?.toDate ? job.exclusiveUntil.toDate() : (job.exclusiveUntil ? new Date(job.exclusiveUntil) : null);
     const isCurrentlyExclusive = jobExclusiveUntil && jobExclusiveUntil > new Date();
     
-    // Hide if it's currently exclusive and the user DOES NOT have the fast pass AND the paywall is active
-    if (isCurrentlyExclusive && profile?.hasExclusiveAddon !== true && sysConfig?.paywallEnabled !== false) {
+    // Hide if it's currently exclusive and the user DOES NOT have active fast pass AND the paywall is active
+    if (isCurrentlyExclusive && (!profile?.hasExclusiveAddon || profile?.isExclusiveActive === false) && sysConfig?.paywallEnabled !== false) {
       return false;
     }
 
