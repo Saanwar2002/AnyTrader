@@ -393,11 +393,11 @@ const libraries: any[] = ['places', 'geometry'];
         validQuotes.push(quote);
       }
       
-      // Update quote count if any were deleted
-      if (deletedCount > 0 && user?.uid === job.homeownerId) {
-         import("firebase/firestore").then(({ updateDoc, doc, increment }) => {
+      // Update quote count if any were deleted or out of sync
+      if (user?.uid === job.homeownerId && (deletedCount > 0 || (job.quoteCount !== undefined && job.quoteCount < 0) || (job.quoteCount !== undefined && job.quoteCount !== validQuotes.length))) {
+         import("firebase/firestore").then(({ updateDoc, doc }) => {
             updateDoc(doc(db, "jobs", id), {
-              quoteCount: increment(-deletedCount)
+              quoteCount: Math.max(0, validQuotes.length)
             }).catch(console.error);
          });
       }
@@ -795,10 +795,10 @@ const libraries: any[] = ['places', 'geometry'];
     }
 
     try {
-      // Decrement quoteCount on job
-      const { increment } = await import("firebase/firestore");
+      // Decrement quoteCount on job safely
+      const remainingCount = Math.max(0, quotes.filter(q => q.id !== withdrawingQuote.id).length);
       await updateDoc(doc(db, "jobs", id), {
-        quoteCount: increment(-1)
+        quoteCount: remainingCount
       });
     } catch (err) {
       console.error("Error decrementing quote count on job:", err);
@@ -976,10 +976,10 @@ const libraries: any[] = ['places', 'geometry'];
         rejectedAt: serverTimestamp()
       });
 
-      // Decrement quoteCount on job
-      const { increment } = await import("firebase/firestore");
+      // Decrement quoteCount on job safely
+      const remainingCount = Math.max(0, quotes.filter(q => q.id !== quote.id).length);
       await updateDoc(doc(db, "jobs", id), {
-        quoteCount: increment(-1)
+        quoteCount: remainingCount
       });
 
       // Notify tradesperson
@@ -3890,7 +3890,7 @@ const libraries: any[] = ['places', 'geometry'];
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-2xl font-black text-slate-900">
-                Quotes ({job.quoteCount || quotes.length})
+                Quotes ({Math.max(quotes.length, Math.max(0, job.quoteCount || 0))})
               </h3>
               <div className="flex items-center gap-3">
                 {isHomeowner && quotes.length > 1 && job.status === "posted" && (
@@ -4178,71 +4178,6 @@ const libraries: any[] = ['places', 'geometry'];
                         <p className="text-xs text-amber-800 italic">"{quote.requoteMessage}"</p>
                       </div>
                     )}
-                    
-                    {quote.status === "accepted" && (
-                      <div className="flex flex-col gap-3 pt-2">
-                        {/* Direct Merchant AI BOM One-Click Ordering Card */}
-                        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950 text-white border border-white/20 shadow-md space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-400 flex items-center justify-center font-bold">
-                                📦
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h4 className="text-xs font-black text-white">Direct Merchant AI BOM Ordering</h4>
-                                  <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase">
-                                    TradeOS
-                                  </span>
-                                </div>
-                                <p className="text-[10px] text-slate-300">
-                                  {job.hasBOMOrder 
-                                    ? `Ordered via ${job.bomMerchant || 'Merchant'} • Ref: ${job.bomPickupRef || 'Ready'}`
-                                    : "1-Click Trade Discount Basket (Screwfix / Travis Perkins / Toolstation)"}
-                                </p>
-                              </div>
-                            </div>
-
-                            {job.hasBOMOrder ? (
-                              <span className="text-[10px] font-black bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full">
-                                ✓ {job.bomStatus === 'ready_for_pickup' ? 'Ready for Counter Pick' : 'Dispatched'}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-black text-amber-400 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
-                                Save 1-2 Hrs
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/10 text-xs">
-                            <div className="text-[11px] text-slate-300">
-                              <span>Materials Total: </span>
-                              <strong className="text-amber-400 font-mono">
-                                £{(job.materialsCost || quote.materialsCost || 85).toFixed(2)}
-                              </strong>
-                              <span className="text-emerald-400 text-[10px] ml-1"> (Trade Pricing)</span>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => setShowBomModal(true)}
-                              className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm active:scale-95"
-                            >
-                              <span>{job.hasBOMOrder ? "View Merchant Barcode & Receipt" : "⚡ 1-Click Order Materials"}</span>
-                              <Sparkles className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <button 
-                          onClick={() => handleDownloadQuote(quote)}
-                          className="flex items-center gap-1.5 text-xs font-bold text-green-600 hover:text-green-700 transition-colors bg-green-50 self-start px-3 py-1.5 rounded-lg border border-green-100"
-                        >
-                          <Download className="w-4 h-4" />
-                          Download Agreed Quote (PDF)
-                        </button>
-                      </div>
-                    )}
 
                     <AnimatePresence>
                       {showHistoryId === quote.id && quote.history && (
@@ -4325,6 +4260,98 @@ const libraries: any[] = ['places', 'geometry'];
                     )}
                   </div>
                 </div>
+
+                {/* Direct Merchant AI BOM One-Click Ordering & Agreed Quote PDF (Full Width) */}
+                {quote.status === "accepted" && (
+                  <div className="w-full flex flex-col gap-3 pt-2">
+                    <div className="w-full p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950 text-white border border-white/20 shadow-md space-y-3.5 overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-400 flex items-center justify-center font-bold text-base shrink-0">
+                            📦
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-xs sm:text-sm font-black text-white leading-tight">Direct Merchant AI BOM Ordering</h4>
+                              <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase shrink-0">
+                                TradeOS
+                              </span>
+                              {quote.quoteScope === "labour_only" ? (
+                                <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-400/40 font-bold px-2 py-0.5 rounded-full uppercase shrink-0">
+                                  Labour Only • Parts Extra
+                                </span>
+                              ) : (
+                                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-bold px-2 py-0.5 rounded-full uppercase shrink-0">
+                                  All-Inclusive • Parts in Quote
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-snug mt-0.5">
+                              {job.hasBOMOrder 
+                                ? `Ordered via ${job.bomMerchant || 'Merchant'} • Ref: ${job.bomPickupRef || 'Ready'}`
+                                : quote.quoteScope === "labour_only"
+                                ? (isHomeowner 
+                                    ? "Labour-only quote: You can order parts at direct Trade Discounts with 1-Click collection or van delivery." 
+                                    : "Labour-only quote: Client supplies parts. You can prepare the BOM basket for client approval or pickup.")
+                                : (isHomeowner
+                                    ? "All-Inclusive quote: Materials are covered under the agreed quote price. Tradesperson manages procurement."
+                                    : "All-Inclusive quote: 1-Click Trade Discount Basket (Screwfix / Travis Perkins / Toolstation) to save 1-2 hrs.")}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 self-start sm:self-auto pl-12 sm:pl-0">
+                          {job.hasBOMOrder ? (
+                            <span className="inline-flex items-center text-[10px] font-black bg-emerald-500 text-slate-950 px-2.5 py-1 rounded-full whitespace-nowrap shadow-sm">
+                              ✓ {job.bomStatus === 'ready_for_pickup' ? 'Ready for Counter Pick' : job.bomStatus === 'out_for_delivery' ? 'Out for Delivery' : 'Dispatched'}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[10px] font-black text-amber-300 bg-amber-400/20 px-2.5 py-1 rounded-full border border-amber-400/30 whitespace-nowrap">
+                              Save 1-2 Hrs
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-white/10 text-xs">
+                        <div className="text-[11px] text-slate-300 flex items-center gap-1.5">
+                          <span>Materials Estimate:</span>
+                          <strong className="text-amber-400 font-mono text-xs sm:text-sm">
+                            £{(job.materialsCost || quote.materialsCost || 85).toFixed(2)}
+                          </strong>
+                          <span className="text-emerald-400 text-[10px] font-semibold bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                            Trade Pricing
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowBomModal(true)}
+                          className="w-full sm:w-auto px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-md active:scale-95 cursor-pointer"
+                        >
+                          <span>
+                            {job.hasBOMOrder 
+                              ? "View Merchant Barcode & Status" 
+                              : quote.quoteScope === "labour_only" && isHomeowner
+                              ? "⚡ 1-Click Order Materials"
+                              : quote.quoteScope === "complete_package" && isHomeowner
+                              ? "📦 View Material Specs & Parts"
+                              : "⚡ 1-Click Order Materials"}
+                          </span>
+                          <Sparkles className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => handleDownloadQuote(quote)}
+                      className="flex items-center justify-center sm:justify-start gap-2 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition-colors bg-emerald-50 hover:bg-emerald-100 self-stretch sm:self-start px-3.5 py-2.5 rounded-xl border border-emerald-200 shadow-sm cursor-pointer"
+                    >
+                      <Download className="w-4 h-4 text-emerald-600" />
+                      <span>Download Agreed Quote (PDF)</span>
+                    </button>
+                  </div>
+                )}
 
                 {quote.status === "accepted" && (
                   <div className="w-full">

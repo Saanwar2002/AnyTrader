@@ -42,6 +42,7 @@ export function MaterialsTracker({
   const [selectedMerchant, setSelectedMerchant] = useState("Screwfix Trade");
   const [isGenerating, setIsGenerating] = useState(false);
   const [showBomModal, setShowBomModal] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [activeBomOrder, setActiveBomOrder] = useState<BOMOrderRecord | null>(() => {
     if (job?.hasBOMOrder) {
       return {
@@ -434,12 +435,38 @@ export function MaterialsTracker({
                 )}
 
                 {!readOnly && (
-                  <button
-                    onClick={() => handleRemoveItem(item.id)}
-                    className="p-1 text-red-500 hover:text-red-700 transition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  confirmDeleteId === item.id ? (
+                    <div className="flex items-center gap-1 bg-red-50 p-0.5 rounded-lg border border-red-300">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleRemoveItem(item.id);
+                          setConfirmDeleteId(null);
+                        }}
+                        className="px-1.5 py-0.5 bg-red-600 hover:bg-red-700 text-white font-black text-[9px] rounded shadow-sm active:scale-95 transition cursor-pointer"
+                        title="Confirm delete"
+                      >
+                        Delete?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="px-1 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[9px] rounded transition cursor-pointer"
+                        title="Cancel"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(item.id)}
+                      className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition cursor-pointer"
+                      title="Delete material"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )
                 )}
               </div>
             </div>

@@ -1975,13 +1975,13 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       <AnimatePresence>
         {showEmergencyToast && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[110] bg-[#1e293b] text-white px-6 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 whitespace-nowrap"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 15, scale: 0.95 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[110] w-[calc(100%-2rem)] max-w-sm bg-slate-900/95 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl border border-white/20 flex items-center justify-center gap-3 text-center"
           >
-            <Zap className="w-5 h-5 text-amber-400" />
-            <p className="text-sm font-bold">Tap again to confirm change</p>
+            <Zap className="w-5 h-5 text-amber-400 shrink-0" />
+            <p className="text-xs font-bold leading-tight">Tap again to confirm change</p>
           </motion.div>
         )}
 
@@ -2101,13 +2101,13 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
       <AnimatePresence>
         {showIMToast && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] bg-[#1e293b] text-white px-6 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 whitespace-nowrap"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 15, scale: 0.95 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[110] w-[calc(100%-2rem)] max-w-sm bg-slate-900/95 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl border border-white/20 flex items-center justify-center gap-3 text-center"
           >
-            <Zap className="w-5 h-5 text-amber-500" />
-            <p className="text-sm font-bold">Tap again to confirm Instant Match</p>
+            <Zap className="w-5 h-5 text-amber-500 shrink-0" />
+            <p className="text-xs font-bold leading-tight">Tap again to confirm Instant Match</p>
           </motion.div>
         )}
       </AnimatePresence>

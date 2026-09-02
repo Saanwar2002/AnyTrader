@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { UserProfile } from "../types";
 import { SessionReauthModal } from "./SessionReauthModal";
+import { isAuthorizedAdminEmail } from "../services/adminAuthSecurityService";
 
 export type SessionStatus = "active" | "expiring_soon" | "expired" | "invalid";
 
@@ -233,13 +234,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       clearTimeout(initFallbackTimer);
 
-      // Security: Prevent unverified emails from accessing the platform
-      // Temporarily disabled for development testing
-      const isAdminEmail = firebaseUser?.email?.toLowerCase() === "saanwar2002@gmail.com";
-      const isTestAdmin = sessionStorage.getItem("is_test_admin") === "true";
+      // Security: Validate admin email
+      let cachedConfig = null;
+      try {
+        const stored = localStorage.getItem("master_admin_auth_config");
+        if (stored) cachedConfig = JSON.parse(stored);
+      } catch {}
+      const isAdminEmail = isAuthorizedAdminEmail(firebaseUser?.email, cachedConfig);
       
-      if (firebaseUser && !firebaseUser.emailVerified && !firebaseUser.isAnonymous && !isAdminEmail && !isTestAdmin) {
-        console.warn("Unverified email attempted login:", firebaseUser.email, "(Allowed due to active dev/test bypass)");
+      if (firebaseUser && !firebaseUser.emailVerified && !firebaseUser.isAnonymous && !isAdminEmail) {
+        console.warn("Unverified email attempted login:", firebaseUser.email);
       }
 
       setUser(firebaseUser);
@@ -265,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (docSnap.exists()) {
               const data = docSnap.data();
               
-              if ((isAdminEmail || isTestAdmin) && data.role !== "admin") {
+              if (isAdminEmail && data.role !== "admin") {
                 data.role = "admin";
                 updateDoc(doc(db, "users", firebaseUser.uid), { 
                   role: "admin",
@@ -333,7 +337,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               }, 0);
             } else {
-              if (isAdminEmail || isTestAdmin) {
+              if (isAdminEmail) {
                 const adminData = {
                   uid: firebaseUser.uid,
                   email: firebaseUser.email || "saanwar2002@gmail.com",
@@ -373,7 +377,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAuthReady(true);
         });
       } else {
-        sessionStorage.removeItem("is_test_admin");
         setProfile(null);
         setLoading(false);
         setIsAuthReady(true);

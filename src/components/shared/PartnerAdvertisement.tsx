@@ -489,6 +489,14 @@ export default function PartnerAdvertisement({
   const displayReviews = linkedTrader?.totalReviews || (currentAd as any).totalReviews;
   const displayPerk = currentAd.perkText || (linkedTrader?.isAvailableForEmergency ? "⚡ 24/7 Response Guaranteed" : linkedTrader?.trades?.[0] ? `${linkedTrader.trades[0]} Specialist` : undefined);
 
+  const mainTradeCategory = 
+    linkedTrader?.trade || 
+    linkedTrader?.trades?.[0] || 
+    (linkedTrader as any)?.tradeCategory ||
+    (currentAd.targetCategories?.find((c: string) => c && c.toLowerCase() !== "all") || (currentAd.targetCategories?.[0] !== "all" ? currentAd.targetCategories?.[0] : undefined)) ||
+    (currentAd as any).tradeCategory ||
+    (currentAd as any).category;
+
   const AdIcon = iconMap[currentAd.iconName || ""] || (isPromotedTrader ? Star : Zap);
 
   // Handle ad clicks (external vs internal routes with billing deductions)
@@ -713,7 +721,7 @@ export default function PartnerAdvertisement({
                   )}
                 </div>
 
-                {/* Title & Hierarchy: Personal Name -> Business & Category -> Rating */}
+                {/* Title & Hierarchy: Personal Name -> Business Name -> Rating + Prominent Trade Category Badge */}
                 <div className="min-w-0 flex-1">
                   {isPromotedTrader ? (
                     <>
@@ -724,32 +732,37 @@ export default function PartnerAdvertisement({
                           : (linkedTrader?.name || currentAd.advertiserName || displayTitle)}
                       </h4>
 
-                      {/* 2. Business Name & Category just below Personal Name */}
+                      {/* 2. Business Name */}
                       {(() => {
                         const bName = linkedTrader?.businessName || (currentAd.title !== linkedTrader?.name ? currentAd.title : "");
-                        const cat = linkedTrader?.trades?.[0] || (currentAd.targetCategories?.[0] !== "all" ? currentAd.targetCategories?.[0] : "");
-                        const subtitle = [bName, cat].filter(Boolean).join(" · ");
-                        if (!subtitle || linkedTrader?.displayNamePreference === "business_only") {
-                          if (cat) return <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">{cat}</p>;
-                          return null;
+                        if (bName && linkedTrader?.displayNamePreference !== "business_only") {
+                          return (
+                            <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">
+                              {bName}
+                            </p>
+                          );
                         }
-                        return (
-                          <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">
-                            {subtitle}
-                          </p>
-                        );
+                        return null;
                       })()}
 
-                      {/* 3. Star Rating directly under Business Name */}
-                      {displayRating && (
-                        <div className="flex items-center mt-1">
+                      {/* 3. Star Rating & Prominent Main Trade Category Badge */}
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        {displayRating && (
                           <span className="inline-flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0">
                             <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
                             {Number(displayRating).toFixed(1)}
                             {displayReviews ? <span className="text-[9px] opacity-80">({displayReviews})</span> : null}
                           </span>
-                        </div>
-                      )}
+                        )}
+
+                        {/* Highlighted Main Trade Category Pill */}
+                        {mainTradeCategory && mainTradeCategory.toLowerCase() !== "all" && (
+                          <span className="inline-flex items-center gap-1 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white border border-blue-400/60 px-2 py-0.5 rounded-md text-[9.5px] sm:text-[10px] font-black tracking-wide uppercase shadow-xs shrink-0 max-w-[170px] sm:max-w-[210px] truncate">
+                            <Wrench className="w-2.5 h-2.5 text-sky-200 shrink-0" />
+                            <span className="truncate">{mainTradeCategory}</span>
+                          </span>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <>
@@ -757,15 +770,22 @@ export default function PartnerAdvertisement({
                       <h4 className="text-xs sm:text-sm font-black text-white leading-tight truncate">
                         {displayTitle}
                       </h4>
-                      {displayRating && (
-                        <div className="flex items-center mt-1">
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        {displayRating && (
                           <span className="inline-flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0">
                             <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
                             {Number(displayRating).toFixed(1)}
                             {displayReviews ? <span className="text-[9px] opacity-80">({displayReviews})</span> : null}
                           </span>
-                        </div>
-                      )}
+                        )}
+
+                        {mainTradeCategory && mainTradeCategory.toLowerCase() !== "all" && (
+                          <span className="inline-flex items-center gap-1 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white border border-blue-400/60 px-2 py-0.5 rounded-md text-[9.5px] sm:text-[10px] font-black tracking-wide uppercase shadow-xs shrink-0 max-w-[170px] sm:max-w-[210px] truncate">
+                            <Tag className="w-2.5 h-2.5 text-sky-200 shrink-0" />
+                            <span className="truncate">{mainTradeCategory}</span>
+                          </span>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>

@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { db, doc, setDoc, serverTimestamp, handleFirestoreError, OperationType, collection, query, where, getDocs, updateDoc, onSnapshot, auth, logout, increment } from "@/src/firebase";
 import { RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
 import { motion } from "motion/react";
-import { User, Briefcase, Loader2, MapPin, Shield, CheckCircle2, ChevronRight, ChevronLeft, Upload, AlertCircle, Info, PoundSterling, Award, Gift, Home, Building2, Star } from "lucide-react";
+import { User, Briefcase, Loader2, MapPin, Shield, CheckCircle2, ChevronRight, ChevronLeft, Upload, AlertCircle, Info, PoundSterling, Award, Gift, Home, Building2, Star, CarFront, Check, LogOut } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { useCategories } from "../lib/CategoryProvider";
@@ -124,6 +124,14 @@ export default function Onboarding() {
     }
 
     const cleanPhone = phone ? phone.replace(/\s/g, "") : "";
+    const isAuthorizedAdmin = user?.email?.toLowerCase() === "saanwar2002@gmail.com";
+
+    // Prevent unauthorized role elevation to admin
+    if (role === 'admin' && !isAuthorizedAdmin) {
+      setError("Unauthorized role selected. Please choose Homeowner, Tradesperson / Business, or Driver.");
+      setRole("homeowner");
+      return;
+    }
 
     if (role !== 'admin') {
       // 1. Block Temporary Emails
@@ -186,12 +194,11 @@ export default function Onboarding() {
 
     setLoading(true);
     setError(null);
-    const isTestAdmin = sessionStorage.getItem("is_test_admin") === "true";
 
     const isBusiness = role === "business";
 
     // Temporarily disabled for development testing
-    if (false && isBusiness && !isTestAdmin && !confirmationResult && !user.phoneNumber && !bypassPhoneAuth) {
+    if (false && isBusiness && !confirmationResult && !user.phoneNumber && !bypassPhoneAuth) {
       try {
         if (!(window as any).recaptchaVerifier) {
           (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
@@ -248,11 +255,11 @@ export default function Onboarding() {
     }
 
     try {
-      const finalRole = isTestAdmin ? "admin" : role;
+      const finalRole = isAuthorizedAdmin && role === "admin" ? "admin" : role;
       const finalName = finalRole === "admin" && !name ? "System Admin" : name;
       const finalPhone = finalRole === "admin" && !phone ? "N/A" : cleanPhone;
       
-      const finalPermissions = isTestAdmin ? ["manage_users", "manage_jobs", "manage_disputes", "view_logs", "manage_team"] : permissions;
+      const finalPermissions = finalRole === "admin" ? ["manage_users", "manage_jobs", "manage_disputes", "view_logs", "manage_team"] : permissions;
 
       // Check for referral
       let referrerUid = null;
@@ -412,10 +419,6 @@ export default function Onboarding() {
       }
 
       console.log("Profile saved successfully.");
-      
-      if (isTestAdmin) {
-        sessionStorage.removeItem("is_test_admin");
-      }
       // No need to reload, AuthProvider is listening to onSnapshot
     } catch (err) {
       console.error("Error creating profile:", err);
@@ -485,55 +488,68 @@ export default function Onboarding() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex items-start justify-center -mt-20 px-4 pb-12 relative z-20">
+      <div className="flex-1 flex items-start justify-center -mt-16 sm:-mt-20 px-4 pb-12 relative z-20">
         <motion.div 
-          initial={{ opacity: 0, y: 40 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-white pt-12 px-8 pb-8 rounded-[3.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] space-y-8 relative"
+          className="max-w-lg w-full bg-white pt-8 sm:pt-10 px-5 sm:px-8 pb-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-xl border border-black/10 space-y-6 relative"
         >
           {step === 1 && (
             <div className="space-y-6">
-              <div 
-                onClick={() => logout()}
-                className="absolute top-6 left-6 text-slate-500 hover:text-slate-800 p-2.5 z-[60] cursor-pointer bg-white rounded-2xl shadow hover:shadow-md transition-all group border border-black"
-              >
-                  <ChevronLeft className="w-8 h-8 group-hover:-translate-x-0.5 transition-transform" />
+              <div className="flex items-center justify-between pb-2 border-b border-black/5">
+                <button 
+                  type="button"
+                  onClick={() => logout()}
+                  className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 p-2 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all border border-black/10"
+                  title="Sign out or switch account"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Switch Account</span>
+                </button>
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+                  Step 1 of 3
+                </span>
               </div>
-              <div className="space-y-4 pt-10">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight">I am a...</h2>
+
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Select your role</h2>
+                  <p className="text-xs text-slate-500 font-medium">Choose how you plan to use AnyTrader & TradeOS</p>
+                </div>
                 
-                
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
+                    type="button"
                     onClick={() => {
                       setRole("homeowner");
                     }}
                     className={cn(
-                      "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
+                      "w-full p-3.5 rounded-2xl border text-left transition-all duration-200 flex items-center gap-3 relative group cursor-pointer",
                       role === "homeowner" 
-                        ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-black bg-white hover:border-black"
+                        ? "border-2 border-orange-500 bg-orange-50/40 shadow-sm" 
+                        : "border-black bg-white hover:bg-slate-50"
                     )}
                   >
                     <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                      role === "homeowner" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                      "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                      role === "homeowner" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"
                     )}>
-                      <Home className="w-7 h-7" />
+                      <Home className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="font-black text-lg text-slate-900 block tracking-tight">Homeowner</span>
-                      <span className="text-sm text-slate-500 block leading-tight">Post jobs, compare quotes, hire with confidence</span>
+                      <span className="font-black text-sm text-slate-900 block leading-tight">Homeowner</span>
+                      <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">Post jobs & hire trades</span>
                     </div>
                     <div className={cn(
-                      "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "homeowner" ? "border-orange-500" : "border-black"
+                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                      role === "homeowner" ? "border-orange-500 bg-orange-500" : "border-slate-300"
                     )}>
-                      {role === "homeowner" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                      {role === "homeowner" && <Check className="w-3 h-3 text-white stroke-[3]" />}
                     </div>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => {
                       setRole("business");
                       setBusinessLayer(null);
@@ -541,31 +557,32 @@ export default function Onboarding() {
                       setSelectedTier(null);
                     }}
                     className={cn(
-                      "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
+                      "w-full p-3.5 rounded-2xl border text-left transition-all duration-200 flex items-center gap-3 relative group cursor-pointer",
                       role === "business" 
-                        ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-black bg-white hover:border-black"
+                        ? "border-2 border-orange-500 bg-orange-50/40 shadow-sm" 
+                        : "border-black bg-white hover:bg-slate-50"
                     )}
                   >
                     <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                      role === "business" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                      "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                      role === "business" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"
                     )}>
-                      <Building2 className="w-7 h-7" />
+                      <Building2 className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="font-black text-lg text-slate-900 block tracking-tight">Business</span>
-                      <span className="text-sm text-slate-500 block leading-tight">Properties, Services, and Consultancies</span>
+                      <span className="font-black text-sm text-slate-900 block leading-tight">Business & Trade</span>
+                      <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">Services & TradeOS</span>
                     </div>
                     <div className={cn(
-                      "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "business" ? "border-orange-500" : "border-black"
+                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                      role === "business" ? "border-orange-500 bg-orange-500" : "border-slate-300"
                     )}>
-                      {role === "business" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                      {role === "business" && <Check className="w-3 h-3 text-white stroke-[3]" />}
                     </div>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => {
                       setRole("fleet_driver");
                       setBusinessLayer(null);
@@ -573,101 +590,111 @@ export default function Onboarding() {
                       setSelectedTier(null);
                     }}
                     className={cn(
-                      "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group",
+                      "w-full p-3.5 rounded-2xl border text-left transition-all duration-200 flex items-center gap-3 relative group cursor-pointer",
                       role === "fleet_driver" 
-                        ? "border-orange-500 bg-orange-50/30 ring-4 ring-orange-500/10" 
-                        : "border-black bg-white hover:border-black"
+                        ? "border-2 border-orange-500 bg-orange-50/40 shadow-sm" 
+                        : "border-black bg-white hover:bg-slate-50"
                     )}
                   >
                     <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                      role === "fleet_driver" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                      "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                      role === "fleet_driver" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"
                     )}>
-                      <svg className="w-7 h-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
+                      <CarFront className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="font-black text-lg text-slate-900 block tracking-tight">Driver (AnyTrader Rides)</span>
-                      <span className="text-sm text-slate-500 block leading-tight">Drive passengers & trades, earn with fair commissions</span>
+                      <span className="font-black text-sm text-slate-900 block leading-tight">Driver (Rides)</span>
+                      <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">Transport & deliveries</span>
                     </div>
                     <div className={cn(
-                      "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "fleet_driver" ? "border-orange-500" : "border-black"
+                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                      role === "fleet_driver" ? "border-orange-500 bg-orange-500" : "border-slate-300"
                     )}>
-                      {role === "fleet_driver" && <div className="w-3 h-3 rounded-full bg-orange-500" />}
+                      {role === "fleet_driver" && <Check className="w-3 h-3 text-white stroke-[3]" />}
                     </div>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setRole("admin");
-                      setBusinessLayer(null);
-                      setBusinessCategory(null);
-                      setSelectedTier(null);
-                    }}
-                    className={cn(
-                      "w-full p-5 rounded-3xl border-2 text-left transition-all duration-300 flex items-center gap-4 relative group hover:border-red-500/50",
-                      role === "admin" 
-                        ? "border-red-500 bg-red-50/30 ring-4 ring-red-500/10" 
-                        : "border-black bg-white hover:border-black border-dashed"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                      role === "admin" ? "bg-red-500 text-white" : "bg-red-50/50 text-red-400 group-hover:bg-red-100"
-                    )}>
-                      <Shield className="w-7 h-7" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-black text-lg text-slate-900 block tracking-tight">Master Admin</span>
-                      <span className="text-sm text-slate-500 block leading-tight">Manage users, reviews, rides, and platform settings</span>
-                    </div>
-                    <div className={cn(
-                      "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
-                      role === "admin" ? "border-red-500" : "border-black"
-                    )}>
-                      {role === "admin" && <div className="w-3 h-3 rounded-full bg-red-500" />}
-                    </div>
-                  </button>
+                  {user?.email?.toLowerCase() === "saanwar2002@gmail.com" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRole("admin");
+                        setBusinessLayer(null);
+                        setBusinessCategory(null);
+                        setSelectedTier(null);
+                      }}
+                      className={cn(
+                        "w-full p-3.5 rounded-2xl border text-left transition-all duration-200 flex items-center gap-3 relative group cursor-pointer",
+                        role === "admin" 
+                          ? "border-2 border-red-500 bg-red-50/40 shadow-sm" 
+                          : "border-black bg-white hover:bg-slate-50 border-dashed"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                        role === "admin" ? "bg-red-500 text-white" : "bg-red-50 text-red-500 group-hover:bg-red-100"
+                      )}>
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-black text-sm text-slate-900 block leading-tight">Master Admin</span>
+                        <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">Platform management</span>
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                        role === "admin" ? "border-red-500 bg-red-500" : "border-slate-300"
+                      )}>
+                        {role === "admin" && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                      </div>
+                    </button>
+                  )}
                 </div>
-
               </div>
+
               {/* Personal Info Fields */}
               {(role === "business" || role === "fleet_driver" || role === "homeowner") && (
                 <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4 pt-4 border-t border-black"
+                  className="space-y-3.5 pt-4 border-t border-black/10"
                 >
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider ml-1">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
                     <input 
                       type="text" 
-                      className="w-full p-4 rounded-2xl border border-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900"
+                      required
+                      className="w-full p-3.5 rounded-xl border border-black bg-slate-50/60 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all font-medium text-slate-900 text-sm"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. John Smith"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mobile Number</label>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider ml-1">
+                      Mobile Number {!user?.isAnonymous && <span className="text-red-500">*</span>}
+                    </label>
                     <input 
                       type="tel" 
                       placeholder="07123 456789"
-                      className="w-full p-4 rounded-2xl border border-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900"
+                      className="w-full p-3.5 rounded-xl border border-black bg-slate-50/60 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all font-medium text-slate-900 text-sm"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider ml-1">
                       Postcode <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
                         type="text" 
                         required
-                        className="w-full p-4 pl-12 rounded-2xl border border-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-medium text-slate-900 uppercase"
+                        className="w-full p-3.5 pl-10 rounded-xl border border-black bg-slate-50/60 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all font-medium text-slate-900 uppercase text-sm"
                         placeholder="e.g. SW1A 1AA"
                         value={postcode}
                         onChange={(e) => setPostcode(e.target.value)}
@@ -688,10 +715,10 @@ export default function Onboarding() {
                       />
                     </div>
                     {city && (
-                      <div className="mt-2 px-4 py-2 bg-primary/5 rounded-xl border border-primary/10 flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-primary" />
-                        <span className="text-xs text-primary font-bold">
-                          {city}{county ? `, ${county}` : ""}
+                      <div className="mt-1.5 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200/60 flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                        <span className="text-xs text-green-800 font-bold">
+                          Verified: {city}{county ? `, ${county}` : ""}
                         </span>
                       </div>
                     )}
@@ -702,15 +729,15 @@ export default function Onboarding() {
               {/* Fleet Driver Setup */}
               {role === "fleet_driver" && (
                 <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4 pt-4 border-t border-black"
+                  className="space-y-3.5 pt-4 border-t border-black/10"
                 >
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vehicle Setup</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider ml-1">Vehicle Setup</p>
                   
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700">Which categories do you want to drive for?</label>
-                    <p className="text-[10px] text-slate-500 mb-2">You can select multiple categories. For example, an Executive car can also take Standard rides.</p>
+                    <p className="text-[11px] text-slate-500 mb-2">You can select multiple categories (e.g. Executive cars also take Standard rides).</p>
                     
                     <div className="grid grid-cols-2 gap-2">
                       {[
@@ -719,31 +746,31 @@ export default function Onboarding() {
                         { id: 'luxury', name: 'Luxury' },
                         { id: '6seater', name: '6-Seater XL' },
                         { id: '8seater', name: '8-Seater Max' },
-                        { id: 'wav', name: 'Wheelchair' }
+                        { id: 'wav', name: 'Wheelchair WAV' }
                       ].map(cat => (
-                        <label key={cat.id} className={cn("p-3 rounded-xl border-2 flex items-center gap-3 transition-colors cursor-pointer", vehicleCategories.includes(cat.id) ? "border-primary bg-primary/5 text-primary" : "border-black hover:border-primary/30 text-slate-600")}>
+                        <label key={cat.id} className={cn("p-2.5 rounded-xl border flex items-center gap-2.5 transition-colors cursor-pointer", vehicleCategories.includes(cat.id) ? "border-orange-500 bg-orange-50/50 text-orange-950 font-bold" : "border-black bg-white hover:bg-slate-50 text-slate-700")}>
                           <input type="checkbox" className="hidden" checked={vehicleCategories.includes(cat.id)} onChange={(e) => {
                             if (e.target.checked) setVehicleCategories(prev => [...prev, cat.id]);
                             else setVehicleCategories(prev => prev.filter(c => c !== cat.id));
                           }} />
-                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", vehicleCategories.includes(cat.id) ? "bg-primary border-primary" : "border-black")}>
-                            {vehicleCategories.includes(cat.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", vehicleCategories.includes(cat.id) ? "bg-orange-500 border-orange-500" : "border-slate-400 bg-white")}>
+                            {vehicleCategories.includes(cat.id) && <Check className="w-3 h-3 text-white stroke-[3]" />}
                           </div>
-                          <span className="text-xs font-black">{cat.name}</span>
+                          <span className="text-xs font-bold">{cat.name}</span>
                         </label>
                       ))}
                     </div>
                   </div>
 
-                  <div className="pt-2">
-                    <label className={cn("p-4 rounded-xl border-2 flex items-center justify-between transition-colors cursor-pointer", isPetFriendly ? "border-primary bg-primary/5" : "border-black hover:border-black")}>
+                  <div className="pt-1">
+                    <label className={cn("p-3 rounded-xl border flex items-center justify-between transition-colors cursor-pointer", isPetFriendly ? "border-orange-500 bg-orange-50/50" : "border-black bg-white hover:bg-slate-50")}>
                       <div>
-                        <p className="text-sm font-black text-slate-900">Pet Friendly Vehicle</p>
-                        <p className="text-xs text-slate-500">Allow passengers to travel with pets (+£3 fare bonus)</p>
+                        <p className="text-xs font-black text-slate-900">Pet Friendly Vehicle</p>
+                        <p className="text-[11px] text-slate-500">Allow passengers with pets (+£3 fare bonus)</p>
                       </div>
                       <input type="checkbox" className="hidden" checked={isPetFriendly} onChange={(e) => setIsPetFriendly(e.target.checked)} />
-                      <div className={`w-10 h-6 outline-none rounded-full transition-colors relative shadow-inner shrink-0 ${isPetFriendly ? 'bg-primary' : 'bg-slate-200'}`}>
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPetFriendly ? 'translate-x-5' : 'translate-x-1'}`} />
+                      <div className={`w-9 h-5 outline-none rounded-full transition-colors relative shadow-inner shrink-0 ${isPetFriendly ? 'bg-orange-500' : 'bg-slate-200'}`}>
+                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isPetFriendly ? 'translate-x-4' : 'translate-x-0.5'}`} />
                       </div>
                     </label>
                   </div>
@@ -751,70 +778,80 @@ export default function Onboarding() {
               )}
 
               {/* Trust Bar */}
-              <div className="grid grid-cols-3 gap-2 py-4 border-y border-slate-50">
-                <div className="flex flex-col items-center text-center gap-1">
-                  <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  </div>
-                  <span className="text-[10px] font-black text-slate-700 uppercase leading-none">Verified<br/>trades</span>
+              <div className="grid grid-cols-3 gap-2 py-3 border-y border-black/5 bg-slate-50/50 rounded-xl px-2">
+                <div className="flex flex-col items-center text-center gap-0.5">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <span className="text-[9px] font-black text-slate-700 uppercase tracking-tight">Verified Trades</span>
                 </div>
-                <div className="flex flex-col items-center text-center gap-1 border-x border-black">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                    <Shield className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <span className="text-[10px] font-black text-slate-700 uppercase leading-none">Secure<br/>payments</span>
+                <div className="flex flex-col items-center text-center gap-0.5 border-x border-black/10">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  <span className="text-[9px] font-black text-slate-700 uppercase tracking-tight">Secure Platform</span>
                 </div>
-                <div className="flex flex-col items-center text-center gap-1">
-                  <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">
-                    <Star className="w-4 h-4 text-orange-600 fill-orange-600" />
-                  </div>
-                  <span className="text-[10px] font-black text-slate-700 uppercase leading-none">Real<br/>reviews</span>
+                <div className="flex flex-col items-center text-center gap-0.5">
+                  <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                  <span className="text-[9px] font-black text-slate-700 uppercase tracking-tight">Genuine Reviews</span>
                 </div>
               </div>
 
               {error && (
-                <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-bold shadow-sm">
-                  {error}
+                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold shadow-sm flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <span>{error}</span>
                 </div>
               )}
 
-              {/* Continue Button */}
-              <button
-                onClick={() => {
-                  console.log("Button clicked. Role:", role, "HomeownerType:", homeownerType);
-                  if (role === "fleet_driver") {
-                    setStep(3); // Go straight to verification
-                    return;
-                  }
-                  
-                  if (platformConfig?.paywallEnabled === false) {
-                    // In beta mode, skip complex setup and go straight to submission
-                    handleSubmit();
-                  } else {
-                    if (role === "business") {
-                      setStep(1.5);
-                    } else {
-                      handleSubmit();
+              {/* Continue Button & Helper message */}
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log("Button clicked. Role:", role, "HomeownerType:", homeownerType);
+                    if (role === "fleet_driver") {
+                      setStep(3); // Go straight to verification
+                      return;
                     }
+                    
+                    if (platformConfig?.paywallEnabled === false) {
+                      // In beta mode, skip complex setup and go straight to submission
+                      handleSubmit();
+                    } else {
+                      if (role === "business") {
+                        setStep(1.5);
+                      } else {
+                        handleSubmit();
+                      }
+                    }
+                  }}
+                  disabled={
+                    !role || 
+                    loading ||
+                    (role !== "admin" && (!name || !postcode || (!user?.isAnonymous && !phone))) ||
+                    (role === "fleet_driver" && vehicleCategories.length === 0)
                   }
-                }}
-                disabled={
-                  !role || 
-                  loading ||
-                  (role !== "admin" && (!name || !postcode || (!user?.isAnonymous && !phone))) ||
-                  (role === "fleet_driver" && vehicleCategories.length === 0)
-                }
-                className="w-full flex items-center justify-center gap-3 bg-orange-500 text-white p-5 rounded-[2rem] font-black text-xl hover:bg-orange-600 transition-all shadow-2xl shadow-orange-500/30 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none active:scale-95 group"
-              >
-                {loading ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : (
-                  <>
-                    {role === "business" || role === "fleet_driver" ? "Continue" : "Complete Setup"}
-                    <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-                  </>
+                  className="w-full flex items-center justify-center gap-2.5 bg-orange-500 text-white p-4 rounded-2xl font-black text-base hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/25 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none active:scale-98 group cursor-pointer"
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <span>{role === "business" || role === "fleet_driver" ? "Continue" : "Complete Setup"}</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                    </>
+                  )}
+                </button>
+
+                {/* Validation helper when button is disabled */}
+                {!role && (
+                  <p className="text-[11px] text-center text-slate-400 font-medium">
+                    Please select a role above to proceed
+                  </p>
                 )}
-              </button>
+                {role && role !== "admin" && (!name || !postcode || (!user?.isAnonymous && !phone)) && (
+                  <p className="text-[11px] text-center text-amber-600 font-medium">
+                    {!name ? "Enter your full name" : !postcode ? "Enter your postcode" : "Enter your mobile number"} to continue
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

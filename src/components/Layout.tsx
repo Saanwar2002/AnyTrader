@@ -20,6 +20,7 @@ import { useBusinessTab } from "@/src/store/businessTabStore";
 import { TermsAcceptancePrompt } from "./TermsAcceptancePrompt";
 import { ScrollToTopButton } from "./shared/ScrollToTopButton";
 import { HeaderAccountSearch } from "./HeaderAccountSearch";
+import { TaxiComingSoonModal } from "./shared/TaxiComingSoonModal";
 
 const getIconComponent = (iconName: string) => {
   const icons: any = { Wrench, Hammer, HardHat, Shield, Zap, Droplets, Paintbrush, Truck, Scissors, Wind, Thermometer, Briefcase, PenTool, Box };
@@ -33,6 +34,7 @@ export default function Layout() {
   const { activeTab, activeSubTab } = useBusinessTab();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadTypes, setUnreadTypes] = useState<Set<string>>(new Set());
+  const [showTaxiComingSoonModal, setShowTaxiComingSoonModal] = useState(false);
   
   // Local Database Sync Status
   const { pendingCount, hasPendingChanges } = useSyncStatus();
@@ -553,63 +555,111 @@ export default function Layout() {
                   <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
-              {platformConfig?.showBookTaxiButton === false && activePortal === "anytrader" ? (
-                <div className="flex items-center gap-2 sm:gap-3 text-left">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 shrink-0">
-                    <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                    <span className="text-[7.5px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
-                  </div>
-                  <div className="hidden sm:block">
-                    <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">UK's #1 Platform</p>
-                  </div>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => {
-                    triggerHaptic();
-                    if (activePortal === "anytrader") {
-                      switchPortal("anyroller");
-                      setTimeout(() => {
-                        if (profile?.role === "driver" || profile?.role === "fleet_driver") {
-                          navigate("/driver-terminal");
-                        } else {
-                          navigate("/book-ride");
-                        }
-                      }, 50);
-                    } else {
-                      switchPortal("anytrader");
-                      setTimeout(() => navigate("/"), 50);
-                    }
-                  }}
-                  className="flex items-center gap-2 sm:gap-3 group text-left shrink-0"
-                >
-                  {activePortal === "anytrader" ? (
-                    <>
-                      <div className="w-10 h-10 sm:w-14 sm:h-14 bg-yellow-300 border-[2px] sm:border-[3px] border-black rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
-                        <Car className="w-4 h-4 sm:w-5 sm:h-5 text-black relative z-10 mb-0.5" />
-                        <span className="text-[6.5px] sm:text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-                      </div>
-                      <div className="hidden sm:block">
-                        <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRoller</span>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
+              {/* Book Taxi / Portal Switcher button */}
+              {(() => {
+                const isTaxiHidden = platformConfig?.taxiPortalMode === "hidden" || platformConfig?.showBookTaxiButton === false;
+                const isTaxiComingSoon = platformConfig?.taxiPortalMode === "coming_soon" || 
+                                         platformConfig?.taxiComingSoon === true || 
+                                         platformConfig?.taxiDisabled === true || 
+                                         platformConfig?.showBookTaxiButton === "coming_soon";
+
+                if (isTaxiHidden && activePortal === "anytrader") {
+                  return (
+                    <div className="flex items-center gap-2 sm:gap-3 text-left">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 shrink-0">
                         <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         <span className="text-[7.5px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
                       </div>
                       <div className="hidden sm:block">
                         <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">UK's #1 Platform</p>
                       </div>
-                    </>
-                  )}
-                </button>
-              )}
+                    </div>
+                  );
+                }
+
+                if (isTaxiComingSoon && activePortal === "anytrader") {
+                  return (
+                    <button 
+                      onClick={() => {
+                        triggerHaptic();
+                        setShowTaxiComingSoonModal(true);
+                      }}
+                      className="flex items-center gap-2 sm:gap-3 group text-left shrink-0 cursor-pointer"
+                      title="AnyRoller Taxi & Courier - Launching Soon in Phase 2"
+                    >
+                      <div className="w-10 h-10 sm:w-14 sm:h-14 bg-slate-100 border-[2px] sm:border-[3px] border-slate-400 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-sm group-hover:scale-105 group-hover:border-slate-600 transition-all duration-300 relative overflow-hidden shrink-0">
+                        <div className="absolute top-0 right-0 bg-amber-500 text-black text-[5.5px] sm:text-[7px] font-black px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded-bl-md uppercase tracking-tight shadow-sm z-20">
+                          SOON
+                        </div>
+                        <Car className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600 relative z-10 mb-0.5 group-hover:text-slate-900 transition-colors" />
+                        <span className="text-[6.5px] sm:text-[8px] font-black text-slate-700 leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight group-hover:text-black">
+                          Book<br/>Taxi
+                        </span>
+                        <div className="absolute inset-0 bg-slate-200/50 pointer-events-none"></div>
+                      </div>
+                      <div className="hidden sm:block">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xl font-display font-black text-slate-800 tracking-tight leading-none block">AnyRoller</span>
+                          <span className="px-1.5 py-0.5 bg-amber-100 border border-amber-300 text-amber-900 text-[9px] font-black uppercase rounded-md leading-none">
+                            Soon
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-600" /> Coming Soon
+                        </p>
+                      </div>
+                    </button>
+                  );
+                }
+
+                return (
+                  <button 
+                    onClick={() => {
+                      triggerHaptic();
+                      if (activePortal === "anytrader") {
+                        switchPortal("anyroller");
+                        setTimeout(() => {
+                          if (profile?.role === "driver" || profile?.role === "fleet_driver") {
+                            navigate("/driver-terminal");
+                          } else {
+                            navigate("/book-ride");
+                          }
+                        }, 50);
+                      } else {
+                        switchPortal("anytrader");
+                        setTimeout(() => navigate("/"), 50);
+                      }
+                    }}
+                    className="flex items-center gap-2 sm:gap-3 group text-left shrink-0 cursor-pointer"
+                  >
+                    {activePortal === "anytrader" ? (
+                      <>
+                        <div className="w-10 h-10 sm:w-14 sm:h-14 bg-yellow-300 border-[2px] sm:border-[3px] border-black rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-yellow-300/20 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden shrink-0">
+                          <Car className="w-4 h-4 sm:w-5 sm:h-5 text-black relative z-10 mb-0.5" />
+                          <span className="text-[6.5px] sm:text-[8px] font-black text-black leading-tight text-center mt-[-2px] relative z-10 uppercase tracking-tight">Book<br/>Taxi</span>
+                          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
+                        </div>
+                        <div className="hidden sm:block">
+                          <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyRoller</span>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-[14px] sm:rounded-[16px] flex flex-col items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform duration-500 shrink-0">
+                          <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                          <span className="text-[7.5px] sm:text-[10px] font-black text-white leading-none mt-0.5">TRADES</span>
+                        </div>
+                        <div className="hidden sm:block">
+                          <span className="text-xl font-display font-black text-slate-900 tracking-tight leading-none block">AnyTrader</span>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Repeat className="w-3 h-3" /> Switch</p>
+                        </div>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
 
               {/* Desktop Navigation */}
               {activePortal !== 'anyroller' && (
@@ -857,7 +907,7 @@ export default function Layout() {
                 <Bell className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-black" />
                 {unreadCount > 0 && (
                   <>
-                    <span className="absolute -top-1 -right-1.5 flex h-3.5 w-3.5">
+                    <span className="absolute -top-2.5 -right-2.5 sm:-top-3 sm:-right-3 flex h-3.5 w-3.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex items-center justify-center rounded-full h-3.5 w-3.5 bg-emerald-500 text-black text-[8px] font-black border border-black shadow-xs">
                         {unreadCount > 9 ? "9+" : unreadCount}
@@ -1352,6 +1402,18 @@ export default function Layout() {
           })}
         </nav>
       )}
+
+      {/* AnyRoller Taxi Coming Soon Modal */}
+      <TaxiComingSoonModal
+        isOpen={showTaxiComingSoonModal}
+        onClose={() => setShowTaxiComingSoonModal(false)}
+        onExploreTrades={() => {
+          setShowTaxiComingSoonModal(false);
+          navigate("/find-trades");
+        }}
+        customTitle={platformConfig?.taxiComingSoonTitle}
+        customMessage={platformConfig?.taxiComingSoonMessage}
+      />
     </div>
   );
 }

@@ -1,5 +1,216 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🔔 Header Notification Alerts Badge Repositioning (`Layout.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *Issue*: The green pulsing unread count notification badge (`unreadCount`) on the top header "ALERTS" button partially overlapped and obscured the Bell icon and the "ALERTS" text on mobile screens.
+    *   *Fix*: Repositioned the badge container to `-top-2.5 -right-2.5 sm:-top-3 sm:-right-3`, ensuring the Bell icon and the "ALERTS" label remain fully clear, centered, and unobstructed.
+
+## 📦 Bill of Materials (BOM) & Ordering Flow Logic (`JobDetails.tsx`, `BomOneClickOrderingModal.tsx`, `bomMerchantService.ts`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "As category 84 is part of AnyTrader side of business where people can register for these kind if delivery jobs. I think we should utelise anytrader job posting and matching mechanism for this purpose. Anyroller taxi side of platform should only be for ordering taxis as vehicles for couriers are different."
+*   **Architectural & Business Logic Breakdown**:
+    1.  **Clear Portal Separation (AnyTrader Category 84 vs. AnyRoller Passenger Taxis)**:
+        - **AnyTrader Category 84 (Courier, Parcel & Express Delivery)**:
+          - Dedicated marketplace category for commercial vans (Small Caddy/Combo, SWB Transit, LWB Luton/Tail Lift) and verified couriers with Goods in Transit & Hire/Reward insurance.
+          - When a BOM order selects courier delivery, it is published directly to the **AnyTrader `jobs` collection** (`isBOMDeliveryJob = true`, `categoryCode = "84"`), making it immediately visible to registered courier drivers in the AnyTrader Job Feed and intelligent matching engine.
+        - **AnyRoller Taxi Portal**:
+          - Exclusively handles passenger transport, saloon/estate/executive private hire taxis, and metered journeys. Van materials and merchant couriers do not clutter passenger taxi queues.
+    2.  **Quote Scope Differentiations & Financial Alignment**:
+        - **All-Inclusive Complete Package (`complete_package` / `supply_and_fit`)**:
+          - *Definition*: The agreed total quote amount (e.g. £450) encompasses **both** labour and materials.
+          - *Payment Flow*: The homeowner pays the agreed quote amount into milestones/escrow. The tradesperson purchases materials using their operating float/quote budget at trade discounts (Screwfix, Travis Perkins, Toolstation) and collects them or dispatches a Category 84 van.
+          - *Homeowner Protection*: The homeowner is **never** billed separately for materials, avoiding double-charging or invoicing disputes. The BOM card displays an informational spec badge indicating parts are supplied by the trader.
+        - **Labour Only (`labour_only`)**:
+          - *Definition*: The agreed quote amount covers **labour and time only**.
+          - *Payment Flow*: The homeowner is responsible for providing materials. The homeowner (or trader on the homeowner's behalf) can use the 1-Click BOM tool to purchase the exact parts at Trade Discount rates (0% AnyTrader markup) for site delivery or Click & Collect.
+          - *Invoice Transparency*: The trader's invoice reflects labour only; the merchant invoice covers materials directly to the homeowner, eliminating markup disputes.
+        - **Labour + Estimated Parts (`labour_plus_estimated_parts`)**:
+          - *Definition*: Transparently broken down into fixed labour and an itemized trade price materials estimate.
+    3.  **Duplicate Order & Double Billing Prevention**:
+        - When an order is submitted (`createBOMOrder`), the job document registers `hasBOMOrder = true`, `bomOrderId`, `bomMerchant`, `bomStatus`, and `bomPickupRef`.
+        - The primary call-to-action transitions from "⚡ 1-Click Order Materials" to "✓ View Merchant Barcode & Status" or "🚚 Track Van Delivery", locking the basket and preventing duplicate submissions.
+    4.  **Property Passport Digital Twin Sync**:
+        - Every BOM order automatically registers the installed part models, SKUs, suppliers, and warranty terms directly into the property's digital passport registry (`componentRegistry.installedParts`), ensuring long-term maintenance records.
+
+## 🔢 Quote Counter Normalization & Negative Value Guard (`JobDetails.tsx`, `JobFeed.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *Issue*: When quotes were withdrawn, rejected, or cleaned up, database counter decrements could cause the `Quotes (-2)` header to display negative numbers.
+*   **Architectural & Layout Refinements**:
+    1.  **Guaranteed Non-Negative Display**:
+        - Updated the Quotes header to `Quotes ({Math.max(quotes.length, Math.max(0, job.quoteCount || 0))})`, ensuring it accurately reflects loaded quotes and never displays negative integers.
+    2.  **Database Self-Healing & Synchronization**:
+        - On job load in `JobDetails.tsx`, if `job.quoteCount` is negative or desynchronized from the actual valid quotes array, the Firestore document automatically updates `quoteCount` to `Math.max(0, validQuotes.length)`.
+        - Withdrawal and rejection handlers now set the exact non-negative remaining quote count rather than blind negative increments.
+
+## 📐 Full-Width Horizontal Expansion of Direct Merchant AI BOM Card (`JobDetails.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Expand this container horizontal to fill empty space" (referencing the Direct Merchant AI BOM Ordering card and Agreed Quote PDF download in the accepted quote view).
+*   **Architectural & Layout Refinements**:
+    1.  **Full-Width Layout Extraction**:
+        - Previously, the `quote.status === "accepted"` block containing the BOM ordering card and quote PDF download was nested inside the left `flex-1 min-w-0` column alongside the right-side price and status badge in the quote header row.
+        - Extracted the accepted BOM ordering card and action buttons out of the two-column header flex row to the top-level card container (`w-full flex flex-col gap-3 pt-2`).
+        - The card now expands horizontally across the entire width of the quote card on all viewports, eliminating the unused empty space on the right and matching the platform guarantee container width.
+
+## 🏷️ Realigned BOM Item Controls & Price Positioning (`BomOneClickOrderingModal.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Move price on the right of quantity counter where highlighted and trash icon below edit tab"
+*   **Architectural & Layout Refinements**:
+    1.  **Left Control Column**:
+        - Stacked the `[ Edit ]` button on top with the double-confirmation red trash icon/button positioned directly beneath it.
+    2.  **Middle-to-Right Flow**:
+        - Positioned the `[ - Qty + ]` stepper in the center, directly adjacent to the `[ Edit ]` column.
+        - Moved the bold price display (`£XX.XX` and struck-out retail price) to the right of the quantity counter, creating a clean linear flow from editing/quantity to price calculation.
+
+## 🗑️ Double Confirmation Delete & Container Containment (`BomOneClickOrderingModal.tsx`, `MaterialsTracker.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "These trash icons going over the container edge. Bring them inside and make them double confirmation for deleting any item"
+*   **Architectural & Layout Refinements**:
+    1.  **Strict Container Containment**:
+        - Updated the material card container with responsive padding (`p-3 sm:p-3.5`) and `overflow-hidden` so controls never poke out of the container edge on mobile viewports.
+        - Grouped the controls row into responsive sub-flex containers with wrapping (`flex-wrap`) and compact button gaps, keeping Edit, Quantity Steppers, Price block, and Delete trigger comfortably within card boundaries.
+    2.  **Double Confirmation for Item Deletions**:
+        - Introduced an inline `confirmDeleteId` state.
+        - Tapping the initial red trash icon transforms it into an inline red **"Delete?"** button and a gray cancel **"✕"** button, preventing accidental item removals while keeping the action intuitive and fast.
+        - Synchronized the same double-confirmation protection in both the Direct Merchant AI BOM modal and the Materials Tracker list.
+
+## 📝 Courier Custom Site Access & Delivery Instructions (`BomOneClickOrderingModal.tsx`, `BomOrderStatusTracker.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "When adding address , provide custom instructions text box so trader can leave instructions for courier if needed"
+*   **Architectural & Layout Refinements**:
+    1.  **Custom Courier Instructions Box (`BomOneClickOrderingModal.tsx`)**:
+        - Added an optional multi-line instructions textarea below the Site Delivery Address input in Step 3 fulfillment configuration.
+        - Integrated quick-tap preset chips for common trade job scenarios (`+ Leave by side gate`, `+ Call on arrival`, `+ Knock loud / ring bell`, `+ Rear lane / back entrance`, `+ Under porch / keep dry`) along with a quick clear action.
+    2.  **Dispatch & Tracker Propagation (`bomMerchantService.ts`, `BomOrderStatusTracker.tsx`)**:
+        - Persisted instructions in the `courierDetails.notes` field and injected them into the Category 84 driver dispatch `ride_requests` document.
+        - Rendered courier instructions in the active order tracking card and digital delivery summary.
+
+## 🎨 High-Contrast Price Badge & Brightened Subtext (`BomOneClickOrderingModal.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Chenage price text font to crisp white with purple background and brighten up small text"
+*   **Architectural & Layout Refinements**:
+    1.  **High-Contrast Courier Price Badge**:
+        - Styled the courier delivery fee with crisp white text (`text-white font-mono`) wrapped in a solid purple background pill (`bg-purple-600 px-2.5 py-1 rounded-lg shadow-sm tracking-wide`), ensuring instant legibility on both dark and light fulfillment selection modes.
+    2.  **Brightened Small Subtext**:
+        - Replaced dim `text-slate-500` with high-contrast, bright text (`text-slate-200 font-medium` in dark mode / `text-slate-700` in light selected mode) for "⚡ Saves 1.5 - 2.0 hours of trader billable labor time."
+
+## 🔙 Persistent Back & Close Navigation Across All BOM Steps (`BomOneClickOrderingModal.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Provide back/ close option to go back from BOM all steps"
+*   **Architectural & Layout Refinements**:
+    1.  **Persistent Top-Right Close Button**:
+        - Prominently styled top-right `X` close button (`w-9 h-9 sm:w-10 sm:h-10`, `rounded-2xl`, `bg-white/10 hover:bg-red-500/80`) with hover/touch animations and `z-10` elevation visible and active across all 4 steps of BOM ordering.
+    2.  **Step-by-Step Back & Close Footer Controls**:
+        - **Step 1 (AI BOM Items)**: Added dedicated "Cancel / Close" button next to "Compare Local Merchants".
+        - **Step 2 (Compare Merchants) & Step 3 (Fulfillment)**: Provided both "Close" and "← Back" buttons allowing users to return to previous steps or cleanly exit.
+        - **Step 4 (Order Confirmation & VAT Receipt)**: Provided "Done & Close Modal" and "Print Receipt" actions.
+        - Added mobile footer shortcut link for instant closing on smaller viewports.
+
+## 📦 Direct Merchant AI BOM Ordering Card Spacing & Element Alignment (`JobDetails.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Fix misplaced elements and spacing on this section"
+*   **Architectural & Layout Refinements**:
+    1.  **Resolved Badge & Text Misplacement (`JobDetails.tsx`)**:
+        - Fixed narrow card width distortion that pushed the "Save 1-2 Hrs" badge and "TRADEOS" chip outside container borders on small phone screens.
+        - Converted the header area into a responsive flex layout (`flex-col sm:flex-row sm:items-center justify-between gap-2.5`) with safe text wrapping and explicit container overflow protection (`overflow-hidden`).
+    2.  **Harmonized Spacing & Full-Width Action Controls**:
+        - Expanded "⚡ 1-Click Order Materials" button to full-width (`w-full sm:w-auto`) on mobile with enhanced padding and touch targets.
+        - Restyled and aligned the "Download Agreed Quote (PDF)" button below with matching emerald theme styling and responsive alignment.
+
+## 🔍 Responsive Search Not-Found & Toast Notifications Layout Refinement (`FindTrades.tsx`, `TradesDashboard.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Can we better display this not found message . its going too much into screen sides"
+*   **Architectural & Layout Refinements**:
+    1.  **Responsive Width & Side Margin Constraints (`FindTrades.tsx`)**:
+        - Replaced fixed unpadded `whitespace-nowrap` banner which was overflowing mobile viewport boundaries with a responsive width container `w-[calc(100%-2rem)] max-w-md mx-auto`.
+        - Enforced guaranteed 16px (1rem) side padding margins on mobile devices preventing text from touching screen edges.
+    2.  **Modern High-Contrast Toast Aesthetics & Header Pill Contrast**:
+        - Formatted with vivid red-orange gradient (`bg-gradient-to-r from-red-600 via-orange-600 to-amber-600`), subtle border (`border border-white/30`), and shadow-2xl elevation.
+        - High-contrast crisp bright white typography (`text-white`, `text-white/95`), bright white frosted icon badge (`bg-white/20 border-white/40`), and crisp white dismiss icon.
+        - Brightened the "Traders Available" count indicator pill to 100% crisp bright white (`text-white font-black`) for optimal legibility across dark and light modes.
+        - Structured layout with an alert icon badge, clean dual-line title/description hierarchy ("No matches found" / "Try adjusting your keywords or clearing active filters"), and a discrete dismiss button.
+        - Positioned cleanly above bottom navigation tabs (`bottom-24 sm:bottom-22`) preventing overlapping with bottom navigation bars.
+
+## 🚖 "Book Taxi" / AnyRoller Launch Controls & "Coming Soon" Interactive Modal (`Layout.tsx`, `TaxiComingSoonModal.tsx`, `AnyTraderAdmin.tsx`, `MasterAdminLayout.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Can we create a toggle setting in admin to disable/Greg out this ,, book taxi,, tab so it will be visible to users but will display on clicks ,, Coming Soon,, overlay text when disabled. As we want to constrat on anytrader side of business at launch"
+*   **Architectural Implementations**:
+    1.  **Greyed-Out / Frosted Header Tab Styling (`Layout.tsx`)**:
+        - Added dedicated support for `taxiPortalMode === "coming_soon" | "active" | "hidden"` and `taxiComingSoon === true`.
+        - When set to **Coming Soon (Greyed Out)** mode:
+          - The "Book Taxi" button remains visible in the header with a frosted grey backdrop (`bg-slate-100 border-slate-400`).
+          - Displays an amber `"SOON"` badge in the top right corner.
+          - Clicking the button triggers haptic feedback and displays the interactive `TaxiComingSoonModal` instead of switching the portal.
+    2.  **Interactive "Coming Soon" Modal Overlay (`src/components/shared/TaxiComingSoonModal.tsx`)**:
+        - Features a high-contrast modal explaining the platform launch strategy (100% focus on onboarding UK verified tradespeople, homeowners, and landlords on AnyTrader).
+        - Highlights upcoming AnyRoller capabilities (0% Commission Ride-Hailing, Bulky Appliance Transport, On-Demand Delivery).
+        - Includes an email waitlist input allowing early users to join the notification list.
+        - Includes a direct CTA button to explore verified trades on AnyTrader.
+        - Supports custom headline and description overrides configured in the Admin console.
+    3.  **Admin Controls in Master Admin & AnyTrader Admin (`MasterAdminLayout.tsx`, `AnyTraderAdmin.tsx`)**:
+        - Added dedicated **Launch Controls** section in both admin consoles.
+        - Provides a 3-way visual switch:
+          1. *Coming Soon (Greyed Out)*: Recommended for launch — button is visible with "SOON" badge, opens modal.
+          2. *Live & Active*: Full passenger dispatch and driver terminal enabled.
+          3. *Completely Hidden*: Replaces the button with a static AnyTrader badge.
+        - Provides live text inputs for the admin to customize the overlay headline and message with instant Firestore persistence to `/platform_config/global`.
+
+## 🚨 Master Admin Email Customization & Real-Time Login Alert Notifications (`MasterAdminLayout.tsx`, `adminAuthSecurityService.ts`, `server.ts`, `firestore.rules`, `AuthProvider.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Can we also have option to change admin email as well in admin settings if needed. Also Can we create a alert Notification to be sent to admin email each time admin credentials are used to login as admin"
+*   **Architectural Upgrades Implemented**:
+    1.  **Dedicated Admin Auth Security Service (`src/services/adminAuthSecurityService.ts`)**:
+        - Created unified security service managing primary/secondary admin emails, 6-digit master PIN (`362515`), and login alert configurations.
+        - Persists configuration to Firestore (`/system_settings/master_admin_auth`) with local storage fallback caching for ultra-fast auth resolution.
+        - Dispatches real-time email alerts via `/api/admin/send-email-alert` containing detailed device metadata, browser user agent, IP address, and timestamp upon successful PIN verification.
+        - Records an immutable session log in the `/admin_login_audits` collection for end-to-end security compliance.
+    2.  **Master Admin Settings Modal with 4-Tab Control Center (`MasterAdminLayout.tsx`)**:
+        - Added `Admin Settings` button in the top navigation bar alongside `Lock Console` and `Change PIN`.
+        - **Admin Emails Tab**: Enables changing the primary master admin email and configuring multiple authorized secondary admin emails.
+        - **Master PIN Tab**: Enables changing the 6-digit security PIN with current PIN verification.
+        - **Login Alerts Tab**: Allows toggling real-time email notifications, configuring immediate vs delayed delivery, and includes an instant "Send Test Login Alert Email" button.
+        - **Login Audits Tab**: Displays real-time session logs with IP addresses, device user agents, and PIN verification status.
+    3.  **Dynamic Role Recognition in Auth Provider (`AuthProvider.tsx`)**:
+        - Dynamically verifies whether the authenticated user is an authorized admin using `isAuthorizedAdminEmail()`.
+        - Automatically assigns administrative privileges to primary or authorized secondary admin emails.
+    4.  **Firestore Rules Hardening (`firestore.rules`)**:
+        - Added secure rules for `/admin_login_audits/{auditId}`: allows authenticated sessions to create audit records while restricting read and delete access strictly to verified admins.
+
+## 🛡️ Production Security Hardening & Master Admin 2FA PIN Gate (`firestore.rules`, `MasterAdminLayout.tsx`, `Onboarding.tsx`, `AuthProvider.tsx`, `Login.tsx`) (Completed September 1, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "How this will work, how can we make it secure so only admin can log in if someone find out admin email address... Yes do them . also remove guest login as we will be doing live app testing"
+*   **Security Protections Implemented**:
+    1.  **Strict Firestore Rules Server-Side Enforcement (`firestore.rules`)**:
+        - Updated `isAdmin()` helper to strictly check `request.auth.token.email.lower() == 'saanwar2002@gmail.com'` or existence in `/admins/{adminId}`.
+        - Hardened `/users/{userId}` create and update rules: ordinary users are strictly forbidden from writing `role: 'admin'`, `role: 'ecosystem_manager'`, or `isAdmin: true` to the database.
+        - All paid subscription tier keys (`tierId`, `subscriptionStatus`, `hasExclusiveAddon`, `gothamSubscription`) are locked against client-side tampering.
+    2.  **Master Admin 2FA PIN Security Gate & Cloud Sync (`MasterAdminLayout.tsx`)**:
+        - Non-authorized accounts navigating to `/admin` are greeted with a locked security wall ("Access Restricted").
+        - For the verified admin (`saanwar2002@gmail.com`), a 6-digit Master PIN security gate blocks access to the management console until the master PIN is provided.
+        - The Master Admin PIN is set to `362515` and synced to Firestore `/system_settings/master_admin_auth` so it persists across all devices.
+        - Integrated a "Change PIN" management modal in the top navigation bar of the Admin Console allowing the admin to update the 6-digit code at any time.
+        - Added an instant "Lock Console" action button in the top navigation bar to lock down session access immediately when stepping away.
+    3.  **Removal of Guest/Test Admin Bypasses**:
+        - Completely removed guest login and test admin simulation buttons from `Login.tsx`.
+        - Cleaned all `isTestAdmin` and `sessionStorage.getItem("is_test_admin")` references across `AuthProvider.tsx`, `Onboarding.tsx`, and `firebase.ts`.
+        - Restricted Master Admin role selection in `Onboarding.tsx` to only display when logged in with the verified admin email.
+
+## 🔐 Auth & Onboarding Flow Streamlining (`Login.tsx`, `Onboarding.tsx`) (Completed September 1, 2026)
+*   **Context & User Request**:
+    *   *User Query*: "Can we look into this screen and sign up screen and see if we need to make any improvements or stream line them for smooth operation... Yes. Make sure to preserve all logics"
+*   **Fixes & Optimizations Implemented**:
+    1.  **Segmented Auth Mode Switcher (`Login.tsx`)**:
+        - Replaced disjointed login/signup toggles with a segmented, high-contrast tab switch (*Sign In* vs *Create Account*).
+        - Wrapped inputs in a semantic `<form>` with appropriate `autoComplete` attributes (`email`, `current-password`, `new-password`) and `inputMode` for smoother mobile auto-fill.
+    2.  **Compact Biometric Strip (`Login.tsx`)**:
+        - Redesigned the biometric / Face ID container into a compact, high-contrast quick-action banner with visual feedback and hardware detection status.
+    3.  **Role Card Grid Optimization (`Onboarding.tsx`)**:
+        - Reduced card padding and icon dimensions (`w-11 h-11`, `p-3.5`) while organizing roles into a 2x2 responsive grid.
+        - Integrated Lucide's `CarFront` icon for AnyTrader Rides drivers.
+        - Preserved all role switching, step routing, and tier/business layer states.
+    4.  **Live Postcode Feedback & Form Helpers (`Onboarding.tsx`)**:
+        - Added instant visual feedback badge upon postcode verification (`lookupPostcode`).
+        - Added actionable microcopy below the submit button when required fields (Name, Phone, Postcode) are missing, ensuring users clearly understand why the button is disabled.
+
 ## ⭐ Review List Pagination & Top 5 Most Recent Display (`FindTrades.tsx`, `PublicProfile.tsx`, `Profile.tsx`, `seedService.ts`) (Completed September 1, 2026)
 *   **Context & User Request**:
     *   *User Request*: "Also check how many reviews we can display under mini, full profile as traders can get lot of reviews overtime and it will long scrolling list , we can show top 5 most recent and show remaining with more tab only next 5 appearing if user keep scrolling the reviews up"
@@ -2509,3 +2720,6 @@ The prefix is determined by the user's primary registration role:
   - **Priority Offers Modal Close Button & Stacking Fix (`TradesDashboard.tsx`)**: Elevated the Unlock Priority Offers modal overlay to `z-[100]` with top safe area padding (`pt-[calc(4.5rem+env(safe-area-inset-top,0px))]`) and internal content scrolling (`max-h-[85vh] overflow-y-auto`). Styled the top-right `[X]` close button with `z-30` elevation and high contrast backdrop, ensuring it remains fully visible, unclipped by top headers, and easily dismissible.
   - **Priority Job Offers Payment Validation & Activation Logic (`TradesDashboard.tsx`, `JobFeed.tsx`, `server.ts`)**: Validated full-stack payment lifecycle for Priority Offers (£15–£25/mo add-on). Supports Stripe Checkout Session creation with `isExclusiveAddon` metadata, server webhook synchronization, mock sandbox checkout auto-completion, client-side URL return handler (`exclusive_success=true`) with toast feedback and query cleanup, resilient client-side fallback activation, and dual check for `hasExclusiveAddon` and `isExclusiveActive` in `JobFeed.tsx` for early-access job visibility.
   - **Vertical Golden Ribbon Badge & Full Trade Category Visibility (`PartnerAdvertisement.tsx`, `TradesBannerAdStudio.tsx`)**: Redesigned the `FEATURED PRO` / `PARTNER OFFER` badge into a compact vertical golden ribbon (`w-12 sm:w-13`, `clip-path` notched tail, metallic gold gradient `from-[#FDE68A] via-[#F59E0B] to-[#D97706]`, stacked dark bronze typography) tucked into the top-right corner of cards (`top-0 right-3.5 sm:right-4 z-20`). Reduced top header right padding to `pr-16 sm:pr-20`, freeing up over 80px of horizontal space and completely eliminating text truncation on trader names, business names, and trade categories.
+  - **Prominent Main Trade Category Pill Badge (`PartnerAdvertisement.tsx`, `TradesBannerAdStudio.tsx`)**: Introduced a dedicated, high-contrast trade category pill (`bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white border border-blue-400/60`, `Wrench` icon, uppercase bold typography) positioned directly next to the star rating (`★ 4.9 (158)`) in the ad card header area. Allows users to instantly identify the trader's primary trade category (e.g., `BUILDER`, `PLUMBING`, `ELECTRICAL`, `LOCKSMITH`, `CAKE MAKER & BAKER`) at a glance.
+  - **Dark & Bright Trade Category Typography in Search Feed Cards (`FindTrades.tsx`)**: Updated trade category text color under trader names across search feed cards, card backs, map previews, and side-by-side comparison cards from muted slate-500 to a bold, high-contrast AnyTrader signature deep blue (`font-black text-[#002b5c] text-[11.5px] sm:text-xs`). Significantly improves legibility and visual pop against white card backgrounds.
+  - **Slim 40% Height-Reduced Compare Toggle Box (`FindTrades.tsx`)**: Streamlined the `[ ☐ Compare ]` button on search feed cards from standard box padding to an ultra-compact, slim pill button (`h-3.5 text-[8px] py-0 px-1.5 leading-none`), reducing its vertical height by 40% while preserving touch accessibility and checkbox toggle state.

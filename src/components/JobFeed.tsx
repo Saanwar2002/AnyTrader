@@ -2119,7 +2119,7 @@ export default function JobFeed() {
                     (job.quoteCount || 0) >= 5 ? "text-red-600 font-bold" : "text-blue-600 font-bold"
                   )}>
                     <PoundSterling className={cn("w-4 h-4", (job.quoteCount || 0) >= 5 ? "text-red-500" : "text-blue-500")} />
-                    <span>{job.quoteCount || 0} Quotes (Max 5)</span>
+                    <span>{Math.max(0, job.quoteCount || 0)} Quotes (Max 5)</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-900 font-bold">
                     <Calendar className="w-4 h-4 text-slate-800" />

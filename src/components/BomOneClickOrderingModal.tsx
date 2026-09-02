@@ -46,6 +46,7 @@ export function BomOneClickOrderingModal({
   const [vanType, setVanType] = useState<"small_van" | "swb_transit" | "lwb_luton">("small_van");
   const [deliveryWindow, setDeliveryWindow] = useState<"asap_90min" | "early_morning_0800" | "custom_slot">("early_morning_0800");
   const [deliveryAddress, setDeliveryAddress] = useState(job?.address?.line1 || job?.propertyName || "Site Address");
+  const [courierInstructions, setCourierInstructions] = useState("");
   
   // Step 1 Custom Add Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -57,6 +58,7 @@ export function BomOneClickOrderingModal({
 
   // Inline Editing State for existing items
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<{
     name: string;
     category: BOMItem["category"];
@@ -300,7 +302,8 @@ export function BomOneClickOrderingModal({
           driverName: "Dave M. (Category 84 Express Courier)",
           driverPhone: "+44 7700 900482",
           vehiclePlate: "VE72 TKX (Ford Transit Custom)",
-          trackingCode: `TRK-VAN-${Math.floor(100000 + Math.random() * 900000)}`
+          trackingCode: `TRK-VAN-${Math.floor(100000 + Math.random() * 900000)}`,
+          notes: courierInstructions.trim() || undefined
         };
       }
 
@@ -342,40 +345,43 @@ export function BomOneClickOrderingModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        className="w-full max-w-4xl bg-slate-900 text-white rounded-3xl border border-white/20 shadow-2xl overflow-hidden my-auto"
+        className="w-full max-w-4xl bg-slate-900 text-white rounded-3xl border border-white/20 shadow-2xl overflow-hidden my-auto relative"
       >
         {/* Header Bar */}
-        <div className="p-5 sm:p-6 bg-slate-950 border-b border-white/10 flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
-              <ShoppingBag className="w-6 h-6" />
+        <div className="p-4 sm:p-6 bg-slate-950 border-b border-white/10 flex items-start justify-between gap-3 sm:gap-4 relative">
+          <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 flex-1 min-w-0 pr-2">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
+              <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h3 className="text-sm sm:text-lg font-black text-white tracking-tight leading-tight">
                   Direct Merchant AI "BOM" One-Click Ordering
                 </h3>
-                <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                <span className="text-[9px] sm:text-[10px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                   TradeOS Core
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5 font-medium">
+              <p className="text-[11px] sm:text-xs text-slate-300 mt-0.5 font-medium leading-snug">
                 Extract required parts, compare trade prices across Screwfix/Travis Perkins, and skip the 2-hour morning queue.
               </p>
             </div>
           </div>
 
+          {/* Prominent High-Visibility Close Button */}
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition border border-white/15 shrink-0"
-            title="Close"
+            aria-label="Close BOM Ordering Modal"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white/10 hover:bg-red-500/80 text-slate-300 hover:text-white transition-all border border-white/20 hover:border-red-400 flex items-center justify-center shrink-0 shadow-lg active:scale-95 cursor-pointer z-10 group"
+            title="Close BOM modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 group-hover:scale-110 transition-transform text-white" />
           </button>
         </div>
 
@@ -445,6 +451,36 @@ export function BomOneClickOrderingModal({
                     <div className="p-3.5 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 rounded-2xl border border-emerald-400/30">
                       <p className="text-[10px] font-extrabold uppercase text-emerald-300">TradeOS Savings</p>
                       <p className="text-lg font-black text-emerald-300 mt-0.5">+£{totalEstimatedSavings.toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  {/* Quote Scope & Billing Transparency Banner */}
+                  <div className={`p-3.5 rounded-2xl border flex items-start gap-3 text-xs ${
+                    quote?.quoteScope === "labour_only" 
+                      ? "bg-amber-500/10 border-amber-400/30 text-amber-200" 
+                      : "bg-emerald-500/10 border-emerald-400/30 text-emerald-200"
+                  }`}>
+                    <ShieldCheck className={`w-4 h-4 shrink-0 mt-0.5 ${
+                      quote?.quoteScope === "labour_only" ? "text-amber-400" : "text-emerald-400"
+                    }`} />
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <p className="font-extrabold text-white text-xs">
+                          {quote?.quoteScope === "labour_only" ? "Labour Only Quote Scope" : "All-Inclusive Package Scope"}
+                        </p>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          quote?.quoteScope === "labour_only" 
+                            ? "bg-amber-400 text-slate-950" 
+                            : "bg-emerald-400 text-slate-950"
+                        }`}>
+                          {quote?.quoteScope === "labour_only" ? "Homeowner Supplies Parts" : "Parts Included in Quote"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-snug">
+                        {quote?.quoteScope === "labour_only"
+                          ? "The agreed quote covers labour only. Materials are charged directly at merchant trade trade price with 0% AnyTrader markup."
+                          : `Materials are funded out of the agreed all-inclusive quote (£${quote?.amount || quote?.total || 'Agreed'}). Homeowner will not be billed twice.`}
+                      </p>
                     </div>
                   </div>
 
@@ -793,24 +829,24 @@ export function BomOneClickOrderingModal({
                         return (
                           <div
                             key={item.id}
-                            className="p-3.5 bg-white text-slate-900 rounded-2xl border border-black flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-400 transition group"
+                            className="p-3 sm:p-3.5 bg-white text-slate-900 rounded-2xl border border-black flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-400 transition group overflow-hidden"
                           >
                             <div className="flex-1 min-w-0 space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                                 <span className="font-black text-xs text-slate-950 leading-tight">
                                   {item.name}
                                 </span>
-                                <span className="text-[9px] bg-slate-100 text-slate-700 font-extrabold px-2 py-0.5 rounded-full border border-slate-300">
+                                <span className="text-[9px] bg-slate-100 text-slate-700 font-extrabold px-2 py-0.5 rounded-full border border-slate-300 shrink-0">
                                   {item.category}
                                 </span>
                                 {item.isPassportComponent && (
-                                  <span className="text-[9px] bg-blue-100 text-blue-800 font-extrabold px-2 py-0.5 rounded-full border border-blue-300 flex items-center gap-1">
+                                  <span className="text-[9px] bg-blue-100 text-blue-800 font-extrabold px-2 py-0.5 rounded-full border border-blue-300 flex items-center gap-1 shrink-0">
                                     <ShieldCheck className="w-2.5 h-2.5" /> Passport Component
                                   </span>
                                 )}
                               </div>
                               
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
+                              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-600">
                                 <span>SKU: <strong className="font-mono text-slate-900">{item.sku || 'TRADE-PART'}</strong></span>
                                 <span>•</span>
                                 <span>Trade Unit: <strong className="text-emerald-700">£{item.unitCost.toFixed(2)}</strong> {item.unit && `/${item.unit}`}</span>
@@ -825,57 +861,88 @@ export function BomOneClickOrderingModal({
                               )}
                             </div>
 
-                            {/* Controls & Price */}
-                            <div className="flex items-center justify-between sm:justify-end gap-2.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                              {/* Modify Item Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleStartEdit(item)}
-                                className="px-2.5 py-1 text-xs font-bold text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-amber-100 hover:border-amber-300 border border-slate-200 rounded-xl transition flex items-center gap-1"
-                                title="Edit item name, unit cost, SKU or notes"
-                              >
-                                <Edit3 className="w-3 h-3 text-amber-600" />
-                                <span>Edit</span>
-                              </button>
+                            {/* Controls & Price - Arranged with Edit & Trash on left, Quantity in middle, Price on right */}
+                            <div className="flex items-center justify-between sm:justify-end gap-3 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                              {/* Left Column: Edit Button & Trash Button below it */}
+                              <div className="flex flex-col items-center justify-center gap-1 shrink-0 min-w-[62px]">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(item)}
+                                  className="w-full px-2 py-1 text-xs font-bold text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-amber-100 hover:border-amber-300 border border-slate-200 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                                  title="Edit item name, unit cost, SKU or notes"
+                                >
+                                  <Edit3 className="w-3 h-3 text-amber-600" />
+                                  <span>Edit</span>
+                                </button>
+
+                                {/* Double-confirmation Trash Button below edit tab */}
+                                {confirmDeleteId === item.id ? (
+                                  <div className="flex items-center gap-1 bg-red-50 p-1 rounded-xl border border-red-300 shadow-inner animate-in fade-in zoom-in-95 duration-150">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleRemoveItem(item.id);
+                                        setConfirmDeleteId(null);
+                                      }}
+                                      className="px-1.5 py-0.5 bg-red-600 hover:bg-red-700 text-white font-black text-[9px] rounded-lg shadow-sm active:scale-95 transition flex items-center gap-0.5 cursor-pointer"
+                                      title="Confirm delete this material"
+                                    >
+                                      <Trash2 className="w-2.5 h-2.5" />
+                                      <span>Del</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteId(null)}
+                                      className="px-1 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[9px] rounded-lg transition cursor-pointer"
+                                      title="Cancel delete"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteId(item.id)}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition flex items-center justify-center cursor-pointer"
+                                    title="Delete Item (Tap to confirm)"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
 
                               {/* Quantity Adjuster */}
-                              <div className="flex items-center bg-slate-100 rounded-xl border border-slate-300 p-0.5">
+                              <div className="flex items-center bg-slate-100 rounded-xl border border-slate-300 p-0.5 shrink-0">
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                                  className="w-6 h-6 rounded-lg bg-white text-slate-900 font-black text-xs hover:bg-slate-200 transition flex items-center justify-center"
+                                  className="w-7 h-7 rounded-lg bg-white text-slate-900 font-black text-xs hover:bg-slate-200 transition flex items-center justify-center cursor-pointer shadow-xs"
                                   title="Decrease quantity"
                                 >
                                   -
                                 </button>
-                                <span className="w-8 text-center text-xs font-black text-slate-900">
+                                <span className="w-7 text-center text-xs font-black text-slate-900">
                                   {item.quantity}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                                  className="w-6 h-6 rounded-lg bg-white text-slate-900 font-black text-xs hover:bg-slate-200 transition flex items-center justify-center"
+                                  className="w-7 h-7 rounded-lg bg-white text-slate-900 font-black text-xs hover:bg-slate-200 transition flex items-center justify-center cursor-pointer shadow-xs"
                                   title="Increase quantity"
                                 >
                                   +
                                 </button>
                               </div>
 
-                              <div className="text-right min-w-[70px]">
-                                <p className="text-sm font-black text-slate-950">£{item.totalCost.toFixed(2)}</p>
+                              {/* Price on the right of quantity counter */}
+                              <div className="text-right min-w-[65px] pl-1">
+                                <p className="text-sm sm:text-base font-black text-slate-950 font-mono tracking-tight">
+                                  £{item.totalCost.toFixed(2)}
+                                </p>
                                 <p className="text-[10px] text-slate-400 line-through">
                                   £{(item.retailCost * item.quantity).toFixed(2)}
                                 </p>
                               </div>
-
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(item.id)}
-                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
                             </div>
                           </div>
                         );
@@ -1065,22 +1132,30 @@ export function BomOneClickOrderingModal({
 
                       <div>
                         <h5 className={`font-black text-base ${fulfillmentType === "courier_dispatch" ? 'text-slate-950' : 'text-white'}`}>
-                          Option 2: Site Courier Delivery
+                          Option 2: Site Courier Van Delivery
                         </h5>
                         <p className={`text-xs mt-1 ${fulfillmentType === "courier_dispatch" ? 'text-slate-600' : 'text-slate-300'}`}>
-                          Head straight to site. An AnyTrader registered van driver collects materials and delivers to driveway.
+                          Auto-posts to AnyTrader Category 84 Van Fleet. A verified local courier collects materials from trade counter and delivers straight to site.
                         </p>
                       </div>
 
-                      <div className={`p-3 rounded-2xl text-xs space-y-1.5 ${
-                        fulfillmentType === "courier_dispatch" ? 'bg-amber-50 text-slate-800' : 'bg-white/5 text-slate-200'
+                      <div className={`p-3.5 rounded-2xl text-xs space-y-1.5 border transition ${
+                        fulfillmentType === "courier_dispatch" 
+                          ? 'bg-purple-50 text-slate-900 border-purple-200' 
+                          : 'bg-white/10 text-white border-white/10'
                       }`}>
-                        <div className="flex justify-between items-center font-bold">
-                          <span>Courier Delivery Fee:</span>
-                          <span className="font-black text-sm text-purple-700">£{courierQuote.courierFee.toFixed(2)}</span>
+                        <div className="flex justify-between items-center">
+                          <span className={`font-bold text-xs ${fulfillmentType === "courier_dispatch" ? 'text-slate-900' : 'text-slate-100'}`}>
+                            Courier Delivery Fee:
+                          </span>
+                          <span className="font-black text-xs sm:text-sm text-white bg-purple-600 px-2.5 py-1 rounded-lg font-mono shadow-sm tracking-wide">
+                            £{courierQuote.courierFee.toFixed(2)}
+                          </span>
                         </div>
-                        <p className="text-[10px] text-slate-500">
-                          Saves 1.5 - 2.0 hours of trader billable labor time.
+                        <p className={`text-[11px] font-medium leading-relaxed ${
+                          fulfillmentType === "courier_dispatch" ? 'text-slate-700' : 'text-slate-200'
+                        }`}>
+                          ⚡ Saves 1.5 - 2.0 hours of trader billable labor time.
                         </p>
                       </div>
                     </div>
@@ -1148,6 +1223,59 @@ export function BomOneClickOrderingModal({
                           />
                         </div>
                       </div>
+
+                      {/* Custom Instructions for Courier */}
+                      <div className="pt-2 border-t border-slate-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-extrabold uppercase text-slate-600 flex items-center gap-1.5">
+                            <span>Courier Access & Site Delivery Instructions</span>
+                            <span className="text-[9px] font-medium text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">Optional</span>
+                          </label>
+                          {courierInstructions && (
+                            <button
+                              type="button"
+                              onClick={() => setCourierInstructions("")}
+                              className="text-[10px] text-red-600 hover:text-red-700 font-bold transition cursor-pointer"
+                            >
+                              ✕ Clear
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={courierInstructions}
+                          onChange={(e) => setCourierInstructions(e.target.value)}
+                          placeholder="e.g. Leave materials beside the rear gate behind van. Call 07700 900482 upon arrival if gate is locked."
+                          className="w-full p-2.5 rounded-xl border border-black text-xs font-medium text-slate-900 bg-slate-50 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 resize-none shadow-inner"
+                        />
+                        {/* Quick preset suggestion chips */}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <span className="text-[10px] text-slate-500 font-bold">Quick presets:</span>
+                          {[
+                            "Leave by side gate",
+                            "Call on arrival",
+                            "Knock loud / ring bell",
+                            "Rear lane / back entrance",
+                            "Under porch / keep dry"
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => {
+                                setCourierInstructions(prev => {
+                                  const trimmed = prev.trim();
+                                  if (!trimmed) return preset;
+                                  if (trimmed.includes(preset)) return trimmed;
+                                  return `${trimmed}, ${preset}`;
+                                });
+                              }}
+                              className="text-[10px] font-semibold bg-slate-100 hover:bg-purple-100 hover:text-purple-900 hover:border-purple-300 text-slate-700 px-2 py-1 rounded-lg border border-slate-300 transition-all cursor-pointer active:scale-95"
+                            >
+                              + {preset}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </motion.div>
                   )}
                 </div>
@@ -1209,54 +1337,94 @@ export function BomOneClickOrderingModal({
 
         {/* Footer Action Buttons */}
         <div className="p-4 sm:p-5 bg-slate-950 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            {currentStep < 4 && (
+          <div className="flex items-center gap-2 text-xs text-slate-400 w-full sm:w-auto justify-between sm:justify-start">
+            {currentStep < 4 ? (
               <span>
                 Step {currentStep} of 3 • Total Trade Basket: <strong className="text-amber-400">£{(selectedMerchant?.basketTotal || totalTradePrice).toFixed(2)}</strong>
               </span>
+            ) : (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Order Completed & Dispatched
+              </span>
             )}
+
+            {/* Mobile Close shortcut in footer */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="sm:hidden text-xs text-slate-400 hover:text-white underline decoration-slate-600"
+            >
+              Close
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {currentStep > 1 && currentStep < 4 && (
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {/* Step 1: Close / Cancel Button */}
+            {currentStep === 1 && (
               <button
                 type="button"
-                onClick={() => setCurrentStep((currentStep - 1) as any)}
-                className="py-2.5 px-4 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition active:scale-95"
+                onClick={onClose}
+                className="py-2.5 px-4 bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-white/20 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                Back
+                <X className="w-3.5 h-3.5" />
+                <span>Cancel / Close</span>
               </button>
             )}
 
+            {/* Steps 2 & 3: Back Button */}
+            {currentStep > 1 && currentStep < 4 && (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="py-2.5 px-3 bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white font-semibold text-xs rounded-xl border border-white/10 transition active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+                  title="Close and exit BOM modal"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Close</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep((currentStep - 1) as any)}
+                  className="py-2.5 px-4 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>← Back</span>
+                </button>
+              </>
+            )}
+
+            {/* Step 1 Next Button */}
             {currentStep === 1 && (
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
                 disabled={items.length === 0}
-                className="w-full sm:w-auto py-2.5 px-5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                className="w-full sm:w-auto py-2.5 px-5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
               >
                 <span>Compare Local Merchants ({items.length} Parts)</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
 
+            {/* Step 2 Next Button */}
             {currentStep === 2 && (
               <button
                 type="button"
                 onClick={() => setCurrentStep(3)}
-                className="w-full sm:w-auto py-2.5 px-5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition shadow-md flex items-center justify-center gap-2 active:scale-95"
+                className="w-full sm:w-auto py-2.5 px-5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition shadow-md flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
               >
                 <span>Proceed to 1-Click Fulfillment</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
 
+            {/* Step 3 Confirm Order Button */}
             {currentStep === 3 && (
               <button
                 type="button"
                 onClick={handleConfirmAndPlaceOrder}
                 disabled={isSubmittingOrder}
-                className="w-full sm:w-auto py-2.5 px-6 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                className="w-full sm:w-auto py-2.5 px-6 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
               >
                 {isSubmittingOrder ? (
                   <>
@@ -1276,6 +1444,7 @@ export function BomOneClickOrderingModal({
               </button>
             )}
 
+            {/* Step 4 Done Button */}
             {currentStep === 4 && (
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
@@ -1283,7 +1452,7 @@ export function BomOneClickOrderingModal({
                   onClick={() => {
                     window.print();
                   }}
-                  className="py-2.5 px-4 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition flex items-center gap-1.5"
+                  className="py-2.5 px-4 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Receipt</span>
@@ -1291,9 +1460,10 @@ export function BomOneClickOrderingModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-full sm:w-auto py-2.5 px-6 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition shadow-md"
+                  className="w-full sm:w-auto py-2.5 px-6 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Done & Return to Job
+                  <X className="w-4 h-4" />
+                  <span>Done & Close Modal</span>
                 </button>
               </div>
             )}

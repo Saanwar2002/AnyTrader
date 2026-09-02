@@ -3,7 +3,7 @@ import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, serv
 import { useAuth } from "./AuthProvider";
 import { usePortal } from "@/src/lib/PortalContext";
 import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, AlertTriangle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap, Building2 } from "lucide-react";
+import { Briefcase, Clock, MapPin, ChevronRight, AlertCircle, AlertTriangle, Settings, Edit2, RotateCcw, XCircle, Loader2, Plus, Image as ImageIcon, Video as VideoIcon, Trash2, History, Zap, Building2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";

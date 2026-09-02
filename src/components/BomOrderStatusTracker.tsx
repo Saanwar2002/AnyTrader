@@ -395,16 +395,25 @@ export function BomOrderStatusTracker({
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-white/10 pt-1.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-400 border-t border-white/10 pt-1.5 gap-1">
                   <span className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-amber-400" />
+                    <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
                     From: {order.courierDetails.pickupAddress || order.selectedMerchant}
                   </span>
                   <span className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-emerald-400" />
+                    <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
                     To: {order.courierDetails.deliveryAddress || "Site Driveway"}
                   </span>
                 </div>
+
+                {order.courierDetails.notes && (
+                  <div className="text-[11px] text-purple-200 bg-purple-950/60 p-2 rounded-lg border border-purple-800/40 flex items-start gap-1.5 mt-1">
+                    <FileText className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                    <span className="leading-snug">
+                      <strong className="text-purple-300">Courier Instructions:</strong> {order.courierDetails.notes}
+                    </span>
+                  </div>
+                )}
               </motion.div>
             )}
           </motion.div>

@@ -8,8 +8,7 @@ service cloud.firestore {
     function isAdmin() { 
       return isSignedIn() && (
         (request.auth.token.email != null && request.auth.token.email.lower() == 'saanwar2002@gmail.com') ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'ecosystem_manager'])
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       ); 
     }
     
@@ -62,13 +61,24 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if true; // Public read for profile discovery, both search list & get profile
-      allow create: if isOwner(userId) || (isSignedIn() && (isAdmin() || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$') || userId.matches('^sample_.*$')));
+      allow create: if (isOwner(userId) && (
+        isAdmin() || (
+          request.resource.data.get('isAdmin', false) == false && 
+          !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager'])
+        )
+      )) || (isSignedIn() && (isAdmin() || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$') || userId.matches('^sample_.*$')));
       allow delete: if isOwner(userId) || (isSignedIn() && (isAdmin() || userId.matches('^mock-trader-.*$') || userId.matches('^seed-.*$') || userId.matches('^sample_.*$')));
       
-      // Prevent privilege escalation while allowing full profile management & seeding
+      // Prevent privilege escalation and paid subscription tampering while allowing profile management & seeding
       allow update: if (
         isSignedIn() && (
-          (isOwner(userId) && (isAdmin() || (request.resource.data.get('isAdmin', false) == false && !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager'])))) || 
+          (isOwner(userId) && (
+            isAdmin() || (
+              request.resource.data.get('isAdmin', false) == false && 
+              !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager']) &&
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscriptionStatus', 'subscriptionId', 'hasExclusiveAddon', 'tierId', 'pendingPlatformFees', 'stripeCustomerId', 'gothamSubscription'])
+            )
+          )) || 
           isAdmin() ||
           userId.matches('^mock-trader-.*$') || 
           userId.matches('^seed-.*$') || 
@@ -591,6 +601,16 @@ service cloud.firestore {
         dealId.matches('^seed-.*$') || 
         isAdmin()
       );
+    }
+
+    match /system_settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admin_login_audits/{auditId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
 
     // --- AI Agent Ecosystem & Audit Log Collections ---

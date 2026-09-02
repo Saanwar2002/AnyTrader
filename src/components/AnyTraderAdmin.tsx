@@ -4351,28 +4351,155 @@ export default function AnyTraderAdmin() {
                     )}
                   </div>
 
-                  {/* Portal Controls */}
+                  {/* Portal & Launch Controls */}
                   <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <Car className="w-4 h-4" /> Portal Controls
-                      </h4>
-                      <button 
-                        onClick={() => setTempConfig({ ...tempConfig, showBookTaxiButton: tempConfig.showBookTaxiButton === false ? true : false })}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div>
+                        <h4 className="text-sm font-black text-black uppercase tracking-wider flex items-center gap-2">
+                          <Car className="w-4 h-4 text-amber-500" /> "Book Taxi" & AnyRoller Launch Controls
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Control visibility and interaction for the AnyRoller Taxi & Courier transport portal.
+                        </p>
+                      </div>
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide border",
+                        (tempConfig.taxiPortalMode === "coming_soon" || tempConfig.taxiComingSoon === true || tempConfig.showBookTaxiButton === "coming_soon")
+                          ? "bg-amber-100 border-amber-300 text-amber-900"
+                          : tempConfig.showBookTaxiButton === false || tempConfig.taxiPortalMode === "hidden"
+                          ? "bg-slate-100 border-slate-300 text-slate-700"
+                          : "bg-emerald-100 border-emerald-300 text-emerald-900"
+                      )}>
+                        {(tempConfig.taxiPortalMode === "coming_soon" || tempConfig.taxiComingSoon === true || tempConfig.showBookTaxiButton === "coming_soon")
+                          ? "Coming Soon Mode"
+                          : tempConfig.showBookTaxiButton === false || tempConfig.taxiPortalMode === "hidden"
+                          ? "Hidden"
+                          : "Live & Active"}
+                      </span>
+                    </div>
+
+                    {/* Mode Selector */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Option 1: Coming Soon (Greyed Out) */}
+                      <button
+                        type="button"
+                        onClick={() => setTempConfig({
+                          ...tempConfig,
+                          taxiPortalMode: "coming_soon",
+                          taxiComingSoon: true,
+                          showBookTaxiButton: "coming_soon"
+                        })}
                         className={cn(
-                          "w-12 h-6 rounded-full relative transition-all",
-                          tempConfig.showBookTaxiButton !== false ? "bg-blue-600" : "bg-slate-200"
+                          "p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer",
+                          (tempConfig.taxiPortalMode === "coming_soon" || tempConfig.taxiComingSoon === true || tempConfig.showBookTaxiButton === "coming_soon")
+                            ? "bg-amber-50 border-black shadow-md ring-2 ring-amber-400/40"
+                            : "bg-slate-50 border-slate-200 hover:border-black/50"
                         )}
                       >
-                        <div className={cn(
-                          "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
-                          tempConfig.showBookTaxiButton !== false ? "right-1" : "left-1"
-                        )} />
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="px-2 py-0.5 bg-amber-500 text-black text-[9px] font-black uppercase rounded-md">
+                            Recommended for Launch
+                          </span>
+                          {(tempConfig.taxiPortalMode === "coming_soon" || tempConfig.taxiComingSoon === true || tempConfig.showBookTaxiButton === "coming_soon") && (
+                            <CheckCircle2 className="w-4 h-4 text-amber-700" />
+                          )}
+                        </div>
+                        <p className="text-xs font-black text-black">Coming Soon (Greyed Out)</p>
+                        <p className="text-[11px] text-slate-600 mt-1 leading-tight">
+                          Button is visible with a "SOON" badge. Clicking opens the Coming Soon overlay to focus on AnyTrader.
+                        </p>
+                      </button>
+
+                      {/* Option 2: Live & Active */}
+                      <button
+                        type="button"
+                        onClick={() => setTempConfig({
+                          ...tempConfig,
+                          taxiPortalMode: "active",
+                          taxiComingSoon: false,
+                          showBookTaxiButton: true
+                        })}
+                        className={cn(
+                          "p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer",
+                          tempConfig.taxiPortalMode === "active" || (tempConfig.showBookTaxiButton === true && !tempConfig.taxiComingSoon && tempConfig.taxiPortalMode !== "coming_soon")
+                            ? "bg-emerald-50 border-black shadow-md ring-2 ring-emerald-400/40"
+                            : "bg-slate-50 border-slate-200 hover:border-black/50"
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="px-2 py-0.5 bg-emerald-600 text-white text-[9px] font-black uppercase rounded-md">
+                            Full Ecosystem
+                          </span>
+                          {(tempConfig.taxiPortalMode === "active" || (tempConfig.showBookTaxiButton === true && !tempConfig.taxiComingSoon && tempConfig.taxiPortalMode !== "coming_soon")) && (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                          )}
+                        </div>
+                        <p className="text-xs font-black text-black">Live & Active</p>
+                        <p className="text-[11px] text-slate-600 mt-1 leading-tight">
+                          Full on-demand passenger taxi dispatch and driver navigation terminal are active.
+                        </p>
+                      </button>
+
+                      {/* Option 3: Completely Hidden */}
+                      <button
+                        type="button"
+                        onClick={() => setTempConfig({
+                          ...tempConfig,
+                          taxiPortalMode: "hidden",
+                          taxiComingSoon: false,
+                          showBookTaxiButton: false
+                        })}
+                        className={cn(
+                          "p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer",
+                          tempConfig.taxiPortalMode === "hidden" || (tempConfig.showBookTaxiButton === false && tempConfig.taxiPortalMode !== "coming_soon")
+                            ? "bg-slate-200 border-black shadow-md ring-2 ring-slate-400/40"
+                            : "bg-slate-50 border-slate-200 hover:border-black/50"
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="px-2 py-0.5 bg-slate-700 text-white text-[9px] font-black uppercase rounded-md">
+                            Disabled
+                          </span>
+                          {(tempConfig.taxiPortalMode === "hidden" || (tempConfig.showBookTaxiButton === false && tempConfig.taxiPortalMode !== "coming_soon")) && (
+                            <CheckCircle2 className="w-4 h-4 text-slate-800" />
+                          )}
+                        </div>
+                        <p className="text-xs font-black text-black">Completely Hidden</p>
+                        <p className="text-[11px] text-slate-600 mt-1 leading-tight">
+                          Removes the button entirely from the header and displays the AnyTrader badge.
+                        </p>
                       </button>
                     </div>
-                    <p className="text-[10px] text-slate-500">
-                      Show the "Book Taxi" / AnyRoller toggle button in the main app header. You can disable this during the early days to focus entirely on the AnyTrader side of the business.
-                    </p>
+
+                    {/* Custom Coming Soon Text Fields */}
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                      <p className="text-xs font-bold text-black flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Customizable Coming Soon Overlay Message
+                      </p>
+                      
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-700">Overlay Headline Title</label>
+                        <input
+                          type="text"
+                          value={tempConfig.taxiComingSoonTitle || ""}
+                          placeholder="Focusing on AnyTrader at Launch"
+                          onChange={(e) => setTempConfig({ ...tempConfig, taxiComingSoonTitle: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-black/30 rounded-xl text-xs font-bold text-black focus:outline-none focus:ring-2 focus:ring-black"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-700">Overlay Description</label>
+                        <textarea
+                          rows={2}
+                          value={tempConfig.taxiComingSoonMessage || ""}
+                          placeholder="We are currently dedicating 100% of our capacity to onboarding top verified UK tradespeople, homeowners, and landlords on AnyTrader. AnyRoller passenger rides and bulky appliance courier dispatch will unlock in our upcoming phase!"
+                          onChange={(e) => setTempConfig({ ...tempConfig, taxiComingSoonMessage: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-black/30 rounded-xl text-xs font-medium text-black focus:outline-none focus:ring-2 focus:ring-black resize-none"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Advertising Configuration */}

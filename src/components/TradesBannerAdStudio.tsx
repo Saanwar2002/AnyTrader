@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   Plus, Zap, ArrowLeft, Loader2, CreditCard, CheckCircle2, 
   PauseCircle, PlayCircle, Clock, Trash2, Edit3, Sparkles, 
-  Eye, MousePointerClick, Star, X, Check, ChevronRight, User
+  Eye, MousePointerClick, Star, X, Check, ChevronRight, User, Wrench
 } from "lucide-react";
 import { 
   collection, query, where, onSnapshot, addDoc, serverTimestamp, 
@@ -681,17 +681,24 @@ export default function TradesBannerAdStudio() {
                               {profile?.name || profile?.businessName || "Elena Rostova"}
                             </h4>
 
-                            {/* 2. Business Name & Category */}
-                            <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">
-                              {[profile?.businessName, profile?.trade].filter(Boolean).join(" · ") || "Heritage Luxe Painting & Decorating"}
-                            </p>
+                            {/* 2. Business Name */}
+                            {profile?.businessName && (
+                              <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">
+                                {profile.businessName}
+                              </p>
+                            )}
 
-                            {/* 3. Star Rating directly under Business Name */}
-                            <div className="flex items-center mt-1">
+                            {/* 3. Star Rating & Prominent Main Trade Category Badge */}
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                               <span className="inline-flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0">
                                 <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
                                 {traderRating}
                                 <span className="text-[9px] opacity-80">({traderReviews})</span>
+                              </span>
+
+                              <span className="inline-flex items-center gap-1 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white border border-blue-400/60 px-2 py-0.5 rounded-md text-[9.5px] sm:text-[10px] font-black tracking-wide uppercase shadow-xs shrink-0 max-w-[170px] sm:max-w-[210px] truncate">
+                                <Wrench className="w-2.5 h-2.5 text-sky-200 shrink-0" />
+                                <span className="truncate">{profile?.trade || "Painting & Decorating"}</span>
                               </span>
                             </div>
                           </div>

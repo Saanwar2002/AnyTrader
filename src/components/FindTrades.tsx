@@ -1391,7 +1391,7 @@ export default function FindTrades() {
                 <div className="w-2 h-2 rounded-full bg-white relative" />
               </div>
               <p className="text-white text-[10px] font-black uppercase tracking-[0.15em]">
-                {filteredTradespeople.length} <span className="text-blue-100 font-bold">Traders Available</span>
+                {filteredTradespeople.length} <span className="text-white font-black">Traders Available</span>
               </p>
             </motion.div>
           </div>
@@ -1608,7 +1608,7 @@ export default function FindTrades() {
                                   )
                                 )}
                               </div>
-                              <p className="text-[10px] text-slate-500 truncate">
+                              <p className="text-[10.5px] font-black text-[#002b5c] truncate">
                                 {tp.trades?.[0] || 'Tradesperson'} • £{tp.miniProfileSettings?.callOutFee ?? tp.miniProfilePricing?.callOutFee ?? tp.callOutFee ?? 0} call-out
                               </p>
                             </div>
@@ -2281,7 +2281,7 @@ export default function FindTrades() {
                         )}
                       </div>
                       <h3 className="text-xs font-bold text-black truncate w-full px-0.5 mb-0.5" title={tp.name}>{tp.name}</h3>
-                      <p className="text-[10.5px] font-semibold text-black truncate w-full px-0.5 mb-2">{tp.trades?.[0] || 'Tradesperson'}</p>
+                      <p className="text-[11px] font-black text-[#002b5c] truncate w-full px-0.5 mb-2">{tp.trades?.[0] || 'Tradesperson'}</p>
                     </div>
 
                     <div className="w-full pt-1.5 border-t border-slate-100 flex flex-col items-center gap-1">
@@ -2456,7 +2456,7 @@ export default function FindTrades() {
                                   <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                                 )}
                               </h4>
-                              <p className="text-[10px] text-slate-500 truncate">{selectedMapTrader.trades?.[0] || 'Tradesperson'}</p>
+                              <p className="text-[11px] font-black text-[#002b5c] truncate">{selectedMapTrader.trades?.[0] || 'Tradesperson'}</p>
                             </div>
                           </div>
 
@@ -2496,15 +2496,28 @@ export default function FindTrades() {
       <AnimatePresence>
         {showNoResultsToast && (
             <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] bg-orange-500 text-white px-6 py-3 rounded-2xl shadow-2xl border border-orange-400 flex items-center gap-3 whitespace-nowrap"
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 15, scale: 0.95 }}
+              className="fixed bottom-24 sm:bottom-22 left-1/2 -translate-x-1/2 z-[110] w-[calc(100%-2rem)] max-w-md bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 text-white px-4 py-3 rounded-2xl shadow-2xl border border-white/30 flex items-center justify-between gap-3 backdrop-blur-md"
             >
-              <AlertTriangle className="w-5 h-5 text-white" />
-              <p className="text-sm font-bold">No matches! Try adjusting your search or filters.</p>
-              <button onClick={() => setShowNoResultsToast(false)} className="ml-2 p-1 hover:bg-orange-600 rounded-full transition-colors">
-                <X className="w-4 h-4" />
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/40 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-white leading-tight">No matches found</p>
+                  <p className="text-[11px] font-semibold text-white/95 leading-tight mt-0.5">
+                    Try adjusting your keywords or clearing active filters.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowNoResultsToast(false)} 
+                className="p-1.5 hover:bg-white/20 rounded-xl transition-colors shrink-0 text-white cursor-pointer"
+                aria-label="Dismiss notification"
+              >
+                <X className="w-4 h-4 text-white" />
               </button>
             </motion.div>
           )}
@@ -2513,14 +2526,27 @@ export default function FindTrades() {
         <AnimatePresence>
           {showSuccessToast && (
             <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] bg-blue-600 text-white px-6 py-3 rounded-2xl shadow-2xl border border-blue-500 flex items-center gap-3 whitespace-nowrap"
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 15, scale: 0.95 }}
+              className="fixed bottom-24 sm:bottom-22 left-1/2 -translate-x-1/2 z-[110] w-[calc(100%-2rem)] max-w-md bg-slate-900/95 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl border border-white/20 flex items-center justify-between gap-3"
             >
-              <CheckCircle className="w-5 h-5 text-white" />
-              <p className="text-sm font-bold">{successMessage}</p>
-              <button onClick={() => setShowSuccessToast(false)} className="ml-2 p-1 hover:bg-blue-700 rounded-full transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-white leading-tight">Results updated</p>
+                  <p className="text-[11px] font-medium text-slate-300 leading-tight mt-0.5 truncate">
+                    {successMessage}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSuccessToast(false)} 
+                className="p-1.5 hover:bg-white/10 rounded-xl transition-colors shrink-0 text-slate-400 hover:text-white cursor-pointer"
+                aria-label="Dismiss notification"
+              >
                 <X className="w-4 h-4" />
               </button>
             </motion.div>
@@ -2646,7 +2672,7 @@ export default function FindTrades() {
                           <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-700 font-bold truncate">
+                      <p className="text-[11.5px] sm:text-xs text-[#002b5c] font-black tracking-tight truncate">
                         {tp.trades?.[0] || 'Professional'}
                       </p>
                     </div>
@@ -2792,7 +2818,7 @@ export default function FindTrades() {
                           )}
                         </div>
                         
-                        <p className="text-[10.5px] text-slate-500 font-semibold truncate leading-tight">
+                        <p className="text-[11.5px] sm:text-xs text-[#002b5c] font-black tracking-tight truncate leading-tight">
                           {tp.trades?.[0] || 'Professional'}
                         </p>
 
@@ -2879,7 +2905,7 @@ export default function FindTrades() {
                         type="button"
                         onClick={(e) => toggleCompareTrader(tp.uid, e)}
                         className={cn(
-                          "px-1.5 py-0.5 text-[8.5px] font-bold rounded border flex items-center gap-1 transition-all cursor-pointer z-10 shrink-0",
+                          "px-1.5 py-0 h-3.5 text-[8px] font-bold rounded border flex items-center gap-0.5 transition-all cursor-pointer z-10 shrink-0 leading-none",
                           selectedCompareIds.includes(tp.uid)
                             ? "bg-blue-600 text-white border-black shadow-2xs"
                             : "bg-slate-100 text-slate-800 border-black hover:bg-slate-200"
@@ -3439,7 +3465,7 @@ export default function FindTrades() {
                             )}
                           </div>
                           <h3 className="font-extrabold text-slate-900 text-[11px] sm:text-base leading-tight truncate w-full px-0.5" title={tp.name}>{tp.name}</h3>
-                          <p className="text-[9.5px] sm:text-[11px] text-slate-600 font-bold truncate w-full px-0.5">{tp.trades?.[0] || 'Professional'}</p>
+                          <p className="text-[10px] sm:text-[11.5px] text-[#002b5c] font-black truncate w-full px-0.5">{tp.trades?.[0] || 'Professional'}</p>
                         </div>
                       );
                     })}

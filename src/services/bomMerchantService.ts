@@ -671,27 +671,42 @@ export async function createBOMOrder(params: {
       orderRecord.propertyPassportSynced = true;
     }
 
-    // 4. If Courier Dispatch selected, create Category 84 dispatch in ride_requests
+    // 4. If Courier Dispatch selected, create Category 84 dispatch as an AnyTrader Job
     if (params.fulfillmentType === "courier_dispatch" && params.courierDetails) {
-      await addDoc(collection(db, "ride_requests"), {
-        serviceCategory: "Courier, Parcel & Express Delivery",
-        serviceSubcategory: "Bulky Item & Heavy Appliance Transport",
+      const courierJobData = {
+        title: `Express Materials Delivery: ${params.selectedMerchant.merchantName} to Site`,
+        description: `Pick up pre-ordered TradeOS materials basket from ${params.selectedMerchant.merchantName} (${params.courierDetails.pickupAddress}) and deliver to site (${params.courierDetails.deliveryAddress}). Collection Code: ${pickupReferenceCode}. Items: ${params.items.length} parts. Van requirement: ${params.courierDetails.vanTypeLabel}.${params.courierDetails.notes ? ` Special notes: ${params.courierDetails.notes}` : ''}`,
+        category: "Courier, Parcel & Express Delivery",
+        subcategory: "Bulky Item & Heavy Appliance Transport (Washing Machines, Fridges, Dishwashers)",
         categoryCode: "84",
-        jobId: params.jobId,
+        parentJobId: params.jobId,
         bomOrderId: orderId,
         pickupAddress: params.courierDetails.pickupAddress,
-        dropoffAddress: params.courierDetails.deliveryAddress,
+        deliveryAddress: params.courierDetails.deliveryAddress,
+        location: params.courierDetails.deliveryAddress,
         scheduledDeliveryTime: params.courierDetails.scheduledTime,
         vanType: params.courierDetails.vanType,
-        totalFare: params.courierDetails.courierFee,
+        vanTypeLabel: params.courierDetails.vanTypeLabel,
+        budget: params.courierDetails.courierFee,
+        fixedPrice: params.courierDetails.courierFee,
         platformFee: params.courierDetails.platformCommission,
         driverPayout: params.courierDetails.driverPayout,
-        traderId: params.tradespersonId,
-        status: "pending",
+        homeownerId: params.homeownerId || params.tradespersonId,
+        homeownerName: params.homeownerName || params.tradespersonName || "AnyTrader Client",
+        tradespersonId: params.tradespersonId,
+        tradespersonName: params.tradespersonName || "Verified Tradesperson",
+        status: "posted",
         urgency: params.courierDetails.deliveryWindow === "asap_90min" ? "emergency" : "scheduled",
-        notes: `TradeOS Materials BOM Dispatch from ${params.selectedMerchant.merchantName}. Collection Ref: ${pickupReferenceCode}. Items: ${params.items.length} trade parts.`,
-        createdAt: serverTimestamp()
-      });
+        pickupReferenceCode,
+        merchantName: params.selectedMerchant.merchantName,
+        isBOMDeliveryJob: true,
+        postedDate: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        quoteCount: 0
+      };
+
+      // Post to AnyTrader jobs collection so registered Category 84 van drivers/couriers see it in JobFeed & matching engine
+      await addDoc(collection(db, "jobs"), courierJobData);
     }
   } catch (err) {
     console.error("Error creating BOM order in Firestore:", err);
