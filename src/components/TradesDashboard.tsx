@@ -36,6 +36,8 @@ import {
   formatDealBadgeText, 
   formatDealScheduleText 
 } from "@/src/lib/flashDeals";
+import TraderNotificationPreferencesModal from "./TraderNotificationPreferencesModal";
+import { checkAndNotifyTraderMatches } from "@/src/services/traderNotificationEngine";
 
 const iconMap: Record<string, any> = {
   Briefcase, Clock, MessageSquare, CheckCircle2, ChevronRight, Star, Search, BarChart3, PoundSterling, ShieldCheck, Zap, UserPlus, ImageIcon, VideoIcon
@@ -71,6 +73,16 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
   const [showIMToast, setShowIMToast] = useState(false);
   const [isSavingIM, setIsSavingIM] = useState(false);
   const [showSavingsInfo, setShowSavingsInfo] = useState(false);
+  const [showTimingModal, setShowTimingModal] = useState(false);
+
+  // Background check for newly matched jobs according to schedule & emergency bypass
+  useEffect(() => {
+    if (user && profile && (profile.role === "tradesperson" || profile.role === "business")) {
+      checkAndNotifyTraderMatches(profile).catch((e) => {
+        console.warn("Auto-match background check error:", e);
+      });
+    }
+  }, [user?.uid, profile?.role]);
 
   // Auto-dismiss the savings info section after 5 seconds of being open
   useEffect(() => {
@@ -226,10 +238,13 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
   };
 
   const getExclusivePrice = () => {
+    if (sysConfig?.paidAddons?.exclusiveLeads?.price !== undefined) {
+      return sysConfig.paidAddons.exclusiveLeads.price;
+    }
     const tier = profile?.tierId || "Basic";
-    if (tier === "Basic") return 25;
-    if (tier.includes("Enterprise") || tier.includes("Highest")) return 10;
-    return 15; // Standard/Pro
+    if (tier === "Basic") return 29;
+    if (tier.includes("Enterprise") || tier.includes("Highest") || tier.includes("Platinum")) return 19;
+    return 29;
   };
 
   useEffect(() => {
@@ -251,13 +266,24 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
     setIsProcessingExclusive(true);
     setExclusiveCheckoutError(null);
     try {
+      const activePrice = getExclusivePrice();
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
           tierName: "Exclusive Leads Add-on",
-          priceId: "price_mock_exclusive_addon", // Replace with real price in prod
+          mode: "subscription",
+          price_data: {
+            currency: 'gbp',
+            unit_amount: Math.round(activePrice * 100),
+            recurring: { interval: 'month' },
+            product_data: {
+              name: 'Exclusive Leads Add-on',
+              description: sysConfig?.paidAddons?.exclusiveLeads?.description || 'Early-access priority notifications and exclusive trade leads'
+            }
+          },
+          priceId: "price_mock_exclusive_addon",
           successUrl: `${window.location.origin}/dashboard?exclusive_success=true`,
           cancelUrl: `${window.location.origin}/dashboard`,
           metadata: { isExclusiveAddon: "true" }
@@ -1032,6 +1058,15 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
               <h2 className="text-xl font-bold text-slate-900">AI Recommended Jobs</h2>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTimingModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-black rounded-lg text-xs font-bold text-black hover:bg-blue-100 active:scale-95 transition-all shadow-xs cursor-pointer"
+                title="Match Notification Timing & Radius Settings"
+              >
+                <Clock className="w-3.5 h-3.5 text-blue-700" />
+                <span>Alert Timing</span>
+              </button>
               <button
                 onClick={() => fetchRecommendations(true)}
                 disabled={isRecommending}
@@ -2227,6 +2262,13 @@ export default function TradesDashboard({ isSubView }: { isSubView?: boolean }) 
           </div>
         )}
       </AnimatePresence>
+
+      {/* Trader Match Notification Timing & Radius Preferences Modal */}
+      <TraderNotificationPreferencesModal
+        isOpen={showTimingModal}
+        onClose={() => setShowTimingModal(false)}
+        traderProfile={profile}
+      />
 
     </div>
   );

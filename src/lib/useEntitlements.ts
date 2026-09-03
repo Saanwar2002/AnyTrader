@@ -115,16 +115,23 @@ export const PROVIDER_TIERS: Record<ProviderTierName, ProviderTierEntitlements> 
 export const resolveTier = (profile: any): ProviderTierName => {
   if (!profile) return 'PAYG';
   
-  const dbTier = profile.tierId || profile.subscriptionType || '';
+  const rawTier = String(profile.tierId || profile.tier || profile.subscriptionType || '');
+  const lower = rawTier.toLowerCase();
 
   // Founding member reward maps to Silver Professional
-  if (profile.isFoundingMember && (dbTier === "Free Trial" || !dbTier)) {
+  if (profile.isFoundingMember && (rawTier === "Free Trial" || !rawTier)) {
       return 'Silver Professional';
   }
   
-  if (dbTier === 'Silver Professional' || dbTier === 'Pro' || dbTier.includes('Professional') || dbTier.includes('Silver')) return 'Silver Professional';
-  if (dbTier === 'Gold Elite' || dbTier === 'Elite' || dbTier.includes('Premium') || dbTier.includes('Gold')) return 'Gold Elite';
-  if (dbTier === 'Platinum Enterprise' || dbTier === 'Enterprise' || dbTier.includes('Powerhouse') || dbTier.includes('Platinum')) return 'Platinum Enterprise';
+  if (lower.includes('platinum') || lower.includes('enterprise powerhouse') || lower.includes('enterprise') || lower === 'platinum') {
+    return 'Platinum Enterprise';
+  }
+  if (lower.includes('gold') || lower.includes('elite') || lower.includes('premium') || lower.includes('business professional')) {
+    return 'Gold Elite';
+  }
+  if (lower.includes('silver') || lower.includes('pro') || lower.includes('professional') || lower === 'pro') {
+    return 'Silver Professional';
+  }
   
   return 'PAYG';
 };

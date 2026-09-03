@@ -123,6 +123,172 @@ export function formatJobLocation(job: any): string {
 }
 
 /**
+ * Map of UK Postcode Area prefixes to canonical Town / City names
+ */
+export const UK_AREA_MAP: Record<string, string> = {
+  HD: "Huddersfield",
+  BD: "Bradford",
+  M: "Manchester",
+  LS: "Leeds",
+  HX: "Halifax",
+  WF: "Wakefield",
+  S: "Sheffield",
+  B: "Birmingham",
+  L: "Liverpool",
+  OL: "Oldham",
+  BL: "Bolton",
+  WN: "Wigan",
+  WA: "Warrington",
+  SK: "Stockport",
+  PR: "Preston",
+  BB: "Blackburn",
+  FY: "Blackpool",
+  LA: "Lancaster",
+  DN: "Doncaster",
+  HG: "Harrogate",
+  YO: "York",
+  HU: "Hull",
+  DL: "Darlington",
+  TS: "Teesside",
+  DH: "Durham",
+  SR: "Sunderland",
+  NE: "Newcastle",
+  CA: "Carlisle",
+  DE: "Derby",
+  NG: "Nottingham",
+  LE: "Leicester",
+  LN: "Lincoln",
+  PE: "Peterborough",
+  NN: "Northampton",
+  CV: "Coventry",
+  WR: "Worcester",
+  DY: "Dudley",
+  WV: "Wolverhampton",
+  WS: "Walsall",
+  ST: "Stoke-on-Trent",
+  CW: "Crewe",
+  CH: "Chester",
+  LL: "Llandudno",
+  SY: "Shrewsbury",
+  TF: "Telford",
+  HR: "Hereford",
+  GL: "Gloucester",
+  OX: "Oxford",
+  MK: "Milton Keynes",
+  LU: "Luton",
+  AL: "St Albans",
+  SG: "Stevenage",
+  CB: "Cambridge",
+  IP: "Ipswich",
+  NR: "Norwich",
+  CO: "Colchester",
+  CM: "Chelmsford",
+  SS: "Southend",
+  EN: "Enfield",
+  HA: "Harrow",
+  UB: "Uxbridge",
+  TW: "Twickenham",
+  KT: "Kingston",
+  SM: "Sutton",
+  CR: "Croydon",
+  BR: "Bromley",
+  DA: "Dartford",
+  RM: "Romford",
+  IG: "Ilford",
+  E: "East London",
+  EC: "London (City)",
+  N: "North London",
+  NW: "North West London",
+  SE: "South East London",
+  SW: "South West London",
+  W: "West London",
+  WC: "Central London",
+  ME: "Medway",
+  CT: "Canterbury",
+  TN: "Tunbridge Wells",
+  BN: "Brighton",
+  RH: "Redhill",
+  GU: "Guildford",
+  SL: "Slough",
+  RG: "Reading",
+  HP: "Hemel Hempstead",
+  SO: "Southampton",
+  PO: "Portsmouth",
+  BH: "Bournemouth",
+  DT: "Dorchester",
+  SP: "Salisbury",
+  SN: "Swindon",
+  BA: "Bath",
+  BS: "Bristol",
+  TA: "Taunton",
+  EX: "Exeter",
+  TQ: "Torquay",
+  PL: "Plymouth",
+  TR: "Truro",
+  CF: "Cardiff",
+  SA: "Swansea",
+  NP: "Newport",
+  G: "Glasgow",
+  EH: "Edinburgh",
+  AB: "Aberdeen",
+  DD: "Dundee",
+  FK: "Falkirk",
+  KY: "Kirkcaldy",
+  PA: "Paisley",
+  ML: "Motherwell",
+  KA: "Kilmarnock",
+  IV: "Inverness",
+  KW: "Caithness",
+  PH: "Perth",
+  BT: "Belfast"
+};
+
+/**
+ * Derives a human-friendly area and city name for a homeowner profile.
+ * E.g. "HD1 Huddersfield", "M Manchester", "BD Bradford", "LS Leeds".
+ */
+export function getHomeownerAreaName(profile: any): string {
+  if (!profile) return "Your Area";
+
+  const rawPostcode = profile.postcode || profile.address?.postcode || "";
+  const outcode = getOutwardPostcode(rawPostcode);
+  const rawCity = (profile.city || profile.town || profile.address?.city || profile.address?.town || "").trim();
+  const cleanCity = rawCity && rawCity !== "Area Hidden" && rawCity.toLowerCase() !== "home" && rawCity.toLowerCase() !== "property"
+    ? rawCity
+    : "";
+
+  if (outcode && outcode !== "Area Hidden") {
+    // Extract letter prefix from outcode (e.g. "HD1" -> "HD", "SW1A" -> "SW", "M1" -> "M")
+    const prefixMatch = outcode.match(/^[A-Z]{1,2}/i);
+    const prefix = prefixMatch ? prefixMatch[0].toUpperCase() : "";
+    const townLookup = UK_AREA_MAP[prefix];
+
+    if (cleanCity) {
+      // If city already contains or is contained in outcode/town, avoid redundant duplicates
+      if (cleanCity.toUpperCase() === outcode.toUpperCase()) {
+        return townLookup ? `${outcode} ${townLookup}` : outcode;
+      }
+      if (townLookup && cleanCity.toLowerCase() === townLookup.toLowerCase()) {
+        return `${outcode} ${townLookup}`;
+      }
+      return `${outcode} ${cleanCity}`;
+    }
+
+    if (townLookup) {
+      return `${outcode} ${townLookup}`;
+    }
+
+    return outcode;
+  }
+
+  if (cleanCity) {
+    return cleanCity;
+  }
+
+  return "Your Area";
+}
+
+/**
  * Calculates distance in miles between two latitude/longitude points using Haversine formula
  */
 export function calculateDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {

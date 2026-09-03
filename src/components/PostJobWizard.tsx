@@ -1,4 +1,4 @@
-import { textContainsTokenMatch, tokenize, tokenMatches, categoryMatchesSearch } from "@/src/lib/fuzzyMatch";
+import { textContainsTokenMatch, tokenize, tokenMatches, categoryMatchesSearch, getMatchingCategoriesForTrader } from "@/src/lib/fuzzyMatch";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -200,21 +200,28 @@ export default function PostJobWizard() {
           );
         })()}
         {(formData.category || formData.title) && (
-          <div className="bg-white rounded-2xl p-4 border border-[#0084a5] shadow-sm flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-blue-600" />
+          <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-[#0084a5] shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
+              <Sparkles className="w-5 h-5 text-[#0084a5]" />
             </div>
-            <div className="flex-1">
-              <p className="text-xs font-bold text-slate-400 uppercase">
-                {formData.title ? "Job Title" : "Category"}
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                CATEGORY
               </p>
-              <p className="font-bold text-slate-900">{formData.title || formData.category}</p>
+              <p className="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate">
+                {formData.category || formData.title}
+              </p>
+              {formData.subcategory && (
+                <p className="text-xs font-bold text-slate-700 mt-0.5 leading-tight truncate">
+                  {formData.subcategory}
+                </p>
+              )}
               {formData.urgency === "emergency" && (
-                <p className="text-xs font-bold text-red-600 uppercase">Emergency</p>
+                <p className="text-xs font-black text-red-600 uppercase mt-0.5">🚨 Emergency</p>
               )}
             </div>
             {formData.postcode && (
-              <div className="text-right border-l border-black pl-4">
+              <div className="text-right border-l border-slate-200 pl-3.5 shrink-0">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location</p>
                 <p className="text-xs font-black text-slate-900 uppercase">
                   {getOutwardPostcode(formData.postcode)}
@@ -709,42 +716,15 @@ export default function PostJobWizard() {
     if (editJob || isPrefilledByAI || claimedDeal) return;
     if (categories.length === 0 || !targetTradespersonId || !targetTrades) return;
 
-    // Normalize targetTrades to an array of strings
-    const tradesArray = Array.isArray(targetTrades) 
-      ? targetTrades 
-      : targetTrades 
-        ? [targetTrades] 
-        : [];
-    if (tradesArray.length === 0) return;
-
-    const stopWords = new Set(["and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", "at", "by", "on", "a", "an", "n", "private", "maker", "services", "general", "domestic", "commercial", "home", "indoor", "outdoor", "installation", "installations", "repair", "repairs", "maintenance", "service", "specialist", "management", "coordination", "planner", "planning", "delivery", "transport", "about"]);
-    const traderTokens = tradesArray.flatMap(trade => tokenize(trade)).filter(tok => !stopWords.has(tok.toLowerCase()));
-
-    const matching = categories.filter(cat => {
-      const catTokens = tokenize(cat.name);
-      const subcategoryTokens = (cat.subcategories || []).flatMap(sub => tokenize(sub));
-      const allCatTokens = [...catTokens, ...subcategoryTokens].filter(tok => !stopWords.has(tok.toLowerCase()));
-
-      return traderTokens.some(traderTok => 
-        allCatTokens.some(catTok => {
-          const tVal = catTok.toLowerCase();
-          const qVal = traderTok.toLowerCase();
-          if (tVal === qVal) return true;
-          if (qVal.startsWith(tVal) && tVal.length >= 4) return true;
-          if (tVal.startsWith(qVal) && qVal.length >= 4) return true;
-          if (qVal + "s" === tVal || tVal + "s" === qVal) return true;
-          return false;
-        })
-      );
-    });
+    const matching = getMatchingCategoriesForTrader(categories, targetTrades);
 
     if (matching.length === 1) {
       // Exactly one matching category - auto-select and skip to subcategory choice (Step 2)
       setFormData(prev => ({ ...prev, category: matching[0].name }));
       setStep(2);
       toast.success(`Automatically selected "${matching[0].name}" to match ${targetTradespersonName}'s core skill!`);
-    } else if (matching.length > 1) {
-      // Pre-select the first match but keep them on Step 1 so they see all the matching options
+    } else if (matching.length > 1 && matching.length < categories.length) {
+      // Pre-select the first match but keep them on Step 1 so they see the trader's matching options
       setFormData(prev => ({ ...prev, category: matching[0].name }));
       setStep(1);
     }
@@ -1152,37 +1132,9 @@ export default function PostJobWizard() {
   const safeSearchQuery = searchQuery.trim();
 
   const traderRelatedCategories = React.useMemo(() => {
-    // Normalize targetTrades to an array of strings
-    const tradesArray = Array.isArray(targetTrades) 
-      ? targetTrades 
-      : targetTrades 
-        ? [targetTrades] 
-        : [];
-
-    if (tradesArray.length === 0) return categories;
-
-    const stopWords = new Set(["and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", "at", "by", "on", "a", "an", "n", "private", "maker", "services", "general", "domestic", "commercial", "home", "indoor", "outdoor", "installation", "installations", "repair", "repairs", "maintenance", "service", "specialist", "management", "coordination", "planner", "planning", "delivery", "transport", "about"]);
-    
-    return categories.filter(cat => {
-      const traderTokens = tradesArray.flatMap(trade => tokenize(trade)).filter(tok => !stopWords.has(tok.toLowerCase()));
-      
-      const catTokens = tokenize(cat.name);
-      const subcategoryTokens = (cat.subcategories || []).flatMap(sub => tokenize(sub));
-      const allCatTokens = [...catTokens, ...subcategoryTokens].filter(tok => !stopWords.has(tok.toLowerCase()));
-
-      return traderTokens.some(traderTok => 
-        allCatTokens.some(catTok => {
-          const tVal = catTok.toLowerCase();
-          const qVal = traderTok.toLowerCase();
-          if (tVal === qVal) return true;
-          if (qVal.startsWith(tVal) && tVal.length >= 4) return true;
-          if (tVal.startsWith(qVal) && qVal.length >= 4) return true;
-          if (qVal + "s" === tVal || tVal + "s" === qVal) return true;
-          return false;
-        })
-      );
-    });
-  }, [categories, targetTrades]);
+    if (!targetTradespersonId || !targetTrades) return categories;
+    return getMatchingCategoriesForTrader(categories, targetTrades);
+  }, [categories, targetTrades, targetTradespersonId]);
 
   const filteredCategories = React.useMemo(() => {
     return traderRelatedCategories.filter(cat => categoryMatchesSearch(cat, safeSearchQuery));
@@ -2229,6 +2181,14 @@ export default function PostJobWizard() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               userId: user?.uid,
+              price_data: {
+                currency: 'gbp',
+                unit_amount: formData.isInstantMatch ? 299 : 499,
+                product_data: {
+                  name: formData.isInstantMatch ? "Instant Match Guarantee" : "Emergency Priority Boost",
+                  description: formData.isInstantMatch ? "Dedicated algorithmic trader matching & dispatch" : "Immediate top-of-feed broadcast to all local trades"
+                }
+              },
               priceId: formData.isInstantMatch ? "price_mock_instant_match" : "price_mock_boost",
               mode: "payment",
               metadata: {
@@ -2270,7 +2230,7 @@ export default function PostJobWizard() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white min-h-screen pb-20">
+    <div className="w-full max-w-2xl mx-auto bg-white min-h-screen pb-20 overflow-x-hidden min-w-0 box-border">
       {/* Target Tradesperson Indicator */}
       {targetTradespersonId && (
         <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white px-4 py-2.5 flex items-center justify-between text-xs font-bold shadow-md sticky top-0 z-30">
@@ -2409,7 +2369,7 @@ export default function PostJobWizard() {
         )}
       </div>
 
-      <div className="max-w-2xl mx-auto p-3 sm:p-4">
+      <div className="w-full max-w-2xl mx-auto p-3 sm:p-4 min-w-0 box-border">
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-2">
             <X className="w-4 h-4" />
@@ -2708,7 +2668,7 @@ export default function PostJobWizard() {
               <JobReminder />
               <div className="space-y-1">
                 <h2 className="text-xl font-bold text-slate-900">What specifically do you need?</h2>
-                <p className="text-slate-500 text-sm">Select the subcategory for {formData.category}.</p>
+                <p className="text-slate-500 text-sm">Select an option for {formData.category}.</p>
               </div>
               <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 pb-4 no-scrollbar">
                 {categories.find(c => c.name === formData.category)?.subcategories.map((sub, idx) => (
@@ -2729,14 +2689,30 @@ export default function PostJobWizard() {
                   </button>
                 ))}
                 
-                <div className="col-span-2 pt-2">
+                <div className="col-span-2 pt-2 space-y-2">
                   <input
                     type="text"
-                    placeholder="Custom Text Box"
-                    className="w-full text-center p-4 rounded-xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-600/20 focus:border-black bg-white font-bold placeholder:font-bold placeholder:text-slate-600 text-xl text-slate-700"
+                    placeholder="Or enter custom requirement..."
+                    className="w-full text-center p-3.5 rounded-xl border border-black shadow-sm focus:outline-none focus:ring-4 focus:ring-[#0084a5]/20 focus:border-black bg-white font-bold placeholder:font-medium placeholder:text-slate-400 text-base sm:text-lg text-slate-800"
                     value={formData.subcategory && !categories.find(c => c.name === formData.category)?.subcategories.includes(formData.subcategory) ? formData.subcategory : ""}
                     onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && formData.subcategory?.trim()) {
+                        e.preventDefault();
+                        nextStep();
+                      }
+                    }}
                   />
+                  {formData.subcategory && !categories.find(c => c.name === formData.category)?.subcategories.includes(formData.subcategory) && formData.subcategory.trim().length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => nextStep()}
+                      className="w-full py-3 bg-[#0084a5] hover:bg-[#006e8a] text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-98 cursor-pointer"
+                    >
+                      <span>Continue with "{formData.subcategory.trim()}"</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -3341,7 +3317,7 @@ export default function PostJobWizard() {
                     ) : (
                       <Locate className="w-4 h-4 flex-shrink-0" />
                     )}
-                    {isLocating ? "Locating..." : "Current Location"}
+                    {isLocating ? "Locating..." : "Get Current Location"}
                   </button>
                   {profile?.postcode && (
                     <button
@@ -3887,7 +3863,7 @@ export default function PostJobWizard() {
                     </div>
                   )}
 
-                  {platformConfig?.premiumJobUpgradesEnabled !== false && formData.urgency !== 'emergency' && (
+                  {platformConfig?.premiumJobUpgradesEnabled !== false && formData.urgency !== 'emergency' && !targetTradespersonId && !claimedDeal && (
                     <div className="space-y-3 pt-6">
                       <h3 className="text-sm font-extrabold text-slate-900 mb-2">Premium Job Upgrades (Optional)</h3>
                       
@@ -3905,7 +3881,7 @@ export default function PostJobWizard() {
                         </div>
                         <div className="flex-1 pr-6">
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-base font-extrabold text-slate-900">Emergency Boost <span className="font-black ml-1">£5</span></h4>
+                            <h4 className="text-base font-extrabold text-slate-900">Emergency Boost <span className="font-black ml-1">£{platformConfig?.paidAddons?.emergencyBoost?.price ?? 5}</span></h4>
                           </div>
                           <p className="text-sm text-slate-600 leading-snug">Emergency boost to elevate your job, help with reliability, and match your choices.</p>
                         </div>
@@ -3998,7 +3974,7 @@ export default function PostJobWizard() {
                 </button>
               ) : (
                 <div className="flex-[3] py-4 px-6 bg-slate-50 rounded-2xl border border-black flex items-center justify-center">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Subcategory Selection</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select an Option</p>
                 </div>
               )
             ) : step === 3 ? (

@@ -24,6 +24,7 @@ import { TraderVideoVerificationCard } from "./TraderVideoVerificationCard";
 import { INITIAL_MOCK_FLASH_DEALS, INITIAL_MOCK_TRADERS, generateTraderSeedReviews } from "@/src/services/seedService";
 import { DealCountdownBadge, shareDeal } from "@/src/lib/dealUtils";
 import { isDealSoldOut, getRemainingSlots, getDealCapacityInfo, formatDealBadgeText, formatDealScheduleText } from "@/src/lib/flashDeals";
+import { findCategoryForTrader, getCategoryHotSearches, isJobMatchingTrader, CategoryHotSearchPreset } from "@/src/utils/tradePresets";
 
 export default function PublicProfile() {
   const { id } = useParams();
@@ -483,6 +484,43 @@ export default function PublicProfile() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Filter existing jobs strictly to match target trader's category/trades (no unrelated jobs like Gas Safety or Taxi)
+  const matchingUserJobs = userJobs.filter(job => isJobMatchingTrader(job, profile));
+  // Strictly capped at 3 max hot searched terms in related category
+  const categoryPresets = getCategoryHotSearches(profile, 3);
+  const { categoryName } = findCategoryForTrader(profile);
+
+  const handleSelectPreset = (preset: CategoryHotSearchPreset) => {
+    const validDeal = selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null;
+    setIsQuoteModalOpen(false);
+    const targetTraderTrades = Array.from(new Set([
+      profile?.primaryCategory,
+      profile?.trade,
+      ...(Array.isArray(profile?.trades) ? profile.trades : profile?.trades ? [profile.trades] : []),
+      ...(Array.isArray(profile?.categories) ? profile.categories : profile?.categories ? [profile.categories] : []),
+      categoryName
+    ].filter(Boolean)));
+
+    navigate("/post-job", {
+      state: {
+        targetTradespersonId: id,
+        targetTradespersonName: profile?.name,
+        targetTrades: targetTraderTrades,
+        isB2B,
+        linkedPropertyId,
+        linkedPropertyName,
+        claimedDeal: validDeal,
+        title: preset.title,
+        category: preset.category || categoryName,
+        subcategory: preset.subcategory || preset.title,
+        description: preset.description ? `${preset.description}. Targeted quote request for ${profile?.name}.` : `Looking for a quote for ${preset.title} from ${profile?.name}.`,
+        budget: preset.typicalPriceRange ? preset.typicalPriceRange.replace(/[^0-9]/g, '').slice(0, 3) : undefined,
+        prefilledByAI: true,
+        prefillSource: "category_hot_search_preset"
+      }
+    });
   };
 
   if (loading) {
@@ -1589,8 +1627,8 @@ export default function PublicProfile() {
                   </div>
                 </div>
 
-                <p className="text-slate-500 text-xs sm:text-sm font-medium">
-                  Select an existing job below to invite <strong className="text-slate-900">{profile.name}</strong>, or post a new job targeted directly to them.
+                <p className="text-slate-600 text-xs sm:text-sm font-medium">
+                  Choose a popular <strong className="text-slate-900">{categoryName}</strong> quote preset below, or post a custom job targeted directly to <strong className="text-slate-900">{profile.name}</strong>.
                 </p>
 
                 {selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) && (() => {
@@ -1638,88 +1676,121 @@ export default function PublicProfile() {
                     <div className="flex justify-center py-12">
                       <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                     </div>
-                  ) : userJobs.length > 0 ? (
-                    userJobs.map(job => (
-                      <button
-                        key={job.id}
-                        onClick={() => handleInviteToJob(job)}
-                        className="w-full p-5 rounded-2xl border border-black hover:border-blue-600 hover:bg-blue-50 transition-all text-left flex items-center justify-between group cursor-pointer"
-                      >
-                        <div>
-                          <h4 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{job.title}</h4>
-                          <p className="text-xs text-slate-500 mt-1">{job.category} • {getOutwardPostcode(job.postcode)}</p>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-all" />
-                      </button>
-                    ))
                   ) : (
-                    <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-black">
-                      <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                      <p className="text-slate-500 font-medium mb-6">You don't have any active jobs yet.</p>
-                      {(() => {
-                        const validDeal = selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null;
-                        return (
-                          <Link 
-                            to="/post-job"
-                            state={{ 
-                              targetTradespersonId: id, 
-                              targetTradespersonName: profile.name, 
-                              targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
-                              isB2B, 
-                              linkedPropertyId, 
-                              linkedPropertyName,
-                              claimedDeal: validDeal,
-                              title: validDeal ? validDeal.service : undefined,
-                              description: validDeal ? validDeal.description : undefined,
-                              budget: validDeal ? (validDeal.discountedPrice || validDeal.price) : undefined,
-                              category: validDeal ? validDeal.category : undefined
-                            }}
-                            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
-                          >
-                            {validDeal ? <Zap className="w-4 h-4 fill-white" /> : <Briefcase className="w-4 h-4" />}
-                            <span>{validDeal ? `Post Job with ${validDeal.discountPercentage}% OFF` : 'Post a Job Now'}</span>
-                          </Link>
-                        );
-                      })()}
-                    </div>
+                    <>
+                      {/* Hot Searched Presets (Strictly capped at 3 max in related category) */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base">🔥</span>
+                            <div>
+                              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                                Popular {categoryName} Presets
+                              </h3>
+                              <p className="text-[11px] text-slate-500 font-medium">
+                                Top 3 hot searched terms in this trade category
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-black bg-amber-100 text-amber-950 px-2 py-0.5 rounded-full border border-amber-300 shrink-0">
+                            3 Max
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {categoryPresets.map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => handleSelectPreset(preset)}
+                              className="w-full p-3 rounded-xl border border-black hover:border-blue-600 hover:bg-blue-50/40 bg-white transition-all text-left flex flex-col justify-between gap-2 group cursor-pointer shadow-2xs"
+                            >
+                              <div className="flex items-start gap-3 w-full">
+                                <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform mt-0.5">
+                                  {preset.icon || "✨"}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <h4 className="font-extrabold text-black text-xs sm:text-[13px] group-hover:text-blue-600 transition-colors leading-snug">
+                                      {preset.title}
+                                    </h4>
+                                    <span className="text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-950 px-1.5 py-0.5 rounded border border-orange-200 shrink-0">
+                                      {preset.tag}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
+                                    {preset.description}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 w-full">
+                                <div>
+                                  {preset.typicalPriceRange ? (
+                                    <p className="text-[11px] font-bold text-slate-700">
+                                      Typical: <span className="text-emerald-700 font-black">{preset.typicalPriceRange}</span>
+                                    </p>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-semibold">Bespoke Quote</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 bg-slate-900 group-hover:bg-blue-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-2xs shrink-0">
+                                  <span>Request</span>
+                                  <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
 
-                {userJobs.length > 0 && (
-                  <div className="pt-4 border-t border-black">
-                    <p className="text-center text-xs text-slate-400 mb-4">Need to post a new job?</p>
-                    {(() => {
-                      const validDeal = selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null;
-                      return (
-                        <Link 
-                          to="/post-job"
-                          state={{ 
-                            targetTradespersonId: id, 
-                            targetTradespersonName: profile.name, 
-                            targetTrades: profile.primaryCategory || profile.trade || profile.trades, 
-                            isB2B, 
-                            linkedPropertyId, 
-                            linkedPropertyName,
-                            claimedDeal: validDeal,
-                            title: validDeal ? validDeal.service : undefined,
-                            description: validDeal ? validDeal.description : undefined,
-                            budget: validDeal ? (validDeal.discountedPrice || validDeal.price) : undefined,
-                            category: validDeal ? validDeal.category : undefined
-                          }}
-                          className={cn(
-                            "w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer",
-                            validDeal
-                              ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                              : "border border-black text-slate-600 hover:bg-slate-50"
-                          )}
-                        >
-                          <Zap className={cn("w-4 h-4", validDeal ? "fill-white" : "text-amber-500")} />
-                          <span>{validDeal ? `Post New Job with ${validDeal.discountPercentage}% OFF` : 'Post New Job'}</span>
-                        </Link>
-                      );
-                    })()}
-                  </div>
-                )}
+                {/* Custom Job Alternative */}
+                <div className="pt-3 border-t border-black">
+                  <p className="text-center text-xs text-slate-500 font-medium mb-3">
+                    Need a custom or bespoke job not listed in the presets?
+                  </p>
+                  {(() => {
+                    const validDeal = selectedDealForQuote && !isDealSoldOut(selectedDealForQuote) ? selectedDealForQuote : null;
+                    const targetTraderTrades = Array.from(new Set([
+                      profile.primaryCategory,
+                      profile.trade,
+                      ...(Array.isArray(profile.trades) ? profile.trades : profile.trades ? [profile.trades] : []),
+                      ...(Array.isArray(profile.categories) ? profile.categories : profile.categories ? [profile.categories] : []),
+                      categoryName
+                    ].filter(Boolean)));
+
+                    return (
+                      <Link 
+                        to="/post-job"
+                        state={{ 
+                          targetTradespersonId: id, 
+                          targetTradespersonName: profile.name, 
+                          targetTrades: targetTraderTrades, 
+                          isB2B, 
+                          linkedPropertyId, 
+                          linkedPropertyName,
+                          claimedDeal: validDeal,
+                          category: categoryName,
+                          title: validDeal ? validDeal.service : undefined,
+                          description: validDeal ? validDeal.description : undefined,
+                          budget: validDeal ? (validDeal.discountedPrice || validDeal.price) : undefined,
+                        }}
+                        className={cn(
+                          "w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-2xs cursor-pointer text-xs sm:text-sm",
+                          validDeal
+                            ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                            : "border border-black bg-slate-50 hover:bg-slate-100 text-slate-900"
+                        )}
+                      >
+                        {validDeal ? <Zap className="w-4 h-4 fill-white" /> : <Pencil className="w-4 h-4 text-slate-700" />}
+                        <span>{validDeal ? `Post Custom Job with ${validDeal.discountPercentage}% OFF` : `Post Custom Job for ${profile.name}`}</span>
+                      </Link>
+                    );
+                  })()}
+                </div>
               </div>
               <div className="h-4 bg-white shrink-0 sm:hidden" />
             </motion.div>

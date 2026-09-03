@@ -1,10 +1,11 @@
 import React from "react";
 import { 
   Zap, Moon, Bell, Mail, RefreshCw, ChevronDown, Loader2, 
-  CheckCircle, XCircle, Pause, Play, Trash2 
+  CheckCircle, XCircle, Pause, Play, Trash2, Sliders, MapPin, Sparkles, Clock
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
+import { MatchNotificationSchedule } from "@/src/services/traderNotificationEngine";
 
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour = i.toString().padStart(2, '0');
@@ -14,6 +15,8 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 interface GrowthNotificationsCardProps {
   isBusinessProfile: boolean;
   isBannerAdsEnabled: boolean;
+  traderProfile?: any;
+  onOpenTimingModal?: () => void;
   // Notifications
   notificationSettings: {
     quietHoursEnabled: boolean;
@@ -35,6 +38,8 @@ interface GrowthNotificationsCardProps {
 export const GrowthNotificationsCard: React.FC<GrowthNotificationsCardProps> = ({
   isBusinessProfile,
   isBannerAdsEnabled,
+  traderProfile,
+  onOpenTimingModal,
   notificationSettings,
   setNotificationSettings,
   handleSaveNotifications,
@@ -44,6 +49,21 @@ export const GrowthNotificationsCard: React.FC<GrowthNotificationsCardProps> = (
   userRole,
   handleUpdateRecurringStatus,
 }) => {
+  const matchSettings = traderProfile?.matchNotificationSettings || {
+    schedule: "every_5_hours" as MatchNotificationSchedule,
+    radiusMiles: 25,
+    bypassEmergency: true,
+  };
+
+  const getScheduleLabel = (sched: MatchNotificationSchedule) => {
+    switch (sched) {
+      case "every_5_hours": return "Every 5 Hours";
+      case "morning_8am": return "8:00 AM Morning Digest";
+      case "afternoon_2pm": return "2:00 PM Afternoon Digest";
+      case "silent_in_app_only": return "Silent In-App Only";
+      default: return "Every 5 Hours";
+    }
+  };
   return (
     <div className="bg-white rounded-[2rem] border border-black shadow-md bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 sm:p-7 relative space-y-7">
       
@@ -228,6 +248,37 @@ export const GrowthNotificationsCard: React.FC<GrowthNotificationsCardProps> = (
               </button>
             </div>
           </div>
+
+          {/* 3. Job Match Notification Timing (Periodic + Emergency Bypass) */}
+          {onOpenTimingModal && (
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/60 rounded-2xl border border-black shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center border border-black shrink-0 mt-0.5 shadow-sm">
+                  <Clock className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs font-black text-black leading-tight">Job Match Timing & Radius</h4>
+                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 uppercase tracking-wider">
+                      {getScheduleLabel(matchSettings.schedule)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-700 font-medium mt-0.5">
+                    {matchSettings.radiusMiles}mi radius • {matchSettings.bypassEmergency ? "⚡ Instant Emergency Bypass Enabled" : "Standard Schedule Only"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onOpenTimingModal}
+                className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-black border border-black rounded-xl text-xs font-black shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Adjust Timing & Radius</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

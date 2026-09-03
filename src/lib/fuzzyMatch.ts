@@ -83,6 +83,39 @@ export function getSimilarityScore(str1: string, str2: string): number {
   return 1 - distance / maxLength;
 }
 
+const VALID_INFLECTION_SUFFIXES = new Set([
+  "", "s", "es", "ed", "ing", "er", "ers", "or", "ors", "ies", "y", 
+  "ment", "ments", "tion", "tions", "ation", "ations", "ian", "ians", "ist", "ists", "al", "ic", "able", "ible"
+]);
+
+/**
+ * Validates morphological English inflections between a longer word and a shorter root.
+ * Prevents false-positive root substring matches (e.g., 'tier' matching 'tie', or 'carpet' matching 'car').
+ */
+function isInflectionalMatch(longer: string, shorter: string): boolean {
+  if (longer.startsWith(shorter)) {
+    const suffix = longer.slice(shorter.length);
+    if (VALID_INFLECTION_SUFFIXES.has(suffix)) return true;
+  }
+  // If shorter ends in "e", e.g. "pipe" -> "piping", "bake" -> "baking", "wire" -> "wiring"
+  if (shorter.endsWith("e") && shorter.length >= 4) {
+    const stem = shorter.slice(0, -1);
+    if (longer.startsWith(stem)) {
+      const suffix = longer.slice(stem.length);
+      if (VALID_INFLECTION_SUFFIXES.has(suffix)) return true;
+    }
+  }
+  // If shorter ends in "y", e.g. "battery" -> "batteries"
+  if (shorter.endsWith("y") && shorter.length >= 4) {
+    const stem = shorter.slice(0, -1);
+    if (longer.startsWith(stem)) {
+      const suffix = longer.slice(stem.length);
+      if (suffix === "ies" || suffix === "ied" || suffix === "ying") return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Checks if a query word token (qTok) matches a target word token (tTok).
  * CRITICAL RULE: Matching MUST occur at the START (prefix) of target tokens.
@@ -96,22 +129,43 @@ export function tokenMatches(qTok: string, tTok: string): boolean {
   // Exact token match
   if (q === t) return true;
 
-  // Very short query tokens (1-2 chars e.g. "ev", "tv")
+  // Very short query tokens (1-2 chars e.g. "ev", "tv", "cp", "pv")
+  // Strict exact match only for 1-2 char tokens to prevent single letter prefix collisions (e.g. 's' matching 'sky')
   if (q.length <= 2) {
-    return t === q || (t.startsWith(q) && t.length <= 3);
+    return t === q;
   }
 
-  // Prefix match: Target token starts with query token (e.g., q="pet" matches t="pet", "pets", "petting")
-  if (t.startsWith(q)) return true;
+  // Known accidental root collision guards
+  const falsePrefixMap: Record<string, string[]> = {
+    all: ["allergen", "allergy", "allerg", "allotment", "allow", "alloy", "alligator"],
+    cat: ["cater", "catch", "categ", "cattl", "catas", "catal", "cathe"],
+    car: ["carpet", "carpen", "carv", "cart", "carr", "card"],
+    tax: ["taxi"],
+    tap: ["tape", "tapest"],
+    pet: ["petrol", "petit", "petri"],
+    van: ["vanta", "vangu", "vanis", "vanil"],
+    pan: ["panel", "panic", "pant"],
+    bar: ["barri", "baron", "barom", "bark"],
+    man: ["manner", "mania", "manual", "mandat", "manag", "manic", "manif"],
+    pin: ["pinn", "pint", "pine", "ping"],
+    bin: ["bind", "bing", "bino"],
+    saw: ["sausage"],
+    gas: ["gasket", "gasp", "gastro"],
+    rat: ["rate", "ratio", "ration", "rating"],
+    bat: ["batter", "battle", "batch"],
+    tie: ["tier", "tiered", "ties"],
+  };
 
-  // Query token starts with target token if query is longer (e.g. q="plumber", t="plum")
-  // Exclude false-positive short prefixes like "cat" (unrelated to "catering"), "car" (unrelated to "carpenter"), "pet" (unrelated to "petrol"), etc.
-  if (q.length >= 4 && q.startsWith(t) && t.length >= 3) {
-    const tLower = t.toLowerCase();
-    const falsePrefixes = new Set(["cat", "car", "pet", "dec", "con", "man", "pan", "pin", "bin", "win", "cap", "bat", "rat", "hat"]);
-    if (!falsePrefixes.has(tLower)) {
-      return true;
-    }
+  const invalidPrefixes = falsePrefixMap[q];
+  if (invalidPrefixes && invalidPrefixes.some((p) => t.startsWith(p))) {
+    return false;
+  }
+
+  // Inflectional morphological match: (e.g. "plumber" vs "plumbing", "radiators" vs "radiator", "pipes" vs "pipe")
+  if (t.length >= q.length) {
+    if (isInflectionalMatch(t, q)) return true;
+  } else {
+    if (isInflectionalMatch(q, t)) return true;
   }
 
   // Prefix-constrained fuzzy match for typos (e.g. "plumbin" vs "plumbing", "electrcian" vs "electrician")
@@ -158,7 +212,7 @@ export function categoryMatchesSearch(
   const rawQueryTokens = tokenize(searchQuery);
   if (rawQueryTokens.length === 0) return true;
 
-  // Identify "noise" or "action" problem-descriptor words
+  // Identify "noise" or "action" problem-descriptor and generic non-trade words
   const noiseWords = new Set([
     "my", "is", "are", "was", "were", "been", "will", "would", "should", "can", "could", "have", "has", "had", 
     "do", "does", "did", "need", "needed", "needs", "want", "wants", "wanted", "fix", "fixing", "fixed", 
@@ -168,28 +222,40 @@ export function categoryMatchesSearch(
     "new", "old", "replace", "replacing", "replaced", "replacement", "install", "installing", "installed", 
     "installation", "installations", "service", "servicing", "serviced", "maintenance", "problem", "problems", 
     "issue", "issues", "trouble", "work", "worker", "job", "jobs", "hire", "hiring", "hired", "please", 
-    "thank", "thanks", "find", "finding", "get", "getting", "about"
+    "thank", "thanks", "find", "finding", "get", "getting", "about",
+    // Generic non-trade descriptors, spaces, quantities, and question words
+    "house", "home", "bedroom", "room", "rooms", "flat", "property", "full", "complete", "system", "systems",
+    "done", "week", "weeks", "month", "months", "day", "days", "area", "type", "cost", "price", "prices",
+    "quote", "quotes", "estimate", "tell", "much", "where", "how", "what", "when", "why", "who", "including",
+    "included", "within", "around", "near", "nearby", "best", "good", "local", "trader", "tradesperson",
+    "company", "business", "building", "unit", "units", "make", "call", "free", "look", "from", "time", "rate"
   ]);
 
-  // Filter query tokens to get significant tokens
-  let queryTokens = rawQueryTokens.filter((tok) => !noiseWords.has(tok.toLowerCase()));
+  // Filter query tokens to get significant trade-specific tokens (min length 3 unless specific acronym)
+  const allowedShortTokens = new Set(["ev", "tv", "cp", "ep", "pv", "ac", "wc", "ai", "3d"]);
+  let queryTokens = rawQueryTokens.filter((tok) => {
+    const tLower = tok.toLowerCase();
+    if (noiseWords.has(tLower)) return false;
+    if (tLower.length < 3 && !allowedShortTokens.has(tLower)) return false;
+    return true;
+  });
   
   // If the query contains ONLY noise words (e.g. user just searched "repair" or "leaking"),
-  // then we fall back to searching all raw tokens.
+  // then we fall back to searching all raw tokens (with length >= 3).
   if (queryTokens.length === 0) {
-    queryTokens = rawQueryTokens;
+    queryTokens = rawQueryTokens.filter(t => t.length >= 3);
   }
 
   // Collect ALL target tokens for this category
   const targetTokensSet = new Set<string>();
 
-  // A. Category Name
-  tokenize(cat.name).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+  // A. Category Name (filter noise words like "and", "services", etc.)
+  tokenize(cat.name).filter(tok => !noiseWords.has(tok.toLowerCase())).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
 
-  // B. Subcategories
+  // B. Subcategories (filter noise words)
   if (cat.subcategories && Array.isArray(cat.subcategories)) {
     cat.subcategories.forEach((sub) => {
-      tokenize(sub).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+      tokenize(sub).filter(tok => !noiseWords.has(tok.toLowerCase())).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
     });
   }
 
@@ -197,11 +263,11 @@ export function categoryMatchesSearch(
   Object.entries(CATEGORY_SYNONYMS).forEach(([term, meta]) => {
     if (meta.categoryName.toLowerCase() === cat.name.toLowerCase()) {
       // Add the synonym term itself (e.g., "plumber")
-      tokenize(term).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+      tokenize(term).filter(tok => !noiseWords.has(tok.toLowerCase())).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
       // Add synonym keywords (e.g., "pipe", "leak", "boiler")
       if (meta.keywords && Array.isArray(meta.keywords)) {
         meta.keywords.forEach((keyword) => {
-          tokenize(keyword).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
+          tokenize(keyword).filter(tok => !noiseWords.has(tok.toLowerCase())).forEach(tok => targetTokensSet.add(tok.toLowerCase()));
         });
       }
     }
@@ -215,10 +281,16 @@ export function categoryMatchesSearch(
   );
 }
 
+export interface SynonymMeta {
+  categoryName: string;
+  tradeTitle?: string;
+  keywords: string[];
+}
+
 /**
  * Rich platform-wide synonym and keyword mappings across all 80+ trade categories.
  */
-export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitle?: string; keywords: string[] }> = {
+export const BASE_CATEGORY_SYNONYMS: Record<string, SynonymMeta> = {
   // Carpentry & Joinery
   "joiner": { categoryName: "Carpentry & Joinery", tradeTitle: "Carpenter & Joiner", keywords: ["wood", "kitchen", "door", "stair", "wardrobe", "decking"] },
   "joinery": { categoryName: "Carpentry & Joinery", tradeTitle: "Carpenter & Joiner", keywords: ["wood", "timber", "furniture"] },
@@ -226,11 +298,33 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
   "carpentry": { categoryName: "Carpentry & Joinery", tradeTitle: "Carpenter & Joiner", keywords: ["wood", "timber"] },
 
   // Plumbing & Gas
-  "plumber": { categoryName: "Plumbing", tradeTitle: "Plumber", keywords: ["pipe", "leak", "boiler", "tap", "drain", "heating", "sink", "toilet"] },
-  "plumbing": { categoryName: "Plumbing", tradeTitle: "Plumber", keywords: ["pipe", "leak", "boiler", "shower", "radiator"] },
-  "gas safe": { categoryName: "Plumbing", tradeTitle: "Gas Safe Engineer", keywords: ["boiler", "heating", "gas"] },
-  "boiler": { categoryName: "Plumbing", tradeTitle: "Boiler Engineer", keywords: ["servicing", "heating", "radiator"] },
-  "drainage": { categoryName: "Plumbing", tradeTitle: "Drainage Specialist", keywords: ["unblock", "drain", "sewer"] },
+  "plumber": { categoryName: "Plumbing", tradeTitle: "Plumber", keywords: ["pipe", "piping", "leak", "tap", "drain", "sink", "toilet", "radiator", "radiators", "water", "cylinder"] },
+  "plumbing": { categoryName: "Plumbing", tradeTitle: "Plumber", keywords: ["pipe", "piping", "leak", "shower", "radiator", "radiators", "water tank", "power flush", "bathroom"] },
+  "radiator": { categoryName: "Plumbing", tradeTitle: "Heating & Plumbing Specialist", keywords: ["radiators", "valves", "trv", "balancing", "bleeding", "piping"] },
+  "radiators": { categoryName: "Plumbing", tradeTitle: "Heating & Plumbing Specialist", keywords: ["radiator", "valves", "trv", "balancing", "bleeding", "piping"] },
+  "piping": { categoryName: "Plumbing", tradeTitle: "Plumber & Pipefitter", keywords: ["pipes", "copper pipe", "plastic pipe", "pipework", "leak"] },
+  "pipework": { categoryName: "Plumbing", tradeTitle: "Plumber & Pipefitter", keywords: ["pipes", "piping", "copper", "soldering"] },
+  "drainage": { categoryName: "Plumbing", tradeTitle: "Drainage Specialist", keywords: ["unblock", "drain", "sewer", "blocked drain"] },
+
+  // Gas Engineering & Heating
+  "gas safe": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["boiler", "heating", "gas", "combi", "central heating", "cp12", "gas safe register"] },
+  "gas engineer": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["boiler", "heating", "gas", "central heating", "flue", "cp12", "gas fire", "gas hob"] },
+  "gas engineering": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["gas boiler", "central heating", "boiler replacement", "boiler installation", "cp12"] },
+  "gas safe engineer": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["boiler installation", "central heating", "boiler repair", "cp12 certificate"] },
+  "boiler": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["servicing", "heating", "combi", "boiler replacement", "boiler installation", "central heating"] },
+  "boiler installation": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["new boiler", "combi boiler", "system boiler", "central heating", "worcester", "vaillant", "baxi", "ideal"] },
+  "boiler replacement": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["new boiler", "boiler change", "combi boiler", "central heating"] },
+  "central heating": { categoryName: "Gas Engineering", tradeTitle: "Central Heating & Gas Engineer", keywords: ["boiler", "radiators", "piping", "heating system", "full central heating", "combi"] },
+  "central heating system": { categoryName: "Gas Engineering", tradeTitle: "Central Heating & Gas Engineer", keywords: ["boiler", "radiators", "new piping", "heating installation", "power flush"] },
+  "combi boiler": { categoryName: "Gas Engineering", tradeTitle: "Gas Safe Heating Engineer", keywords: ["boiler", "central heating", "hot water", "gas"] },
+
+  // Plant & Machinery Hire
+  "plant hire": { categoryName: "Plant & Operated Machinery Hire", tradeTitle: "Plant & Machinery Operator", keywords: ["digger", "mini digger", "micro digger", "excavator", "cherry picker", "telehandler", "dumper", "compactor"] },
+  "digger hire": { categoryName: "Plant & Operated Machinery Hire", tradeTitle: "Plant & Machinery Operator", keywords: ["mini digger", "micro digger", "excavator", "tracked dumper", "groundwork machine"] },
+  "mini digger": { categoryName: "Plant & Operated Machinery Hire", tradeTitle: "Mini Digger Operator", keywords: ["digger hire", "excavator", "trenching", "groundwork", "narrow access digger"] },
+  "excavator": { categoryName: "Plant & Operated Machinery Hire", tradeTitle: "Excavator Operator", keywords: ["digger", "plant hire", "earthmoving", "demolition machinery"] },
+  "cherry picker": { categoryName: "Plant & Operated Machinery Hire", tradeTitle: "IPAF Cherry Picker Operator", keywords: ["mewp", "boom lift", "scissor lift", "high access platform"] },
+  "telehandler": { categoryName: "Plant & Operated Machinery Hire", tradeTitle: "Telehandler Operator", keywords: ["forklift", "rough terrain", "cpcs operator"] },
 
   // Electrical
   "electrician": { categoryName: "Electrical", tradeTitle: "Electrician", keywords: ["wire", "fusebox", "rewire", "socket", "switch", "lighting", "eicr"] },
@@ -257,11 +351,15 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
   "childcare": { categoryName: "Childcare & Babysitting", tradeTitle: "Childcare Provider", keywords: ["kids", "toddler", "after school"] },
 
   // Pet Services
-  "pet sitter": { categoryName: "Pet Services", tradeTitle: "Pet Sitter & Walker", keywords: ["pet sitting", "dog", "cat", "animals", "house sitting"] },
-  "pet sitting": { categoryName: "Pet Services", tradeTitle: "Pet Sitter", keywords: ["dog", "cat", "boarding", "holiday care"] },
-  "dog walker": { categoryName: "Pet Services", tradeTitle: "Dog Walker", keywords: ["dog", "walking", "exercise", "puppy"] },
-  "dog sitter": { categoryName: "Pet Services", tradeTitle: "Dog Sitter", keywords: ["dog boarding", "kennels", "pets"] },
-  "cat sitter": { categoryName: "Pet Services", tradeTitle: "Cat Sitter", keywords: ["cat", "feline", "pets"] },
+  "pet sitter": { categoryName: "Pet Services", tradeTitle: "Pet Sitter & Walker", keywords: ["pet sitting", "dog sitting", "cat sitting", "pet care", "house sitting"] },
+  "pet sitting": { categoryName: "Pet Services", tradeTitle: "Pet Sitter", keywords: ["pet sitting", "dog sitting", "cat sitting", "pet care", "dog boarding", "holiday pet care"] },
+  "pet care": { categoryName: "Pet Services", tradeTitle: "Pet Care Specialist", keywords: ["pet care", "pet sitting", "dog walking", "cat sitting", "pet boarding", "pet grooming", "puppy care", "animal care"] },
+  "pet carer": { categoryName: "Pet Services", tradeTitle: "Pet Carer", keywords: ["pet care", "pet sitting", "dog walking", "cat sitting", "animal care", "pet sitter"] },
+  "dog walker": { categoryName: "Pet Services", tradeTitle: "Dog Walker", keywords: ["dog walking", "dog exercise", "puppy care", "dog walker", "pet care"] },
+  "dog walking": { categoryName: "Pet Services", tradeTitle: "Dog Walker", keywords: ["dog walker", "dog sitting", "pet care", "dog exercise"] },
+  "dog sitter": { categoryName: "Pet Services", tradeTitle: "Dog Sitter", keywords: ["dog sitting", "dog boarding", "kennels", "pet care"] },
+  "cat sitter": { categoryName: "Pet Services", tradeTitle: "Cat Sitter", keywords: ["cat sitting", "feline care", "cat care", "cattery", "pet care"] },
+  "cat sitting": { categoryName: "Pet Services", tradeTitle: "Cat Sitter", keywords: ["cat sitter", "feline care", "cat care", "cattery", "pet care"] },
 
   // Auto & Vehicle Repairs
   "mechanic": { categoryName: "Auto & Vehicle Repairs", tradeTitle: "Mechanic", keywords: ["car", "mot", "service", "brakes", "clutch", "engine"] },
@@ -275,6 +373,24 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
   "bin cleaning": { categoryName: "Specialist Cleaning", tradeTitle: "Wheelie Bin Cleaner", keywords: ["wheelie bin", "mobile bin wash", "bin cleaning", "bin store", "domestic bin wash"] },
   "wheelie bin cleaning": { categoryName: "Specialist Cleaning", tradeTitle: "Wheelie Bin Cleaner", keywords: ["bin wash", "domestic bin cleaning", "wheelie bin", "mobile bin cleaning"] },
   "bin store cleaning": { categoryName: "Industrial & Commercial Cleaning", tradeTitle: "Commercial Bin Store Cleaner", keywords: ["bin store", "refuse area", "commercial bin", "refuse store"] },
+
+  // Bake N Cake, Pastry & Catering
+  "cake": { categoryName: "Bake N Cake", tradeTitle: "Cake Maker & Baker", keywords: ["baking", "baker", "wedding cake", "birthday cake", "cupcakes", "dessert", "pastry", "catering", "food", "patisserie", "sweet treats", "afternoon tea", "bespoke bakes", "tier cake", "fondant"] },
+  "baker": { categoryName: "Bake N Cake", tradeTitle: "Baker & Cake Designer", keywords: ["cake", "baking", "wedding cake", "birthday cake", "pastry", "cupcakes", "bread", "dessert", "patisserie"] },
+  "baking": { categoryName: "Bake N Cake", tradeTitle: "Cake Maker & Baker", keywords: ["cake", "baker", "wedding cake", "birthday cake", "pastry", "cupcakes", "dessert", "patisserie"] },
+  "bake n cake": { categoryName: "Bake N Cake", tradeTitle: "Cake Maker & Baker", keywords: ["cake", "baker", "baking", "wedding cake", "birthday cake", "cupcake", "dessert", "pastry", "patisserie", "bespoke bakes", "afternoon tea"] },
+  "cake maker": { categoryName: "Bake N Cake", tradeTitle: "Cake Maker & Decorator", keywords: ["wedding cake", "birthday cake", "cupcakes", "celebration cake", "bespoke bakes", "tier cake", "fondant", "baking"] },
+  "cake maker & baker": { categoryName: "Bake N Cake", tradeTitle: "Cake Maker & Baker", keywords: ["wedding cake", "birthday cake", "cupcakes", "celebration cake", "bespoke bakes", "pastry", "desserts"] },
+  "wedding cake": { categoryName: "Bake N Cake", tradeTitle: "Wedding Cake Designer", keywords: ["wedding cakes", "tier cake", "3 tier cake", "cake maker", "baker", "tasting", "fondant", "allergen", "bespoke bakes", "celebration cake"] },
+  "wedding cakes": { categoryName: "Bake N Cake", tradeTitle: "Wedding Cake Designer", keywords: ["wedding cake", "tier cake", "3 tier cake", "cake maker", "baker", "tasting", "fondant", "allergen", "bespoke bakes"] },
+  "birthday cake": { categoryName: "Bake N Cake", tradeTitle: "Birthday Cake Maker", keywords: ["celebration cake", "custom cake", "cupcakes", "baker", "cake maker", "baking"] },
+  "birthday cakes": { categoryName: "Bake N Cake", tradeTitle: "Birthday Cake Maker", keywords: ["celebration cake", "custom cake", "cupcakes", "baker", "cake maker", "baking"] },
+  "cupcake": { categoryName: "Bake N Cake", tradeTitle: "Cupcake & Dessert Specialist", keywords: ["cupcakes", "dessert table", "sweet treats", "baking", "mini treats", "pastry"] },
+  "cupcakes": { categoryName: "Bake N Cake", tradeTitle: "Cupcake & Dessert Specialist", keywords: ["cupcake", "dessert table", "sweet treats", "baking", "mini treats", "pastry"] },
+  "pastry chef": { categoryName: "Bake N Cake", tradeTitle: "Pastry Chef & Baker", keywords: ["patisserie", "desserts", "french pastry", "cake", "baking", "afternoon tea", "croissant", "tarts"] },
+  "bespoke bakes": { categoryName: "Bake N Cake", tradeTitle: "Bespoke Cake Designer", keywords: ["custom cake", "wedding cake", "birthday cake", "artisan bakes", "desserts"] },
+  "catering": { categoryName: "Bake N Cake", tradeTitle: "Caterer & Private Chef", keywords: ["caterer", "buffet", "event food", "private chef", "wedding food", "canapes", "party food", "platter"] },
+  "caterer": { categoryName: "Bake N Cake", tradeTitle: "Caterer & Private Chef", keywords: ["catering", "buffet", "event food", "private chef", "wedding food", "party food", "platters"] },
 
   // Handyman
   "handyman": { categoryName: "Handyman & Property Maintenance", tradeTitle: "Handyman", keywords: ["flat pack", "tv mounting", "shelving", "odd jobs", "repairs"] },
@@ -308,7 +424,29 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
   "dishwasher delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "Appliance Courier", keywords: ["dishwasher", "kitchen appliance", "white goods", "bulky delivery"] },
   "appliance delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "White Goods Transport Specialist", keywords: ["washing machine", "fridge", "dishwasher", "cooker", "tumble dryer", "bulky delivery"] },
   "on demand delivery": { categoryName: "Courier, Parcel & Express Delivery", tradeTitle: "On-Demand Courier", keywords: ["asap delivery", "instant courier", "same day van", "express pickup", "fast courier"] },
-  "man and van": { categoryName: "Removals", tradeTitle: "Man & Van Driver", keywords: ["van delivery", "bulky items", "furniture", "appliance transport", "pickup", "moving"] },
+
+  // Removals, House Moves & Relocations
+  "removals": { categoryName: "Home & Domestic Removals", tradeTitle: "Removals & Relocation Specialist", keywords: ["house removal", "house move", "moving", "man and van", "home removals", "flat move", "packing", "furniture transport"] },
+  "removal": { categoryName: "Home & Domestic Removals", tradeTitle: "Removals Specialist", keywords: ["house removal", "house move", "moving", "man and van", "home removals", "flat move", "packing", "furniture transport"] },
+  "house removal": { categoryName: "Home & Domestic Removals", tradeTitle: "House Removals Specialist", keywords: ["house removals", "house move", "moving house", "home removals", "full house move", "man and van", "packing", "flat move", "removals"] },
+  "house removals": { categoryName: "Home & Domestic Removals", tradeTitle: "House Removals Specialist", keywords: ["house removal", "house move", "moving house", "home removals", "full house move", "man and van", "packing", "flat move", "removals"] },
+  "home removals": { categoryName: "Home & Domestic Removals", tradeTitle: "Home Removals Specialist", keywords: ["house removal", "house move", "moving house", "full house move", "packing", "removals", "relocation"] },
+  "home removal": { categoryName: "Home & Domestic Removals", tradeTitle: "Home Removals Specialist", keywords: ["house removal", "house move", "moving house", "full house move", "packing", "removals", "relocation"] },
+  "house move": { categoryName: "Home & Domestic Removals", tradeTitle: "Home Removals Specialist", keywords: ["house removal", "moving house", "full house move", "flat move", "removals", "packing", "man and van"] },
+  "house moving": { categoryName: "Home & Domestic Removals", tradeTitle: "Home Removals Specialist", keywords: ["house removal", "moving house", "full house move", "flat move", "removals", "packing", "man and van"] },
+  "moving house": { categoryName: "Home & Domestic Removals", tradeTitle: "Home Removals Specialist", keywords: ["house removal", "house move", "full house move", "home removals", "packing", "removals"] },
+  "moving": { categoryName: "Home & Domestic Removals", tradeTitle: "Removals & Moving Specialist", keywords: ["house move", "house removal", "flat move", "man and van", "relocation", "removals", "luton van"] },
+  "relocation": { categoryName: "Home & Domestic Removals", tradeTitle: "Relocation & Removals Specialist", keywords: ["house move", "office move", "corporate move", "removals", "relocating", "house removal"] },
+  "flat move": { categoryName: "Home & Domestic Removals", tradeTitle: "Flat & Apartment Removals Specialist", keywords: ["apartment move", "house removal", "small move", "man and van", "removals", "student move"] },
+  "furniture removal": { categoryName: "Home & Domestic Removals", tradeTitle: "Furniture Removals Specialist", keywords: ["sofa", "wardrobe", "bulky item", "house removal", "man and van", "removals", "disassembly"] },
+  "furniture moving": { categoryName: "Home & Domestic Removals", tradeTitle: "Furniture Removals Specialist", keywords: ["sofa", "wardrobe", "bulky item", "house removal", "man and van", "removals"] },
+  "man and van": { categoryName: "Removals", tradeTitle: "Man & Van Removals Driver", keywords: ["man with a van", "van delivery", "house removal", "small move", "furniture move", "removals", "pickup", "moving"] },
+  "man with a van": { categoryName: "Removals", tradeTitle: "Man & Van Removals Driver", keywords: ["man and van", "van delivery", "house removal", "small move", "furniture move", "removals", "pickup", "moving"] },
+  "office removal": { categoryName: "Office & Commercial Removals", tradeTitle: "Commercial Removals Specialist", keywords: ["office move", "business relocation", "commercial removals", "desk move", "it relocation"] },
+  "office removals": { categoryName: "Office & Commercial Removals", tradeTitle: "Commercial Removals Specialist", keywords: ["office move", "business relocation", "commercial removals", "desk move", "it relocation"] },
+  "piano removal": { categoryName: "Specialist & Heavy Item Removals", tradeTitle: "Piano & Heavy Item Mover", keywords: ["piano move", "grand piano", "upright piano", "heavy lifting", "specialist removals", "safe moving"] },
+  "piano move": { categoryName: "Specialist & Heavy Item Removals", tradeTitle: "Piano & Heavy Item Mover", keywords: ["piano moving", "grand piano", "upright piano", "heavy lifting", "specialist removals"] },
+  "house clearance": { categoryName: "House & Garden Clearance", tradeTitle: "House Clearance Specialist", keywords: ["probate clearance", "rubbish removal", "waste clearance", "garage clearance", "property clearance", "estate clearance"] },
 
   // General Labour, Trade Mates & Site Helpers
   "labourer": { categoryName: "General Labour, Trade Mates & Site Helpers", tradeTitle: "General Labourer", keywords: ["digging", "trench", "garden", "heavy lifting", "site helper", "demolition", "clearing", "rubble", "skip", "carrying"] },
@@ -352,9 +490,49 @@ export const CATEGORY_SYNONYMS: Record<string, { categoryName: string; tradeTitl
 };
 
 /**
+ * Active runtime synonyms dictionary combining hardcoded base synonyms with
+ * dynamic synonyms fetched from Firestore (without requiring any code redeployments).
+ */
+export let CATEGORY_SYNONYMS: Record<string, SynonymMeta> = { ...BASE_CATEGORY_SYNONYMS };
+
+/**
+ * Registers dynamic synonyms loaded from Firestore or AI suggestions at runtime.
+ * Allows adding new categories, trade titles, and keyword synonyms without any code redeployments!
+ */
+export function registerDynamicSynonyms(dynamicSynonyms: Record<string, SynonymMeta>) {
+  if (!dynamicSynonyms || typeof dynamicSynonyms !== "object") return;
+  CATEGORY_SYNONYMS = {
+    ...BASE_CATEGORY_SYNONYMS,
+    ...dynamicSynonyms,
+  };
+}
+
+/**
+ * Returns currently active synonyms.
+ */
+export function getActiveCategorySynonyms(): Record<string, SynonymMeta> {
+  return CATEGORY_SYNONYMS;
+}
+
+/**
  * Pre-populated dictionary of common trade category keywords, synonyms, and variations.
  */
 export const COMMON_TRADE_VOCABULARY: CandidateItem[] = [
+  // Bake N Cake, Wedding Cakes & Catering
+  { label: "Bake N Cake", type: "category", categoryName: "Bake N Cake" },
+  { label: "Cake Maker & Baker", type: "trade", categoryName: "Bake N Cake" },
+  { label: "Baker", type: "trade", categoryName: "Bake N Cake" },
+  { label: "Pastry Chef", type: "trade", categoryName: "Bake N Cake" },
+  { label: "Caterer & Private Chef", type: "trade", categoryName: "Bake N Cake" },
+  { label: "Wedding Cakes", type: "subcategory", categoryName: "Bake N Cake" },
+  { label: "Birthday Cakes", type: "subcategory", categoryName: "Bake N Cake" },
+  { label: "Cupcakes & Mini Treats", type: "subcategory", categoryName: "Bake N Cake" },
+  { label: "Dessert Tables", type: "subcategory", categoryName: "Bake N Cake" },
+  { label: "Celebration Cakes", type: "subcategory", categoryName: "Bake N Cake" },
+  { label: "Party Food Platters", type: "subcategory", categoryName: "Bake N Cake" },
+  { label: "Afternoon Tea", type: "subcategory", categoryName: "Bake N Cake" },
+  { label: "Bespoke Bakes", type: "subcategory", categoryName: "Bake N Cake" },
+
   // Tailoring, Garment Alterations & Laundry
   { label: "Tailoring, Alterations & Laundry Services", type: "category", categoryName: "Tailoring, Alterations & Laundry Services" },
   { label: "Tailor", type: "trade", categoryName: "Tailoring, Alterations & Laundry Services" },
@@ -504,7 +682,36 @@ export const COMMON_TRADE_VOCABULARY: CandidateItem[] = [
   { label: "Illuminated Lightboxes, Neon & LED Shopfront Fascias", type: "subcategory", categoryName: "Graphics & Signages" },
   { label: "Estate Agent & Property Boards (T-Boards, Flag Boards & V-Boards)", type: "subcategory", categoryName: "Graphics & Signages" },
   { label: "Post, Panel & Monolith / Totem Roadside Signs", type: "subcategory", categoryName: "Graphics & Signages" },
-  { label: "High-Level Building Signage Installation & Abseil / Cherry Picker Access", type: "subcategory", categoryName: "Graphics & Signages" }
+  { label: "High-Level Building Signage Installation & Abseil / Cherry Picker Access", type: "subcategory", categoryName: "Graphics & Signages" },
+
+  // Removals & House Moves
+  { label: "Home & Domestic Removals", type: "category", categoryName: "Home & Domestic Removals" },
+  { label: "Removals", type: "category", categoryName: "Removals" },
+  { label: "House Removals", type: "trade", categoryName: "Home & Domestic Removals" },
+  { label: "House Removal", type: "trade", categoryName: "Home & Domestic Removals" },
+  { label: "Home Removals", type: "trade", categoryName: "Home & Domestic Removals" },
+  { label: "Full House Move", type: "subcategory", categoryName: "Home & Domestic Removals" },
+  { label: "Flat & Apartment Move", type: "subcategory", categoryName: "Home & Domestic Removals" },
+  { label: "Man & Van Removals", type: "trade", categoryName: "Removals" },
+  { label: "Man and Van", type: "trade", categoryName: "Removals" },
+  { label: "Office & Commercial Removals", type: "category", categoryName: "Office & Commercial Removals" },
+  { label: "Specialist & Heavy Item Removals", type: "category", categoryName: "Specialist & Heavy Item Removals" },
+  { label: "House & Garden Clearance", type: "category", categoryName: "House & Garden Clearance" },
+  { label: "House Clearance", type: "subcategory", categoryName: "House & Garden Clearance" },
+
+  // Pet Services
+  { label: "Pet Services", type: "category", categoryName: "Pet Services" },
+  { label: "Pet Care", type: "trade", categoryName: "Pet Services" },
+  { label: "Pet Carer", type: "trade", categoryName: "Pet Services" },
+  { label: "Pet Sitting", type: "trade", categoryName: "Pet Services" },
+  { label: "Pet Sitter", type: "trade", categoryName: "Pet Services" },
+  { label: "Pet Sitting (in-home)", type: "subcategory", categoryName: "Pet Services" },
+  { label: "Dog Walking", type: "subcategory", categoryName: "Pet Services" },
+  { label: "Dog Walker", type: "trade", categoryName: "Pet Services" },
+  { label: "Cat Sitting", type: "subcategory", categoryName: "Pet Services" },
+  { label: "Cat Sitter", type: "trade", categoryName: "Pet Services" },
+  { label: "Dog Boarding / Kennels", type: "subcategory", categoryName: "Pet Services" },
+  { label: "Pet Grooming", type: "subcategory", categoryName: "Pet Services" }
 ];
 
 /**
@@ -658,13 +865,27 @@ export function matchTraderWithSearchQuery(
   const rawQueryLower = rawSearchQuery.trim().toLowerCase();
   const mainSynonym = CATEGORY_SYNONYMS[rawQueryLower];
 
-  // Every token in queryTokens must find a valid front-of-word token match
+  // 1. If full query matches a synonym (e.g. "house removal" -> "Home & Domestic Removals"), check if trader provides that category/trade/keywords
+  if (mainSynonym) {
+    const targetCategory = mainSynonym.categoryName;
+    const targetTitle = mainSynonym.tradeTitle;
+    const keywords = mainSynonym.keywords || [];
+
+    const isMatch =
+      (targetCategory && allTraderFields.some((field) => textContainsTokenMatch(field, targetCategory) || field.toLowerCase().includes(targetCategory.toLowerCase()))) ||
+      (targetTitle && allTraderFields.some((field) => textContainsTokenMatch(field, targetTitle) || field.toLowerCase().includes(targetTitle.toLowerCase()))) ||
+      keywords.some((kw) => arrayFields.some((field) => textContainsTokenMatch(field, kw)));
+
+    if (isMatch) return true;
+  }
+
+  // 2. Every token in queryTokens must find a valid front-of-word token match
   return queryTokens.every((qTok) => {
-    // 1. Direct token match across any field on the trader profile
+    // Direct token match across any field on the trader profile
     const directMatch = allTraderFields.some((field) => textContainsTokenMatch(field, qTok));
     if (directMatch) return true;
 
-    // 2. Token synonym expansion (e.g., qTok = "joiner" -> category "Carpentry & Joinery", tradeTitle "Carpenter & Joiner")
+    // Token synonym expansion (e.g., qTok = "joiner" -> category "Carpentry & Joinery", tradeTitle "Carpenter & Joiner")
     const tokenSynonym = CATEGORY_SYNONYMS[qTok] || (qTok === rawQueryLower ? mainSynonym : undefined);
     if (tokenSynonym) {
       const targetCategory = tokenSynonym.categoryName;
@@ -758,4 +979,89 @@ export function findFuzzySuggestion(
 
   return null;
 }
+
+/**
+ * Accurately finds only the categories that match a specific trader's registered trades/specialties.
+ * Prevents false-positive matches (such as showing Car Detailing or Scaffolding to a Painter/Plasterer)
+ * by matching strictly on category names, trade titles, and canonical synonyms rather than scanning
+ * unrelated subcategories of other industries.
+ */
+export function getMatchingCategoriesForTrader<T extends { name: string; id?: string | number; docId?: string; subcategories?: string[] }>(
+  categories: T[],
+  targetTrades: string | string[] | undefined | null
+): T[] {
+  if (!targetTrades || categories.length === 0) return categories;
+
+  // Flatten and clean all trade strings (splitting on separators like bullet, slash, comma)
+  const rawTrades = Array.isArray(targetTrades) ? targetTrades : [targetTrades];
+  const tradesArray: string[] = [];
+
+  rawTrades.forEach(t => {
+    if (!t) return;
+    const str = String(t).trim();
+    if (!str) return;
+    // Split bullet points or slashes if packed in a single string
+    if (str.includes("•") || str.includes("|") || str.includes(",")) {
+      str.split(/[•|,]+/).forEach(part => {
+        const p = part.trim();
+        if (p) tradesArray.push(p.toLowerCase());
+      });
+    } else {
+      tradesArray.push(str.toLowerCase());
+    }
+  });
+
+  if (tradesArray.length === 0) return categories;
+
+  const stopWords = new Set([
+    "and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", 
+    "at", "by", "on", "a", "an", "private", "services", "general", "domestic", 
+    "commercial", "specialist", "management", "coordination", "about"
+  ]);
+
+  // Pass 1: High-precision match against Category Name, Category ID, and Canonical Synonyms
+  const directMatches = categories.filter(cat => {
+    const catNameLower = cat.name.toLowerCase();
+    const catIdStr = String(cat.id || cat.docId || "").toLowerCase();
+
+    return tradesArray.some(trade => {
+      // 1. Exact match on category name or ID
+      if (catNameLower === trade || catIdStr === trade) return true;
+
+      // 2. Canonical synonym resolution (e.g. "painter" -> "Painting & Decorating")
+      const synonym = CATEGORY_SYNONYMS[trade] || BASE_CATEGORY_SYNONYMS[trade];
+      if (synonym && synonym.categoryName.toLowerCase() === catNameLower) return true;
+
+      // Check if trade is a known keyword of this category
+      if (synonym && synonym.keywords && synonym.keywords.some(k => k.toLowerCase() === catNameLower)) {
+        return true;
+      }
+
+      // 3. Category Name Token Overlap (matching strictly against cat.name, NOT unrelated subcategories)
+      const tradeTokens = tokenize(trade).filter(tok => !stopWords.has(tok));
+      const catTokens = tokenize(cat.name).filter(tok => !stopWords.has(tok));
+      
+      if (tradeTokens.length === 0 || catTokens.length === 0) return false;
+
+      // Every significant trade token should match a category token, or vice versa
+      const hasTokenMatch = tradeTokens.some(traderTok =>
+        catTokens.some(catTok => tokenMatches(traderTok, catTok))
+      );
+
+      return hasTokenMatch;
+    });
+  });
+
+  if (directMatches.length > 0) {
+    return directMatches;
+  }
+
+  // Pass 2: Fallback only if no direct category name/synonym match was found
+  const fallbackMatches = categories.filter(cat => {
+    return tradesArray.some(trade => categoryMatchesSearch(cat, trade));
+  });
+
+  return fallbackMatches.length > 0 ? fallbackMatches : categories;
+}
+
 

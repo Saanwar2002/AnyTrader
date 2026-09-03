@@ -2866,4 +2866,86 @@ Respond strictly with a JSON object matching this schema:
   return defaultScan;
 }
 
+export interface SynonymClassificationResult {
+  categoryName: string;
+  tradeTitle: string;
+  keywords: string[];
+  confidence: number;
+  reasoning: string;
+}
+
+const synonymClassificationCache = new Map<string, SynonymClassificationResult>();
+
+export async function classifyUnmatchedSearchTermServer(term: string): Promise<SynonymClassificationResult> {
+  const cleanTerm = (term || "").trim().toLowerCase();
+  const cached = synonymClassificationCache.get(cleanTerm);
+  if (cached) {
+    return cached;
+  }
+
+  const defaultFallback: SynonymClassificationResult = {
+    categoryName: "Handyman & General Property Maintenance",
+    tradeTitle: "Handyperson / Maintenance Specialist",
+    keywords: [cleanTerm, "maintenance", "repairs"],
+    confidence: 0.5,
+    reasoning: "General matching fallback",
+  };
+
+  try {
+    const genAI = getGenAI();
+    const model = await getGlobalAiModel();
+
+    const prompt = `You are AnyTrader's intelligent Trade Categorization & Search Optimization Engine.
+A homeowner searched for the term: "${cleanTerm}", but no traders or categories matched.
+Analyze this search term and assign it to the MOST appropriate Trade Category from the UK trade ecosystem.
+Examples of Trade Categories:
+- "Pet Services" (for terms like pet sitting, dog walking, pet care, cat sitting, dog boarding)
+- "Plumbing" (for terms like tap replacement, leak detection, radiator powerflush, boiler)
+- "Electrical" (for terms like fusebox, socket installation, rewire, ev charger)
+- "Carpentry & Joinery" (for terms like door hanging, fitted wardrobes, bespoke joinery)
+- "Painting & Decorating" (for terms like wallpapering, interior painting, exterior painting)
+- "Roofing & Guttering" (for terms like chimney repairs, flat roof, gutter clean, leadwork)
+- "Gardening & Landscaping" (for terms like lawn mowing, turfing, tree surgeon, patio)
+- "Cleaning & Domestic Services" (for terms like end of tenancy clean, carpet cleaning, oven cleaning)
+- "Specialist Cleaning" (for terms like wheelie bin cleaning, pressure washing, graffiti removal)
+- "Removals" (for terms like man and van, house removals, furniture courier)
+- "General Labour, Trade Mates & Site Helpers" (for terms like demolition helper, brick carrier, skip loader, site assistant)
+- "Tailoring, Alterations & Laundry Services" (for terms like dry cleaning, dress alterations, suit tailoring)
+- "Locksmiths & Security" (for terms like lock replacement, CCTV, safe opening)
+- "Handyman & General Property Maintenance" (for general odd jobs, flat pack assembly)
+
+Return ONLY valid JSON:
+{
+  "categoryName": "Exact Trade Category Name",
+  "tradeTitle": "Professional Trade Title (e.g., Pet Sitter & Animal Carer)",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4"],
+  "confidence": 0.95,
+  "reasoning": "Brief 1-sentence explanation why this term belongs to this category."
+}`;
+
+    const response = await genAI.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json" }
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    if (parsed.categoryName) {
+      const result: SynonymClassificationResult = {
+        categoryName: parsed.categoryName,
+        tradeTitle: parsed.tradeTitle || cleanTerm,
+        keywords: Array.isArray(parsed.keywords) && parsed.keywords.length > 0 ? parsed.keywords : [cleanTerm],
+        confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.85,
+        reasoning: parsed.reasoning || `Matched to ${parsed.categoryName}`,
+      };
+      synonymClassificationCache.set(cleanTerm, result);
+      return result;
+    }
+  } catch (err) {
+    console.warn("AI Synonym Classification fallback used:", err);
+  }
+
+  return defaultFallback;
+}
+
 

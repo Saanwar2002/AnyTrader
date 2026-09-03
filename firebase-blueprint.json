@@ -3749,6 +3749,42 @@
         "targetDate",
         "createdAt"
       ]
+    },
+    "DynamicSearchSynonym": {
+      "title": "DynamicSearchSynonym",
+      "description": "Dynamic search term and synonym mappings loaded at runtime without code deployment.",
+      "type": "object",
+      "properties": {
+        "term": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "tradeTitle": { "type": "string" },
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "type": "string", "enum": ["active", "paused", "rejected"] },
+        "addedBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["term", "categoryName", "keywords", "status"]
+    },
+    "UnmatchedSearchTelemetry": {
+      "title": "UnmatchedSearchTelemetry",
+      "description": "Logged customer searches with zero or low matching results for auto-synonym and profile optimization suggestions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "query": { "type": "string" },
+        "normalizedQuery": { "type": "string" },
+        "searchCount": { "type": "integer" },
+        "lastSearchedAt": { "type": "string" },
+        "postcodeArea": { "type": "string" },
+        "status": { "type": "string", "enum": ["unmatched", "synonym_added", "trader_notified", "ignored"] },
+        "suggestedCategory": { "type": "string" },
+        "suggestedTrade": { "type": "string" }
+      },
+      "required": ["query", "normalizedQuery", "searchCount", "status"]
     }
   },
   "firestore": {
@@ -4093,6 +4129,18 @@
         }
       },
       "description": "Quiet Period Off-Peak Trades Flash Deals"
+    },
+    "/dynamic_search_synonyms/{id}": {
+      "schema": {
+        "$ref": "#/entities/DynamicSearchSynonym"
+      },
+      "description": "Dynamic search term and synonym registry loaded at runtime without code changes."
+    },
+    "/unmatched_search_telemetry/{id}": {
+      "schema": {
+        "$ref": "#/entities/UnmatchedSearchTelemetry"
+      },
+      "description": "Telemetry collection for customer search terms with zero or low matching results."
     }
   }
 }

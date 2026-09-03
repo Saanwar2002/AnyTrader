@@ -44,6 +44,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    match /dynamic_search_synonyms/{synonymId} {
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && (request.resource.data.get('addedBy', '') == request.auth.uid || resource.data.get('addedBy', '') == request.auth.uid));
+    }
+    match /unmatched_search_telemetry/{telemetryId} {
+      allow read: if isSignedIn() || isAdmin();
+      allow create, update: if request.resource.data.query is string && request.resource.data.query.size() <= 200;
+      allow delete: if isAdmin();
+    }
 
     // --- User Profiles (Public/Private Split) ---
     match /advertisements/{adId} {

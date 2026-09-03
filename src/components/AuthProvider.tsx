@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { UserProfile } from "../types";
 import { SessionReauthModal } from "./SessionReauthModal";
 import { isAuthorizedAdminEmail } from "../services/adminAuthSecurityService";
+import { checkAndNotifyTraderMatches } from "../services/traderNotificationEngine";
 
 export type SessionStatus = "active" | "expiring_soon" | "expired" | "invalid";
 
@@ -209,6 +210,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!lastHeartbeatAt || now - lastHeartbeatAt > 60 * 1000) {
           performHeartbeatCheck(false);
         }
+        // Check trader matches if trader/business profile is loaded
+        if (profile && (profile.role === "tradesperson" || profile.role === "business")) {
+          checkAndNotifyTraderMatches(profile).catch(() => {});
+        }
       }
     };
 
@@ -220,7 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
       window.removeEventListener("focus", handleVisibilityOrFocus);
     };
-  }, [user, performHeartbeatCheck, lastHeartbeatAt]);
+  }, [user, profile, performHeartbeatCheck, lastHeartbeatAt]);
 
   useEffect(() => {
     let profileUnsubscribe: (() => void) | null = null;

@@ -644,7 +644,8 @@ const libraries: any[] = ['places', 'geometry'];
         finalAmount = Math.round(amountEntered * (1 - discountPercentageVal / 100));
       }
 
-      const payoutBreakdown = calculatePayoutBreakdown(finalAmount, profile?.tier || 'payg');
+      const traderTier = profile?.tierId || profile?.tier || 'payg';
+      const payoutBreakdown = calculatePayoutBreakdown(finalAmount, traderTier);
 
       const isQuickTrack = finalAmount < 400;
       const defaultMilestones = !isQuickTrack ? [
@@ -1280,12 +1281,21 @@ const libraries: any[] = ['places', 'geometry'];
     if (!user) return;
     setIsProcessing(true);
     try {
+      const milestoneAmount = Math.max(1, Math.round(Number(milestone.amount) || 0));
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
-          priceId: "price_mock_milestone", // Mock price ID
+          price_data: {
+            currency: 'gbp',
+            unit_amount: milestoneAmount * 100, // pence
+            product_data: {
+              name: `Milestone: ${milestone.title || 'Project Stage'}`,
+              description: `Escrow stage payment for Job #${id}`
+            }
+          },
+          priceId: "price_mock_milestone", // Fallback identifier
           mode: "payment",
           metadata: {
             type: "milestone_funding",
@@ -1301,9 +1311,12 @@ const libraries: any[] = ['places', 'geometry'];
       const data = await response.json();
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        toast.error(data.error || "Failed to initiate milestone escrow payment");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Funding Error:", err);
+      toast.error(err.message || "Failed to start escrow funding");
     } finally {
       setIsProcessing(false);
     }
@@ -1315,9 +1328,13 @@ const libraries: any[] = ['places', 'geometry'];
     
     setIsProcessing(true);
     try {
+      const token = await user.getIdToken();
       const response = await fetch("/api/release-milestone", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           jobId: id,
           quoteId: quote.id,
@@ -1327,10 +1344,14 @@ const libraries: any[] = ['places', 'geometry'];
       });
 
       if (response.ok) {
-        // Local state update via quotes listener will handle refresh
+        toast.success(`£${milestone.amount} released to tradesperson!`);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Failed to release milestone funds");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Release Error:", err);
+      toast.error("Network error while releasing milestone");
     } finally {
       setIsProcessing(false);
     }
@@ -1388,12 +1409,13 @@ const libraries: any[] = ['places', 'geometry'];
   useEffect(() => {
     const amount = parseFloat(quoteAmount);
     if (!isNaN(amount) && amount > 0) {
-      const summary = calculatePayoutBreakdown(amount, profile?.tier || 'payg');
+      const traderTier = profile?.tierId || profile?.tier || 'payg';
+      const summary = calculatePayoutBreakdown(amount, traderTier);
       setPayoutSummary(summary);
     } else {
       setPayoutSummary(null);
     }
-  }, [quoteAmount, profile?.tier]);
+  }, [quoteAmount, profile?.tier, profile?.tierId]);
 
   const handleRaiseDispute = async () => {
     if (!id || !user || !disputeReason) return;
@@ -3179,8 +3201,11 @@ const libraries: any[] = ['places', 'geometry'];
                     Private Request
                   </span>
                 </div>
-                <p className="text-sm text-blue-100 font-medium mt-1">
-                  Sent exclusively to: <strong className="text-white font-bold underline">{job.targetTradespersonName || "Individual Trader"}</strong>
+                <p className="text-sm text-blue-100 font-medium mt-1 flex items-center gap-1.5 flex-wrap">
+                  <span>Sent exclusively to:</span>
+                  <span className="bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded-full text-xs uppercase tracking-tight shadow-xs border border-amber-300 inline-flex items-center gap-1">
+                    👤 {job.targetTradespersonName || "Individual Trader"}
+                  </span>
                 </p>
               </div>
             </div>
@@ -3296,7 +3321,15 @@ const libraries: any[] = ['places', 'geometry'];
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           userId: user?.uid,
-                          priceId: "price_mock_boost", // Replace with actual Stripe price ID
+                          price_data: {
+                            currency: 'gbp',
+                            unit_amount: 500,
+                            product_data: {
+                              name: 'Emergency Job Boost',
+                              description: 'Priority placement at the top of trader feeds'
+                            }
+                          },
+                          priceId: "price_mock_boost",
                           mode: "payment",
                           metadata: {
                             type: "boost",

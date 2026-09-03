@@ -2,6 +2,12 @@ import { db } from "@/src/firebase";
 import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { GoogleGenAI } from "@google/genai";
 import { TRADE_CATEGORIES } from "@/src/constants";
+import { fetchUnmatchedSearches } from "./searchOptimizationService";
+import { CATEGORY_SYNONYMS, categoryMatchesSearch } from "@/src/lib/fuzzyMatch";
+
+function toTitleCase(str: string): string {
+  return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+}
 
 export interface ProfileAuditSuggestion {
   id: string;
@@ -176,6 +182,53 @@ Location: ${profile.postcode || profile.city || "UK"}`
         actionType: "add_skill",
         actionLabel: `➕ Add ${top3Recommended.length} Recommended Skills`
       });
+    }
+
+    // 2b. UNMATCHED SEARCH DEMAND TELEMETRY AUDIT (Data-Driven Customer Search Gaps)
+    try {
+      const unmatchedSearches = await fetchUnmatchedSearches(20);
+      const relevantUnmatched = unmatchedSearches.filter((item) => {
+        if (item.status === "ignored") return false;
+        const q = item.query.toLowerCase().trim();
+        
+        // Already in user's services or skills?
+        const alreadyHas = userServices.some(s => s.toLowerCase() === q || s.toLowerCase().includes(q));
+        if (alreadyHas) return false;
+
+        // Does this search match the trader's trades or categories?
+        const matchesTrade = userTrades.some((tradeName) => {
+          const catObj = TRADE_CATEGORIES.find(c => c.name.toLowerCase() === tradeName.toLowerCase()) || { name: tradeName, subcategories: [] };
+          if (categoryMatchesSearch(catObj as any, q)) return true;
+          
+          const synonymMeta = CATEGORY_SYNONYMS[q];
+          if (synonymMeta && synonymMeta.categoryName.toLowerCase() === tradeName.toLowerCase()) return true;
+
+          // Token check: e.g. "pet care" matching "Pet Services"
+          const qTokens = q.split(/\s+/);
+          const tTokens = tradeName.toLowerCase().split(/[\s,&]+/);
+          return qTokens.some(qt => qt.length >= 3 && tTokens.some(tt => tt.startsWith(qt) || qt.startsWith(tt)));
+        });
+
+        return matchesTrade;
+      });
+
+      // Add top unmet search terms as actionable profile additions
+      relevantUnmatched.slice(0, 3).forEach((item) => {
+        const displayTerm = toTitleCase(item.query);
+        suggestions.push({
+          id: `sug_demand_${item.normalizedQuery}`,
+          category: "skills",
+          title: `🔥 High Search Demand: Add "${displayTerm}"`,
+          impact: "high",
+          description: `Homeowners searched for "${item.query}" ${item.searchCount > 1 ? `(${item.searchCount} times)` : ""} in your category with zero matching traders found. Add this keyword to your profile to capture these local leads!`,
+          currentValue: userServices,
+          suggestedValue: [displayTerm],
+          actionType: "add_skill",
+          actionLabel: `➕ Add "${displayTerm}" (+Match Leads)`
+        });
+      });
+    } catch (telemetryErr) {
+      console.warn("Telemetry search gap audit fallback:", telemetryErr);
     }
   }
 

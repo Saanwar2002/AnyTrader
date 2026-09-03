@@ -33,6 +33,7 @@ import {
   getHybridTraderRecommendations, 
   TraderRecommendationCard 
 } from "@/src/services/aiRecommendationService";
+import { recordUnmatchedSearch, extractCleanTradeQuery } from "@/src/services/searchOptimizationService";
 import { triggerHaptic } from "@/src/lib/capacitor";
 import { toast } from "sonner";
 
@@ -47,6 +48,11 @@ interface Message {
   sources?: GroundingSource[];
   suggestedCategories?: string[];
   recommendedTraders?: TraderRecommendationCard[];
+  demandGapNotice?: {
+    type: "unmatched_category" | "no_traders_found";
+    searchTerm: string;
+    category?: string;
+  };
   quickAction?: {
     type: "post_job" | "emergency_job" | "find_trades";
     category: string;
@@ -101,7 +107,9 @@ How can I assist your project today?`,
 
     // 1. Context extraction: Detect matching trade categories
     const matchedCats = findMatchingTradeCategories(userMessage, 3);
+    const hasCategoryMatch = matchedCats.length > 0;
     const primaryCategory = matchedCats[0] || "General Trades";
+    const cleanExtractedQuery = extractCleanTradeQuery(userMessage);
 
     // 2. Query hybrid trader recommendations in parallel
     const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode, undefined, userMessage).catch(() => []);
@@ -177,6 +185,33 @@ How can I assist your project today?`,
       const modelText = finalAccumulatedText || streamResult.text || "Here is the guidance for your request.";
       const finalSources = capturedSources.length > 0 ? capturedSources : streamResult.sources || [];
 
+      // 4. Telemetry: Record unmatched search terms, categories, or trader supply gaps
+      let demandGapNotice: Message["demandGapNotice"] = undefined;
+      const queryForTelemetry = cleanExtractedQuery || userMessage.trim().slice(0, 40);
+
+      if (!hasCategoryMatch && queryForTelemetry.length >= 3) {
+        demandGapNotice = {
+          type: "unmatched_category",
+          searchTerm: queryForTelemetry,
+        };
+        recordUnmatchedSearch(queryForTelemetry, userPostcode, {
+          source: "ai_bot",
+          gapType: "unmatched_category",
+          category: primaryCategory !== "General Trades" ? primaryCategory : "",
+        });
+      } else if (recommendedTraders.length === 0 && queryForTelemetry.length >= 3) {
+        demandGapNotice = {
+          type: "no_traders_found",
+          searchTerm: queryForTelemetry,
+          category: primaryCategory,
+        };
+        recordUnmatchedSearch(queryForTelemetry, userPostcode, {
+          source: "ai_bot",
+          gapType: "no_traders_found",
+          category: primaryCategory,
+        });
+      }
+
       // 5. Generate 1-tap quick action spec
       const quickAction: Message["quickAction"] = {
         type: userMessage.toLowerCase().includes("emergency") || userMessage.toLowerCase().includes("burst") || userMessage.toLowerCase().includes("flooding")
@@ -198,6 +233,7 @@ How can I assist your project today?`,
             sources: finalSources,
             suggestedCategories: matchedCats,
             recommendedTraders: recommendedTraders.slice(0, 2),
+            demandGapNotice,
             quickAction
           };
         }
@@ -379,6 +415,25 @@ How can I assist your project today?`,
                           </button>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Demand Gap Notification for Homeowner (Unmatched Category or 0 Local Traders) */}
+                  {msg.role === "model" && msg.demandGapNotice && (
+                    <div className="bg-amber-50/90 border border-black rounded-2xl p-3.5 space-y-1.5 shadow-2xs">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>
+                          {msg.demandGapNotice.type === "no_traders_found"
+                            ? `Demand Logged: 0 Verified Traders Currently Found for "${msg.demandGapNotice.searchTerm}"`
+                            : `New Specialty Logged: "${msg.demandGapNotice.searchTerm}"`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-800 leading-relaxed font-medium">
+                        {msg.demandGapNotice.type === "no_traders_found"
+                          ? `We've recorded this request in AnyTrader's High-Demand Queue to alert verified trades in your area. You can still post a job below so nearby trade professionals can quote directly.`
+                          : `We've logged "${msg.demandGapNotice.searchTerm}" in AnyTrader's search demand telemetry. Our trade matching engine is indexing this service. You can post a job below to receive quotes from related trades.`}
+                      </p>
                     </div>
                   )}
 

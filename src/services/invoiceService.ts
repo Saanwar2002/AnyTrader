@@ -1,7 +1,7 @@
 import { db, sendNotification } from "@/src/firebase";
 import { collection, doc, setDoc, getDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import jsPDF from "jspdf";
-import { calculatePayoutBreakdown } from "./stripeIntegrationService";
+import { calculatePayoutBreakdown, normalizeTraderTier } from "./stripeIntegrationService";
 import { exportInvoicesToSheets } from "./googleSheetsService";
 
 export interface InvoiceData {
@@ -45,12 +45,14 @@ export interface InvoiceData {
  */
 export function isProInvoiceUser(tradespersonProfile: any): boolean {
   if (!tradespersonProfile) return false;
+  const normalized = normalizeTraderTier(tradespersonProfile.tierId || tradespersonProfile.tier);
   return Boolean(
-    tradespersonProfile.tier === "gold" ||
-    tradespersonProfile.tier === "platinum" ||
-    tradespersonProfile.tier === "pro" ||
+    normalized === "pro" ||
+    normalized === "premium" ||
+    normalized === "platinum" ||
     tradespersonProfile.hasVerifiedVideoProSubscription ||
-    tradespersonProfile.isProInvoiceSubscriber
+    tradespersonProfile.isProInvoiceSubscriber ||
+    tradespersonProfile.isPro
   );
 }
 
@@ -79,7 +81,8 @@ export async function createOrGetJobInvoice(
 
   // Determine tier & calculations
   const isPro = isProInvoiceUser(tradespersonProfile);
-  const payoutBreakdown = calculatePayoutBreakdown(acceptedQuote.amount || 0, tradespersonProfile?.tier || "payg");
+  const rawTier = tradespersonProfile?.tierId || tradespersonProfile?.tier || "payg";
+  const payoutBreakdown = calculatePayoutBreakdown(acceptedQuote.amount || 0, rawTier);
 
   const laborAmount = acceptedQuote.amount || 0;
   const materialsAmount = job.materialsCost || acceptedQuote.materialsCost || 0;

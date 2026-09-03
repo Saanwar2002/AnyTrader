@@ -408,14 +408,15 @@ export default function MyJobs() {
                     </span>
                   </div>
                 ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
-                  <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white font-black text-xs sm:text-sm tracking-wide uppercase py-2.5 px-4 sm:px-6 flex items-center justify-between border-b border-indigo-950 shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">🎯</span>
-                      <span>Direct Trader Quote Request</span>
+                  <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white font-black text-xs sm:text-sm tracking-wide uppercase py-2.5 px-4 sm:px-6 flex items-center justify-between border-b border-indigo-950 shadow-sm gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm shrink-0">🎯</span>
+                      <span className="truncate">Direct Trader Quote Request</span>
                     </div>
-                    <span className="bg-white/20 text-white text-[10px] sm:text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider border border-white/20">
-                      Sent to: {job.targetTradespersonName || "Individual Trader"}
-                    </span>
+                    <div className="bg-amber-400 text-slate-950 text-[10px] sm:text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1.5 shrink-0 border border-amber-300">
+                      <span className="text-slate-800 font-bold opacity-90 hidden xs:inline">Sent to:</span>
+                      <span className="text-amber-950 font-black tracking-tight underline decoration-amber-600 decoration-1 underline-offset-2">{job.targetTradespersonName || "Individual Trader"}</span>
+                    </div>
                   </div>
                 ) : (job.boostTier === 'instant_match' || job.isInstantMatch) ? (
                   <div className="bg-[#E6A020] text-center py-2 text-slate-900 font-black text-3xl tracking-wide uppercase border-b border-[#D4921E]">
@@ -562,16 +563,19 @@ export default function MyJobs() {
                     </div>
                   ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 border-2 border-blue-200 rounded-2xl p-3 flex items-center justify-between gap-2 shadow-xs">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm font-black text-xs">
                           🎯
                         </div>
-                        <div>
-                          <span className="text-[11px] font-black text-blue-950 uppercase tracking-wider">
+                        <div className="min-w-0">
+                          <span className="text-[11px] font-black text-blue-950 uppercase tracking-wider block">
                             Direct 1-on-1 Quote Request
                           </span>
-                          <p className="text-xs font-bold text-slate-800 mt-0.5">
-                            Exclusively To: <span className="text-blue-900 font-black">{job.targetTradespersonName || "Individual Trader"}</span>
+                          <p className="text-xs font-bold text-slate-700 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span>Exclusively To:</span>
+                            <span className="text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-md border border-blue-200/90 font-black text-xs shadow-2xs inline-flex items-center gap-1">
+                              👤 {job.targetTradespersonName || "Individual Trader"}
+                            </span>
                           </p>
                         </div>
                       </div>

@@ -24,10 +24,38 @@ export interface PayoutBreakdown {
   paymentRail: 'card' | 'bank_transfer';
 }
 
+export type NormalizedTraderTier = 'payg' | 'pro' | 'premium' | 'platinum';
+
+/**
+ * Normalizes user tier strings from across the platform (e.g. "Silver Professional", "Pro", "Gold Elite")
+ * into canonical keys ('payg' | 'pro' | 'premium' | 'platinum') for consistent fee calculation and feature entitlements.
+ */
+export function normalizeTraderTier(rawTier?: string): NormalizedTraderTier {
+  if (!rawTier) return 'payg';
+  const clean = rawTier.trim().toLowerCase();
+  
+  if (clean.includes('platinum') || clean.includes('enterprise powerhouse')) {
+    return 'platinum';
+  }
+  if (clean.includes('gold') || clean.includes('elite') || clean.includes('premium') || clean.includes('business professional')) {
+    return 'premium';
+  }
+  if (clean.includes('silver') || clean.includes('pro') || clean.includes('professional')) {
+    return 'pro';
+  }
+  return 'payg';
+}
+
 /**
  * Calculates the financial breakdown for a quote based on the user's tier.
+ * Canonical platform rates:
+ * - PAYG (Free Explorer): 5.0% platform commission
+ * - Pro (Silver Professional): 3.5% platform commission
+ * - Premium (Gold Elite): 2.5% platform commission
+ * - Platinum (Platinum Enterprise): 1.5% platform commission
  */
-export function calculatePayoutBreakdown(amount: number, tier: string = 'payg'): PayoutBreakdown {
+export function calculatePayoutBreakdown(amount: number, tier: string = 'payg', customCommissionRate?: number): PayoutBreakdown {
+  const normalizedTier = normalizeTraderTier(tier);
   const isLargeJob = amount >= STRIPE_CONFIG.PAYMENT_RAIL_THRESHOLD;
   const paymentRail = isLargeJob ? 'bank_transfer' : 'card';
 
@@ -39,11 +67,15 @@ export function calculatePayoutBreakdown(amount: number, tier: string = 'payg'):
     stripeFee = (amount * STRIPE_CONFIG.CARD_FEE_PERCENT) + STRIPE_CONFIG.CARD_FEE_FLAT;
   }
 
-  // 2. Calculate Platform Commission based on Tier
-  let commissionRate = 0.15; // Default PAYG
-  if (tier === 'pro') commissionRate = 0.10;
-  if (tier === 'premium') commissionRate = 0.05;
-  if (tier === 'platinum') commissionRate = 0.03; // Ultra low for big builders
+  // 2. Calculate Platform Commission based on Tier or Custom Config
+  let commissionRate = 0.05; // Default PAYG (5%)
+  if (typeof customCommissionRate === 'number' && customCommissionRate >= 0) {
+    commissionRate = customCommissionRate;
+  } else {
+    if (normalizedTier === 'pro') commissionRate = 0.035; // Silver Professional (3.5%)
+    else if (normalizedTier === 'premium') commissionRate = 0.025; // Gold Elite (2.5%)
+    else if (normalizedTier === 'platinum') commissionRate = 0.015; // Platinum Enterprise (1.5%)
+  }
 
   let platformCommission = Math.min(amount * commissionRate, STRIPE_CONFIG.COMMISSION_CAP);
 
@@ -76,20 +108,25 @@ export interface VerifiedVideoProPlan {
   * - Priority quote positioning on homeowner comparison screens
   * - HD Video Selfie & Credential hosting
  */
-export function calculateVerifiedVideoProSubscription(billingCycle: "monthly" | "annual" = "monthly"): VerifiedVideoProPlan {
-  const monthlyPrice = 15.00;
-  const annualPrice = 144.00; // £12/mo effective rate (20% discount)
+export function calculateVerifiedVideoProSubscription(
+  billingCycle: "monthly" | "annual" = "monthly",
+  customConfig?: { monthlyPrice?: number; annualPrice?: number; matchScoreBonus?: number }
+): VerifiedVideoProPlan {
+  const baseMonthly = customConfig?.monthlyPrice ?? 15.00;
+  const annualPrice = customConfig?.annualPrice ?? (Math.round(baseMonthly * 12 * 0.8)); // 20% discount default
+  const effectiveMonthlyRate = billingCycle === "annual" ? Math.round((annualPrice / 12) * 100) / 100 : baseMonthly;
+  const matchBonus = customConfig?.matchScoreBonus ?? 35;
   
   return {
-    monthlyPrice: billingCycle === "monthly" ? monthlyPrice : 12.00,
+    monthlyPrice: effectiveMonthlyRate,
     annualPrice,
     billingCycle,
-    matchScoreBonus: 35,
+    matchScoreBonus: matchBonus,
     hasPriorityQuotePositioning: true,
     hasVideoSelfieHosting: true,
     badgeLabel: "Verified Video Pro",
     features: [
-      "⚡ +35 Match Score Points in 40+ Signal Intelligent Matching Engine",
+      `⚡ +${matchBonus} Match Score Points in 40+ Signal Intelligent Matching Engine`,
       "🚀 Priority Quote Positioning (Top Placement on Homeowner Feeds)",
       "📹 HD 15-60s Live Video Selfie & Credential Video Hosting",
       "🏅 Verified Video Pro Gold Trust Badge on Profile & Quotes",

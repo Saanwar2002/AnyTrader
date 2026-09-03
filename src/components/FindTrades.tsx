@@ -4,8 +4,9 @@ import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react
 import { getGoogleMapsApiKey, triggerHaptic } from "@/src/lib/capacitor";
 import { db, collection, query, where, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
-import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, textContainsTokenMatch, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
-import { cn, getDealPricing } from "@/src/lib/utils";
+import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, textContainsTokenMatch, categoryMatchesSearch, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
+import { initSearchOptimizationService, recordUnmatchedSearch, onDynamicSynonymsUpdate } from "@/src/services/searchOptimizationService";
+import { cn, getDealPricing, getHomeownerAreaName } from "@/src/lib/utils";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import { useCategories } from "../lib/CategoryProvider";
@@ -20,6 +21,7 @@ import { seedMockTraders, INITIAL_MOCK_TRADERS, INITIAL_MOCK_FLASH_DEALS, genera
 import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo, formatDealBadgeText, formatDealScheduleText } from "@/src/lib/flashDeals";
 import { shareDeal, DealCountdownBadge } from "@/src/lib/dealUtils";
 export { shareDeal, DealCountdownBadge };
+import { getCategoryHotSearches } from "@/src/utils/tradePresets";
 import { Capacitor } from '@capacitor/core';
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import { toast } from "sonner";
@@ -470,9 +472,21 @@ export default function FindTrades() {
   const [documentViewerTrader, setDocumentViewerTrader] = useState<any>(null);
   const [documentViewerInitialBadge, setDocumentViewerInitialBadge] = useState<string>("liability_insurance");
 
-  // Rebuild dictionary when tradespeople change
+  // Rebuild dictionary when tradespeople change or dynamic synonyms are registered
   useEffect(() => {
     setCandidateDictionary(buildCandidateDictionary(tradespeople));
+  }, [tradespeople]);
+
+  // Synchronize dynamic synonyms from Firestore and re-index dictionary on updates
+  useEffect(() => {
+    const unsubInit = initSearchOptimizationService();
+    const unsubUpdate = onDynamicSynonymsUpdate(() => {
+      setCandidateDictionary(buildCandidateDictionary(tradespeople));
+    });
+    return () => {
+      if (typeof unsubInit === "function") unsubInit();
+      if (typeof unsubUpdate === "function") unsubUpdate();
+    };
   }, [tradespeople]);
 
   // --- Live Auto-Complete Dropdown State ---
@@ -1045,13 +1059,14 @@ export default function FindTrades() {
             if (queryTrimmed.length <= 3) {
               return subLower.startsWith(queryTrimmed) || wordBoundaryRegex.test(subLower);
             }
-            return subLower.includes(queryTrimmed);
+            return subLower.includes(queryTrimmed) || textContainsTokenMatch(sub, queryTrimmed);
           });
         }
 
         // Synonym & Trade Title Matches
         const synonymMeta = CATEGORY_SYNONYMS[queryTrimmed];
         const isSynonymMatch = synonymMeta && synonymMeta.categoryName.toLowerCase() === catNameLower;
+        const isFuzzyCatMatch = categoryMatchesSearch(cat, queryTrimmed);
 
         // Calculate relevance priority score
         let priority = 0;
@@ -1061,6 +1076,8 @@ export default function FindTrades() {
           priority = 90;
         } else if (nameMatches) {
           priority = 80;
+        } else if (isFuzzyCatMatch) {
+          priority = 75;
         } else if (matchingSub && matchingSub.toLowerCase().startsWith(queryTrimmed)) {
           priority = 60;
         } else if (matchingSub && wordBoundaryRegex.test(matchingSub.toLowerCase())) {
@@ -1117,6 +1134,18 @@ export default function FindTrades() {
   const visibleTradespeople = useMemo(() => {
     return finalDisplayList.slice(0, displayLimit);
   }, [finalDisplayList, displayLimit]);
+
+  // Zero-result Search Telemetry with session deduplication & cost optimization
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (
+      trimmed.length >= 3 && 
+      finalDisplayList.length === 0 && 
+      autocompleteSuggestions.matchingCategories.length === 0
+    ) {
+      recordUnmatchedSearch(trimmed, profile?.postcode || postcodeFilterValue);
+    }
+  }, [searchQuery, finalDisplayList.length, autocompleteSuggestions.matchingCategories.length, profile?.postcode, postcodeFilterValue]);
 
   // Handle logging clicks and deducting budget on promoted profile clicks
   const handlePromotedCardClick = async (tp: any) => {
@@ -1240,14 +1269,24 @@ export default function FindTrades() {
     return shuffled.slice(0, 10);
   }, [tradespeople, profile?.postcode]);
 
-  const hotSearches = [
-    { label: "Emergency Plumber", query: "Plumber" },
-    { label: "Boiler Service", query: "Boiler" },
-    { label: "Kitchen Fitting", query: "Kitchen" },
-    { label: "Smart Home", query: "Smart" },
-    { label: "Rewiring", query: "Rewiring" },
-    { label: "Leak Repair", query: "Leak" }
-  ];
+  const hotSearches = useMemo(() => {
+    if (selectedCategory && selectedCategory !== "All") {
+      const presets = getCategoryHotSearches({ primaryCategory: selectedCategory, trades: [selectedCategory] }, 10);
+      return presets.slice(0, 10).map(p => ({ label: p.title, query: p.subcategory || p.title, icon: p.icon }));
+    }
+    return [
+      { label: "Emergency Plumber", query: "Plumber", icon: "🔧" },
+      { label: "Boiler Service & CP12", query: "Boiler", icon: "🔥" },
+      { label: "EICR Electrical Check", query: "EICR", icon: "⚡" },
+      { label: "Kitchen Fitting", query: "Kitchen", icon: "🍳" },
+      { label: "Interior Painting", query: "Painting", icon: "🎨" },
+      { label: "Garden Landscaping", query: "Garden", icon: "🌳" },
+      { label: "End of Tenancy Clean", query: "End of Tenancy", icon: "✨" },
+      { label: "Roof Repair & Guttering", query: "Roofing", icon: "🏠" },
+      { label: "Handyman & Odd Jobs", query: "Handyman", icon: "🛠️" },
+      { label: "Rubbish Removal & Clearance", query: "Rubbish Removal", icon: "🚛" }
+    ];
+  }, [selectedCategory]);
 
   if (showSplash) {
     return (
@@ -1884,8 +1923,8 @@ export default function FindTrades() {
                   <Trash2 className="w-3 h-3" /> Clear All
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {recentSearches.map((search) => {
+              <div className="grid grid-cols-2 gap-2">
+                {recentSearches.slice(0, 6).map((search) => {
                   const isCat = categories.some(c => c.name.toLowerCase() === search.toLowerCase());
                   return (
                     <button
@@ -1900,17 +1939,19 @@ export default function FindTrades() {
                           addRecentSearch(search);
                         }
                       }}
-                      className="group px-3 py-1.5 bg-white border border-black rounded-lg text-xs font-bold text-black hover:bg-slate-50 transition-all flex items-center gap-2 shadow-xs active:scale-[0.98]"
+                      className="group px-2.5 py-2 min-h-[42px] bg-white border border-black rounded-xl text-[10px] font-bold text-black hover:bg-slate-50 transition-all flex items-center justify-between gap-1.5 shadow-2xs active:scale-[0.98] text-left min-w-0 cursor-pointer"
                     >
-                      {isCat ? (
-                        <Tag className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                      ) : (
-                        <Search className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      )}
-                      <span className="text-black">{search}</span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {isCat ? (
+                          <Tag className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                        ) : (
+                          <Search className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        )}
+                        <span className="text-black font-bold truncate leading-tight">{search}</span>
+                      </div>
                       <span
                         onClick={(e) => removeRecentSearch(search, e)}
-                        className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors ml-1"
+                        className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-black transition-colors shrink-0"
                         title="Remove search"
                       >
                         <X className="w-3 h-3" />
@@ -2218,11 +2259,22 @@ export default function FindTrades() {
 
           {/* Hot Searches */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className="w-4 h-4 text-orange-500 fill-orange-500" />
-              <h2 className="font-bold text-slate-900">Hot Searches</h2>
+            <div className="mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Zap className="w-4 h-4 text-orange-500 fill-orange-500 shrink-0" />
+                <h2 className="font-bold text-black text-sm sm:text-base">
+                  {selectedCategory && selectedCategory !== "All" 
+                    ? `Hot Searches in ${selectedCategory}` 
+                    : `Hot Searches in ${getHomeownerAreaName(profile)}`}
+                </h2>
+              </div>
+              <div className="mt-1.5 flex items-center">
+                <span className="text-[10px] font-black bg-amber-100 text-black px-2.5 py-0.5 rounded-full border border-black inline-flex items-center gap-1 shadow-2xs">
+                  🔥 Trending
+                </span>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {hotSearches.map(item => (
                 <button
                   key={item.label}
@@ -2230,10 +2282,10 @@ export default function FindTrades() {
                     setSearchQuery(item.query);
                     addRecentSearch(item.label);
                   }}
-                  className="px-4 py-2 bg-white border-2 border-black rounded-xl text-xs font-bold text-slate-900 hover:bg-slate-50 transition-all flex items-center gap-2"
+                  className="px-2.5 py-2 min-h-[46px] bg-white border border-black rounded-xl text-[10px] font-bold text-black hover:bg-slate-50 transition-all flex items-center gap-2 shadow-2xs cursor-pointer text-left min-w-0 active:scale-98"
                 >
-                  <Search className="w-3 h-3" />
-                  {item.label}
+                  <span className="text-sm shrink-0 leading-none">{item.icon || "🔍"}</span>
+                  <span className="leading-snug break-words text-black font-bold flex-1">{item.label}</span>
                 </button>
               ))}
             </div>
@@ -3135,7 +3187,7 @@ export default function FindTrades() {
                 </div>
                 <div className="flex-1 flex flex-col gap-2 w-full">
                   <button 
-                    onClick={() => navigate(`/profile/${selectedTraderPreview.uid}`, { state: { openQuote: true, isB2B, linkedPropertyId: isB2B && selectedAsset ? selectedAsset.id : undefined, linkedPropertyName: isB2B && selectedAsset ? (selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1) : undefined } })}
+                    onClick={() => navigate(`/profile/${selectedTraderPreview.uid}`, { state: { openQuote: true, initialProfile: selectedTraderPreview, isB2B, linkedPropertyId: isB2B && selectedAsset ? selectedAsset.id : undefined, linkedPropertyName: isB2B && selectedAsset ? (selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1) : undefined } })}
                     className="w-full bg-slate-900 text-white rounded-xl py-2.5 px-5 text-xs font-black text-center shadow-md shadow-slate-900/10 hover:bg-slate-800 active:scale-[0.99] transition-all flex items-center justify-center uppercase tracking-widest border border-black cursor-pointer"
                   >
                     Request Quote

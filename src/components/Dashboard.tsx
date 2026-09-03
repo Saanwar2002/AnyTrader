@@ -12,7 +12,7 @@ import {
   ChevronRight, Plus, Loader2, AlertCircle, Star,
   Search, BarChart3, Zap as EmergencyIcon, Zap, Bot, Bell,
   MapPin, Image as ImageIcon, Video as VideoIcon,
-  ShieldCheck, Activity, Calendar as CalendarIcon, Car, KeyRound, Sparkles, Package
+  ShieldCheck, Activity, Calendar as CalendarIcon, Car, KeyRound, Sparkles, Package, X
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn, getOutwardPostcode } from "@/src/lib/utils";
@@ -41,6 +41,16 @@ export default function Dashboard() {
   const [maintenancePredictions, setMaintenancePredictions] = useState<any[]>([]);
   const [isGeneratingPredictions, setIsGeneratingPredictions] = useState(false);
   const [emergencyRides, setEmergencyRides] = useState<any[]>([]);
+  const [isMoveInDismissed, setIsMoveInDismissed] = useState<boolean>(() => {
+    try {
+      if (localStorage.getItem("anytrader_move_in_settled") === "true") return true;
+      if (sessionStorage.getItem("anytrader_move_in_session_dismissed") === "true") return true;
+      return false;
+    } catch {
+      return false;
+    }
+  });
+  const [showMoveInDismissModal, setShowMoveInDismissModal] = useState(false);
 
   useEffect(() => {
     if (!user || !profile || profile.role !== 'admin') return;
@@ -239,34 +249,166 @@ export default function Dashboard() {
       </button>
 
       {/* New Home Move-In Pack & Day-One Concierge Banner */}
-      <Link
-        to="/move-in"
-        className="w-full bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/15 border border-black p-4 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 shadow-sm hover:shadow-md transition-all group"
-      >
-        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500 text-slate-950 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-black group-hover:scale-105 transition-transform mt-0.5 sm:mt-0">
-            <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-display font-black text-slate-900 text-base sm:text-lg leading-tight">
-                📦 New Home Move-In Pack & Trade Hub
-              </h3>
-              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-950 px-2 py-0.5 rounded-full border border-black/20 whitespace-nowrap">
-                Estate Agent Ready
-              </span>
+      {!isMoveInDismissed && (
+        <div className="relative w-full group">
+          <Link
+            to="/move-in"
+            className="w-full bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/15 border border-black p-4 sm:p-5 pr-12 sm:pr-14 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 shadow-sm hover:shadow-md transition-all block"
+          >
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500 text-slate-950 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-black group-hover:scale-105 transition-transform mt-0.5 sm:mt-0">
+                <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-display font-black text-slate-900 text-base sm:text-lg leading-tight">
+                    📦 New Home Move-In Pack & Trade Hub
+                  </h3>
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-950 px-2 py-0.5 rounded-full border border-black/20 whitespace-nowrap">
+                    Estate Agent Ready
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 font-bold mt-1 leading-snug">
+                  Day-One Checklist: Insurance Locks, Gas Safe Boiler Service, Deep Clean & 1-Click Quotes
+                </p>
+              </div>
             </div>
-            <p className="text-xs sm:text-sm text-slate-700 font-bold mt-1 leading-snug">
-              Day-One Checklist: Insurance Locks, Gas Safe Boiler Service, Deep Clean & 1-Click Quotes
+
+            <div className="bg-slate-900 text-white text-xs sm:text-sm font-black px-4 py-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm group-hover:bg-slate-800 transition-all border border-black w-full sm:w-auto">
+              <span>Open Move-In Hub</span>
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
+
+          {/* Close/Dismiss Button in Top-Right Corner */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowMoveInDismissModal(true);
+            }}
+            title="Dismiss Move-In Pack"
+            aria-label="Dismiss Move-In Pack"
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/90 hover:bg-white text-slate-700 hover:text-black border border-black flex items-center justify-center shadow-xs transition-all hover:scale-105 cursor-pointer z-10"
+          >
+            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+          </button>
+        </div>
+      )}
+
+      {/* Move-In Pack Dismissal Confirmation Modal */}
+      {showMoveInDismissModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setShowMoveInDismissModal(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl border-2 border-black p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowMoveInDismissModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-black border border-slate-200 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-300 text-amber-900 flex items-center justify-center shrink-0">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-black text-slate-900 text-lg leading-tight">
+                  Move-In Pack Visibility
+                </h3>
+                <p className="text-xs font-semibold text-slate-500">
+                  Select your display preference
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+              How would you like to handle this Move-In Pack banner on your dashboard?
             </p>
+
+            <div className="space-y-2.5 pt-1">
+              {/* Option 1: Appears at the next startup */}
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem("anytrader_move_in_session_dismissed", "true");
+                  } catch (e) {
+                    console.error("Session storage error:", e);
+                  }
+                  setIsMoveInDismissed(true);
+                  setShowMoveInDismissModal(false);
+                  toast.info("Move-In Pack hidden for now. It will reappear at next app startup.");
+                }}
+                className="w-full p-3.5 rounded-2xl border-2 border-black bg-slate-50 hover:bg-blue-50/80 text-left transition-all group flex items-start gap-3 cursor-pointer shadow-xs active:scale-[0.99]"
+              >
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 border border-blue-200 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+                  <Clock className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-slate-900 text-sm flex items-center justify-between">
+                    <span>Appears at the next startup</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                      Temporary
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-600 mt-0.5 leading-snug">
+                    Dismisses the banner for this session. It will reappear the next time you open the app.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: I am settled */}
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    localStorage.setItem("anytrader_move_in_settled", "true");
+                  } catch (e) {
+                    console.error("Local storage error:", e);
+                  }
+                  setIsMoveInDismissed(true);
+                  setShowMoveInDismissModal(false);
+                  toast.success("Move-In Pack dismissed permanently. You are all settled!");
+                }}
+                className="w-full p-3.5 rounded-2xl border-2 border-black bg-slate-50 hover:bg-emerald-50/80 text-left transition-all group flex items-start gap-3 cursor-pointer shadow-xs active:scale-[0.99]"
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-slate-900 text-sm flex items-center justify-between">
+                    <span>I am settled</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      Permanent
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-600 mt-0.5 leading-snug">
+                    Permanently hides the Move-In Hub from your dashboard.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowMoveInDismissModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-black rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Keep Visible / Cancel
+              </button>
+            </div>
           </div>
         </div>
-
-        <div className="bg-slate-900 text-white text-xs sm:text-sm font-black px-4 py-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm group-hover:bg-slate-800 transition-all border border-black w-full sm:w-auto">
-          <span>Open Move-In Hub</span>
-          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-        </div>
-      </Link>
+      )}
 
       {/* Quick Actions */}
       <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
@@ -408,14 +550,15 @@ export default function Dashboard() {
                       </span>
                     </div>
                   ) : (job.targetTradespersonName || job.targetTradespersonId) ? (
-                    <div className="bg-gradient-to-r from-indigo-900 to-blue-900 text-white font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-indigo-950 shadow-2xs">
+                    <div className="bg-gradient-to-r from-indigo-900 to-blue-900 text-white font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-indigo-950 shadow-2xs gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="shrink-0">🎯</span>
                         <span className="truncate">Direct 1-on-1 Quote Request</span>
                       </div>
-                      <span className="bg-white/20 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-white/20 shrink-0">
-                        {job.targetTradespersonName || "Individual Trader"}
-                      </span>
+                      <div className="bg-amber-400 text-slate-950 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs flex items-center gap-1 shrink-0 border border-amber-300">
+                        <span className="text-slate-800 font-bold opacity-90 hidden xs:inline">Sent to:</span>
+                        <span className="text-amber-950 font-black tracking-tight underline decoration-amber-600 decoration-1 underline-offset-2">{job.targetTradespersonName || "Individual Trader"}</span>
+                      </div>
                     </div>
                   ) : null}
 
@@ -553,8 +696,11 @@ export default function Dashboard() {
                           <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider block truncate">
                             Direct 1-on-1 Request
                           </span>
-                          <span className="text-xs font-bold text-slate-800 truncate block">
-                            Exclusive to: <span className="text-blue-950 font-black">{job.targetTradespersonName || "Individual Trader"}</span>
+                          <span className="text-xs font-bold text-slate-800 truncate flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span>Exclusive to:</span>
+                            <span className="text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-md border border-blue-200/90 font-black text-xs shadow-2xs inline-flex items-center gap-1">
+                              👤 {job.targetTradespersonName || "Individual Trader"}
+                            </span>
                           </span>
                         </div>
                       </div>

@@ -37,6 +37,7 @@ import {
 
 import { performInitialPublicRecordCheck } from "../services/verificationService";
 import { getPlatformHealthInsights, PlatformHealthInsights, generateBroadcastDraft, summarizeDisputeChat, analyzeFraudRisk, RiskAlert, analyzeDocument, suggestNewCategories, CategorySuggestion, getAiModelRecommendations, AiModelRecommendation } from "../services/gemini";
+import { normalizeTraderTier } from "../services/stripeIntegrationService";
 
 export default function AnyTraderAdmin() {
   const { user, profile } = useAuth();
@@ -44,12 +45,12 @@ export default function AnyTraderAdmin() {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const tabFromUrl = searchParams.get("tab") as any;
-  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "advertising", "affiliates", "ai_agents", "sentinel_analytics"].includes(tabFromUrl) ? tabFromUrl : "users";
+  const initialTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "monetization", "advertising", "affiliates", "ai_agents", "sentinel_analytics", "subscriptions"].includes(tabFromUrl) ? tabFromUrl : "users";
   
-  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "advertising" | "affiliates" | "ai_agents" | "sentinel_analytics">(initialTab as any);
+  const [activeTab, setActiveTab] = useState<"users" | "jobs" | "disputes" | "logs" | "team" | "broadcast" | "analytics" | "settings" | "verifications" | "insights" | "risk" | "trends" | "categories" | "security" | "guest_jobs" | "monetization" | "advertising" | "affiliates" | "ai_agents" | "sentinel_analytics" | "subscriptions">(initialTab as any);
   
   useEffect(() => {
-    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "advertising", "affiliates", "ai_agents", "sentinel_analytics"].includes(tabFromUrl) ? tabFromUrl : "users";
+    const validTab = ["users", "jobs", "disputes", "logs", "team", "broadcast", "analytics", "settings", "verifications", "insights", "risk", "trends", "categories", "security", "guest_jobs", "monetization", "advertising", "affiliates", "ai_agents", "sentinel_analytics", "subscriptions"].includes(tabFromUrl) ? tabFromUrl : "users";
     if (validTab !== activeTab) {
       setActiveTab(validTab);
       setFilter(validTab === "jobs" ? "emergency" : "all");
@@ -317,14 +318,47 @@ export default function AnyTraderAdmin() {
             message: "Scheduled maintenance will occur on [Date] at [Time]. The platform will be temporarily offline."
           },
           feeTiers: [
-            { name: "Free Explorer", price: 0, maxQuotes: 5, maxAcceptedQuotes: 2, limitPeriod: "monthly", description: "Start risk-free and test the platform", includesRecommendation: false },
-            { name: "Silver Professional", price: 45, maxQuotes: 30, maxAcceptedQuotes: 10, limitPeriod: "monthly", description: "Perfect for active tradespeople", includesRecommendation: false },
-            { name: "Gold Elite", price: 95, maxQuotes: 9999, maxAcceptedQuotes: 9999, limitPeriod: "monthly", description: "For top professionals with priority alerts", includesRecommendation: true },
-            { name: "Platinum Enterprise", price: 245, maxQuotes: 9999, maxAcceptedQuotes: 9999, limitPeriod: "monthly", description: "Multi-seat management for teams", includesRecommendation: true }
+            { name: "Free Explorer", price: 0, maxQuotes: 5, maxAcceptedQuotes: 2, commission: 5, leadFee: 0, shopDiscount: 0, limitPeriod: "monthly", description: "Start risk-free. 5% Platform Commission. Standard Visibility.", includesRecommendation: false },
+            { name: "Silver Professional", price: 19.99, maxQuotes: 30, maxAcceptedQuotes: 10, commission: 3.5, leadFee: 0, shopDiscount: 5, limitPeriod: "monthly", description: "For active tradespeople. 3.5% Platform Commission. Priority Alerts.", includesRecommendation: false },
+            { name: "Gold Elite", price: 49.99, maxQuotes: 9999, maxAcceptedQuotes: 9999, commission: 2.5, leadFee: 0, shopDiscount: 10, limitPeriod: "monthly", description: "Top professional tier. 2.5% Commission. Verified placement & AI tools.", includesRecommendation: true },
+            { name: "Platinum Enterprise", price: 99.99, maxQuotes: 9999, maxAcceptedQuotes: 9999, commission: 1.5, leadFee: 0, shopDiscount: 15, limitPeriod: "monthly", description: "Enterprise scale. 1.5% Commission. Multi-seat dispatch.", includesRecommendation: true }
           ],
+          paidAddons: {
+            exclusiveLeads: {
+              enabled: true,
+              price: 29.00,
+              earlyAccessMinutes: 30,
+              description: "Exclusive leads add-on with 30-min priority notifications"
+            },
+            verifiedVideoPro: {
+              enabled: true,
+              monthlyPrice: 15.00,
+              annualPrice: 144.00,
+              matchScoreBonus: 35,
+              description: "Verified Video Pro credential badge, priority quotes & +35 match score points"
+            },
+            emergencyBoost: {
+              enabled: true,
+              price: 5.00,
+              durationHours: 4,
+              description: "Top-of-feed emergency red banner & instant SMS alert"
+            },
+            instantMatch: {
+              enabled: true,
+              price: 2.99,
+              slaMinutes: 15,
+              description: "Guaranteed priority matchmaking algorithm for local traders"
+            },
+            milestoneEscrow: {
+              enabled: true,
+              homeownerMediationStake: 25.00,
+              traderMediationStake: 25.00,
+              description: "Stripe Connect milestone stage payments & dispute mediation staking"
+            }
+          },
           businessTiers: [
             { name: "Standard Homeowner", price: 0, jobPostsLimit: 9999, limitPeriod: "lifetime", description: "Free for individual homeowners" },
-            { name: "Premium Landlord", price: 19, jobPostsLimit: 50, limitPeriod: "monthly", description: "Asset tracking and priority support" },
+            { name: "Premium Landlord", price: 19, jobPostsLimit: 50, limitPeriod: "monthly", description: "Asset tracking, CP12/EICR alerts and priority support" },
             { name: "Business Professional", price: 125, jobPostsLimit: 200, limitPeriod: "monthly", description: "For active management firms & teams" },
             { name: "Enterprise Powerhouse", price: 595, jobPostsLimit: 9999, limitPeriod: "monthly", description: "Unlimited scale for large enterprises" }
           ]
@@ -559,16 +593,62 @@ export default function AnyTraderAdmin() {
 
     setIsSavingSettings(true);
     try {
+      const paidAddons = tempConfig.paidAddons || {
+        exclusiveLeads: { enabled: true, price: 29.00, earlyAccessMinutes: 30, description: "Exclusive leads add-on with 30-min priority notifications" },
+        verifiedVideoPro: { enabled: true, monthlyPrice: 15.00, annualPrice: 144.00, matchScoreBonus: 35, description: "Verified Video Pro credential badge, priority quotes & +35 match score points" },
+        emergencyBoost: { enabled: true, price: 5.00, durationHours: 4, description: "Top-of-feed emergency red banner & instant SMS alert" },
+        instantMatch: { enabled: true, price: 2.99, slaMinutes: 15, description: "Guaranteed priority matchmaking algorithm for local traders" },
+        milestoneEscrow: { enabled: true, homeownerMediationStake: 25.00, traderMediationStake: 25.00, description: "Stripe Connect milestone stage payments & dispute mediation staking" }
+      };
+
       await setDoc(doc(db, "platform_config", "global"), {
         ...tempConfig,
         feeTiers,
         businessTiers,
+        paidAddons,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid
       });
-      await createAuditLog("update_settings", "global", "config", "Updated platform settings and fee structures");
+
+      // Synchronize trade tiers into platform_config/global_tiers so both config schemas stay perfectly in sync
+      try {
+        const globalTiersRef = doc(db, "platform_config", "global_tiers");
+        const globalTiersSnap = await getDoc(globalTiersRef);
+        const currentGlobalTiers = globalTiersSnap.exists() ? globalTiersSnap.data() : { providerModels: {} };
+
+        const mappedOneOffTiers: Record<string, any> = {};
+        feeTiers.forEach((ft: any) => {
+          const canonical = normalizeTraderTier(ft.name);
+          mappedOneOffTiers[canonical] = {
+            price: Number(ft.price) || 0,
+            commission: (Number(ft.commission) || 0) > 1 ? ((Number(ft.commission) || 0) / 100) : (Number(ft.commission) || 0.05),
+            maxQuotes: Number(ft.maxQuotes) || 9999,
+            maxAcceptedQuotes: Number(ft.maxAcceptedQuotes) || 9999,
+            leadFee: Number(ft.leadFee) || 0,
+            description: ft.description || "",
+            features: ft.features || (ft.description ? [ft.description] : [])
+          };
+        });
+
+        await setDoc(globalTiersRef, {
+          ...currentGlobalTiers,
+          providerModels: {
+            ...(currentGlobalTiers.providerModels || {}),
+            one_off_trades: {
+              tiers: {
+                ...(currentGlobalTiers.providerModels?.one_off_trades?.tiers || {}),
+                ...mappedOneOffTiers
+              }
+            }
+          }
+        }, { merge: true });
+      } catch (syncErr) {
+        console.warn("Could not sync global_tiers:", syncErr);
+      }
+
+      await createAuditLog("update_settings", "global", "config", "Updated platform settings, tiers, and paid add-on feature pricing");
       setHasUnsavedChanges(false);
-      showToast("Success", "Settings saved successfully.");
+      showToast("Success", "Settings, tiers, and paid feature pricing saved and synchronized successfully.");
     } catch (err) {
       console.error(err);
       showToast("Error", "Failed to save settings. Please check your connection.", "error");
@@ -1361,80 +1441,113 @@ export default function AnyTraderAdmin() {
           price: 0, 
           maxQuotes: 5, 
           maxAcceptedQuotes: 2, 
-          commission: 15,
+          commission: 5,
           leadFee: 0,
           shopDiscount: 0,
           limitPeriod: "monthly", 
-          description: "Start risk-free. 15% Platform Commission. Standard Lead Priority. Basic AI Insights.", 
+          description: "Start risk-free. 5% Platform Commission. Standard Visibility. Basic AI Insights.", 
           includesRecommendation: false 
         },
         { 
           name: "Silver Professional", 
-          price: 45, 
+          price: 19.99, 
           maxQuotes: 30, 
           maxAcceptedQuotes: 10, 
-          commission: 10,
+          commission: 3.5,
           leadFee: 0,
           shopDiscount: 5,
           limitPeriod: "monthly", 
-          description: "For active pros. 10% Platform Commission. Priority Support. Performance Badge (5% Shop Discount).", 
+          description: "For active tradespeople. 3.5% Platform Commission. Instant Lead Alerts. Priority Support.", 
           includesRecommendation: false 
         },
         { 
           name: "Gold Elite", 
-          price: 95, 
-          maxQuotes: 9999, 
-          maxAcceptedQuotes: 9999, 
-          commission: 5,
-          leadFee: 0,
-          shopDiscount: 10,
-          limitPeriod: "monthly", 
-          description: "Top Tier. 5% Platform Commission. Instant Lead Alerts. High-Trust Badge (10% Shop Discount).", 
-          includesRecommendation: true 
-        },
-        { 
-          name: "Platinum Enterprise", 
-          price: 245, 
+          price: 49.99, 
           maxQuotes: 9999, 
           maxAcceptedQuotes: 9999, 
           commission: 2.5,
           leadFee: 0,
+          shopDiscount: 10,
+          limitPeriod: "monthly", 
+          description: "Top Tier. 2.5% Platform Commission. Gold Trust Badge. Instant Match Priority.", 
+          includesRecommendation: true 
+        },
+        { 
+          name: "Platinum Enterprise", 
+          price: 99.99, 
+          maxQuotes: 9999, 
+          maxAcceptedQuotes: 9999, 
+          commission: 1.5,
+          leadFee: 0,
           shopDiscount: 15,
           limitPeriod: "monthly", 
-          description: "Teams & Scale. 2.5% Platform Commission. Multi-seat Dashboard (15% Shop Discount).", 
+          description: "Enterprise scale. 1.5% Platform Commission. Multi-seat Crew Dispatch. Custom TradeOS Reports.", 
           includesRecommendation: true 
         }
       ],
+      paidAddons: {
+        exclusiveLeads: {
+          enabled: true,
+          price: 29.00,
+          earlyAccessMinutes: 30,
+          description: "Exclusive leads add-on with 30-min priority notifications"
+        },
+        verifiedVideoPro: {
+          enabled: true,
+          monthlyPrice: 15.00,
+          annualPrice: 144.00,
+          matchScoreBonus: 35,
+          description: "Verified Video Pro credential badge, priority quotes & +35 match score points"
+        },
+        emergencyBoost: {
+          enabled: true,
+          price: 5.00,
+          durationHours: 4,
+          description: "Top-of-feed emergency red banner & instant SMS alert"
+        },
+        instantMatch: {
+          enabled: true,
+          price: 2.99,
+          slaMinutes: 15,
+          description: "Guaranteed priority matchmaking algorithm for local traders"
+        },
+        milestoneEscrow: {
+          enabled: true,
+          homeownerMediationStake: 25.00,
+          traderMediationStake: 25.00,
+          description: "Stripe Connect milestone stage payments & dispute mediation staking"
+        }
+      },
       businessTiers: [
         { 
           name: "Standard Homeowner", 
           price: 0, 
-          jobPostsLimit: 3, 
+          jobPostsLimit: 9999, 
           commission: 0, 
           shopDiscount: 0,
           hasTeamManagement: false,
-          limitPeriod: "monthly", 
-          description: "Regular homeowners. 3 Active Job Posts per month. Standard support. AI Scope Refiner included." 
+          limitPeriod: "lifetime", 
+          description: "Regular homeowners. Post unlimited jobs. Compare quotes. Direct messaging & AI Scope Refiner." 
         },
         { 
           name: "Premium Landlord", 
           price: 19, 
-          jobPostsLimit: 20, 
+          jobPostsLimit: 50, 
           commission: 1, 
           shopDiscount: 2,
           hasTeamManagement: false,
           limitPeriod: "monthly", 
-          description: "Asset management. 20 Job Posts per month. 1% Service Fee. Priority Trader Matching. Property Portfolio tools." 
+          description: "Asset management. Multi-property dashboard. CP12 & EICR automated compliance alerts. Tenant repair reporting bridge." 
         },
         { 
           name: "Business Professional", 
           price: 125, 
-          jobPostsLimit: 9999, 
+          jobPostsLimit: 200, 
           commission: 0.5, 
           shopDiscount: 5,
           hasTeamManagement: true,
           limitPeriod: "monthly", 
-          description: "Property PM Firms. Unlimited Job Posts. 0.5% Service Fee. Multi-user accounts. Team coordination dashboard." 
+          description: "Property PM Firms. 200 Job Posts/mo. 0.5% Service Fee. Multi-user accounts. Team coordination dashboard." 
         },
         { 
           name: "Enterprise Powerhouse", 
@@ -1450,7 +1563,7 @@ export default function AnyTraderAdmin() {
     };
     setTempConfig(unifiedConfig);
     setHasUnsavedChanges(true);
-    showToast("Sync Successful", "Tiers updated to Unified Pricing Model. Click 'Save Changes' to push to database.");
+    showToast("Sync Successful", "Tiers and paid feature pricing updated to Unified Pricing Model. Click 'Save Changes' to push to database.");
   };
 
   if (profile?.role !== "admin") {
@@ -1728,6 +1841,7 @@ export default function AnyTraderAdmin() {
                 <TabButton active={activeTab === "analytics"} onClick={() => handleTabChange("analytics")} icon={<BarChart3 className="w-4 h-4" />} label="Stats" />
                 <TabButton active={activeTab === "insights"} onClick={() => handleTabChange("insights")} icon={<Sparkles className="w-4 h-4" />} label="Insights" />
                 <TabButton active={activeTab === "monetization"} onClick={() => handleTabChange("monetization")} icon={<DollarSign className="w-4 h-4" />} label="Tiers" />
+                <TabButton active={activeTab === "subscriptions"} onClick={() => handleTabChange("subscriptions")} icon={<CreditCard className="w-4 h-4 text-emerald-500" />} label="Subscriptions" />
               </div>
             </div>
 
@@ -3723,39 +3837,624 @@ export default function AnyTraderAdmin() {
                   })}
                 </div>
                </div>
-            </div>
-          </div>
-        )}
+
+               {/* PAID ADD-ONS & ANCILLARY FEATURE PRICING CONTROLS */}
+               <div className="space-y-6 pt-10 border-t border-black">
+                 <div className="flex items-center justify-between flex-wrap gap-3">
+                   <div className="space-y-1">
+                     <div className="flex items-center gap-2">
+                       <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-300">
+                         <Zap className="w-4 h-4" />
+                       </span>
+                       <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Paid Add-Ons & Ancillary Feature Pricing Controls</h4>
+                     </div>
+                     <p className="text-xs text-slate-500">Live controls for platform add-ons: Exclusive Leads, Verified Video Pro, Emergency Boosts, Instant Match, and Milestone Escrow.</p>
+                   </div>
+                   <span className="text-[11px] font-bold px-3 py-1 bg-slate-100 text-slate-700 rounded-full border border-black">
+                     Stripe Connect Dual-Rail & Dynamic Checkout
+                   </span>
+                 </div>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                   {/* 1. EXCLUSIVE LEADS ADD-ON */}
+                   <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4 flex flex-col justify-between">
+                     <div className="space-y-3">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-sm border border-amber-200">
+                             ⚡
+                           </div>
+                           <div>
+                             <h5 className="font-bold text-sm text-slate-900">Exclusive Leads Add-On</h5>
+                             <p className="text-[10px] text-slate-500 font-medium">Monthly recurring subscription</p>
+                           </div>
+                         </div>
+                         <label className="relative inline-flex items-center cursor-pointer">
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer"
+                             checked={tempConfig.paidAddons?.exclusiveLeads?.enabled ?? true}
+                             onChange={(e) => {
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   exclusiveLeads: {
+                                     ...prev?.paidAddons?.exclusiveLeads,
+                                     enabled: e.target.checked
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                         </label>
+                       </div>
+
+                       <p className="text-xs text-slate-600">
+                         Grants subscribing tradespeople early-access lead notifications before standard dispatch broadcast.
+                       </p>
+
+                       <div className="grid grid-cols-2 gap-3 pt-2">
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Price (£/mo)</label>
+                           <input 
+                             type="number"
+                             step="0.01"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.exclusiveLeads?.price ?? 29.00}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value) || 0;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   exclusiveLeads: {
+                                     ...prev?.paidAddons?.exclusiveLeads,
+                                     price: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Early Buffer (mins)</label>
+                           <input 
+                             type="number"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.exclusiveLeads?.earlyAccessMinutes ?? 30}
+                             onChange={(e) => {
+                               const val = parseInt(e.target.value) || 30;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   exclusiveLeads: {
+                                     ...prev?.paidAddons?.exclusiveLeads,
+                                     earlyAccessMinutes: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-[11px] text-amber-700 bg-amber-50/70 p-2 rounded-xl border border-amber-200">
+                       ✓ Auto-renews via Stripe Checkout • Synced with TradesDashboard
+                     </div>
+                   </div>
+
+                   {/* 2. VERIFIED VIDEO PRO PLAN */}
+                   <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4 flex flex-col justify-between">
+                     <div className="space-y-3">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm border border-blue-200">
+                             📹
+                           </div>
+                           <div>
+                             <h5 className="font-bold text-sm text-slate-900">Verified Video Pro</h5>
+                             <p className="text-[10px] text-slate-500 font-medium">Monthly / Annual subscription</p>
+                           </div>
+                         </div>
+                         <label className="relative inline-flex items-center cursor-pointer">
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer"
+                             checked={tempConfig.paidAddons?.verifiedVideoPro?.enabled ?? true}
+                             onChange={(e) => {
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   verifiedVideoPro: {
+                                     ...prev?.paidAddons?.verifiedVideoPro,
+                                     enabled: e.target.checked
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                         </label>
+                       </div>
+
+                       <p className="text-xs text-slate-600">
+                         Provides Verified Video badge, priority quote positioning, and algorithmic match score boost (+35 pts).
+                       </p>
+
+                       <div className="grid grid-cols-3 gap-2 pt-2">
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monthly (£)</label>
+                           <input 
+                             type="number"
+                             step="0.01"
+                             className="w-full px-2.5 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.verifiedVideoPro?.monthlyPrice ?? 15.00}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value) || 0;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   verifiedVideoPro: {
+                                     ...prev?.paidAddons?.verifiedVideoPro,
+                                     monthlyPrice: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Annual (£)</label>
+                           <input 
+                             type="number"
+                             step="0.01"
+                             className="w-full px-2.5 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.verifiedVideoPro?.annualPrice ?? 144.00}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value) || 0;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   verifiedVideoPro: {
+                                     ...prev?.paidAddons?.verifiedVideoPro,
+                                     annualPrice: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Match Pts</label>
+                           <input 
+                             type="number"
+                             className="w-full px-2.5 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.verifiedVideoPro?.matchScoreBonus ?? 35}
+                             onChange={(e) => {
+                               const val = parseInt(e.target.value) || 35;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   verifiedVideoPro: {
+                                     ...prev?.paidAddons?.verifiedVideoPro,
+                                     matchScoreBonus: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-[11px] text-blue-700 bg-blue-50/70 p-2 rounded-xl border border-blue-200">
+                       ✓ 20% discount on Annual plan • Integrated with 40-Signal matching engine
+                     </div>
+                   </div>
+
+                   {/* 3. EMERGENCY JOB BOOST */}
+                   <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4 flex flex-col justify-between">
+                     <div className="space-y-3">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-xl bg-red-50 text-red-700 flex items-center justify-center font-bold text-sm border border-red-200">
+                             🚨
+                           </div>
+                           <div>
+                             <h5 className="font-bold text-sm text-slate-900">Emergency Job Boost</h5>
+                             <p className="text-[10px] text-slate-500 font-medium">One-off homeowner surcharge</p>
+                           </div>
+                         </div>
+                         <label className="relative inline-flex items-center cursor-pointer">
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer"
+                             checked={tempConfig.paidAddons?.emergencyBoost?.enabled ?? true}
+                             onChange={(e) => {
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   emergencyBoost: {
+                                     ...prev?.paidAddons?.emergencyBoost,
+                                     enabled: e.target.checked
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-600"></div>
+                         </label>
+                       </div>
+
+                       <p className="text-xs text-slate-600">
+                         Highlights urgent job posts at the top of active trader feeds with a flashing red banner and high-priority SMS alerts.
+                       </p>
+
+                       <div className="grid grid-cols-2 gap-3 pt-2">
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Boost Fee (£)</label>
+                           <input 
+                             type="number"
+                             step="0.01"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.emergencyBoost?.price ?? 5.00}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value) || 0;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   emergencyBoost: {
+                                     ...prev?.paidAddons?.emergencyBoost,
+                                     price: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration (Hours)</label>
+                           <input 
+                             type="number"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.emergencyBoost?.durationHours ?? 4}
+                             onChange={(e) => {
+                               const val = parseInt(e.target.value) || 4;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   emergencyBoost: {
+                                     ...prev?.paidAddons?.emergencyBoost,
+                                     durationHours: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-[11px] text-red-700 bg-red-50/70 p-2 rounded-xl border border-red-200">
+                       ✓ 100% platform retained fee • Auto-pinned to JobFeed priority banner
+                     </div>
+                   </div>
+
+                   {/* 4. INSTANT MATCH GUARANTEE */}
+                   <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4 flex flex-col justify-between">
+                     <div className="space-y-3">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm border border-purple-200">
+                             🎯
+                           </div>
+                           <div>
+                             <h5 className="font-bold text-sm text-slate-900">Instant Match Guarantee</h5>
+                             <p className="text-[10px] text-slate-500 font-medium">Fast-track matching guarantee</p>
+                           </div>
+                         </div>
+                         <label className="relative inline-flex items-center cursor-pointer">
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer"
+                             checked={tempConfig.paidAddons?.instantMatch?.enabled ?? true}
+                             onChange={(e) => {
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   instantMatch: {
+                                     ...prev?.paidAddons?.instantMatch,
+                                     enabled: e.target.checked
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                         </label>
+                       </div>
+
+                       <p className="text-xs text-slate-600">
+                         Priority algorithm dispatch guaranteeing connection with top 3 verified available tradespeople within target SLA.
+                       </p>
+
+                       <div className="grid grid-cols-2 gap-3 pt-2">
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Price (£)</label>
+                           <input 
+                             type="number"
+                             step="0.01"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.instantMatch?.price ?? 2.99}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value) || 0;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   instantMatch: {
+                                     ...prev?.paidAddons?.instantMatch,
+                                     price: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">SLA (Mins)</label>
+                           <input 
+                             type="number"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.instantMatch?.slaMinutes ?? 15}
+                             onChange={(e) => {
+                               const val = parseInt(e.target.value) || 15;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   instantMatch: {
+                                     ...prev?.paidAddons?.instantMatch,
+                                     slaMinutes: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-[11px] text-purple-700 bg-purple-50/70 p-2 rounded-xl border border-purple-200">
+                       ✓ Full refund if SLA is unmet • Directly processed via Stripe Checkout
+                     </div>
+                   </div>
+
+                   {/* 5. MILESTONE ESCROW & MEDIATION */}
+                   <div className="bg-white p-6 rounded-3xl border border-black shadow-sm space-y-4 flex flex-col justify-between">
+                     <div className="space-y-3">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm border border-emerald-200">
+                             ⚖️
+                           </div>
+                           <div>
+                             <h5 className="font-bold text-sm text-slate-900">Milestone Escrow & Stakes</h5>
+                             <p className="text-[10px] text-slate-500 font-medium">Stripe Connect dual-rail escrow</p>
+                           </div>
+                         </div>
+                         <label className="relative inline-flex items-center cursor-pointer">
+                           <input 
+                             type="checkbox" 
+                             className="sr-only peer"
+                             checked={tempConfig.paidAddons?.milestoneEscrow?.enabled ?? true}
+                             onChange={(e) => {
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   milestoneEscrow: {
+                                     ...prev?.paidAddons?.milestoneEscrow,
+                                     enabled: e.target.checked
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                         </label>
+                       </div>
+
+                       <p className="text-xs text-slate-600">
+                         Non-custodial escrow for phased jobs. In formal disputes, both parties stake mediation deposits to prevent frivolous claims.
+                       </p>
+
+                       <div className="grid grid-cols-2 gap-3 pt-2">
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Homeowner Stake (£)</label>
+                           <input 
+                             type="number"
+                             step="1.00"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.milestoneEscrow?.homeownerMediationStake ?? 25.00}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value) || 0;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   milestoneEscrow: {
+                                     ...prev?.paidAddons?.milestoneEscrow,
+                                     homeownerMediationStake: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                         <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trader Stake (£)</label>
+                           <input 
+                             type="number"
+                             step="1.00"
+                             className="w-full px-3 py-2 rounded-xl border border-black bg-slate-50 text-sm font-bold mt-1"
+                             value={tempConfig.paidAddons?.milestoneEscrow?.traderMediationStake ?? 25.00}
+                             onChange={(e) => {
+                               const val = parseFloat(e.target.value) || 0;
+                               setTempConfig((prev: any) => ({
+                                 ...prev,
+                                 paidAddons: {
+                                   ...prev?.paidAddons,
+                                   milestoneEscrow: {
+                                     ...prev?.paidAddons?.milestoneEscrow,
+                                     traderMediationStake: val
+                                   }
+                                 }
+                               }));
+                               setHasUnsavedChanges(true);
+                             }}
+                           />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-[11px] text-emerald-700 bg-emerald-50/70 p-2 rounded-xl border border-emerald-200">
+                       ✓ Direct transfer to Trader Connect Account • Platform commission (1.5%–5%) automatically deducted
+                     </div>
+                   </div>
+
+                   {/* 6. COMMISSION & TAX PROTECTION SUMMARY */}
+                   <div className="bg-slate-900 text-white p-6 rounded-3xl border border-white/20 shadow-sm space-y-4 flex flex-col justify-between">
+                     <div className="space-y-3">
+                       <div className="flex items-center gap-2">
+                         <div className="w-8 h-8 rounded-xl bg-white/10 text-white flex items-center justify-center font-bold text-sm border border-white/20">
+                           🛡️
+                         </div>
+                         <div>
+                           <h5 className="font-bold text-sm text-white">Tax & Escrow Non-Custodial Shield</h5>
+                           <p className="text-[10px] text-slate-400 font-medium">Stripe Connect Direct Transfer Architecture</p>
+                         </div>
+                       </div>
+
+                       <p className="text-xs text-slate-300">
+                         All milestone escrow payments and job payments flow directly to the tradesperson's connected Stripe account. The platform only receives its exact commission and service fees as application fees.
+                       </p>
+
+                       <div className="p-3 bg-white/5 rounded-2xl border border-white/10 space-y-1.5 text-xs">
+                         <div className="flex justify-between">
+                           <span className="text-slate-400">Free Explorer (PAYG):</span>
+                           <span className="font-bold text-white">5.0% commission</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span className="text-slate-400">Silver Professional:</span>
+                           <span className="font-bold text-white">3.5% commission</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span className="text-slate-400">Gold Elite:</span>
+                           <span className="font-bold text-white">2.5% commission</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span className="text-slate-400">Platinum Enterprise:</span>
+                           <span className="font-bold text-white">1.5% commission</span>
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-[11px] text-slate-400 bg-white/5 p-2 rounded-xl border border-white/10">
+                       ✓ Zero tax liability from holding gross user escrow funds
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             </div>
+           </div>
+         )}
 
         {activeTab === "subscriptions" && (() => {
           const tradespeople = users.filter(u => u.role === "tradesperson");
           const activeSubscribers = tradespeople.filter(u => u.subscriptionStatus === "active");
           const trialingUsers = tradespeople.filter(u => u.subscriptionStatus === "trialing" || (!u.subscriptionStatus && u.tierId === "Free Trial"));
           
-          const mrr = activeSubscribers.reduce((total, user) => {
-            const tier = platformConfig?.feeTiers?.find((t: any) => t.name === user.tierId);
-            return total + (tier?.price || 0);
+          const exclusiveLeadsPrice = tempConfig?.paidAddons?.exclusiveLeads?.price ?? 29.00;
+          const videoProMonthlyPrice = tempConfig?.paidAddons?.verifiedVideoPro?.monthlyPrice ?? 15.00;
+
+          // Calculate core tiers MRR using canonical tier normalization
+          const tiersMrr = activeSubscribers.reduce((total, u) => {
+            const canonical = normalizeTraderTier(u.tierId || u.tier);
+            let price = 0;
+            if (canonical === 'pro') price = 19.99;
+            else if (canonical === 'premium') price = 49.99;
+            else if (canonical === 'platinum') price = 99.99;
+
+            const matchedTier = platformConfig?.feeTiers?.find((t: any) => normalizeTraderTier(t.name) === canonical);
+            if (matchedTier && typeof matchedTier.price === 'number') {
+              price = matchedTier.price;
+            }
+            return total + price;
           }, 0);
+
+          // Calculate paid add-ons MRR
+          const exclusiveAddonUsers = tradespeople.filter(u => u.hasExclusiveAddon || u.isExclusiveActive);
+          const exclusiveMrr = exclusiveAddonUsers.length * exclusiveLeadsPrice;
+
+          const videoProUsers = tradespeople.filter(u => u.hasVerifiedVideoProSubscription);
+          const videoProMrr = videoProUsers.length * videoProMonthlyPrice;
+
+          const totalCombinedMrr = tiersMrr + exclusiveMrr + videoProMrr;
 
           const homeowners = users.filter(u => u.role === "homeowner");
           const proHomeowners = homeowners.filter(u => u.subscriptionType === "landlord");
 
-          const tierBreakdown = platformConfig?.feeTiers?.map((tier: any) => ({
-            name: tier.name,
-            count: tradespeople.filter(u => u.tierId === tier.name).length,
-            revenue: tradespeople.filter(u => u.tierId === tier.name && u.subscriptionStatus === "active").length * (tier.price || 0)
-          })) || [];
+          const tierBreakdown = (platformConfig?.feeTiers || []).map((tier: any) => {
+            const canonical = normalizeTraderTier(tier.name);
+            const count = tradespeople.filter(u => normalizeTraderTier(u.tierId || u.tier) === canonical).length;
+            const revenue = tradespeople.filter(u => normalizeTraderTier(u.tierId || u.tier) === canonical && u.subscriptionStatus === "active").length * (tier.price || 0);
+            return {
+              name: tier.name,
+              canonical,
+              price: tier.price || 0,
+              count,
+              revenue
+            };
+          });
 
           const exportSubscriptionsCSV = () => {
-            const headers = ["Name", "Email", "Tier", "Status", "Next Billing Date", "Cancel at Period End"];
-            const rows = tradespeople.map(u => [
-              u.name || "N/A",
-              u.email || "N/A",
-              u.tierId || "Free Trial",
-              u.subscriptionStatus || "trialing",
-              u.currentPeriodEnd ? new Date(u.currentPeriodEnd).toLocaleDateString() : "N/A",
-              u.cancelAtPeriodEnd ? "Yes" : "No"
-            ]);
+            const headers = ["Name", "Email", "Tier", "AddOns", "Status", "Next Billing Date", "Cancel at Period End"];
+            const rows = tradespeople.map(u => {
+              const addons = [];
+              if (u.hasExclusiveAddon || u.isExclusiveActive) addons.push("Exclusive Leads");
+              if (u.hasVerifiedVideoProSubscription) addons.push("Video Pro");
+              return [
+                u.name || "N/A",
+                u.email || "N/A",
+                u.tierId || u.tier || "Free Explorer",
+                addons.length > 0 ? addons.join(" + ") : "None",
+                u.subscriptionStatus || "active",
+                u.currentPeriodEnd ? new Date(u.currentPeriodEnd).toLocaleDateString() : "N/A",
+                u.cancelAtPeriodEnd ? "Yes" : "No"
+              ];
+            });
 
             const csvContent = [
               headers.join(","),
@@ -3787,94 +4486,122 @@ export default function AnyTraderAdmin() {
 
           return (
             <div className="p-6 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* MRR & SUBSCRIBER KPI METRICS */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
-                  <p className="text-slate-500 text-sm font-bold uppercase tracking-tight">Trades MRR</p>
-                  <p className="text-3xl font-black text-slate-900 mt-1">£{mrr.toFixed(2)}</p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
-                  <p className="text-slate-500 text-sm font-bold uppercase tracking-tight">Active Trade Subs</p>
-                  <p className="text-3xl font-black text-slate-900 mt-1">{activeSubscribers.length}</p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
-                  <p className="text-slate-500 text-sm font-bold uppercase tracking-tight">Pro Landlords</p>
-                  <p className="text-3xl font-black text-slate-900 mt-1">{proHomeowners.length}</p>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
-                <h3 className="font-bold text-lg text-slate-900 mb-4">Homeowner/Landlord Tiers</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between p-3 bg-slate-50 rounded-lg font-bold text-sm">
-                    <span>Tier</span>
-                    <span>Subscribers</span>
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-tight">
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                    <span>Total Platform MRR</span>
                   </div>
-                  {[
-                    { name: "Standard Homeowner", count: homeowners.filter(u => u.subscriptionType === "standard").length },
-                    { name: "Premium Landlord", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Premium Landlord").length },
-                    { name: "Business Professional", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Business Professional").length },
-                    { name: "Enterprise Powerhouse", count: homeowners.filter(u => u.subscriptionType === "landlord" && u.tierId === "Enterprise Powerhouse").length },
-                  ].map(tier => (
-                    <div key={tier.name} className="flex justify-between p-3 border-b border-black text-sm">
-                      <span className="font-medium text-slate-700">{tier.name}</span>
-                      <span className="font-bold text-slate-900">{tier.count}</span>
-                    </div>
-                  ))}
+                  <p className="text-3xl font-black text-slate-900 mt-2">£{totalCombinedMrr.toFixed(2)}</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Tiers + Paid Add-ons combined</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-tight">
+                    <CreditCard className="w-4 h-4 text-blue-600" />
+                    <span>Core Tiers MRR</span>
+                  </div>
+                  <p className="text-3xl font-black text-slate-900 mt-2">£{tiersMrr.toFixed(2)}</p>
+                  <p className="text-[11px] text-slate-500 mt-1">{activeSubscribers.length} paying trade subscriptions</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-tight">
+                    <Zap className="w-4 h-4 text-amber-500" />
+                    <span>Add-Ons MRR</span>
+                  </div>
+                  <p className="text-3xl font-black text-slate-900 mt-2">£{(exclusiveMrr + videoProMrr).toFixed(2)}</p>
+                  <p className="text-[11px] text-slate-500 mt-1">{exclusiveAddonUsers.length} Exclusive + {videoProUsers.length} Video Pro</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-tight">
+                    <Building2 className="w-4 h-4 text-indigo-600" />
+                    <span>Pro Landlords</span>
+                  </div>
+                  <p className="text-3xl font-black text-slate-900 mt-2">{proHomeowners.length}</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Portfolio & compliance tiers</p>
                 </div>
               </div>
 
+              {/* TIER REVENUE BREAKDOWN */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
+                  <h3 className="font-bold text-base text-slate-900 mb-4 flex items-center justify-between">
+                    <span>Trade Provider Tiers Breakdown</span>
+                    <span className="text-xs text-slate-500 font-normal">Active Pricing</span>
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between p-3 bg-slate-50 rounded-lg font-bold text-xs text-slate-600">
+                      <span>Tier Name</span>
+                      <span>Traders</span>
+                      <span>Active MRR</span>
+                    </div>
+                    {tierBreakdown.map(tier => (
+                      <div key={tier.name} className="flex justify-between p-3 border-b border-black text-xs items-center">
+                        <div>
+                          <span className="font-bold text-slate-900">{tier.name}</span>
+                          <span className="text-slate-400 ml-2">£{tier.price}/mo</span>
+                        </div>
+                        <span className="font-bold text-slate-700">{tier.count}</span>
+                        <span className="font-black text-emerald-600">£{tier.revenue.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-black shadow-sm">
+                  <h3 className="font-bold text-base text-slate-900 mb-4 flex items-center justify-between">
+                    <span>Paid Add-Ons Live Performance</span>
+                    <span className="text-xs text-slate-500 font-normal">Active Subscriptions</span>
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between p-3 bg-slate-50 rounded-lg font-bold text-xs text-slate-600">
+                      <span>Feature Add-On</span>
+                      <span>Subscribers</span>
+                      <span>Monthly Revenue</span>
+                    </div>
+                    <div className="flex justify-between p-3 border-b border-black text-xs items-center">
+                      <div>
+                        <span className="font-bold text-slate-900">⚡ Exclusive Leads Buffer</span>
+                        <span className="text-slate-400 ml-2">£{exclusiveLeadsPrice}/mo</span>
+                      </div>
+                      <span className="font-bold text-slate-700">{exclusiveAddonUsers.length}</span>
+                      <span className="font-black text-emerald-600">£{exclusiveMrr.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between p-3 border-b border-black text-xs items-center">
+                      <div>
+                        <span className="font-bold text-slate-900">📹 Verified Video Pro</span>
+                        <span className="text-slate-400 ml-2">£{videoProMonthlyPrice}/mo</span>
+                      </div>
+                      <span className="font-bold text-slate-700">{videoProUsers.length}</span>
+                      <span className="font-black text-emerald-600">£{videoProMrr.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between p-3 bg-slate-50 rounded-xl text-xs items-center font-bold">
+                      <span className="text-slate-700">Combined Add-Ons Total</span>
+                      <span>{exclusiveAddonUsers.length + videoProUsers.length}</span>
+                      <span className="text-emerald-700 font-black">£{(exclusiveMrr + videoProMrr).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SUBSCRIBERS TABLE */}
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Subscriptions & Revenue</h3>
-                  <p className="text-sm text-slate-500">Manage tradesperson subscriptions and track MRR.</p>
+                  <h3 className="text-lg font-bold text-slate-900">Subscriptions & Members</h3>
+                  <p className="text-sm text-slate-500">Manage tradesperson subscriptions and track active tiers and add-ons.</p>
                 </div>
                 <button 
                   onClick={exportSubscriptionsCSV}
-                  className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors flex items-center gap-2"
+                  className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-100 transition-colors flex items-center gap-2 border border-blue-200"
                 >
                   <FileText className="w-4 h-4" />
                   Export CSV
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-3xl border border-black shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
-                      <DollarSign className="w-5 h-5" />
-                    </div>
-                    <p className="text-sm font-bold text-slate-500 uppercase">Total MRR</p>
-                  </div>
-                  <p className="text-3xl font-black text-slate-900">£{mrr.toLocaleString()}</p>
-                  <p className="text-xs text-slate-400 mt-2">Monthly Recurring Revenue</p>
-                </div>
-
-                <div className="bg-white p-6 rounded-3xl border border-black shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <p className="text-sm font-bold text-slate-500 uppercase">Active Subscribers</p>
-                  </div>
-                  <p className="text-3xl font-black text-slate-900">{activeSubscribers.length}</p>
-                  <p className="text-xs text-slate-400 mt-2">Paying tradespeople</p>
-                </div>
-
-                <div className="bg-white p-6 rounded-3xl border border-black shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
-                      <Users className="w-5 h-5" />
-                    </div>
-                    <p className="text-sm font-bold text-slate-500 uppercase">Trialing Users</p>
-                  </div>
-                  <p className="text-3xl font-black text-slate-900">{trialingUsers.length}</p>
-                  <p className="text-xs text-slate-400 mt-2">On Free Trial tier</p>
-                </div>
-              </div>
-
               <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-black flex items-center justify-between">
-                  <h4 className="font-bold text-slate-900">Subscribers List</h4>
+                  <h4 className="font-bold text-slate-900">Subscribers & Add-On Roster</h4>
                   {filteredTradespeople.length > 5 && (
                     <button 
                       onClick={() => setIsSubscribersExpanded(!isSubscribersExpanded)}
@@ -3893,58 +4620,85 @@ export default function AnyTraderAdmin() {
                     <thead>
                       <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider">
                         <th className="p-4 font-bold">Tradesperson</th>
-                        <th className="p-4 font-bold">Tier</th>
+                        <th className="p-4 font-bold">Core Tier</th>
+                        <th className="p-4 font-bold">Active Add-Ons</th>
                         <th className="p-4 font-bold">Status</th>
                         <th className="p-4 font-bold">Next Billing</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {(isSubscribersExpanded ? filteredTradespeople : filteredTradespeople.slice(0, 5)).map(user => (
-                        <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden">
-                                {user.photoURL ? (
-                                  <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                    {user.name?.charAt(0) || "U"}
-                                  </div>
+                      {(isSubscribersExpanded ? filteredTradespeople : filteredTradespeople.slice(0, 5)).map(user => {
+                        const canonical = normalizeTraderTier(user.tierId || user.tier);
+                        return (
+                          <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden">
+                                  {user.photoURL ? (
+                                    <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                      {user.name?.charAt(0) || "U"}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-sm text-slate-900">{user.name}</p>
+                                  <p className="text-[10px] text-slate-500">{user.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span className={cn(
+                                "px-2.5 py-1 rounded-lg text-xs font-bold border",
+                                canonical === "platinum" ? "bg-purple-50 text-purple-700 border-purple-300" :
+                                canonical === "premium" ? "bg-amber-50 text-amber-700 border-amber-300" :
+                                canonical === "pro" ? "bg-blue-50 text-blue-700 border-blue-300" :
+                                "bg-slate-100 text-slate-700 border-slate-300"
+                              )}>
+                                {user.tierId || user.tier || "Free Explorer"}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex flex-wrap gap-1.5">
+                                {(user.hasExclusiveAddon || user.isExclusiveActive) && (
+                                  <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-300 rounded text-[10px] font-bold flex items-center gap-1">
+                                    ⚡ Exclusive Leads
+                                  </span>
+                                )}
+                                {user.hasVerifiedVideoProSubscription && (
+                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-300 rounded text-[10px] font-bold flex items-center gap-1">
+                                    📹 Video Pro
+                                  </span>
+                                )}
+                                {!user.hasExclusiveAddon && !user.isExclusiveActive && !user.hasVerifiedVideoProSubscription && (
+                                  <span className="text-slate-400 text-xs">—</span>
                                 )}
                               </div>
-                              <div>
-                                <p className="font-bold text-sm text-slate-900">{user.name}</p>
-                                <p className="text-[10px] text-slate-500">{user.email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold">
-                              {user.tierId || "Free Trial"}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            {user.subscriptionStatus === "active" ? (
-                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold flex items-center gap-1 w-max">
-                                <CheckCircle2 className="w-3 h-3" /> Active
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold w-max">
-                                {user.subscriptionStatus || "Trialing"}
-                              </span>
-                            )}
-                            {user.cancelAtPeriodEnd && (
-                              <p className="text-[10px] text-red-500 mt-1 font-bold">Cancels at period end</p>
-                            )}
-                          </td>
-                          <td className="p-4 text-xs text-slate-600 font-medium">
-                            {user.currentPeriodEnd ? new Date(user.currentPeriodEnd).toLocaleDateString() : "-"}
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="p-4">
+                              {user.subscriptionStatus === "active" ? (
+                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold flex items-center gap-1 w-max">
+                                  <CheckCircle2 className="w-3 h-3" /> Active
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold w-max">
+                                  {user.subscriptionStatus || "Active"}
+                                </span>
+                              )}
+                              {user.cancelAtPeriodEnd && (
+                                <p className="text-[10px] text-red-500 mt-1 font-bold">Cancels at period end</p>
+                              )}
+                            </td>
+                            <td className="p-4 text-xs text-slate-600 font-medium">
+                              {user.currentPeriodEnd ? new Date(user.currentPeriodEnd).toLocaleDateString() : "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filteredTradespeople.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="p-8 text-center text-slate-500">
+                          <td colSpan={5} className="p-8 text-center text-slate-500">
                             No tradespeople found matching your filters.
                           </td>
                         </tr>

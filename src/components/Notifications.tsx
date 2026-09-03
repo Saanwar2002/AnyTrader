@@ -2,15 +2,17 @@ import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, deleteDoc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, MessageSquare, FileText, Info, Check, Loader2, Clock, X, Calendar, ArrowRight, Sparkles, ExternalLink, ShieldCheck, CreditCard, Building, Wrench } from "lucide-react";
+import { Bell, MessageSquare, FileText, Info, Check, Loader2, Clock, X, Calendar, ArrowRight, Sparkles, ExternalLink, ShieldCheck, CreditCard, Building, Wrench, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
+import TraderNotificationPreferencesModal from "./TraderNotificationPreferencesModal";
 
 export default function Notifications() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -218,8 +220,19 @@ export default function Notifications() {
     <div className="max-w-2xl mx-auto space-y-6 pb-12">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-black text-black">Notifications</h1>
-        <div className="flex items-center gap-4 text-sm font-extrabold text-black">
+        <div className="flex items-center gap-3 text-sm font-extrabold text-black">
           <span className="bg-slate-100 border border-black px-3 py-1 rounded-full">{notifications.filter(n => !n.read).length} Unread</span>
+          
+          {(profile?.role === "tradesperson" || profile?.role === "business") && (
+            <button
+              onClick={() => setShowPreferencesModal(true)}
+              className="w-10 h-10 rounded-full bg-slate-100 border border-black hover:bg-slate-200 flex items-center justify-center text-black hover:text-blue-600 transition-all active:scale-95 shadow-xs"
+              title="Job Match Notification Timing & Settings"
+            >
+              <Settings className="w-5 h-5 stroke-[2.5]" />
+            </button>
+          )}
+
           <button 
             onClick={() => navigate(-1)} 
             className="w-10 h-10 rounded-full bg-slate-100 border border-black hover:bg-slate-200 flex items-center justify-center text-black hover:text-blue-600 transition-colors"
@@ -330,6 +343,13 @@ export default function Notifications() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Trader Notification Timing & Radius Preferences Modal */}
+      <TraderNotificationPreferencesModal
+        isOpen={showPreferencesModal}
+        onClose={() => setShowPreferencesModal(false)}
+        traderProfile={profile}
+      />
     </div>
   );
 }

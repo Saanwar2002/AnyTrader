@@ -882,10 +882,21 @@ async function startServer() {
         else if (session.mode === 'subscription') {
           const subscriptionId = session.subscription as string;
           if (userId && db) {
+            const rawTier = session.metadata?.tierName || "Pro";
+            const lowerTier = rawTier.toLowerCase();
+            let canonicalTier = 'pro';
+            if (lowerTier.includes('platinum') || lowerTier.includes('enterprise powerhouse')) canonicalTier = 'platinum';
+            else if (lowerTier.includes('gold') || lowerTier.includes('elite') || lowerTier.includes('premium') || lowerTier.includes('business professional')) canonicalTier = 'premium';
+            else if (lowerTier.includes('silver') || lowerTier.includes('pro') || lowerTier.includes('professional')) canonicalTier = 'pro';
+            else canonicalTier = 'payg';
+
             await db.collection("users").doc(userId).update({
               subscriptionStatus: "active",
               subscriptionId: subscriptionId,
-              tierId: session.metadata?.tierName || "Pro",
+              tierId: rawTier,
+              tier: canonicalTier,
+              isPro: canonicalTier !== 'payg',
+              isProInvoiceSubscriber: canonicalTier !== 'payg',
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
           }
@@ -1130,16 +1141,58 @@ async function startServer() {
              }, { merge: true });
            }
            else if (mode === 'subscription') {
+             const rawTier = tierName || "Pro";
+             const lowerTier = rawTier.toLowerCase();
+             let canonicalTier = 'pro';
+             if (lowerTier.includes('platinum') || lowerTier.includes('enterprise powerhouse')) canonicalTier = 'platinum';
+             else if (lowerTier.includes('gold') || lowerTier.includes('elite') || lowerTier.includes('premium') || lowerTier.includes('business professional')) canonicalTier = 'premium';
+             else if (lowerTier.includes('silver') || lowerTier.includes('pro') || lowerTier.includes('professional')) canonicalTier = 'pro';
+             else canonicalTier = 'payg';
+
              await db.collection("users").doc(userId).set({
-                tierId: tierName || "Pro",
+                tierId: rawTier,
+                tier: canonicalTier,
+                isPro: canonicalTier !== 'payg',
+                isProInvoiceSubscriber: canonicalTier !== 'payg',
                 subscriptionStatus: "active",
                 subscriptionId: "mock_sub_" + Math.random().toString(36).substring(7),
                 currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
              }, { merge: true });
            } else if (mode === 'payment') {
-             // For one-off payments like job boosts
-             if (metadata.jobId && metadata.type === 'boost') {
+             if (metadata.type === 'milestone_funding' && metadata.jobId && metadata.quoteId && metadata.milestoneId) {
+               const { jobId, quoteId, milestoneId } = metadata;
+               const quoteRef = db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
+               const quoteDoc = await quoteRef.get();
+               if (quoteDoc.exists) {
+                 const quoteData = quoteDoc.data();
+                 const milestones = quoteData?.milestones || [];
+                 const updatedMilestones = milestones.map((m: any) => {
+                   if (m.id === milestoneId) {
+                     return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: "mock_pi_" + Math.random().toString(36).substring(7) };
+                   }
+                   return m;
+                 });
+                 await quoteRef.update({ milestones: updatedMilestones });
+                 await db.collection("notifications").add({
+                   userId: quoteData?.tradespersonId,
+                   title: "Milestone Funded! 💰",
+                   message: `Homeowner funded "${milestones.find((m: any) => m.id === milestoneId)?.title}". You can now start work!`,
+                   type: "status",
+                   link: `/job/${jobId}`,
+                   read: false,
+                   createdAt: admin.firestore.FieldValue.serverTimestamp()
+                 });
+               }
+             } else if (metadata.type === 'mediation_stake' && metadata.jobId) {
+               await db.collection("jobs").doc(metadata.jobId).update({
+                 status: "disputed",
+                 mediationStakePaid: true,
+                 disputeReason: metadata.disputeReason || "Unspecified",
+                 technicalFaultReport: metadata.technicalFaultReport || "Unspecified",
+                 disputedAt: admin.firestore.FieldValue.serverTimestamp()
+               });
+             } else if (metadata.jobId && metadata.type === 'boost') {
                 const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
                 const isIM = metadata.tier === 'instant_match';
                 await db.collection("jobs").doc(metadata.jobId).set({

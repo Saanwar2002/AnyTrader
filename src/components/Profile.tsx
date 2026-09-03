@@ -26,7 +26,9 @@ import { RatesFaqsCard, FAQ_PRESETS } from "./profile/RatesFaqsCard";
 import { GrowthNotificationsCard } from "./profile/GrowthNotificationsCard";
 import { HomeownerIdentityCard } from "./profile/HomeownerIdentityCard";
 import { SafetyEmergencyCard } from "./profile/SafetyEmergencyCard";
+import TraderNotificationPreferencesModal from "./TraderNotificationPreferencesModal";
 import { cn } from "@/src/lib/utils";
+import { normalizeTraderTier } from "@/src/services/stripeIntegrationService";
 import { 
   DndContext, 
   closestCenter,
@@ -556,6 +558,7 @@ export default function Profile() {
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
   const [isVerificationExpanded, setIsVerificationExpanded] = useState(false);
   const [isNotificationsExpanded, setIsNotificationsExpanded] = useState(false);
+  const [showMatchTimingModal, setShowMatchTimingModal] = useState(false);
   const [isBannerAdsEnabled, setIsBannerAdsEnabled] = useState(true);
   const [isEditingServices, setIsEditingServices] = useState(false);
   const [tempServices, setTempServices] = useState<string[]>([]);
@@ -1692,9 +1695,23 @@ export default function Profile() {
           body: JSON.stringify({
             userId: user.uid,
             tierName: showCheckoutForTier.name,
-            priceId: "price_mock_" + showCheckoutForTier.name.toLowerCase().replace(/\s/g, "_"), // Replace with actual price ID in future
+            mode: "subscription",
+            price_data: {
+              currency: 'gbp',
+              unit_amount: Math.round(showCheckoutForTier.price * 100),
+              recurring: { interval: 'month' },
+              product_data: {
+                name: `${showCheckoutForTier.name} Membership`,
+                description: `Monthly subscription to ${showCheckoutForTier.name}`
+              }
+            },
+            priceId: "price_mock_" + showCheckoutForTier.name.toLowerCase().replace(/\s/g, "_"),
             successUrl: `${window.location.origin}/profile?session_id={CHECKOUT_SESSION_ID}`,
-            cancelUrl: `${window.location.origin}/profile`
+            cancelUrl: `${window.location.origin}/profile`,
+            metadata: {
+              tierName: showCheckoutForTier.name,
+              userId: user.uid
+            }
           }),
         });
 
@@ -1710,24 +1727,31 @@ export default function Profile() {
         const nextBillingDate = new Date();
         nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
 
-        const tierField = profile.role === "homeowner" ? "homeownerTierId" : "tierId";
-        const statusField = profile.role === "homeowner" ? "homeownerSubscriptionStatus" : "subscriptionStatus";
-        const periodEndField = profile.role === "homeowner" ? "homeownerCurrentPeriodEnd" : "currentPeriodEnd";
-        const cancelField = profile.role === "homeowner" ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
+        const isHomeowner = profile.role === "homeowner";
+        const tierField = isHomeowner ? "homeownerTierId" : "tierId";
+        const statusField = isHomeowner ? "homeownerSubscriptionStatus" : "subscriptionStatus";
+        const periodEndField = isHomeowner ? "homeownerCurrentPeriodEnd" : "currentPeriodEnd";
+        const cancelField = isHomeowner ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
 
-        await updateDoc(doc(db, "users", user.uid), { 
+        const updatePayload: any = { 
           [tierField]: showCheckoutForTier.name,
           [statusField]: 'trialing',
           [periodEndField]: nextBillingDate.toISOString(),
           [cancelField]: false
-        });
+        };
+
+        if (!isHomeowner) {
+          const canonical = normalizeTraderTier(showCheckoutForTier.name);
+          updatePayload.tier = canonical;
+          updatePayload.isPro = canonical !== 'payg';
+          updatePayload.isProInvoiceSubscriber = canonical !== 'payg';
+        }
+
+        await updateDoc(doc(db, "users", user.uid), updatePayload);
         
         setProfile((prev: any) => ({ 
           ...prev, 
-          [tierField]: showCheckoutForTier.name,
-          [statusField]: 'trialing',
-          [periodEndField]: nextBillingDate.toISOString(),
-          [cancelField]: false
+          ...updatePayload
         }));
         
         setShowCheckoutForTier(null);
@@ -2403,6 +2427,8 @@ export default function Profile() {
         <GrowthNotificationsCard
           isBusinessProfile={isBusinessProfile}
           isBannerAdsEnabled={isBannerAdsEnabled}
+          traderProfile={profile}
+          onOpenTimingModal={() => setShowMatchTimingModal(true)}
           notificationSettings={notificationSettings}
           setNotificationSettings={setNotificationSettings}
           handleSaveNotifications={handleSaveNotifications}
@@ -3772,6 +3798,19 @@ export default function Profile() {
       <TermsModal 
         isOpen={showProfileTermsModal} 
         onClose={() => setShowProfileTermsModal(false)} 
+      />
+
+      {/* Trader Notification Timing & Radius Preferences Modal */}
+      <TraderNotificationPreferencesModal
+        isOpen={showMatchTimingModal}
+        onClose={() => setShowMatchTimingModal(false)}
+        traderProfile={profile}
+        onSaved={(updated) => {
+          setProfile((prev: any) => ({
+            ...prev,
+            matchNotificationSettings: updated,
+          }));
+        }}
       />
     </div>
   );

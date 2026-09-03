@@ -490,7 +490,7 @@ export default function PartnerAdvertisement({
   const displayPerk = currentAd.perkText || (linkedTrader?.isAvailableForEmergency ? "⚡ 24/7 Response Guaranteed" : linkedTrader?.trades?.[0] ? `${linkedTrader.trades[0]} Specialist` : undefined);
 
   const mainTradeCategory = 
-    linkedTrader?.trade || 
+    (linkedTrader as any)?.trade || 
     linkedTrader?.trades?.[0] || 
     (linkedTrader as any)?.tradeCategory ||
     (currentAd.targetCategories?.find((c: string) => c && c.toLowerCase() !== "all") || (currentAd.targetCategories?.[0] !== "all" ? currentAd.targetCategories?.[0] : undefined)) ||
@@ -727,7 +727,7 @@ export default function PartnerAdvertisement({
                     <>
                       {/* 1. Personal Name (or Business name if business-only) */}
                       <h4 className="text-xs sm:text-sm font-black text-white leading-tight truncate">
-                        {linkedTrader?.displayNamePreference === "business_only" 
+                        {(linkedTrader as any)?.displayNamePreference === "business_only" 
                           ? (linkedTrader?.businessName || currentAd.title || "Verified Business")
                           : (linkedTrader?.name || currentAd.advertiserName || displayTitle)}
                       </h4>
@@ -735,7 +735,7 @@ export default function PartnerAdvertisement({
                       {/* 2. Business Name */}
                       {(() => {
                         const bName = linkedTrader?.businessName || (currentAd.title !== linkedTrader?.name ? currentAd.title : "");
-                        if (bName && linkedTrader?.displayNamePreference !== "business_only") {
+                        if (bName && (linkedTrader as any)?.displayNamePreference !== "business_only") {
                           return (
                             <p className="text-[10px] sm:text-[11px] font-bold text-slate-300 truncate mt-0.5">
                               {bName}

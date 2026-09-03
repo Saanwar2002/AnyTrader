@@ -13,7 +13,7 @@ export function FloatingTradeBotWidget() {
 
   const [isDragging, setIsDragging] = useState(false);
 
-  // Check if user is on Taxi / Rides side
+  // Check if user is on Taxi / Rides side or Post Job wizard
   const isTaxiSide =
     activePortal === "anyroller" ||
     activeRole === "driver" ||
@@ -23,14 +23,18 @@ export function FloatingTradeBotWidget() {
     location.pathname.startsWith("/saved-journeys") ||
     location.pathname.startsWith("/platform-fee-success");
 
+  const isPostJobWizard =
+    location.pathname.startsWith("/post-job") ||
+    location.pathname.startsWith("/post-emergency-job");
+
   const handleOpenBot = () => {
     if (isDragging) return;
     triggerHaptic();
     setIsTradeBotOpen(true);
   };
 
-  // Strictly hide on Taxi side or when TradeBot dialog is open
-  if (isTaxiSide || isTradeBotOpen) return null;
+  // Strictly hide on Taxi side, Post Job wizard, or when TradeBot dialog is open
+  if (isTaxiSide || isPostJobWizard || isTradeBotOpen) return null;
 
   return (
     <div className="fixed bottom-[calc(4.8rem+env(safe-area-inset-bottom,0px))] right-2 sm:bottom-6 sm:right-4 z-[95] pointer-events-none select-none">

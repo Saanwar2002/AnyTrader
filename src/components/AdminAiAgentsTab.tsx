@@ -4,7 +4,7 @@ import {
   Bot, ShieldAlert, Zap, Megaphone, Cpu, Power, Settings2, 
   RefreshCw, CheckCircle2, AlertTriangle, Play, Sparkles, Send, 
   Copy, ExternalLink, HelpCircle, Eye, ShieldCheck, DollarSign, Clock, Filter, ArrowRight, Share2, Layers, UserPlus,
-  ShoppingBag, Users, CloudLightning, FileText, AlertOctagon, ArrowUpRight
+  ShoppingBag, Users, CloudLightning, FileText, AlertOctagon, ArrowUpRight, Search
 } from "lucide-react";
 import TraderOutreachAgent from "./TraderOutreachAgent";
 import AdminMaterialsArbitrageTab from "./AdminMaterialsArbitrageTab";
@@ -12,6 +12,7 @@ import AdminTraderChurnTab from "./AdminTraderChurnTab";
 import AdminDemandSurgeTab from "./AdminDemandSurgeTab";
 import AdminAiAuditLogsTab from "./AdminAiAuditLogsTab";
 import AdminFlashDealsAndAiAnalyticsTab from "./AdminFlashDealsAndAiAnalyticsTab";
+import AdminSearchDemandTab from "./AdminSearchDemandTab";
 import { 
   getAiAgentSettings, 
   updateAiAgentSettings, 
@@ -46,7 +47,7 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<
-    "toggles" | "outreach" | "materials_arbitrage" | "trader_churn" | "demand_surge" | 
+    "toggles" | "outreach" | "materials_arbitrage" | "trader_churn" | "demand_surge" | "search_demand" |
     "finances" | "disputes" | "compliance" | "concierge" | "threats" | "campaigns" | "diagnostics" | "audit_logs" | "sentinel_analytics"
   >("outreach");
   
@@ -437,6 +438,20 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
         </button>
 
         <button
+          onClick={() => setActiveSubTab("search_demand")}
+          className={cn(
+            "px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 border border-black shrink-0 relative",
+            activeSubTab === "search_demand" ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-100"
+          )}
+        >
+          <Search className="w-4 h-4 text-amber-400" />
+          Search Demand & Synonyms
+          <span className="bg-amber-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black">
+            Live
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab("disputes")}
           className={cn(
             "px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 border border-black relative shrink-0",
@@ -570,6 +585,11 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
       {/* Dynamic Weather & Demand Surge SubTab */}
       {activeSubTab === "demand_surge" && (
         <AdminDemandSurgeTab onShowNotice={showNotice} />
+      )}
+
+      {/* Search Demand Telemetry & Dynamic Synonyms SubTab */}
+      {activeSubTab === "search_demand" && (
+        <AdminSearchDemandTab />
       )}
 
       {/* Governance & Audit Logs SubTab */}

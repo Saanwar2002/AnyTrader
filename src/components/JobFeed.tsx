@@ -1899,14 +1899,15 @@ export default function JobFeed() {
                   </span>
                 </div>
               ) : isDirectRequest ? (
-                <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-indigo-950 shadow-xs">
+                <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-indigo-950 shadow-xs gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="shrink-0 text-sm">🎯</span>
                     <span className="truncate">Direct 1-on-1 Quote Request</span>
                   </div>
-                  <span className="bg-white/20 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-white/20 shrink-0">
-                    {job.targetTradespersonName ? `Sent To: ${job.targetTradespersonName}` : "Targeted Request"}
-                  </span>
+                  <div className="bg-amber-400 text-slate-950 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs flex items-center gap-1 shrink-0 border border-amber-300">
+                    <span className="text-slate-800 font-bold opacity-90 hidden xs:inline">Sent to:</span>
+                    <span className="text-amber-950 font-black tracking-tight underline decoration-amber-600 decoration-1 underline-offset-2">{job.targetTradespersonName || "Individual Trader"}</span>
+                  </div>
                 </div>
               ) : isInstantMatch ? (
                 <div className="bg-[#E6A020] text-slate-950 font-black text-xs uppercase py-2 px-4 sm:px-5 flex items-center justify-between border-b border-[#D4921E] shadow-xs">

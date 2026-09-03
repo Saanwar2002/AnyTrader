@@ -75,7 +75,8 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
   }, [isOpen, job?.id, user?.uid]);
 
   const numAmount = parseFloat(quoteAmount) || 0;
-  const payout = calculatePayoutBreakdown(numAmount);
+  const traderTier = profile?.tierId || profile?.tier || "payg";
+  const payout = calculatePayoutBreakdown(numAmount, traderTier);
 
   const handleGenerateAiDraft = async () => {
     setIsGeneratingAiDraft(true);
@@ -85,7 +86,7 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
         job.title || "Trade Job",
         job.description || "",
         traderName,
-        numAmount || avgEstimate,
+        String(numAmount || avgEstimate),
         quoteScope
       );
       if (draft) {

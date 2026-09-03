@@ -1,5 +1,318 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🤖 AI Bot Trader Recommendation Precision & Category Synonym Matching (Completed September 3, 2026)
+*   **Context & Directives**:
+    - "Can we fix this? We keep getting the same problem again and again. The AI bot is also showing the irrelevant traders to the user question or user inquiry. So the inquiry is about the cake and bake category, and the AI bot is suggesting the profiles of traders in different categories. Can you deep look into the logic and the codebase why the AI bot is not matching the traders profiles to the exact inquiry or the question of the user or the main category it is suggesting in the description?"
+*   **Root Causes Identified**:
+    1.  **Missing Category Synonyms in Fuzzy Match Engine (`src/lib/fuzzyMatch.ts`)**:
+        - While `TRADE_CATEGORIES` defined Category ID 84 as `"Bake N Cake"`, `BASE_CATEGORY_SYNONYMS` had no mappings for `"cake"`, `"baker"`, `"baking"`, `"wedding cake"`, `"cupcakes"`, `"pastry"`, or `"catering"`.
+        - When users asked questions about cakes (e.g. *"What is the average cost of a 3-tier wedding cake in the UK, and what are food allergen laws?"*), the category matcher failed to resolve the category with high confidence.
+    2.  **Overly Broad Substring Matching in `getHybridTraderRecommendations` (`src/services/aiRecommendationService.ts`)**:
+        - The `relevant` filter previously performed broad substring inclusion across trader bios, company names, and services (`bio.includes(catLower)`).
+        - If an unrelated trader (e.g. a builder or removal driver) had the letters or words in their bio, they were flagged as relevant.
+    3.  **Indiscriminate Fallback to Entire Pool (`candidatePool = relevant.length > 0 ? relevant : pool`)**:
+        - When `relevant` was empty or miscalculated, the recommendation engine fell back to the entire database pool `pool`. As a result, random builders, plumbers, and removal specialists were displayed as "recommendations" for baking and pastry questions.
+*   **Solutions & Architecture Implemented**:
+    1.  **Bake N Cake, Pastry & Catering Synonyms (`src/lib/fuzzyMatch.ts`)**:
+        - Added rich synonym mappings for `"cake"`, `"baker"`, `"baking"`, `"bake n cake"`, `"cake maker"`, `"cake maker & baker"`, `"wedding cake"`, `"wedding cakes"`, `"birthday cake"`, `"birthday cakes"`, `"cupcake"`, `"cupcakes"`, `"pastry chef"`, `"bespoke bakes"`, `"catering"`, and `"caterer"` mapping directly to `"Bake N Cake"` and associated trade titles.
+        - Enriched `COMMON_TRADE_VOCABULARY` with verified trade classifications and subcategories.
+    2.  **Domain-Specific Heuristic Boosts (`findMatchingTradeCategories`)**:
+        - Added specialized scoring for baking, cakes, wedding cakes, fondant, pastry, patisserie, afternoon tea, catering, FSA hygiene, and Natasha's Law / food allergens (+25 score boost for `"Bake N Cake"` & `"Catering & Private Chef"`).
+    3.  **Multi-Token & Strict Alias Filtering (`getHybridTraderRecommendations`)**:
+        - Added `getCategoryAliases(category)` to expand target categories into their canonical trade variations.
+        - Extracted query keyword tokens (filtering noise/stop words) and verified token overlap against trader metadata.
+        - **Strict Zero-Pollution Guard**: Removed the indiscriminate fallback to `pool`. If no verified traders in that specific domain match the inquiry, the function returns an empty list (`[]`), cleanly prompting the Demand Gap / Unmatched Search notice rather than presenting unrelated tradespeople.
+    4.  **Seeded Trader Profile Enrichment (`src/services/seedService.ts`)**:
+        - Enriched verified mock baker profile (Chloe Dupont - Artisan Sweet & Savoury Creations) with comprehensive trades (`["Bake N Cake", "Cake Maker & Baker", "Catering & Private Chef", "Bespoke Bakes", "Wedding Cakes", "Celebration Cakes"]`), tags, and recommended categories.
+        - Updated card generation in `getHybridTraderRecommendations` to dynamically display the trader's actual primary trade and business name.
+
+## 🎨 Direct Trader Quote Refinement: Paid Add-on Suppression & Distinct Trader Name Highlighting (Completed September 3, 2026)
+*   **Context & Directives**:
+    - "When requesting quote from individual trader, do we need to show these paid add on as quote request is only visible to that trader. Also on post job card, can we show trader name in different color"
+*   **Enhancements Implemented**:
+    1.  **Suppression of Broadcast Add-Ons for 1-on-1 Requests (`PostJobWizard.tsx` & `EmergencyJobWizard.tsx`)**:
+        - Because direct quote requests and Flash Deal claims are exclusively routed to a single specified tradesperson (`targetTradespersonId` or `claimedDeal`), broadcasting upsells (such as *Emergency Boost £5* and *Instant Match £5.99*) are now automatically hidden during direct quote creation.
+    2.  **Standout Trader Name Visual Presentation on Posted Job Cards (`MyJobs.tsx`, `Dashboard.tsx`, `JobFeed.tsx`, `JobDetails.tsx`)**:
+        - **Top Direct Quote Bar**: Replaced the white-on-dark pill with a high-contrast amber/gold badge (`bg-amber-400 text-slate-950 border border-amber-300`) with the trader name rendered in bold high-contrast `text-amber-950` with an accent underline.
+        - **Inner Direct Request Callout**: Upgraded the "Exclusively To" section to display the trader's name inside a distinct, colorful tag (`bg-blue-100/90 text-blue-700 border border-blue-200/90 font-black px-2 py-0.5 rounded-md shadow-2xs`) so the recipient specialist immediately pops out visually.
+
+## 🎯 Direct Trader Quote Category Resolution & Precision Trade Matching (Completed September 3, 2026)
+*   **Context & Directives**:
+    - "Also check when requesting quote from individual trader, why irrelevant categories are shown. Check the logic and find out why it is happening."
+*   **Root Cause Identified**:
+    1.  **Overly Broad Subcategory Scanning**:
+        - In `PostJobWizard.tsx` (and `EmergencyJobWizard.tsx`), the previous `traderRelatedCategories` filtering compared every token of the trader's trades against *every subcategory* across all 86+ platform categories using `tokenize()` and partial substring matching.
+        - For example, if a trader registered as a **"Painter & Decorator"** / **"Plasterer"** (e.g. Elena Rostova), the token `"paint"` matched subcategories in completely unrelated categories:
+          - *Car Detailing & Valeting* (matched subcategory *"Paint Correction / Machine Polishing"* & *"Paint Protection Film"*)
+          - *Hazardous Material Removal* (matched subcategory *"Lead Paint Removal"*)
+          - *Scaffolding* (matched subcategory *"Painting & Decorating Access Scaffolding"*)
+    2.  **Truncated Trade Arrays from Profile**:
+        - In `PublicProfile.tsx`, `targetTrades: profile?.primaryCategory || profile?.trade || profile?.trades` used logical OR (`||`), passing only the first single trade string instead of the trader's complete repertoire of trades and categories.
+*   **Solution & Architecture**:
+    1.  **High-Precision Trade Category Resolver (`getMatchingCategoriesForTrader` in `src/lib/fuzzyMatch.ts`)**:
+        - Performs a **Pass 1 High-Precision Match** strictly against:
+          - Direct Category Name (`cat.name.toLowerCase() === trade`)
+          - Category ID (`cat.id === trade`)
+          - Canonical Trade Synonyms (e.g. `"painter"`, `"decorator"` $\rightarrow$ `"Painting & Decorating"`; `"plasterer"` $\rightarrow$ `"Plastering & Rendering"`; `"joiner"` $\rightarrow$ `"Carpentry & Joinery"`)
+          - Strict Category Name Token Overlap (matching words in `cat.name` rather than scanning unrelated subcategories).
+        - **Pass 2 Fallback**: Only checks deeper subcategories if zero category-level matches or synonyms exist for an esoteric trade.
+    2.  **Comprehensive Profile Trade Transmission (`PublicProfile.tsx`)**:
+        - Updated navigation links and preset selectors to compile all trader categories into an array: `targetTrades: Array.from(new Set([profile.primaryCategory, profile.trade, ...profile.trades, ...profile.categories, categoryName].filter(Boolean)))`.
+    3.  **Refined Wizard Experience (`PostJobWizard.tsx` & `EmergencyJobWizard.tsx`)**:
+        - If a trader specializes in 1 category (e.g. "Pet Services"), the wizard automatically selects that category and skips immediately to specific service options (Step 2).
+        - If a trader specializes in multiple categories (e.g. "Painting & Decorating" + "Plastering"), Step 1 displays *only* those relevant categories with zero false-positive clutter.
+
+## 🔥 Homeowner Dashboard Hot Searches Expansion & Category-Specific Presets (Completed September 3, 2026)
+*   **Context & Directives**:
+    - "We need to investigate why it's showing a maximum of three hot searches on this section of the homeowner dashboard. I think we need to show a little bit more. So, just make changes just for this section to show at least six or seven hot searches which are related to the traders' category, their skill set, or their services."
+*   **Implementation & Enhancements**:
+    1.  **Expanded Hot Searches Display (`FindTrades.tsx`)**:
+        - Increased hot searches generation limit from 3 to 7 items in `FindTrades.tsx`.
+        - When a category is selected (e.g. *Bake N Cake*, *Plumbing*, *Gas Engineering*, *Electrical*, *Roofing*, *Carpentry*, *Gardening*, *Painting*, *General Labour*, *Handyman*, etc.), it returns 6–7 curated, high-demand subcategories and skill sets.
+        - When no category is selected ("All"), it displays 7 trending high-intent homeowner search chips (Emergency Plumber, Boiler Service & CP12, EICR Electrical Check, Kitchen Fitting, Interior Painting, Garden Landscaping, End of Tenancy Clean).
+        - Updated the visual badge from restrictive `"3 Max"` to `"🔥 Trending"` with warm amber styling.
+    2.  **Rich Category Presets (`src/utils/tradePresets.ts`)**:
+        - Expanded `CURATED_HOT_SEARCHES` with 7 specialized subcategories and skill presets across key categories: *Bake N Cake*, *Plumbing*, *Gas Engineering*, *Electrical*, *Home Cleaning*, *Painting & Decorating*, *General Labour*, *Roofing*, *Carpentry & Joinery*, *Gardening & Landscaping*, and *Handyman & Property Maintenance*.
+        - Added category alias detection for roofing, carpentry, joinery, gardening, landscaping, fencing, turfing, and handyman maintenance.
+        - Maintained single trader quote modal preset capping (3 items) on `PublicProfile.tsx` while allowing the main Homeowner Dashboard to request 7 items.
+
+## 💳 Platform Subscription Tiers, Escrow Stage Payments & Paid Features Logic System Audit (Completed September 3, 2026)
+*   **Context & Directives**:
+    *   *User Directives*:
+        - "First study platform tiers pricing model and check all logics if all work correctly. Check codebase if logics work correctly to activate tier based paid features once paid for and suggest if we to improve anything before start implementing escrow stage payments feature"
+        - "For milestone escrow , how we do this as platform use stripe connect for all transactions. We do not want the funds to be transferred to platform account as this will create taxing issues for platform. We only want our commission and fees paid into platform account."
+        - "First fix these then also check other paid features throughout platform to see if they need fixing."
+        - "Also check if we need to tweak the control settings in admin for these paying tiers, subscription and paid add on features so they all in sync"
+*   **Key Architecture Inconsistencies Identified & Resolved**:
+    1.  **Unified Tier Resolution Engine (`normalizeTraderTier` in `stripeIntegrationService.ts`)**:
+        - **Problem**: Inconsistent schema usage across Firestore and codebase: some records stored `tierId` (e.g. `"Silver Professional"`, `"Gold Elite"`, `"Platinum Enterprise"`), while components checked `tier` with canonical slugs (`"payg"`, `"pro"`, `"premium"`, `"platinum"`). This caused paid subscription features (e.g., lower commission, Pro invoicing, lead access delay bypass, priority badges) to fail to activate.
+        - **Solution**: Created and exported `normalizeTraderTier(input)` as the universal canonical resolver across all frontend and backend services. Maps any tier name, legacy string, or ID to `'payg' | 'pro' | 'premium' | 'platinum'`.
+        - Updated `calculatePayoutBreakdown` to default to `normalizeTraderTier(traderTier)` and apply correct commission rates:
+          - PAYG: 5.0% (min £2.00)
+          - Silver / Pro (£19.99/mo): 3.5%
+          - Gold / Premium (£49.99/mo): 2.5%
+          - Platinum (£99.99/mo): 1.5%
+          - Taxi / AnyRoller: 12% standard platform commission strictly isolated to taxi bookings (`activePortal === 'anyroller'`).
+    2.  **Admin Tier Controls & Bidirectional Document Synchronization (`AdminTierManager.tsx`, `AnyTraderAdmin.tsx`)**:
+        - **Problem**: The system had two disparate admin configuration interfaces writing to two separate documents in `platform_config`: `global` (holding `feeTiers`) and `global_tiers` (holding `one_off_trades.tiers`). If an administrator updated tier fees in one screen, the other screen was out of sync.
+        - **Solution**:
+          - Implemented bidirectional auto-synchronization: When saving in `AdminTierManager.tsx`, changes to `one_off_trades.tiers` automatically synchronize to `platform_config/global.feeTiers`.
+          - When saving in `AnyTraderAdmin.tsx` (`handleSaveSettings`), updates to `feeTiers` automatically synchronize into `platform_config/global_tiers.one_off_trades.tiers`.
+          - Updated `syncWithUnifiedPricing` in `AnyTraderAdmin.tsx` to align with the canonical four-tier model (`Free Explorer` £0 / 5.0%, `Silver Professional` £19.99 / 3.5%, `Gold Elite` £49.99 / 2.5%, and `Platinum Enterprise` £99.99 / 1.5%).
+    3.  **Live Paid Add-Ons Admin Control Matrix (`AnyTraderAdmin.tsx`)**:
+        - Created a dedicated **Paid Add-Ons & Ancillary Feature Pricing Controls** console inside the Admin `monetization` tab for live management of:
+          - **Exclusive Leads Add-On**: Toggle enabled/disabled, monthly price (£29/mo default), and early buffer time (30 mins).
+          - **Verified Video Pro Plan**: Toggle enabled/disabled, monthly (£15/mo default), annual (£144/yr default), and algorithmic match score bonus (+35 pts).
+          - **Emergency Job Boost**: Toggle enabled/disabled, boost fee (£5 default), and duration (4 hours).
+          - **Instant Match Guarantee**: Toggle enabled/disabled, fast-track price (£2.99 default), and target SLA buffer (15 minutes).
+          - **Milestone Escrow & Mediation Deposits**: Toggle enabled/disabled, homeowner mediation deposit stake (£25 default), and trader mediation deposit stake (£25 default).
+          - Non-custodial Stripe Connect direct-transfer architecture guidelines with zero gross holding tax liability for platform account.
+    4.  **Admin Subscriptions Tab & Revenue Intelligence Dashboard (`AnyTraderAdmin.tsx`)**:
+        - Added a dedicated top-level **Subscriptions** tab (`CreditCard` icon) in the Admin Control Center.
+        - Real-time revenue intelligence metrics factoring canonical tier normalization (`normalizeTraderTier`):
+          - **Total Platform MRR**: Combined monthly recurring revenue across core tiers and active paid add-ons.
+          - **Core Tiers MRR**: Monthly recurring revenue breakdown across verified paying trade subscriptions.
+          - **Paid Add-Ons MRR**: Real-time revenue tracking for Exclusive Leads (£29/mo) and Verified Video Pro (£15/mo) subscribers.
+          - **Pro Landlords & Housing**: Tracking portfolio tier subscriptions.
+        - Enhanced table with active add-on badges (`⚡ Exclusive Leads`, `📹 Video Pro`), next billing date, and updated CSV export incorporating add-on statuses.
+    5.  **Milestone Escrow Security & Authorization Fix (`JobDetails.tsx`, `server.ts`)**:
+        - **Problem**: `/api/release-milestone` in `server.ts` is guarded by `requireAuth` middleware expecting an `Authorization: Bearer <token>` header. In `JobDetails.tsx`, `handleReleaseMilestone` previously invoked `fetch("/api/release-milestone")` without any Authorization header, causing all live release calls to fail with a `401 Unauthorized`.
+        - **Solution**: Updated `handleReleaseMilestone` to fetch the current Firebase ID token (`await user.getIdToken()`) and attach `Authorization: Bearer ${token}` with user confirmation and comprehensive error handling.
+    6.  **Milestone Escrow Funding & Dynamic Pricing Fix (`JobDetails.tsx`, `server.ts`)**:
+        - **Problem**: `handleFundMilestone` passed `priceId: "price_mock_milestone"` without dynamic amount or item definitions, which throws Stripe API errors in production when the price ID doesn't exist in the Stripe dashboard.
+        - **Solution**: Updated `handleFundMilestone` to supply dynamic `price_data` (unit amount in pence calculated from milestone amount, currency `'gbp'`, product name & description) alongside metadata (`jobId`, `quoteId`, `milestoneId`, `type: "milestone_funding"`). In `server.ts`, both live Stripe sessions and resilient mock mode update the quote milestone status to `'funded'` and notify the tradesperson.
+    7.  **Paid Feature Checkouts & Dynamic Stripe Price Data (`Profile.tsx`, `BillingManager.tsx`, `TradesDashboard.tsx`, `EmergencyJobWizard.tsx`, `PostJobWizard.tsx`)**:
+        - **Problem**: Paid features (Emergency Job Boost £5, Instant Match £2.99, Exclusive Leads Add-on £29/mo, Tier Subscriptions £19.99/£49.99/£99.99) were sending hardcoded `price_mock_*` strings without inline `price_data`.
+        - **Solution**: Added comprehensive `price_data` payloads with explicit `mode` (`"payment"` or `"subscription"`) and product metadata across all checkout triggers, enabling smooth checkout in both live Stripe configurations and resilient development mode.
+    8.  **Multi-Field Tier Synchronization on Paid Subscription Events**:
+        - Updated Stripe webhook (`checkout.session.completed`) and fallback handlers in `server.ts`, `Profile.tsx`, and `BillingManager.tsx` to atomically persist:
+          - `tierId` (display name, e.g. `"Silver Professional"`)
+          - `tier` (canonical slug, e.g. `"pro"`)
+          - `isPro` (boolean: `true` for non-PAYG)
+          - `isProInvoiceSubscriber` (boolean)
+          - `subscriptionStatus: "active"`
+    9.  **Provider Entitlements & Permissions Harmonization (`useEntitlements.ts`, `invoiceService.ts`)**:
+        - Updated `resolveTier` in `useEntitlements.ts` to inspect both `profile.tierId` and `profile.tier`, ensuring Silver/Gold/Platinum entitlements (0-minute lead delay, unlimited quotes, branded invoicing) accurately activate.
+        - Synchronized `isProInvoiceUser` in `invoiceService.ts` to recognize Silver/Pro, Gold/Premium, and Platinum tiers.
+    10. **Full End-to-End Dynamic Sync for Paid Add-Ons & Ancillary Pricing Across Client Flow Services**:
+        - **`TradesDashboard.tsx`**: Dynamic Exclusive Leads checkout and subscription pricing now reads live from `sysConfig.paidAddons.exclusiveLeads.price` instead of a hardcoded constant.
+        - **`EmergencyJobWizard.tsx`**: Emergency Boost fee calculation and UI labels dynamically pull from `platformConfig.paidAddons.emergencyBoost.price`.
+        - **`PostJobWizard.tsx`**: Emergency Boost and Instant Match pricing badges now synchronize directly with `platformConfig.paidAddons.emergencyBoost.price` and `platformConfig.paidAddons.instantMatch.price`.
+        - **`lib/boosts.ts`**: `getInstantMatchCopy(customPrice)` refactored to consume dynamic admin-configured prices.
+        - **`TraderVideoVerificationCard.tsx`**: Verified Video Pro subscription pricing, toast confirmation messages, and +35 match score points pull dynamically from `platformConfig.paidAddons.verifiedVideoPro`.
+        - **`BillingManager.tsx`**: Updated to a 4-tier responsive grid rendering live tier definitions, platform commission rates, and feature sets with canonical tier normalization, plus a dedicated **Paid Add-on Features & Performance Boosts** control section featuring 1-click live toggle and management for Exclusive Leads (£29/mo), Verified Video Pro (£15/mo), and Instant Match SLAs.
+    11. **Category-Specific Profile Card Quote Request Presets (`tradePresets.ts`, `FindTrades.tsx`, `PublicProfile.tsx`)**:
+        - Created `/src/utils/tradePresets.ts` mapping specific categories and trade types (e.g. Cake Making & Baking, Electrical, Plumbing, Roofing, Painting & Decorating, Gardening, Domestic Cleaning) to max 3 hot search terms strictly relevant to the trader's trade category.
+        - In `FindTrades.tsx` and `PublicProfile.tsx`, quote request modal now displays category-accurate presets (e.g. for "Cake & Bake": "Custom Birthday Cake", "Wedding Cake Tasting Box", "Cupcake Platter / Dessert Table") rather than unrelated generic trade terms.
+    12. **Job Posting Wizard Real-Time Subcategory & Custom Input Header Display (`PostJobWizard.tsx`)**:
+        - Enhanced the step header card (`JobReminder`) to display the selected subcategory (or custom text entered into the Custom Text Box) directly underneath the main category in refined smaller text.
+        - Automatically updates and persists throughout all remaining steps (Steps 2, 3, 3.5, 4, and 5) providing persistent contextual clarity on what the user is posting.
+
+## 🔍 Zero-Code Search Demand Telemetry & Dynamic Synonyms Engine (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "As we have profile optimizer agent built in, can we use that to check which user search terms are not matching to any Category/Subcategory/Traders Profiles and can suggest to include them to fuzzymatch for the category and suggest trader to update their profile relevant section so they can be matched to search terms... How we are going to add them to fuzzymatch without manual code change... Yes. Do it for both fuzzymatch and profile optimizer agent make sure minimum running cost."
+*   **Architecture & Cost Optimization Blueprint**:
+    1.  **Zero-Code Dynamic Synonyms (`src/lib/fuzzyMatch.ts`, `dynamic_search_synonyms`)**:
+        - Decoupled static dictionary compilation from runtime synonym mapping: `CATEGORY_SYNONYMS` is initialized with immutable base trade vocabulary and dynamically augmented in memory via `registerDynamicSynonyms()`.
+        - Instant live updates across all connected clients with zero application rebuilds or redeployments via Firestore `onSnapshot` listener (`initSearchOptimizationService()`).
+        - Autocomplete candidate dictionaries re-index seamlessly upon dynamic synonym updates via `onDynamicSynonymsUpdate()`.
+    2.  **Telemetry Data Collection with Strict Minimum Running Cost**:
+        - Session-level in-memory Set cache (`sessionLoggedTerms`) ensures identical queries within the same user session never trigger redundant Firestore writes ($0 repeat cost).
+        - 1.8-second debounce timer (`recordUnmatchedSearch`) prevents intermediate keystroke writes while user types in the main search bar.
+        - **AI Bot Telemetry & Supply Gap Logging (`TradeBot.tsx`, `extractCleanTradeQuery`)**:
+          - Evaluates whether conversational AI queries in TradeBot matched a valid category (`findMatchingTradeCategories`) and if verified traders were returned (`recommendedTraders`).
+          - Automatically logs `source: "ai_bot"` with `gapType: "unmatched_category"` or `gapType: "no_traders_found"` directly into search demand telemetry.
+          - Parses natural conversational phrases into clean trade keywords (`extractCleanTradeQuery`) by stripping conversational filler prefixes and trailing location tags.
+          - Reassures homeowners with transparent in-chat alert banners notifying them that their demand has been logged in the local network onboarding queue, paired with a 1-tap Free Job Post CTA.
+        - Batched frequency increments (`searchCount: increment(1)`) reduce document creation overhead.
+    3.  **AI Profile Optimizer Agent Telemetry Cross-Referencing (`aiProfileOptimizationService.ts`)**:
+        - When a trader views their profile audit or when background readiness runs, `auditProfileAndAccountReadiness` cross-references top unmet homeowner search queries against the trader's trades.
+        - Automatically creates actionable high-impact suggestions: `🔥 High Search Demand: Add "[Term]" to Services`.
+        - 1-click addition directly inserts the unmet search keyword into `profile.services` and `profile.skills`, enabling the trader to be matched immediately for future customer searches.
+    4.  **Admin Command Center & AI Categorizer (`AdminSearchDemandTab.tsx`, `geminiServer.ts`)**:
+        - Integrated "Search Demand & Synonyms" tab into Admin AI Agents command center.
+        - 1-click "✨ AI Classify" calls Gemini 2.5 Flash with in-memory semantic caching (`classifyUnmatchedSearchTermServer`) to classify terms into target categories, titles, and keywords at zero repeat token cost.
+        - 1-click "⚡ Publish to FuzzyMatch" promotes the telemetry record to `dynamic_search_synonyms` instantly.
+    5.  **Schema & Security Rules**:
+        - Registered `dynamic_search_synonyms` and `unmatched_search_telemetry` collections in `firebase-blueprint.json` and deployed security rules in `firestore.rules`.
+
+## 🐾 Pet Care & Pet Sitting Search Term Integration (`fuzzyMatch.ts`, `seedService.ts`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Also add ,, pet care,, in search words"
+*   **Enhancements Implemented**:
+    1.  **Vocabulary & Dictionary Integration (`fuzzyMatch.ts`)**:
+        - Added `"Pet Care"` and `"Pet Carer"` to `COMMON_TRADE_VOCABULARY` mapped to category `"Pet Services"`.
+        - Configured dedicated entries for `"pet care"` and `"pet carer"` in `CATEGORY_SYNONYMS`:
+          - Maps directly to `"Pet Services"` category and trade title `"Pet Care Specialist"`.
+          - Associated keywords: `["pet care", "pet sitting", "dog walking", "cat sitting", "pet boarding", "pet grooming", "puppy care", "animal care"]`.
+        - Interlinked `"pet care"` as a keyword across related pet search terms (`"pet sitter"`, `"pet sitting"`, `"dog walker"`, `"dog walking"`, `"dog sitter"`, `"cat sitter"`, `"cat sitting"`).
+    2.  **Trader Profile Skills & Services (`seedService.ts`)**:
+        - Updated Sarah Jenkins' profile (`Paws & Whiskers Professional Pet Care`) to include `"Pet Care"` and `"Pet Care Specialist"` across trades, services, tags, and skills.
+    3.  **Candidate Dictionary & Autocomplete**:
+        - `buildCandidateDictionary()` now indexes `"Pet Care"` as a candidate item, powering immediate autocomplete suggestions, filter area pills, and category priority sorting in `FindTrades.tsx`.
+
+## 🐾 Pet Sitting & False-Positive Search Prefix Collision Fix (`fuzzyMatch.ts`, `seedService.ts`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Also search term is pet sitting and matched profile is cakes and bakes"
+*   **Root Cause Analysis**:
+    1.  **Prefix Match Collision (`tokenMatches`)**:
+        - In `tokenMatches`, when matching query tokens to target tokens using `t.startsWith(q)`, short 3-letter roots like `"cat"` were matching completely unrelated words that happen to start with the same letters, notably `"catering"`, `"caterer"`, and `"category"`.
+        - Similarly, `"car"` was matching `"carpet"` and `"carpenter"`, `"tax"` was matching `"taxi"`, and `"pet"` could match `"petrol"`.
+    2.  **Broad Keyword Synonym Expansion**:
+        - `CATEGORY_SYNONYMS["pet sitting"]` included the single keyword `"cat"`. When evaluating traders, `matchTraderWithSearchQuery` evaluated Chloe Dupont (baker and caterer) whose trade was `"Catering & Private Chef"`.
+        - Because `"catering".startsWith("cat")` returned `true`, the baker was matched as a false positive for "pet sitting".
+    3.  **Missing Dedicated Pet Services Seed Trader**:
+        - The seed database lacked a verified Pet Services / Pet Sitting mock specialist, making the false positive more prominent.
+*   **Fixes Implemented**:
+    1.  **Prefix Collision Guard Map (`fuzzyMatch.ts`)**:
+        - Updated `tokenMatches` to enforce a false-prefix guard map on `t.startsWith(q)`:
+          - `"cat"` will never match words starting with `"cater"`, `"catch"`, `"categ"`, `"cattl"`, or `"catas"`.
+          - `"car"` will never match words starting with `"carpet"`, `"carpen"`, `"carv"`, `"cart"`, or `"carr"`.
+          - `"tax"` will never match words starting with `"taxi"`.
+          - `"tap"` will never match words starting with `"tape"` or `"tapest"`.
+          - `"pet"` will never match words starting with `"petrol"`, `"petit"`, or `"petri"`.
+          - `"van"` will never match words starting with `"vanta"`, `"vangu"`, or `"vanis"`.
+    2.  **Refined Pet Services Synonyms & Keywords**:
+        - Replaced ambiguous short words in `CATEGORY_SYNONYMS` with specific domain phrases: `"pet sitting"`, `"dog sitting"`, `"cat sitting"`, `"pet care"`, `"dog walking"`, and `"holiday pet care"`.
+        - Added Pet Services vocabulary and subcategories (`Pet Services`, `Pet Sitting`, `Dog Walking`, `Cat Sitting`) into `COMMON_TRADE_VOCABULARY`.
+    3.  **Capability-Targeted Keyword Matching**:
+        - In `matchTraderWithSearchQuery`, synonym keywords are now evaluated against the trader's capability arrays (`trades`, `services`, `tags`, `skills`, `recommendedCategories`) rather than arbitrary free-form bio text.
+    4.  **Verified Pet Services Specialist Added (`seedService.ts`)**:
+        - Seeded 5-star verified pet care specialist *Sarah Jenkins* (`Paws & Whiskers Professional Pet Care`), NARPS registered and DBS checked, covering in-home pet sitting, dog walking, and cat sitting.
+
+## 🚚 Removals & House Moves Search Tokenization & Synonym Matching Fix (`fuzzyMatch.ts`, `FindTrades.tsx`, `seedService.ts`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Can you check why my search term is not matching to Removal category or any subcategories"
+*   **Root Cause Analysis**:
+    1.  **Missing Multi-Word Removals Synonyms**: The search dictionary lacked comprehensive synonym mappings for phrases such as `"house removal"`, `"house removals"`, `"home removal"`, `"home removals"`, `"house move"`, `"moving house"`, `"removals"`, `"flat move"`, and `"furniture removal"`.
+    2.  **Strict Token-By-Token Conjunction**: When a user searched for multi-word phrases like `"house removal"`, the trader matching engine checked each token independently. If a trader only had the primary category name `"Home & Domestic Removals"`, the token `"removal"` did not match `"removals"` if the singular form wasn't mapped, or if the trader didn't have `"house"` explicitly in their name/services.
+    3.  **Autocomplete Priority Scoring**: The category matching in `FindTrades.tsx`'s live search autocomplete didn't incorporate `categoryMatchesSearch` and multi-word token matching for subcategories (e.g. "Full House Move").
+*   **Fixes Implemented**:
+    1.  **Comprehensive Synonym Registry (`fuzzyMatch.ts`)**:
+        - Added mappings for `"removal"`, `"removals"`, `"house removal"`, `"house removals"`, `"home removal"`, `"home removals"`, `"house move"`, `"house moving"`, `"moving house"`, `"moving"`, `"relocation"`, `"flat move"`, `"furniture removal"`, `"furniture moving"`, `"man with a van"`, `"office removal"`, `"office removals"`, `"piano removal"`, `"piano move"`, and `"house clearance"`.
+    2.  **Whole-Query Synonym & Category Expansion in `matchTraderWithSearchQuery`**:
+        - If the entire search query matches a known synonym (e.g. `"house removal"` -> `"Home & Domestic Removals"`), the engine checks if the trader provides that category, trade title, or keywords.
+        - Enhanced tokenized matching across all trader fields, services, tags, and skills.
+    3.  **Enhanced Autocomplete & Subcategory Matching (`FindTrades.tsx`)**:
+        - Integrated `categoryMatchesSearch` into category scoring in the search dropdown so searches for "Removal" or "House removal" surface "Home & Domestic Removals" and "Removals" with instant priority.
+    4.  **Verified Removals Mock Traders (`seedService.ts`)**:
+        - Added 5-star verified removals businesses (`Apex House Removals & Logistics Ltd` and `Swift Moves & Man-with-a-Van Express`) with full house move, flat move, and packing services.
+
+## 📦 Move-In Pack Banner Dismissal & Visibility Options (`Dashboard.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "I think what we can do is we can give it a cross close button on the top right corner. When the user clicks it, it will give it two options. The first option they can select is appears at the next startup. The second option will be I am settled. If the I am settled is selected by the user, then it will disappear. But if they select the first option, then it will reappear for the next app startup."
+*   **Changes Implemented**:
+    1.  **Top-Right Close Button**: Positioned a discrete, accessible `✕` close button in the top-right corner of the "New Home Move-In Pack & Trade Hub" card.
+    2.  **Interactive 2-Option Preference Modal**:
+        - **Option 1 ("Appears at the next startup")**: Stored in `sessionStorage` (`anytrader_move_in_session_dismissed`), dismissing the banner for the current app session while ensuring it cleanly reappears when the user restarts or re-opens the app.
+        - **Option 2 ("I am settled")**: Stored in `localStorage` (`anytrader_move_in_settled`), permanently hiding the banner from the homeowner's home dashboard.
+    3.  **Clean Cancel / Dismiss Control**: Allows users to cancel or keep the card visible without accidental dismissals.
+
+## 📍 Post Job Location Button Label Update (`PostJobWizard.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Can we change text to,, Get Current Location,, on this tab. Keep everything else same"
+*   **Changes Implemented**:
+    - Updated the geolocation trigger button label on Step 4 (Location step) from "Current Location" to "Get Current Location".
+
+## 📱 Mobile Layout Responsive Optimization for AI-Structured Job Confirmation (`VoiceJobAssistant.tsx`, `PostJobWizard.tsx`, `FloatingTradeBotWidget.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*: "Chech the sections cutting out job structured by AI on mobile devices."
+*   **Root Cause Analysis**:
+    1.  **Container Padding & Width Stacking**: On mobile screens (320px–375px), outer wrappers (`p-3 sm:p-4`), voice card outer frames (`p-4 sm:p-5`), and inner confirmation cards (`p-4 sm:p-6`) stacked rigid padding, compressing the interior content area down to <250px.
+    2.  **Missing `min-w-0` on Flex Children**:
+        - Text inputs (`input`) in the "Quick Append to Description" and "Add Custom Spec Tag" sections lacked `min-w-0`, causing browsers to assign them an intrinsic minimum width of ~160px–180px.
+        - The companion buttons ("Append Note", "+ Add Spec") with rigid padding (`px-3.5`) and `shrink-0` exceeded available row width, causing parent container blowout and truncating buttons off the right screen edge (`App...`, `+ Ad...`).
+    3.  **Quote Scope Buttons Sizing**: The 3 Quote Scope buttons ("Supply & Fit", "Labour Only", "Materials") were rendered in `flex gap-1.5` without an equal-width grid, causing the third button to be truncated (`Materi...`).
+    4.  **Floating Widget Interference**: The persistent `FloatingTradeBotWidget` overlayed the bottom-right interactive elements and sample prompt buttons on mobile screens when browsing `/post-job` and `/post-emergency-job`.
+*   **Architectural & Layout Fixes Implemented**:
+    1.  **Defensive Box Model & Width Containment**:
+        - Updated `VoiceJobAssistant.tsx` container to `w-full max-w-full min-w-0 p-3.5 sm:p-5 box-border overflow-hidden`.
+        - Updated inner confirmation card to `w-full max-w-full min-w-0 p-3.5 sm:p-5 box-border overflow-hidden`.
+        - Added `w-full max-w-2xl mx-auto overflow-x-hidden min-w-0 box-border` to `PostJobWizard.tsx`.
+    2.  **Equal-Width 3-Column Quote Scope Grid**:
+        - Replaced `flex gap-1.5` with `grid grid-cols-3 gap-1.5`, with buttons styled using `w-full px-1 py-2 text-[10px] sm:text-[11px] truncate leading-tight` so each button takes exactly 33.3% width cleanly without clipping.
+    3.  **Flex-1 `min-w-0` Inputs & Responsive Button Labels**:
+        - Set `flex-1 min-w-0 w-full` on all append and custom spec text inputs.
+        - Added responsive labels to the buttons: `<span className="hidden xs:inline">Append Note</span><span className="xs:hidden">Append</span>` and `<span className="hidden xs:inline">+ Add Spec</span><span className="xs:hidden">+ Add</span>` with compact `px-2.5 sm:px-3.5` padding.
+    4.  **Tag Pills & Textarea Wrapping**:
+        - Added `max-w-full break-words leading-tight` to spec highlight pills and preset chips so long text items wrap safely within the card boundary.
+        - Set `w-full min-w-0 max-w-full box-border` on all inputs, select dropdowns, and description textareas.
+    5.  **Full-Width Responsive Action CTAs**:
+        - Restructured the bottom action bar so the primary button ("Confirm & Continue to Post") is 100% full-width (`w-full sm:flex-1 p-3.5`), with the secondary "Speak Again" and "Discard" buttons positioned in a 2-column mobile grid (`grid grid-cols-2 sm:flex gap-2`).
+    6.  **Route-Aware Floating Widget Suppression**:
+        - Updated `FloatingTradeBotWidget.tsx` to automatically hide on `/post-job` and `/post-emergency-job` routes (`isPostJobWizard`), ensuring a clutter-free view that never covers voice recording buttons or sample prompt chips.
+
+## 🔔 Trader Matched Job Push Notification Engine & Schedule Preferences (`traderNotificationEngine.ts`, `TraderNotificationPreferencesModal.tsx`, `TradesDashboard.tsx`, `GrowthNotificationsCard.tsx`, `Notifications.tsx`, `AuthProvider.tsx`) (Completed September 2, 2026)
+*   **Context & Directives**:
+    *   *User Directives*:
+        - "Create a logic where the trader can be notified by the notification in their notification bar on their phone, like periodically, maybe like every five hours, to remind them to check the matched job in their home page or in their dashboard."
+        - "Bypass Emergency alerts if toggled on."
+        - "Option A where the trader can get the notification after the capacitor up and the app will be installed on their phones... show them the notification as like '3 new match jobs in your area (25 mi)' and give a brief description of the job in the notification heading."
+        - "Make that notification clickable so when the trader clicks the notification, it takes them to their dashboard."
+        - "Add a little gear icon... clicking that, they can set the notification timing with 3 options (every 5 hours, 8:00 AM in the morning, 2:00 PM in the afternoon), plus a 4th option 'don't send any notifications / Silent in-app only' where notifications appear in alerts without sound."
+        - "Show them the radius in miles."
+        - "Make sure that the job notification they receive is exact exact match to their trade or their skills or services."
+*   **Architectural & System Logic Breakdown**:
+    1.  **Strict Trade & Skill Matching Logic (`isJobStrictMatch`)**:
+        - Matches jobs against registered trader trades (`profile.trades`), specific trade skills/services (`profile.services`), and tags (`profile.tags`).
+        - Tokenizes keywords and validates that query words align with the start of tokens (`fuzzyMatchToken`), preventing mid-word false positives (e.g. `pet` will match `Pet Sitting` but will never match `Carpet Cleaning`).
+        - Computes Haversine distance (`calculateDistanceMiles`) between trader coordinates/postcode and job location, strictly filtering out any job exceeding the trader's chosen radius (e.g. 5, 10, 15, 25, 50 miles).
+    2.  **Flexible Scheduling Options & Emergency Instant Bypass**:
+        - **Every 5 Hours** (`every_5_hours`): Periodic digests dispatch at least 5 hours after the previous notification timestamp (`lastMatchNotificationAt`).
+        - **8:00 AM Morning Digest** (`morning_8am`): Periodic digests dispatch once per day when the clock is within the morning window (08:00–10:00).
+        - **2:00 PM Afternoon Digest** (`afternoon_2pm`): Periodic digests dispatch once per day within the afternoon window (14:00–16:00).
+        - **Silent / In-App Only** (`silent_in_app_only`): Device push and audio alerts are muted, while in-app notifications and dashboard matching badges continue to populate silently.
+        - **⚡ Instant Emergency Bypass** (`bypassEmergency = true`): If an urgent/emergency job matching the trader's trade is posted, the notification engine bypasses the periodic digest timer to alert the trader instantly.
+    3.  **Clickable Push & Local Notification Dispatch (`triggerDeviceNotification`)**:
+        - Utilizes Service Worker / Web Push Notifications with custom vibration patterns, action icons, and payload URLs (`/trade-jobs`).
+        - Clicking the notification instantly routes the trader to their AI Recommended Jobs feed and Trades Dashboard.
+    4.  **UI & Settings Integration Across the Ecosystem**:
+        - **Trades Dashboard (`TradesDashboard.tsx`)**: Added an "Alert Timing" button in the AI Recommended Jobs header to open preferences with 1 click.
+        - **Notifications Page (`Notifications.tsx`)**: Added a Settings gear icon in the header for tradespersons and businesses to adjust timing schedules and radius on the fly.
+        - **Growth & Notifications Profile (`GrowthNotificationsCard.tsx`)**: Added a dedicated "Job Match Timing & Radius" summary card and trigger button inside the profile notifications settings.
+        - **Interactive Modal (`TraderNotificationPreferencesModal.tsx`)**: Full configuration modal allowing traders to adjust schedules, slider radius (5–50 mi), emergency bypass toggle, and send immediate test notifications.
+        - **Automatic Background Synchronization (`AuthProvider.tsx`)**: Background checks evaluate new matching opportunities on session heartbeats and window focus events.
+
 ## 🔔 Header Notification Alerts Badge Repositioning (`Layout.tsx`) (Completed September 2, 2026)
 *   **Context & Directives**:
     *   *Issue*: The green pulsing unread count notification badge (`unreadCount`) on the top header "ALERTS" button partially overlapped and obscured the Bell icon and the "ALERTS" text on mobile screens.

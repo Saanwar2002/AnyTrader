@@ -130,8 +130,38 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
         }, { merge: true });
       }
 
+      // Auto-sync Trade Tiers to platform_config/global feeTiers so both admin panels stay in perfect sync!
+      const oneOffTiers = config?.providerModels?.one_off_trades?.tiers;
+      if (oneOffTiers) {
+        const syncedFeeTiers = Object.entries(oneOffTiers).map(([tierKey, data]: [string, any]) => {
+          let name = "Free Explorer";
+          const lower = tierKey.toLowerCase();
+          if (lower === 'pro' || lower.includes('silver')) name = "Silver Professional";
+          else if (lower === 'premium' || lower === 'gold' || lower.includes('elite')) name = "Gold Elite";
+          else if (lower === 'platinum' || lower.includes('enterprise')) name = "Platinum Enterprise";
+          else if (lower === 'payg' || lower.includes('free')) name = "Free Explorer";
+          else name = tierKey.charAt(0).toUpperCase() + tierKey.slice(1);
+
+          return {
+            name,
+            price: Number(data.price) || 0,
+            commission: (Number(data.commission) || 0) * 100, // stored as % in feeTiers
+            maxQuotes: Number(data.maxQuotes) || 9999,
+            maxAcceptedQuotes: Number(data.maxAcceptedQuotes) || 9999,
+            leadFee: Number(data.leadFee) || 0,
+            description: data.description || "",
+            features: data.features || [],
+            limitPeriod: "monthly"
+          };
+        });
+
+        await setDoc(doc(db, "platform_config", "global"), {
+          feeTiers: syncedFeeTiers
+        }, { merge: true });
+      }
+
       setHasUnsavedChanges(false); // Reset unsaved changes
-      alert("Tiers updated successfully and synced with ecosystem!");
+      alert("Tiers updated successfully and synced with global platform config!");
     } catch (error) {
       console.error("Error saving tiers:", error);
       alert("Failed to save tiers");
@@ -148,7 +178,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
         <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-slate-700 mb-2">Tier Configuration Not Found</h3>
         <p className="text-slate-500 mb-6 max-w-md mx-auto">
-          The global tier configuration has not been initialized yet. Click the button below to create the initial configuration with sample data.
+          The global tier configuration has not been initialized yet. Click the button below to create the initial configuration with canonical platform tiers.
         </p>
         <button 
           onClick={async () => {
@@ -156,20 +186,58 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
               providerModels: {
                 one_off_trades: {
                   tiers: {
-                    basic: { price: 29.99, maxQuotes: 10, maxAcceptedQuotes: 2, commission: 0.1, leadFee: 2, description: "Small traders", features: ["10 Quotes/mo"], color: "bg-blue-50 border-blue-200" },
-                    pro: { price: 59.99, maxQuotes: 50, maxAcceptedQuotes: 10, commission: 0.08, leadFee: 0, description: "Professional trades", features: ["50 Quotes/mo", "Priority Support"], color: "bg-purple-50 border-purple-200" }
+                    payg: {
+                      price: 0,
+                      commission: 0.05,
+                      maxQuotes: 5,
+                      maxAcceptedQuotes: 2,
+                      leadFee: 0,
+                      description: "Start risk-free. 5% Platform Commission. Standard Visibility.",
+                      features: ["5 Quotes/month", "5% Platform Commission", "Standard Profile Visibility"],
+                      color: "bg-slate-50 border-black"
+                    },
+                    pro: {
+                      price: 19.99,
+                      commission: 0.035,
+                      maxQuotes: 30,
+                      maxAcceptedQuotes: 10,
+                      leadFee: 0,
+                      description: "For active tradespeople. 3.5% Platform Commission. Priority Alerts.",
+                      features: ["30 Quotes/month", "3.5% Commission", "Instant Lead Alerts", "Priority Support", "Branded Invoicing"],
+                      color: "bg-blue-50 border-black"
+                    },
+                    premium: {
+                      price: 49.99,
+                      commission: 0.025,
+                      maxQuotes: 9999,
+                      maxAcceptedQuotes: 9999,
+                      leadFee: 0,
+                      description: "Top tier for established trades. 2.5% Commission. Highest trust rank.",
+                      features: ["Unlimited Quotes", "2.5% Commission", "Gold Trust Badge", "Instant Match Priority", "AI Material List Assistant"],
+                      color: "bg-amber-50 border-black"
+                    },
+                    platinum: {
+                      price: 99.99,
+                      commission: 0.015,
+                      maxQuotes: 9999,
+                      maxAcceptedQuotes: 9999,
+                      leadFee: 0,
+                      description: "Enterprise scale for multi-seat trade crews. 1.5% Commission.",
+                      features: ["Unlimited Quotes", "1.5% Commission", "Multi-seat Crew Dispatch", "Dedicated Account Manager", "Custom TradeOS Reports"],
+                      color: "bg-purple-50 border-black"
+                    }
                   }
                 },
                 on_demand_transport: {
                   tiers: {
-                    standard: { price: 0, commission: 0.12, description: "Standard Taxi", destinationFilters: 2, advanceBookingDays: 7, priorityDispatch: 0, features: ["Unlimited work", "Standard Dispatch"], color: "bg-green-50 border-green-200" },
-                    gold: { price: 49.99, commission: 0.10, description: "Priority Driver", destinationFilters: 4, advanceBookingDays: 14, priorityDispatch: 50, features: ["Priority Airport Queue", "Higher Earning Potential"], color: "bg-amber-50 border-amber-200" },
+                    standard: { price: 0, commission: 0.12, description: "Standard Driver", destinationFilters: 2, advanceBookingDays: 7, priorityDispatch: 0, features: ["Unlimited trips", "Standard Dispatch", "12% Platform Commission"], color: "bg-green-50 border-black" },
+                    gold: { price: 49.99, commission: 0.10, description: "Priority Driver", destinationFilters: 4, advanceBookingDays: 14, priorityDispatch: 50, features: ["Priority Airport Queue", "Higher Earning Potential", "10% Platform Commission"], color: "bg-amber-50 border-black" },
                   }
                 },
                 homeowners: {
                   tiers: {
-                    rider_plus: { price: 9.99, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "Premium privileges for AnyRoller passengers.", features: ["Priority Matching during peak hours", "10% discount on every journey", "Exclusive Rider Plus badge"], color: "bg-amber-50 border-amber-200" },
-                    business: { price: 49.99, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "B2B Corporate Billing and Multi-Account", features: ["Monthly Invoicing", "Team Access", "Dedicated Support"], color: "bg-blue-50 border-blue-200" }
+                    standard: { price: 0, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "Standard Homeowner", features: ["Post unlimited jobs", "Compare quotes", "Direct messaging"], color: "bg-slate-50 border-black" },
+                    landlord: { price: 19, maxQuotes: 0, maxAcceptedQuotes: 0, commission: 0, leadFee: 0, description: "Premium Landlord Portfolio", features: ["Multi-property dashboard", "CP12 & EICR automated compliance", "Tenant repair reporting bridge"], color: "bg-blue-50 border-black" }
                   }
                 }
               }
@@ -179,7 +247,7 @@ export default function AdminTierManager({ modelsToShow }: AdminTierManagerProps
           }}
           className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700"
         >
-          Initialize Tiers
+          Initialize Canonical Tiers
         </button>
       </div>
     );

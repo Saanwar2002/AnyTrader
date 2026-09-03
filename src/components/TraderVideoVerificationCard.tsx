@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Video, Camera, StopCircle, Upload, CheckCircle2, ShieldCheck, Play, Loader2, Trash2, Sparkles, AlertCircle, Award, Zap, Check, RotateCcw, SwitchCamera } from "lucide-react";
-import { db, doc, updateDoc, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile } from "@/src/firebase";
+import { db, doc, updateDoc, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, onSnapshot } from "@/src/firebase";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
@@ -13,6 +13,7 @@ interface TraderVideoVerificationCardProps {
 }
 
 export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOnly = false }: TraderVideoVerificationCardProps) {
+  const [platformConfig, setPlatformConfig] = useState<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [mediaBlobUrl, setMediaBlobUrl] = useState<string | null>(null);
@@ -23,7 +24,17 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
 
-  const plan = calculateVerifiedVideoProSubscription("monthly");
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "platform_config", "global"), (snap) => {
+      if (snap.exists()) {
+        setPlatformConfig(snap.data());
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const videoAddonConfig = platformConfig?.paidAddons?.verifiedVideoPro;
+  const plan = calculateVerifiedVideoProSubscription("monthly", videoAddonConfig);
   const isVideoProSubscriber = Boolean(profile?.hasVerifiedVideoProSubscription);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -69,7 +80,7 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
       if (onUpdateProfile) onUpdateProfile(updates);
 
       if (newStatus) {
-        toast.success("⚡ Verified Video Pro Active! Granted +35 AI Match Score points and Priority Quote Placement (£15/mo).");
+        toast.success(`⚡ Verified Video Pro Active! Granted +${plan.matchScoreBonus} AI Match Score points and Priority Quote Placement (£${plan.monthlyPrice}/mo).`);
       } else {
         toast.info("Verified Video Pro subscription paused.");
       }

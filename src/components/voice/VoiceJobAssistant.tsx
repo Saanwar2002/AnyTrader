@@ -570,10 +570,10 @@ export default function VoiceJobAssistant({
   };
 
   return (
-    <div className={cn("bg-white rounded-3xl p-4 sm:p-5 border border-black shadow-sm space-y-4", className)}>
+    <div className={cn("w-full max-w-full min-w-0 bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-black shadow-sm space-y-4 box-border overflow-hidden", className)}>
       {/* Error Banner */}
       {voiceError && (
-        <div className="p-4 bg-amber-50 rounded-2xl border border-black text-black text-xs font-semibold leading-relaxed space-y-2 relative">
+        <div className="p-3.5 sm:p-4 bg-amber-50 rounded-2xl border border-black text-black text-xs font-semibold leading-relaxed space-y-2 relative">
           <button 
             type="button"
             onClick={() => setVoiceError(null)}
@@ -595,49 +595,49 @@ export default function VoiceJobAssistant({
 
       {/* Main Interactive Mic State */}
       {!extractedJob && !isProcessing && (
-        <div className="space-y-3.5">
+        <div className="space-y-3.5 min-w-0">
           {!isRecording ? (
-            <div className="space-y-3">
+            <div className="space-y-3 min-w-0">
               {/* Primary Interactive Speak Button */}
               <button
                 type="button"
                 onClick={startVoiceRecording}
-                className="w-full p-4 sm:p-5 rounded-2xl border-2 border-black bg-gradient-to-r from-blue-50 via-indigo-50/50 to-blue-50 text-slate-900 font-black hover:bg-blue-100/70 active:scale-[0.99] transition-all flex items-center gap-3.5 cursor-pointer shadow-sm group"
+                className="w-full p-3.5 sm:p-5 rounded-2xl border-2 border-black bg-gradient-to-r from-blue-50 via-indigo-50/50 to-blue-50 text-slate-900 font-black hover:bg-blue-100/70 active:scale-[0.99] transition-all flex items-center gap-3 sm:gap-3.5 cursor-pointer shadow-sm group min-w-0"
               >
-                <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform shrink-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform shrink-0">
                   <Mic className="w-5 h-5" />
                 </div>
                 <div className="text-left flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <span className="text-sm sm:text-lg font-black text-slate-900 leading-tight">
                       Tap to speak with microphone
                     </span>
-                    <span className="bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[9.5px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
+                    <span className="bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[9px] sm:text-[9.5px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
                       AI Powered
                     </span>
                   </div>
-                  <span className="block text-xs font-semibold text-slate-500 mt-0.5 leading-snug">
+                  <span className="block text-[11px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-snug">
                     Describe fault, boiler model, location, or required work
                   </span>
                 </div>
               </button>
 
               {/* Inspiration Chips */}
-              <div className="pt-1 space-y-2">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-500" />
-                  Or tap an example to test AI:
+              <div className="pt-1 space-y-2 min-w-0">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Or tap an example to test AI:</span>
                 </p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5 min-w-0">
                   {VOICE_SAMPLE_PROMPTS.map((prompt, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => handleSamplePromptClick(prompt.text)}
-                      className="text-left bg-slate-50 hover:bg-orange-50 border border-slate-200 hover:border-black rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                      className="text-left bg-slate-50 hover:bg-orange-50 border border-slate-200 hover:border-black rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer max-w-full shrink-0"
                     >
-                      <span>{prompt.icon}</span>
-                      <span>{prompt.label}</span>
+                      <span className="shrink-0">{prompt.icon}</span>
+                      <span className="truncate">{prompt.label}</span>
                     </button>
                   ))}
                 </div>
@@ -661,7 +661,7 @@ export default function VoiceJobAssistant({
             </div>
           ) : (
             /* Active Live Recording State */
-            <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-2xl p-5 sm:p-6 border border-black space-y-4 shadow-lg">
+            <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-2xl p-4 sm:p-6 border border-black space-y-4 shadow-lg min-w-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-red-500 animate-ping inline-block" />
@@ -690,9 +690,9 @@ export default function VoiceJobAssistant({
               </div>
 
               {/* Live Streaming Speech Preview */}
-              <div className="bg-white/10 rounded-xl p-3.5 min-h-[64px] border border-white/10 text-sm leading-relaxed">
+              <div className="bg-white/10 rounded-xl p-3.5 min-h-[64px] border border-white/10 text-sm leading-relaxed min-w-0 break-words">
                 {transcript || interimTranscript ? (
-                  <p className="text-slate-100 font-medium">
+                  <p className="text-slate-100 font-medium break-words">
                     {transcript} <span className="text-blue-300 italic">{interimTranscript}</span>
                   </p>
                 ) : (
@@ -707,15 +707,15 @@ export default function VoiceJobAssistant({
                 <button
                   type="button"
                   onClick={stopVoiceRecording}
-                  className="flex-1 p-3.5 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 text-white font-black flex items-center justify-center gap-2 shadow-md hover:brightness-110 active:scale-98 transition-all cursor-pointer text-base"
+                  className="flex-1 p-3.5 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 text-white font-black flex items-center justify-center gap-2 shadow-md hover:brightness-110 active:scale-98 transition-all cursor-pointer text-sm sm:text-base min-w-0"
                 >
-                  <StopCircle className="w-5 h-5 fill-white" />
-                  <span>Done Speaking — Extract Job</span>
+                  <StopCircle className="w-5 h-5 fill-white shrink-0" />
+                  <span className="truncate">Done Speaking — Extract Job</span>
                 </button>
                 <button
                   type="button"
                   onClick={stopRecordingSession}
-                  className="px-4 py-3.5 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 transition-colors cursor-pointer"
+                  className="px-4 py-3.5 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 transition-colors cursor-pointer shrink-0"
                   title="Cancel"
                 >
                   <X className="w-5 h-5" />
@@ -728,12 +728,12 @@ export default function VoiceJobAssistant({
 
       {/* AI Processing Spinner */}
       {isProcessing && (
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50/60 p-8 rounded-2xl border border-black text-center space-y-3">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50/60 p-6 sm:p-8 rounded-2xl border border-black text-center space-y-3 min-w-0">
           <div className="w-14 h-14 bg-white rounded-2xl border border-black shadow-md mx-auto flex items-center justify-center">
             <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
           </div>
           <div>
-            <h4 className="font-display font-black text-slate-900 text-lg">Gemini AI is structuring your job...</h4>
+            <h4 className="font-display font-black text-slate-900 text-base sm:text-lg">Gemini AI is structuring your job...</h4>
             <p className="text-xs font-bold text-slate-600 mt-1">
               Matching trade category, subcategory, urgency, and pricing scope
             </p>
@@ -743,15 +743,15 @@ export default function VoiceJobAssistant({
 
       {/* Extracted Structured Job Confirmation Summary Screen */}
       {extractedJob && !isProcessing && (
-        <div className="bg-slate-50 rounded-2xl border-2 border-black p-4 sm:p-6 space-y-5 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+        <div className="w-full max-w-full min-w-0 bg-slate-50 rounded-xl sm:rounded-2xl border-2 border-black p-3.5 sm:p-5 space-y-4 sm:space-y-5 shadow-sm animate-in fade-in zoom-in-95 duration-200 box-border overflow-hidden">
           {/* Card Header & Status */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/10 pb-4">
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/10 pb-3.5">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
                 <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
               </span>
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-black text-emerald-800 uppercase tracking-widest block">
                     AI Voice Spec Confirmation
                   </span>
@@ -759,7 +759,7 @@ export default function VoiceJobAssistant({
                     Ready to Review
                   </span>
                 </div>
-                <span className="text-xs font-semibold text-slate-600 block mt-0.5">
+                <span className="text-xs font-semibold text-slate-600 block mt-0.5 leading-snug">
                   Review, edit, or append to your job details before submitting
                 </span>
               </div>
@@ -779,9 +779,9 @@ export default function VoiceJobAssistant({
           </div>
 
           {/* Form Fields: Title & Category Selection */}
-          <div className="space-y-4">
+          <div className="space-y-3.5 sm:space-y-4 min-w-0">
             {/* Job Title Field */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                 <span>Job Title</span>
                 <span className="text-[10px] font-normal text-slate-500 lowercase">editable</span>
@@ -791,15 +791,15 @@ export default function VoiceJobAssistant({
                 value={extractedJob.title}
                 onChange={(e) => setExtractedJob({ ...extractedJob, title: e.target.value })}
                 placeholder="e.g. Combi Boiler Repair & Diagnostics"
-                className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-black text-sm font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden"
+                className="w-full min-w-0 max-w-full px-3.5 py-2.5 bg-white rounded-xl border border-black text-xs sm:text-sm font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden box-border"
               />
             </div>
 
             {/* Trade Category & Subcategory Selectors */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+              <div className="min-w-0">
                 <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <Wrench className="w-3.5 h-3.5 text-slate-700" />
+                  <Wrench className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                   <span>Category</span>
                 </label>
                 <select
@@ -814,7 +814,7 @@ export default function VoiceJobAssistant({
                       subcategory: defaultSub
                     });
                   }}
-                  className="w-full px-3 py-2.5 bg-white rounded-xl border border-black text-xs font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden cursor-pointer"
+                  className="w-full min-w-0 max-w-full px-3 py-2.5 bg-white rounded-xl border border-black text-xs font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden cursor-pointer box-border truncate"
                 >
                   {categories.map((cat) => (
                     <option key={cat.name} value={cat.name}>
@@ -824,7 +824,7 @@ export default function VoiceJobAssistant({
                 </select>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                   <span>Subcategory / Speciality</span>
                 </label>
@@ -832,7 +832,7 @@ export default function VoiceJobAssistant({
                   <select
                     value={extractedJob.subcategory || availableSubcategories[0]}
                     onChange={(e) => setExtractedJob({ ...extractedJob, subcategory: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-white rounded-xl border border-black text-xs font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden cursor-pointer"
+                    className="w-full min-w-0 max-w-full px-3 py-2.5 bg-white rounded-xl border border-black text-xs font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden cursor-pointer box-border truncate"
                   >
                     {availableSubcategories.map((sub: string) => (
                       <option key={sub} value={sub}>
@@ -846,17 +846,17 @@ export default function VoiceJobAssistant({
                     value={extractedJob.subcategory || ""}
                     onChange={(e) => setExtractedJob({ ...extractedJob, subcategory: e.target.value })}
                     placeholder="e.g. General repair"
-                    className="w-full px-3 py-2.5 bg-white rounded-xl border border-black text-xs font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden"
+                    className="w-full min-w-0 max-w-full px-3 py-2.5 bg-white rounded-xl border border-black text-xs font-bold text-slate-900 focus:ring-2 focus:ring-black focus:outline-hidden box-border"
                   />
                 )}
               </div>
             </div>
 
             {/* Urgency & Quote Scope Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 min-w-0">
+              <div className="min-w-0">
                 <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-slate-700" />
+                  <Clock className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                   <span>Urgency Level</span>
                 </label>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -871,7 +871,7 @@ export default function VoiceJobAssistant({
                       type="button"
                       onClick={() => setExtractedJob({ ...extractedJob, urgency: urg.id as any })}
                       className={cn(
-                        "px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer text-center",
+                        "px-2 py-2 rounded-lg text-[11px] font-bold transition-all border cursor-pointer text-center truncate",
                         extractedJob.urgency === urg.id
                           ? cn(urg.color, "border-black font-black shadow-xs")
                           : "bg-white text-slate-700 border-slate-300 hover:border-black"
@@ -883,12 +883,12 @@ export default function VoiceJobAssistant({
                 </div>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-slate-700" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                   <span>Quote Scope</span>
                 </label>
-                <div className="flex gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   {[
                     { id: "supply_and_fit", label: "Supply & Fit" },
                     { id: "labour_only", label: "Labour Only" },
@@ -899,11 +899,12 @@ export default function VoiceJobAssistant({
                       type="button"
                       onClick={() => setExtractedJob({ ...extractedJob, quoteScope: scope.id as any })}
                       className={cn(
-                        "flex-1 px-2 py-2 rounded-lg text-[11px] font-bold transition-all border cursor-pointer text-center",
+                        "w-full px-1 py-2 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all border cursor-pointer text-center leading-tight truncate",
                         extractedJob.quoteScope === scope.id
                           ? "bg-black text-white border-black font-black shadow-xs"
                           : "bg-white text-slate-700 border-slate-300 hover:border-black"
                       )}
+                      title={scope.label}
                     >
                       {scope.label}
                     </button>
@@ -913,13 +914,13 @@ export default function VoiceJobAssistant({
             </div>
 
             {/* Editable Description with Live Word Count */}
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5 text-slate-700" />
+                  <FileText className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                   <span>AI-Generated Description (Editable)</span>
                 </label>
-                <span className="text-[10px] font-semibold text-slate-500">
+                <span className="text-[10px] font-semibold text-slate-500 shrink-0">
                   {extractedJob.description.trim().split(/\s+/).filter(Boolean).length} words
                 </span>
               </div>
@@ -928,22 +929,22 @@ export default function VoiceJobAssistant({
                 value={extractedJob.description}
                 onChange={(e) => setExtractedJob({ ...extractedJob, description: e.target.value })}
                 placeholder="Detailed description of the job..."
-                className="w-full p-3.5 bg-white rounded-xl border border-black text-xs sm:text-sm font-medium text-slate-900 leading-relaxed focus:ring-2 focus:ring-black focus:outline-hidden"
+                className="w-full min-w-0 max-w-full p-3 bg-white rounded-xl border border-black text-xs sm:text-sm font-medium text-slate-900 leading-relaxed focus:ring-2 focus:ring-black focus:outline-hidden box-border"
               />
             </div>
 
             {/* Quick Append Tool */}
-            <div className="bg-white rounded-xl p-3.5 border border-black space-y-2.5">
-              <div className="flex items-center justify-between">
+            <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-black space-y-2.5 min-w-0 max-w-full box-border">
+              <div className="flex items-center justify-between flex-wrap gap-1">
                 <label className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                  <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                  <Edit3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <span>Quick Append to Description</span>
                 </label>
                 <span className="text-[10px] font-bold text-slate-400">1-Tap Preset Additions</span>
               </div>
 
               {/* Preset Append Chips */}
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 min-w-0">
                 {[
                   "Access via side gate / key safe",
                   "Parking available on driveway",
@@ -955,7 +956,7 @@ export default function VoiceJobAssistant({
                     key={idx}
                     type="button"
                     onClick={() => handleAppendNote(preset)}
-                    className="px-2.5 py-1 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-400 rounded-lg text-[11px] font-semibold text-slate-700 hover:text-blue-900 transition-colors cursor-pointer active:scale-95"
+                    className="max-w-full text-left px-2.5 py-1 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-400 rounded-lg text-[11px] font-semibold text-slate-700 hover:text-blue-900 transition-colors cursor-pointer active:scale-95 break-words"
                   >
                     + {preset}
                   </button>
@@ -963,7 +964,7 @@ export default function VoiceJobAssistant({
               </div>
 
               {/* Custom Append Input */}
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-1.5 sm:gap-2 pt-1 min-w-0">
                 <input
                   type="text"
                   value={appendText}
@@ -974,42 +975,43 @@ export default function VoiceJobAssistant({
                       handleAppendNote();
                     }
                   }}
-                  placeholder="Type any extra note to append (e.g. tall ladder needed, pets on site)..."
-                  className="flex-1 px-3 py-2 bg-slate-50 rounded-lg border border-slate-300 text-xs font-medium text-slate-900 focus:bg-white focus:border-black focus:outline-hidden"
+                  placeholder="Type extra note to append..."
+                  className="flex-1 min-w-0 w-full px-3 py-2 bg-slate-50 rounded-lg border border-slate-300 text-xs font-medium text-slate-900 focus:bg-white focus:border-black focus:outline-hidden box-border"
                 />
                 <button
                   type="button"
                   onClick={() => handleAppendNote()}
                   disabled={!appendText.trim()}
-                  className="px-3.5 py-2 rounded-lg bg-black hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold transition-all cursor-pointer shrink-0"
+                  className="px-2.5 sm:px-3.5 py-2 rounded-lg bg-black hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold transition-all cursor-pointer shrink-0"
                 >
-                  Append Note
+                  <span className="hidden xs:inline">Append Note</span>
+                  <span className="xs:hidden">Append</span>
                 </button>
               </div>
             </div>
 
             {/* Detected Specifications / Highlights (Interactive Chips) */}
-            <div className="bg-white rounded-xl p-3.5 border border-black space-y-2">
-              <div className="flex items-center justify-between">
+            <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-black space-y-2 min-w-0 max-w-full box-border">
+              <div className="flex items-center justify-between flex-wrap gap-1">
                 <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider">
                   Key Specifications Detected ({extractedJob.keyHighlights?.length || 0})
                 </span>
                 <span className="text-[10px] text-slate-400">Click ✕ to remove</span>
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 min-w-0">
                 {extractedJob.keyHighlights && extractedJob.keyHighlights.length > 0 ? (
                   extractedJob.keyHighlights.map((spec, i) => (
                     <span
                       key={i}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-950 text-xs font-bold rounded-lg"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-950 text-xs font-bold rounded-lg max-w-full break-words"
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                      <span>{spec}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                      <span className="break-words min-w-0 leading-tight">{spec}</span>
                       <button
                         type="button"
                         onClick={() => handleRemoveHighlight(i)}
-                        className="text-blue-500 hover:text-red-600 hover:bg-blue-100 p-0.5 rounded-xs cursor-pointer ml-0.5"
+                        className="text-blue-500 hover:text-red-600 hover:bg-blue-100 p-0.5 rounded-xs cursor-pointer ml-0.5 shrink-0"
                         title="Remove specification"
                       >
                         <X className="w-3 h-3" />
@@ -1022,7 +1024,7 @@ export default function VoiceJobAssistant({
               </div>
 
               {/* Add Custom Highlight Input */}
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-1.5 sm:gap-2 pt-1 min-w-0">
                 <input
                   type="text"
                   value={newHighlightText}
@@ -1033,16 +1035,17 @@ export default function VoiceJobAssistant({
                       handleAddHighlight();
                     }
                   }}
-                  placeholder="Add custom spec tag (e.g. Worcester 30kW, 45sqm)..."
-                  className="flex-1 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-300 text-xs font-medium text-slate-900 focus:bg-white focus:border-black focus:outline-hidden"
+                  placeholder="Add custom spec tag (e.g. Worcester 30kW)..."
+                  className="flex-1 min-w-0 w-full px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-300 text-xs font-medium text-slate-900 focus:bg-white focus:border-black focus:outline-hidden box-border"
                 />
                 <button
                   type="button"
                   onClick={handleAddHighlight}
                   disabled={!newHighlightText.trim()}
-                  className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-800 text-xs font-bold transition-all cursor-pointer shrink-0"
+                  className="px-2.5 sm:px-3.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-800 text-xs font-bold transition-all cursor-pointer shrink-0"
                 >
-                  + Add Spec
+                  <span className="hidden xs:inline">+ Add Spec</span>
+                  <span className="xs:hidden">+ Add</span>
                 </button>
               </div>
             </div>
@@ -1053,35 +1056,37 @@ export default function VoiceJobAssistant({
             <button
               type="button"
               onClick={() => onApplyVoiceJob(extractedJob)}
-              className="flex-1 p-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black flex items-center justify-center gap-2 shadow-md active:scale-98 transition-all cursor-pointer text-sm"
+              className="w-full sm:flex-1 p-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black flex items-center justify-center gap-2 shadow-md active:scale-98 transition-all cursor-pointer text-sm"
             >
               <span>Confirm & Continue to Post</span>
               <ChevronRight className="w-4 h-4 stroke-[3]" />
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setExtractedJob(null);
-                setTranscript("");
-                setInterimTranscript("");
-                startVoiceRecording();
-              }}
-              className="px-4 py-3.5 rounded-xl bg-white border border-black text-slate-800 font-bold hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 text-xs cursor-pointer shadow-xs"
-            >
-              <RefreshCw className="w-4 h-4 text-slate-600" />
-              <span>Speak Again</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setExtractedJob(null);
-                setTranscript("");
-                setInterimTranscript("");
-              }}
-              className="px-4 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors flex items-center justify-center gap-1 text-xs cursor-pointer"
-            >
-              <span>Discard</span>
-            </button>
+            <div className="grid grid-cols-2 sm:flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setExtractedJob(null);
+                  setTranscript("");
+                  setInterimTranscript("");
+                  startVoiceRecording();
+                }}
+                className="px-3.5 py-3 rounded-xl bg-white border border-black text-slate-800 font-bold hover:bg-slate-100 transition-colors flex items-center justify-center gap-1.5 text-xs cursor-pointer shadow-xs"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                <span>Speak Again</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setExtractedJob(null);
+                  setTranscript("");
+                  setInterimTranscript("");
+                }}
+                className="px-3.5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors flex items-center justify-center gap-1 text-xs cursor-pointer"
+              >
+                <span>Discard</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

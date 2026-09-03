@@ -1,4 +1,4 @@
-import { textContainsTokenMatch, tokenize, tokenMatches, categoryMatchesSearch } from "@/src/lib/fuzzyMatch";
+import { textContainsTokenMatch, tokenize, tokenMatches, categoryMatchesSearch, getMatchingCategoriesForTrader } from "@/src/lib/fuzzyMatch";
 import React, { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronRight, X, AlertTriangle, MapPin, Camera, Image as ImageIcon, Loader2, Zap, CreditCard, Lock, Locate, Info, Sparkles, CheckCircle2, ShieldCheck, Tag, ExternalLink, Briefcase } from "lucide-react";
@@ -180,42 +180,13 @@ export default function EmergencyJobWizard() {
     fetchUser();
   }, [user]);
 
-  const filteredCategories = TRADE_CATEGORIES.filter(cat => {
-    const matchesSearch = categoryMatchesSearch(cat, searchQuery);
-    
-    // Normalize targetTrades to an array of strings
-    const tradesArray = Array.isArray(targetTrades) 
-      ? targetTrades 
-      : targetTrades 
-        ? [targetTrades] 
-        : [];
+  const traderRelatedCategories = React.useMemo(() => {
+    if (!targetTradespersonId || !targetTrades) return TRADE_CATEGORIES;
+    return getMatchingCategoriesForTrader(TRADE_CATEGORIES, targetTrades);
+  }, [targetTrades, targetTradespersonId]);
 
-    // If we have a specific target tradesperson, check for token-level overlap
-    const matchesTargetTrades = tradesArray.length > 0 
-      ? (() => {
-          const stopWords = new Set(["and", "or", "the", "with", "for", "our", "your", "its", "n", "of", "to", "in", "at", "by", "on", "a", "an", "n", "private", "maker", "services", "general", "domestic", "commercial", "home", "indoor", "outdoor", "installation", "installations", "repair", "repairs", "maintenance", "service", "specialist", "management", "coordination", "planner", "planning", "delivery", "transport", "about"]);
-          const traderTokens = tradesArray.flatMap(trade => tokenize(trade)).filter(tok => !stopWords.has(tok.toLowerCase()));
-          
-          const catTokens = tokenize(cat.name);
-          const subcategoryTokens = (cat.subcategories || []).flatMap(sub => tokenize(sub));
-          const allCatTokens = [...catTokens, ...subcategoryTokens].filter(tok => !stopWords.has(tok.toLowerCase()));
-
-          // Return true if ANY trader trade token overlaps with ANY category or subcategory token
-          return traderTokens.some(traderTok => 
-            allCatTokens.some(catTok => {
-              const tVal = catTok.toLowerCase();
-              const qVal = traderTok.toLowerCase();
-              if (tVal === qVal) return true;
-              if (qVal.startsWith(tVal) && tVal.length >= 4) return true;
-              if (tVal.startsWith(qVal) && qVal.length >= 4) return true;
-              if (qVal + "s" === tVal || tVal + "s" === qVal) return true;
-              return false;
-            })
-          );
-        })()
-      : true;
-      
-    return matchesSearch && matchesTargetTrades;
+  const filteredCategories = traderRelatedCategories.filter(cat => {
+    return categoryMatchesSearch(cat, searchQuery);
   });
 
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -503,6 +474,14 @@ export default function EmergencyJobWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user?.uid,
+          price_data: {
+            currency: 'gbp',
+            unit_amount: 499,
+            product_data: {
+              name: 'Emergency Priority Dispatch',
+              description: 'Instant broadcast to local on-call verified tradespeople'
+            }
+          },
           priceId: "price_mock_boost",
           mode: "payment",
           metadata: {
@@ -982,7 +961,7 @@ export default function EmergencyJobWizard() {
           </div>
 
           {/* Premium Job Upgrades */}
-          {platformConfig?.premiumJobUpgradesEnabled !== false && (
+          {platformConfig?.premiumJobUpgradesEnabled !== false && !targetTradespersonId && (
             <div className="space-y-3 pt-4 border-t border-red-100">
               <h3 className="text-lg font-extrabold text-black mt-2 mb-2">Premium Upgrades (Optional)</h3>
               
@@ -1000,7 +979,7 @@ export default function EmergencyJobWizard() {
               </div>
               <div className="flex-1 pr-6">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <h4 className="text-base font-extrabold text-black">Emergency Boost <span className="text-red-600 font-black ml-1">£5</span></h4>
+                  <h4 className="text-base font-extrabold text-black">Emergency Boost <span className="text-red-600 font-black ml-1">£{platformConfig?.paidAddons?.emergencyBoost?.price ?? 5}</span></h4>
                 </div>
                 <p className="text-xs text-black font-semibold line-clamp-2">Pin your job to the top of all local tradespeople's feeds and send them an instant push notification alert.</p>
               </div>
@@ -1054,7 +1033,7 @@ export default function EmergencyJobWizard() {
                 <div className="flex items-center justify-between px-2">
                   <span className="text-xs font-extrabold text-black uppercase">Total Fee</span>
                   <span className="text-lg font-black text-red-600">
-                    {isInstantMatch ? 'From ' : ''}£{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
+                    {isInstantMatch ? 'From ' : ''}£{((isEmergencyBoost ? (platformConfig?.paidAddons?.emergencyBoost?.price ?? 5) : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
                   </span>
                 </div>
               )}
@@ -1121,7 +1100,7 @@ export default function EmergencyJobWizard() {
                   <div className="text-right">
                     <p className="text-xs font-bold text-slate-500 uppercase">One-time</p>
                     <p className="text-xl font-black text-red-600">
-                      {isInstantMatch ? 'From ' : ''}£{((isEmergencyBoost ? 5 : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
+                      {isInstantMatch ? 'From ' : ''}£{((isEmergencyBoost ? (platformConfig?.paidAddons?.emergencyBoost?.price ?? 5) : 0) + (isInstantMatch ? (instantMatchCopy?.price || 2.99) : 0)).toFixed(2)}
                     </p>
                   </div>
                 </div>

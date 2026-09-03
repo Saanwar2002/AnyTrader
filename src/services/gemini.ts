@@ -704,3 +704,16 @@ export async function clearAiCache(): Promise<{ success: boolean; message: strin
   return res.json();
 }
 
+export interface SynonymClassificationResult {
+  categoryName: string;
+  tradeTitle: string;
+  keywords: string[];
+  confidence: number;
+  reasoning: string;
+}
+
+export async function classifyUnmatchedSearchTerm(term: string): Promise<SynonymClassificationResult> {
+  return callServerGemini("classifyUnmatchedSearchTermServer", [term]);
+}
+
+
