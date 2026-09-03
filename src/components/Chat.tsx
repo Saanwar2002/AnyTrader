@@ -5,6 +5,7 @@ import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, ChevronLeft, Loader2, User as UserIcon, Briefcase, Image as ImageIcon, X, Mic, Square, Play, Pause, MousePointer2, Trash2 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { playSound } from "@/src/lib/sound";
 
 export default function Chat() {
   const { conversationId } = useParams();
@@ -26,6 +27,7 @@ export default function Chat() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isInitialListener = useRef(true);
 
   // Get metadata from location state (e.g., job title, recipient name)
   const { jobTitle, recipientName } = location.state || {};
@@ -52,6 +54,18 @@ export default function Chat() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!isInitialListener.current) {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            if (data.senderId !== user?.uid) {
+              playSound('notification');
+            }
+          }
+        });
+      } else {
+        isInitialListener.current = false;
+      }
       setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
       // Scroll to bottom
@@ -331,7 +345,7 @@ export default function Chat() {
   if (loading) return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-12rem)] sm:h-[calc(100dvh-13rem)] bg-white rounded-2xl border border-black shadow-sm overflow-hidden">
+    <div className="flex flex-col flex-1 h-full sm:h-[calc(100dvh-11rem)] bg-white rounded-none sm:rounded-2xl border-0 sm:border border-black shadow-sm overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
       {/* Header */}
       <div className="p-3 sm:p-4 border-b border-black flex items-center justify-between bg-slate-50/50 gap-2 shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -471,7 +485,7 @@ export default function Chat() {
       )}
 
       {/* Input */}
-      <form onSubmit={handleSendMessage} className="p-2 sm:p-4 border-t border-black flex gap-1 sm:gap-2 items-center bg-white shrink-0">
+      <form onSubmit={handleSendMessage} className="p-2 sm:p-4 border-t border-black flex gap-1 sm:gap-2 items-center bg-white shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <input
           type="file"
           accept="image/*"

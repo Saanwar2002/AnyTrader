@@ -1,5 +1,54 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🚗 Tradesperson Category Job Feed Filter Precision (`JobFeed.tsx` & `matchingEngine.ts`) (Completed September 3, 2026)
+*   **Context & Directives**:
+    - "Also trader on boarded under category,, car valeting and detailing , but all platform wide active job posting showing in his find work job feed"
+*   **Root Causes Identified**:
+    1.  **Asynchronous Profile Initial State Race (`JobFeed.tsx`)**:
+        - When the "Find Work" feed loaded, `showMatchedOnly` was initialized via `useState` before `profile` loaded from Firestore context (`profile` was initially `null`).
+        - Because newly registered tradespeople had no saved `profile.activeFilter` in Firestore, the initial sync `useEffect` skipped.
+        - Consequently, `showMatchedOnly` remained `false`, causing `filteredJobs` to bypass trade category matching completely and display all 86+ platform-wide categories.
+    2.  **TypeError Exception in Matching Engine (`matchingEngine.ts`)**:
+        - `calculateTraderMatchScore` called `.map()` directly on `trader.trades` and `trader.tags` without checking if they were stored as comma-separated strings (e.g. `"Car Valeting & Detailing"`).
+        - This threw runtime `TypeError` exceptions during match score calculations, setting match scores to 0.
+*   **Solutions & Architecture Implemented**:
+    1.  **Default Best Match Only for Tradespeople (`JobFeed.tsx`)**:
+        - Updated initial state and cloud profile sync effect so that tradespeople (`profile?.role === "tradesperson"`) automatically default to `showMatchedOnly = true` ("Best Match Only") upon opening the feed unless explicitly toggled off in local storage.
+    2.  **String & Array Profile Normalization (`JobFeed.tsx` & `matchingEngine.ts`)**:
+        - Safely normalized `trades`, `category`, `tradeCategory`, `primaryTrade`, `services`, `tags`, `skills`, and `specialties` across string, array, or null representations.
+    3.  **Comprehensive Token & Subcategory Matching**:
+        - Enhanced `matchesTrade`, `matchesService`, and `matchesSpecialization` to perform exact, substring, and tokenized matching across `category`, `subcategory`, `title`, and `description` (e.g. matching "Car Valeting & Detailing" with "Car Valet", "Mobile Wash", "Detailing").
+
+## 🎯 Direct 1-to-1 Quote Request Trader Profile Name Display (Completed September 3, 2026)
+*   **Context & Directives**:
+    - "Also we do not need to show this text in direct 1 two 1 quote request . we can say traders profile name instead for direct quite request"
+*   **Fix Implemented (`JobDetails.tsx`)**:
+    - Updated empty quotes state (`quotes.length === 0`) to dynamically check if the job is a targeted 1-to-1 direct quote request or claimed Flash Deal (`job.targetTradespersonName` or `job.claimedDeal?.traderName`).
+    - Replaced generic "Waiting for quotes..." and "Verified tradespeople in your area are reviewing this job" with personalized trader name headers:
+      - **Heading**: `Waiting for [Trader Profile Name]...` (e.g. `Waiting for Apex Roofing...`)
+      - **Description**: `Direct 1-to-1 quote request sent to [Trader Profile Name]. They have been notified to review your job.`
+    - Preserved standard broadcast "Waiting for quotes..." text for general open market job posts.
+
+## 📱 Mobile Capacitor Input Accessibility & Notification Sound Alerts (Completed September 3, 2026)
+*   **Context & Directives**:
+    - "Text input box not accessible under message tab on trader and homeowners dashboards after capacitor wrap. Also no message or Notifications sound or alert after capacitor wrap."
+*   **Root Causes Identified**:
+    1.  **Mobile Bottom Navigation Bar Layout Overlap (`#mobile-bottom-nav`)**:
+        - On mobile devices and inside native Capacitor WebViews, the fixed bottom navigation bar (`#mobile-bottom-nav`) sits at `fixed bottom-0` with height `72px + env(safe-area-inset-bottom)`.
+        - Inside active conversation screens (`/chat/:conversationId`), `<main>` previously retained `pb-20`, and `Chat.tsx` used fixed height `h-[calc(100dvh-12rem)]`.
+        - This caused the bottom chat input form (`<form onSubmit={handleSendMessage}>`) to render directly underneath `#mobile-bottom-nav`, completely blocking or covering the text box.
+    2.  **Missing Audio Chimes & Haptics for Real-Time Messages and System Alerts**:
+        - While Firestore `onSnapshot` listeners created toast notices and unread count updates, no Web Audio chimes or native Capacitor haptics (`Haptics.impact`) were played on incoming messages or notification documents.
+*   **Solutions & Architecture Implemented**:
+    1.  **Dedicated Full-Screen Chat View Layout (`Layout.tsx` & `Chat.tsx`)**:
+        - **Bottom Navigation Hiding on Active Chat Routes**: Updated `Layout.tsx` so `#mobile-bottom-nav` is automatically hidden when navigating to active chat threads (`/chat/*`). When users return to `/messages`, the bottom tab bar automatically reappears for seamless tab navigation.
+        - **Flex-1 Responsive Chat Container**: Updated `<main>` wrapper and `Chat.tsx` to fill the available viewport height (`flex-1 h-full min-h-[calc(100dvh-104px)]`) with `p-0` on mobile and safe-area inset padding (`pb-[max(0.75rem,env(safe-area-inset-bottom))]`).
+        - **Virtual Keyboard Resizing**: Keyboard resize events (`KeyboardResize.Body`) cleanly shrink the body height while keeping the text input form pinned directly above the virtual keyboard without layout shifts.
+    2.  **Web Audio Sound Chimes & Native Capacitor Haptics (`src/lib/sound.ts`)**:
+        - **Web Audio Dual-Tone Notification Chime**: Enhanced `playSound('notification')` using native HTML5 Web Audio API oscillators (dual-tone E5 to A5 sine chime) with audio context resume unlock for instant sound playback without external MP3 asset dependency.
+        - **Haptics Integration**: Integrated `triggerHaptic(ImpactStyle.Medium)` into `playSound()` so every new message and system notification triggers physical haptic vibration on native mobile devices.
+        - **Real-Time Message Listener Triggers (`Chat.tsx`, `RideChat.tsx`, `Layout.tsx`)**: Wired real-time Firestore `snapshot.docChanges()` to trigger `playSound('notification')` whenever a new message arrives from the other participant.
+
 ## 🤖 AI Bot Trader Recommendation Precision & Category Synonym Matching (Completed September 3, 2026)
 *   **Context & Directives**:
     - "Can we fix this? We keep getting the same problem again and again. The AI bot is also showing the irrelevant traders to the user question or user inquiry. So the inquiry is about the cake and bake category, and the AI bot is suggesting the profiles of traders in different categories. Can you deep look into the logic and the codebase why the AI bot is not matching the traders profiles to the exact inquiry or the question of the user or the main category it is suggesting in the description?"
@@ -147,6 +196,25 @@
     12. **Job Posting Wizard Real-Time Subcategory & Custom Input Header Display (`PostJobWizard.tsx`)**:
         - Enhanced the step header card (`JobReminder`) to display the selected subcategory (or custom text entered into the Custom Text Box) directly underneath the main category in refined smaller text.
         - Automatically updates and persists throughout all remaining steps (Steps 2, 3, 3.5, 4, and 5) providing persistent contextual clarity on what the user is posting.
+    13. **Quote Submission Responsiveness & Exception Handling Fix (`JobDetails.tsx`, `QuickQuoteModal.tsx`)**:
+        - **Problem**: Traders reported the "Submit Quote" button was unresponsive or failing without feedback when submitting quotes.
+        - **Root Cause**: Disabled condition (`disabled={!quoteAmount}`) prevented button click feedback when `quoteAmount` was empty/invalid, missing null-checks on `job.homeownerId` caused Firestore `setDoc` payloads with `undefined` values to fail silently, and errors thrown during quote submission were set in state (`setError`) but never rendered visually in `JobDetails.tsx`.
+        - **Solution**:
+          - Sanitized and validated `quoteAmount` in `handleQuote` with user-friendly error banners and toast notifications ("Please enter a valid total quote amount in £.").
+          - Removed `disabled={!quoteAmount}` so clicking "Submit Quote" provides immediate validation feedback.
+          - Added null guards (`homeownerId: job.homeownerId || ""`, `payoutBreakdown` defaults, `(quoteMessage || "").trim()`) to prevent Firestore `undefined` field exceptions.
+          - Rendered `error` alert banner above the submit button in `JobDetails.tsx`.
+          - Allowed traders directly invited/requested by homeowners (`isDirectlyRequested`) to submit quotes even if the public job quote limit (5) was reached.
+    14. **Business Sign-Up Onboarding Verification Document "I'll do this later" Responsiveness (`Onboarding.tsx`)**:
+        - **Problem**: During business onboarding, clicking "I'll do this later" on Step 3 (Verification Required) felt unresponsive to clicks.
+        - **Root Cause**:
+          - Any validation issues (such as missing required fields or invalid mobile numbers) called `setError()` without resetting `loading` state or rendering the `{error}` banner on Step 3, causing silent button freezes.
+          - Missing required fields on Step 1 caused `handleSubmit()` to return early without user notification.
+        - **Solution**:
+          - Rendered a styled error alert box inside Step 3 (`{error && ...}`) so any validation or write errors are immediately visible.
+          - Added fallback navigation (`setStep(1)`) if core fields (Name, Postcode, Mobile Number) are missing or invalid, guiding users directly to what needs fixing.
+          - Added interactive loading spinners (`Loader2`) to both "I'll do this later" and "Complete Setup" buttons.
+          - Upgraded document upload trigger in Step 3 to support real device file selection (`<input type="file" accept="image/*,application/pdf" />`).
 
 ## 🔍 Zero-Code Search Demand Telemetry & Dynamic Synonyms Engine (Completed September 2, 2026)
 *   **Context & Directives**:

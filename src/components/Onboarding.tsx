@@ -120,6 +120,9 @@ export default function Onboarding() {
     // but the db still requires name to exist for users.
     if (!user || !role || (role !== 'admin' && (!name || !postcode || (!user?.isAnonymous && !phone)))) {
       console.log("handleSubmit returning early: Missing required fields");
+      setError("Please complete your Name, Postcode, and UK Mobile Number in Step 1 to finish setup.");
+      setLoading(false);
+      setStep(1);
       return;
     }
 
@@ -130,6 +133,7 @@ export default function Onboarding() {
     if (role === 'admin' && !isAuthorizedAdmin) {
       setError("Unauthorized role selected. Please choose Homeowner, Tradesperson / Business, or Driver.");
       setRole("homeowner");
+      setLoading(false);
       return;
     }
 
@@ -138,12 +142,15 @@ export default function Onboarding() {
       const emailDomain = user.email?.split("@")[1]?.toLowerCase();
       if (emailDomain && BLOCKED_DOMAINS.includes(emailDomain)) {
         setError("Sorry, we do not accept registrations from this email provider. Please use a standard email address.");
+        setLoading(false);
         return;
       }
 
       // 2. Phone Number Validation (Basic UK format check)
       if (!user?.isAnonymous && !/^(\+44|0)7\d{9}$/.test(cleanPhone)) {
         setError("Please enter a valid UK mobile number (e.g., 07123 456789).");
+        setLoading(false);
+        setStep(1);
         return;
       }
 
@@ -360,6 +367,8 @@ export default function Onboarding() {
         ),
         subscriptionType: role === "business" ? "business" : null,
         businessCategory: role === "business" ? businessCategory : null,
+        category: businessCategory || selectedTrades[0] || "General Trades",
+        primaryTrade: selectedTrades[0] || businessCategory || "General Trades",
         permissions: finalPermissions,
         deviceId,
         ipAddress: detectedIp,
@@ -372,7 +381,7 @@ export default function Onboarding() {
         postcode: finalRole === "admin" && !postcode ? "N/A" : postcode.toUpperCase().replace(/\s/g, ""),
         city,
         county,
-        trades: selectedTrades,
+        trades: selectedTrades.length > 0 ? selectedTrades : (businessCategory ? [businessCategory] : []),
         subcategories: selectedSubcategories,
         vehicleCategories: finalRole === "fleet_driver" ? vehicleCategories : null,
         isPetFriendly: finalRole === "fleet_driver" ? isPetFriendly : false,
@@ -1240,6 +1249,16 @@ export default function Onboarding() {
                 </div>
               </div>
 
+              {error && (
+                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                  <button type="button" onClick={() => setError(null)} className="text-red-900 font-extrabold hover:underline ml-2">✕</button>
+                </div>
+              )}
+
               <div className="space-y-4">
                 {uniqueRequiredCerts.map((cert, idx) => (
                   <div key={idx} className="p-5 rounded-[2rem] border-2 border-black bg-slate-50/50 space-y-4">
@@ -1251,46 +1270,64 @@ export default function Onboarding() {
                         <span className="text-[10px] bg-slate-200 text-slate-500 px-3 py-1 rounded-full font-black uppercase tracking-widest">Required</span>
                       )}
                     </div>
-                    <button 
-                      onClick={() => {
-                        // Mock upload
-                        const mockUrl = `https://example.com/docs/${(cert as string).replace(/\s/g, '_')}.pdf`;
-                        setVerificationDocs(prev => [...prev.filter(d => d.type !== cert), { type: cert, fileUrl: mockUrl }]);
-                      }}
-                      className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-black bg-white text-xs font-black text-slate-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all group"
+                    <label 
+                      htmlFor={`cert-upload-${idx}`}
+                      className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-black bg-white text-xs font-black text-slate-500 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all group cursor-pointer"
                     >
                       <Upload className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
-                      Upload Document
-                    </button>
+                      <span>{verificationDocs.find(d => d.type === cert) ? "Replace Document" : "Choose / Upload Document"}</span>
+                      <input
+                        id={`cert-upload-${idx}`}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              const mockUrl = reader.result as string || `https://example.com/docs/${(cert as string).replace(/\s/g, '_')}.pdf`;
+                              setVerificationDocs(prev => [...prev.filter(d => d.type !== cert), { type: cert, fileUrl: mockUrl }]);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
                   </div>
                 ))}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
+                  type="button"
                   onClick={() => setStep(role === "fleet_driver" ? 1 : 2)}
-                  className="w-full sm:w-auto p-5 rounded-[2rem] border-2 border-black font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto p-5 rounded-[2rem] border-2 border-black font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <ChevronLeft className="w-5 h-5" /> Back
                 </button>
                 <div className="flex-1 flex flex-col sm:flex-row gap-4">
                   <button
+                    type="button"
                     onClick={() => {
+                      setError(null);
                       setSelectedTier(platformConfig?.feeTiers?.[0]?.name || "Free Trial");
                       handleSubmit();
                     }}
                     disabled={loading}
-                    className="flex-1 bg-white border-2 border-black text-slate-600 p-5 rounded-[2rem] font-black text-sm sm:text-lg hover:border-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                    className="flex-1 bg-white border-2 border-black text-slate-700 p-5 rounded-[2rem] font-black text-sm sm:text-base hover:border-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                   >
-                    I'll do this later
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin text-slate-600" /> : "I'll do this later"}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
+                      setError(null);
                       setSelectedTier(platformConfig?.feeTiers?.[0]?.name || "Free Trial");
                       handleSubmit();
                     }}
                     disabled={loading}
-                    className="flex-1 bg-primary text-white p-5 rounded-[2rem] font-black text-sm sm:text-lg hover:bg-primary-hover transition-all shadow-xl shadow-primary/30 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                    className="flex-1 bg-primary text-white p-5 rounded-[2rem] font-black text-sm sm:text-base hover:bg-primary-hover transition-all shadow-xl shadow-primary/30 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
                   >
                     {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Complete Setup"}
                   </button>

@@ -76,14 +76,24 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
 
   // --- GROUP 3: Past Job Similarity & Trade Skill Match (25% Weight) ---
   const jobCategory = (job.category || "").toLowerCase();
-  const traderTrades = (trader.trades || [trader.category || ""]).map((t: string) => (t || "").toLowerCase());
-  const jobText = `${job.title || ""} ${job.description || ""}`.toLowerCase();
+  const rawTrades = Array.isArray(trader.trades)
+    ? trader.trades
+    : typeof trader.trades === "string"
+    ? (trader.trades as string).split(",")
+    : [trader.category || trader.tradeCategory || trader.primaryTrade || ""];
+  const traderTrades = rawTrades.filter(Boolean).map((t: string) => (t || "").trim().toLowerCase());
+  const jobText = `${job.category || ""} ${job.subcategory || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
   
   let skillScore = 30; // base score
-  const hasExactCategory = traderTrades.some((t: string) => t.includes(jobCategory) || jobCategory.includes(t));
+  const hasExactCategory = traderTrades.some((t: string) => t && (t.includes(jobCategory) || jobCategory.includes(t)));
   if (hasExactCategory) skillScore += 45;
 
-  const traderTags = (trader.tags || trader.skills || []).map((s: string) => (s || "").toLowerCase());
+  const rawTags = [
+    ...(Array.isArray(trader.tags) ? trader.tags : typeof trader.tags === "string" ? (trader.tags as string).split(",") : []),
+    ...(Array.isArray(trader.skills) ? trader.skills : typeof trader.skills === "string" ? (trader.skills as string).split(",") : []),
+    ...(Array.isArray(trader.specialties) ? trader.specialties : typeof trader.specialties === "string" ? (trader.specialties as string).split(",") : [])
+  ];
+  const traderTags = rawTags.filter(Boolean).map((s: string) => (s || "").trim().toLowerCase());
   const matchedTagsCount = traderTags.filter((tag: string) => tag && jobText.includes(tag)).length;
   skillScore += Math.min(25, matchedTagsCount * 8);
 

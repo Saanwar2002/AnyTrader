@@ -49,10 +49,11 @@ export default function BusinessDashboard() {
       return;
     }
 
-    // Fetch recent quotes across all business jobs
+    // Fetch recent quotes across all business jobs/quotes
+    const isTraderUser = ["tradesperson", "trader", "business"].includes(profile?.role) || profile?.subscriptionType === "business";
     const quotesQuery = query(
       collectionGroup(db, "quotes"),
-      where("homeownerId", "==", user.uid),
+      where(isTraderUser ? "tradespersonId" : "homeownerId", "==", user.uid),
       orderBy("createdAt", "desc"),
       limit(5)
     );

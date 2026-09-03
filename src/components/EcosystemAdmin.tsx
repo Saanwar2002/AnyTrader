@@ -66,7 +66,7 @@ export default function EcosystemAdmin() {
     });
 
     // Watchdog: Fetch traders with expiring docs
-    const unsubUsers = onSnapshot(query(collection(db, "users"), where("role", "==", "tradesperson")), (snap) => {
+    const unsubUsers = onSnapshot(query(collection(db, "users"), where("role", "in", ["tradesperson", "trader", "business"])), (snap) => {
       const traders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const now = new Date();
       const thirtyDaysFromNow = new Date();

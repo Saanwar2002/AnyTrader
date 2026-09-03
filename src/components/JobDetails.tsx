@@ -612,25 +612,42 @@ const libraries: any[] = ['places', 'geometry'];
     setIsSubmittingQuote(true);
     setError(null);
     try {
+      const cleanAmountStr = (quoteAmount || "").toString().replace(/[^0-9.]/g, "");
+      const amountEntered = parseFloat(cleanAmountStr);
+      if (!cleanAmountStr || isNaN(amountEntered) || amountEntered <= 0) {
+        const errMsg = "Please enter a valid total quote amount in £.";
+        setError(errMsg);
+        toast.error(errMsg);
+        setIsSubmittingQuote(false);
+        return;
+      }
+
       // Check limits via server-side API
-      const limitResponse = await fetch("/api/check-quote-limit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid, jobId: id })
-      });
-      
-      const limitData = await limitResponse.json();
+      let limitData: any = { allowed: true };
+      try {
+        const limitResponse = await fetch("/api/check-quote-limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.uid, jobId: id })
+        });
+        if (limitResponse.ok) {
+          limitData = await limitResponse.json();
+        }
+      } catch (limitErr) {
+        console.warn("Could not check quote limit, proceeding:", limitErr);
+      }
       
       const existingQuote = quotes.find(q => q.tradespersonId === user.uid);
       
-      if (!existingQuote && !limitData.allowed) {
-        setError(limitData.error || `You have reached your monthly limit of ${limitData.limit} quotes. Please upgrade your tier to quote on more jobs.`);
+      if (!existingQuote && limitData.allowed === false) {
+        const limitMsg = limitData.error || `You have reached your monthly limit of ${limitData.limit} quotes. Please upgrade your tier to quote on more jobs.`;
+        setError(limitMsg);
+        toast.error(limitMsg);
         setIsSubmittingQuote(false);
         return;
       }
 
       const matchingDeal = getMatchingDeal();
-      const amountEntered = parseFloat(quoteAmount);
       let finalAmount = amountEntered;
       let originalAmountVal = amountEntered;
       let isDiscountApplied = false;
@@ -673,26 +690,26 @@ const libraries: any[] = ['places', 'geometry'];
         tradespersonPhone: profile?.phone || "",
         tradespersonRating: profile?.rating || 5.0,
         tradespersonCategory: profile?.trades?.[0] || profile?.trade || profile?.category || job.category || "",
-        homeownerId: job.homeownerId,
+        homeownerId: job.homeownerId || "",
         amount: finalAmount,
         originalAmount: originalAmountVal,
         isDiscountApplied,
         discountPercentage: discountPercentageVal,
         appliedFlashDealId: appliedFlashDealIdVal,
-        netPayoutValue: payoutBreakdown.netPayout,
-        stripeFeeAmount: payoutBreakdown.stripeFee,
-        platformCommission: payoutBreakdown.platformCommission,
-        paymentRail: payoutBreakdown.paymentRail,
-        message: quoteMessage.trim(),
+        netPayoutValue: payoutBreakdown.netPayout || 0,
+        stripeFeeAmount: payoutBreakdown.stripeFee || 0,
+        platformCommission: payoutBreakdown.platformCommission || 0,
+        paymentRail: payoutBreakdown.paymentRail || "card",
+        message: (quoteMessage || "").trim(),
         startDate: resolvedStartDate,
-        isImmediateStart,
+        isImmediateStart: Boolean(isImmediateStart),
         estimatedTimeline: estimatedTimeline || "1 Full day (8h)",
-        paymentPreference,
-        quoteScope,
+        paymentPreference: paymentPreference || "fixed_price",
+        quoteScope: quoteScope || "complete_package",
         lineItems: useLineItems ? lineItems.filter(item => item.description && item.amount) : [],
-        depositTerm,
-        guaranteeTerm,
-        partsWarranty,
+        depositTerm: depositTerm || "0_percent_completion",
+        guaranteeTerm: guaranteeTerm || "1_year_workmanship",
+        partsWarranty: partsWarranty || "standard_parts",
         status: "pending",
         paymentTrack: isQuickTrack ? "quick" : "project",
         milestones: defaultMilestones,
@@ -717,21 +734,27 @@ const libraries: any[] = ['places', 'geometry'];
       } else {
         quoteDataPayload.createdAt = serverTimestamp();
         await setDoc(targetQuoteRef, quoteDataPayload);
-        const { increment } = await import("firebase/firestore");
-        await updateDoc(doc(db, "jobs", id), {
-          quoteCount: increment(1),
-          lastQuoteDate: serverTimestamp()
-        });
+        try {
+          const { increment } = await import("firebase/firestore");
+          await updateDoc(doc(db, "jobs", id), {
+            quoteCount: increment(1),
+            lastQuoteDate: serverTimestamp()
+          });
+        } catch (jobUpdateErr) {
+          console.warn("Non-fatal: Could not update job quote count:", jobUpdateErr);
+        }
       }
 
       // Notify homeowner
-      await sendNotification(
-        job.homeownerId,
-        "Quote Received/Updated",
-        `A tradesperson has ${existingQuote ? 'updated their' : 'submitted a'} quote for: ${job.title}`,
-        "quote",
-        `/job/${id}`
-      );
+      if (job.homeownerId) {
+        await sendNotification(
+          job.homeownerId,
+          "Quote Received/Updated",
+          `A tradesperson has ${existingQuote ? 'updated their' : 'submitted a'} quote for: ${job.title}`,
+          "quote",
+          `/job/${id}`
+        );
+      }
 
       // Track exclusive limits if applicable
       if (limitData.isJobExclusive) {
@@ -755,13 +778,11 @@ const libraries: any[] = ['places', 'geometry'];
       setQuoteStartDate("");
       setIsImmediateStart(false);
       setEstimatedTimeline("");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error submitting quote:", err);
-      try {
-        handleFirestoreError(err, OperationType.WRITE, `jobs/${id}/quotes`);
-      } catch (e: any) {
-        setError(e.message);
-      }
+      const msg = err?.message || "Failed to submit quote. Please check your connection and try again.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmittingQuote(false);
     }
@@ -4711,23 +4732,30 @@ const libraries: any[] = ['places', 'geometry'];
               </div>
             )}
 
-            {quotes.length === 0 && (!job.quoteCount || job.quoteCount === 0) && (
-              <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center border border-black">
-                  <Clock className="w-8 h-8 text-blue-600 animate-pulse" />
+            {quotes.length === 0 && (!job.quoteCount || job.quoteCount === 0) && (() => {
+              const directTraderName = job.targetTradespersonName || job.claimedDeal?.traderName || job.claimedDeal?.businessName;
+              return (
+                <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center border border-black">
+                    <Clock className="w-8 h-8 text-blue-600 animate-pulse" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xl font-bold text-slate-900">
+                      {isHomeowner
+                        ? (directTraderName ? `Waiting for ${directTraderName}...` : "Waiting for quotes...")
+                        : "No quotes submitted yet"}
+                    </h4>
+                    <p className="text-sm text-slate-500 max-w-[320px] mx-auto">
+                      {isHomeowner
+                        ? (directTraderName
+                            ? `Direct 1-to-1 quote request sent to ${directTraderName}. They have been notified to review your job.`
+                            : "Verified tradespeople in your area are reviewing this job.")
+                        : "Be the first verified tradesperson to submit a quote for this job below!"}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <h4 className="text-xl font-bold text-slate-900">
-                    {isHomeowner ? "Waiting for quotes..." : "No quotes submitted yet"}
-                  </h4>
-                  <p className="text-sm text-slate-500 max-w-[280px] mx-auto">
-                    {isHomeowner
-                      ? "Verified tradespeople in your area are reviewing this job."
-                      : "Be the first verified tradesperson to submit a quote for this job below!"}
-                  </p>
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
         )}
@@ -5217,12 +5245,30 @@ const libraries: any[] = ['places', 'geometry'];
                 </ul>
               </div>
 
+              {error && (
+                <div className="p-3.5 bg-red-50 border border-red-300 rounded-xl text-red-700 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                  <button type="button" onClick={() => setError(null)} className="text-red-900 font-extrabold hover:underline ml-2">✕</button>
+                </div>
+              )}
+
               <button 
+                type="button"
                 onClick={handleQuote}
-                disabled={!quoteAmount || isSubmittingQuote}
-                className="w-full bg-[#1e3a5f] text-white p-4 rounded-2xl font-bold hover:bg-blue-900 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={isSubmittingQuote}
+                className="w-full bg-[#1e3a5f] text-white p-4 rounded-2xl font-bold hover:bg-blue-900 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-98"
               >
-                {isSubmittingQuote ? <Loader2 className="w-5 h-5 animate-spin" /> : (needsRequote ? "Update Quote" : "Submit Quote")}
+                {isSubmittingQuote ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Submitting Quote...</span>
+                  </>
+                ) : (
+                  needsRequote ? "Update Quote" : "Submit Quote"
+                )}
               </button>
             </div>
           </div>

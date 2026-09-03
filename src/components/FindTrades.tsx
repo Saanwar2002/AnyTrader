@@ -769,14 +769,13 @@ export default function FindTrades() {
       console.error("Error fetching active search ads:", err);
     });
 
-    const q = query(collection(db, "users"), where("role", "==", "tradesperson"));
+    const q = query(collection(db, "users"), where("role", "in", ["tradesperson", "trader", "business"]));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Tradesperson));
-      if (data.length > 0) {
-        setTradespeople(data);
-      } else {
-        seedMockTraders().catch(console.error);
-      }
+      const dbTraders = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Tradesperson));
+      const seedPool = INITIAL_MOCK_TRADERS as Tradesperson[];
+      const dbUids = new Set(dbTraders.map(t => t.uid));
+      const merged = [...dbTraders, ...seedPool.filter(s => !dbUids.has(s.uid))];
+      setTradespeople(merged);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching tradespeople:", error);
@@ -839,6 +838,8 @@ export default function FindTrades() {
           tp.categories?.includes(selectedCategory) || 
           tp.primaryTrade === selectedCategory || 
           tp.category === selectedCategory || 
+          tp.businessCategory === selectedCategory ||
+          tp.subcategories?.includes(selectedCategory) ||
           tp.services?.includes(selectedCategory) || 
           tp.skills?.includes(selectedCategory);
         

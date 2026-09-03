@@ -131,7 +131,9 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
       return;
     }
 
-    if (!existingQuoteId && (job.quoteCount || 0) >= 5) {
+    const isDirectlyRequested = job.targetTradespersonId === user?.uid || (job.invitedTraderIds && job.invitedTraderIds.includes(user?.uid));
+
+    if (!existingQuoteId && (job.quoteCount || 0) >= 5 && !isDirectlyRequested) {
       toast.error("This job has reached the maximum limit of 5 quotes.");
       return;
     }
@@ -164,19 +166,19 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
         tradespersonName: profile?.businessName || profile?.name || "Tradesperson",
         tradespersonPhone: profile?.phone || "",
         tradespersonRating: profile?.rating || 5.0,
-        tradespersonCategory: profile?.trades?.[0] || profile?.trade || profile?.category || job.category,
-        homeownerId: job.homeownerId,
+        tradespersonCategory: profile?.trades?.[0] || profile?.trade || profile?.category || job.category || "",
+        homeownerId: job.homeownerId || "",
         amount: numAmount,
         originalAmount: numAmount,
         pricingType,
-        netPayoutValue: payout.netPayout,
-        stripeFeeAmount: payout.stripeFee,
-        platformCommission: payout.platformCommission,
-        paymentRail: payout.paymentRail,
-        message: quoteMessage.trim(),
+        netPayoutValue: payout.netPayout || 0,
+        stripeFeeAmount: payout.stripeFee || 0,
+        platformCommission: payout.platformCommission || 0,
+        paymentRail: payout.paymentRail || "card",
+        message: (quoteMessage || "").trim(),
         startDate: resolvedStartDate,
         isImmediateStart: startDateType === "immediate",
-        estimatedTimeline: estimatedDuration.replace(/_/g, " "),
+        estimatedTimeline: (estimatedDuration || "").replace(/_/g, " "),
         paymentPreference: "fixed_price",
         quoteScope,
         depositTerm: "0_percent_completion",
@@ -196,7 +198,7 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
         const { arrayUnion } = await import("firebase/firestore");
         quoteData.history = arrayUnion({
           amount: numAmount,
-          message: quoteMessage.trim(),
+          message: (quoteMessage || "").trim(),
           timestamp: new Date().toISOString(),
           reason: "Quick Quote Update"
         });
@@ -205,21 +207,27 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
         quoteData.createdAt = serverTimestamp();
         await setDoc(quoteRef, quoteData);
 
-        const { increment } = await import("firebase/firestore");
-        await updateDoc(doc(db, "jobs", job.id), {
-          quoteCount: increment(1),
-          lastQuoteDate: serverTimestamp(),
-        });
+        try {
+          const { increment } = await import("firebase/firestore");
+          await updateDoc(doc(db, "jobs", job.id), {
+            quoteCount: increment(1),
+            lastQuoteDate: serverTimestamp(),
+          });
+        } catch (updateErr) {
+          console.warn("Non-fatal: Could not update job quote count:", updateErr);
+        }
       }
 
       // Send in-app notification to homeowner
-      await sendNotification(
-        job.homeownerId,
-        existingQuoteId ? "Quote Updated" : "New Quote Received",
-        `${profile?.businessName || profile?.name || "A tradesperson"} ${existingQuoteId ? 'updated their quote to' : 'submitted a quote of'} £${numAmount} for: ${job.title}`,
-        "quote",
-        `/job/${job.id}`
-      );
+      if (job.homeownerId) {
+        await sendNotification(
+          job.homeownerId,
+          existingQuoteId ? "Quote Updated" : "New Quote Received",
+          `${profile?.businessName || profile?.name || "A tradesperson"} ${existingQuoteId ? 'updated their quote to' : 'submitted a quote of'} £${numAmount} for: ${job.title}`,
+          "quote",
+          `/job/${job.id}`
+        );
+      }
 
       toast.success(existingQuoteId ? `Quote updated to £${numAmount}!` : `Quote of £${numAmount} submitted successfully!`);
       if (onQuoteSubmitted) {

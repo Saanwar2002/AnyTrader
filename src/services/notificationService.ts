@@ -8,7 +8,7 @@ export async function distributeJobNotifications(jobId: string, category: string
     // 2. Fetch all tradespeople in the target category (simplified, doing frontend filtering for category)
     const q = query(
       collection(db, "users"),
-      where("role", "==", "tradesperson")
+      where("role", "in", ["tradesperson", "trader", "business"])
     );
     const snapshot = await getDocs(q);
     

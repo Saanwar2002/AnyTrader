@@ -1912,9 +1912,10 @@ async function startServer() {
       if (!db) return res.json({ allowed: true, warning: "Database backend disabled in sandbox" });
 
       const userDoc = await db.collection("users").doc(userId).get();
-      if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
-
-      const userData = userDoc.data() || {};
+      let userData: any = {};
+      if (userDoc.exists) {
+        userData = userDoc.data() || {};
+      }
       const platformConfig = await getCachedConfig("global");
       const globalTiers = await getCachedConfig("global_tiers");
       

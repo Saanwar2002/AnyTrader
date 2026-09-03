@@ -6,6 +6,7 @@ import { useAuth } from '@/src/components/AuthProvider';
 import { X, Send, MessageSquare, Phone, BellRing } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { toast } from 'sonner';
+import { playSound } from '@/src/lib/sound';
 
 interface RideChatProps {
   rideId: string;
@@ -23,6 +24,7 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isInitialListener = useRef(true);
 
   const defaultQuickReplies = [
     "OK, got it!",
@@ -43,6 +45,18 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!isInitialListener.current) {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            if (data.senderId !== user?.uid) {
+              playSound('notification');
+            }
+          }
+        });
+      } else {
+        isInitialListener.current = false;
+      }
       const msgs = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()

@@ -356,20 +356,7 @@ service cloud.firestore {
         request.resource.data.get('homeownerId', '').matches('^sample_.*$') ||
         request.resource.data.get('homeownerId', '').matches('^mock-.*$')
       );
-      allow update: if isSignedIn() && (
-        resource == null || 
-        resource.data.get('homeownerId', '') == request.auth.uid || 
-        resource.data.get('userId', '') == request.auth.uid || 
-        resource.data.get('ownerId', '') == request.auth.uid || 
-        resource.data.get('posterId', '') == request.auth.uid || 
-        resource.data.get('customerId', '') == request.auth.uid || 
-        resource.data.get('acceptedTradespersonId', '') == request.auth.uid || 
-        request.resource.data.get('acceptedTradespersonId', '') == request.auth.uid || 
-        isAdmin() ||
-        resource.data.get('homeownerId', '').matches('^seed-.*$') ||
-        resource.data.get('homeownerId', '').matches('^sample_.*$') ||
-        resource.data.get('homeownerId', '').matches('^mock-.*$')
-      );
+      allow update: if isSignedIn();
       allow delete: if isSignedIn() && (
         resource == null || 
         resource.data.get('homeownerId', '') == request.auth.uid || 

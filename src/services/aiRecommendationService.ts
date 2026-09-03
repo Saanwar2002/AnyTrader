@@ -337,7 +337,7 @@ export async function getHybridTraderRecommendations(
     if (!liveTradersPool || liveTradersPool.length === 0) {
       try {
         const usersRef = collection(db, "users");
-        const q = query(usersRef, where("role", "in", ["tradesperson", "trader"]), limit(30));
+        const q = query(usersRef, where("role", "in", ["tradesperson", "trader", "business"]), limit(30));
         const snap = await getDocs(q);
         if (!snap.empty) {
           firestoreTraders = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Tradesperson));
@@ -362,8 +362,15 @@ export async function getHybridTraderRecommendations(
     const queryLower = (userQuery || "").toLowerCase().trim();
     const targetAliases = getCategoryAliases(category);
 
-    // Extract significant query tokens (min 3 chars, skip noise words)
-    const noiseWords = new Set(["how", "much", "does", "cost", "what", "where", "when", "who", "which", "is", "are", "the", "and", "for", "with", "apply", "laws", "rule", "rules", "need", "hire", "find", "best", "good", "local"]);
+    // Extract significant query tokens (min 3 chars, skip noise and generic non-trade words)
+    const noiseWords = new Set([
+      "how", "much", "does", "cost", "what", "where", "when", "who", "which", "is", "are", "was", "were", "been",
+      "the", "and", "for", "with", "apply", "laws", "rule", "rules", "need", "hire", "find", "best", "good", "local",
+      "system", "systems", "installed", "installing", "installation", "new", "complete", "including", "included",
+      "house", "home", "full", "done", "week", "weeks", "work", "price", "prices", "quote", "quotes", "about", "tell",
+      "estimate", "service", "unit", "area", "type", "within", "around", "near", "nearby", "trader", "tradesperson",
+      "company", "business"
+    ]);
     const queryTokens = queryLower
       .split(/[^a-z0-9]+/i)
       .filter(t => t.length >= 3 && !noiseWords.has(t));
@@ -375,22 +382,26 @@ export async function getHybridTraderRecommendations(
       const traderTrades = (t.trades || []).map((tr: string) => tr.toLowerCase());
       const recCats = (t.recommendedCategories || []).map((rc: string) => rc.toLowerCase());
       const traderCat = (t.category || "").toLowerCase();
+      const busCat = (t.businessCategory || "").toLowerCase();
       const primary = (t.primaryTrade || "").toLowerCase();
       const bio = (t.bio || "").toLowerCase();
       const company = (t.businessName || t.companyName || "").toLowerCase();
       const services = (t.services || []).map((s: string) => s.toLowerCase());
       const tags = ((t as any).tags || []).map((tg: string) => tg.toLowerCase());
       const skills = ((t as any).skills || []).map((sk: string) => sk.toLowerCase());
+      const subcats = (t.subcategories || []).map((sb: string) => sb.toLowerCase());
 
       const allTraderText = [
         ...traderTrades,
         ...recCats,
         traderCat,
+        busCat,
         primary,
         company,
         ...services,
         ...tags,
         ...skills,
+        ...subcats,
         bio
       ].join(" ");
 
@@ -399,10 +410,12 @@ export async function getHybridTraderRecommendations(
         return (
           traderTrades.some((tr: string) => tr.includes(alias) || alias.includes(tr)) ||
           recCats.some((rc: string) => rc.includes(alias) || alias.includes(rc)) ||
-          traderCat.includes(alias) ||
-          primary.includes(alias) ||
+          traderCat.includes(alias) || alias.includes(traderCat) ||
+          busCat.includes(alias) || alias.includes(busCat) ||
+          primary.includes(alias) || alias.includes(primary) ||
           services.some((s: string) => s.includes(alias) || alias.includes(s)) ||
           tags.some((tg: string) => tg.includes(alias) || alias.includes(tg)) ||
+          subcats.some((sb: string) => sb.includes(alias) || alias.includes(sb)) ||
           company.includes(alias)
         );
       });
@@ -411,6 +424,7 @@ export async function getHybridTraderRecommendations(
       const tokenMatchCount = queryTokens.filter(tok => allTraderText.includes(tok)).length;
       const matchesTokens = queryTokens.length > 0 && tokenMatchCount >= Math.min(2, queryTokens.length);
 
+      // Require alias match OR specific trade token match to prevent off-category traders
       return matchesAlias || matchesTokens;
     });
 

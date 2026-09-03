@@ -11,6 +11,7 @@ import { FloatingTradeBotWidget } from "./FloatingTradeBotWidget";
 import { Logo } from "./Logo";
 import { AnimatePresence, motion } from "motion/react";
 import { setNativeStatusBar, triggerHaptic } from "@/src/lib/capacitor";
+import { playSound } from "@/src/lib/sound";
 import { usePortal } from "../lib/PortalContext";
 import CrossPortalBanner from "./shared/CrossPortalBanner";
 import { getShopRecommendations } from "@/src/services/gemini";
@@ -251,6 +252,7 @@ export default function Layout() {
 
             const visibleAt = data.visibleAt ? (data.visibleAt.toDate ? data.visibleAt.toDate() : new Date(data.visibleAt)) : now;
             if (visibleAt <= now) {
+              playSound('notification');
               toast.info(data.title || "New Notification", {
                 description: data.message || "You have a new alert.",
                 duration: 5000,
@@ -1001,7 +1003,7 @@ export default function Layout() {
         "flex-1 w-full relative min-h-0",
         isDriverTerminal || activePortal === "anyroller" 
           ? "p-0 flex flex-col overflow-hidden" 
-          : (isFullScreenPage ? "p-0 flex flex-col" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
+          : (isFullScreenPage || location.pathname.startsWith('/chat/') ? "p-0 sm:px-4 sm:pt-4 sm:pb-6 flex flex-col min-h-[calc(100dvh-104px)] h-full" : "max-w-7xl mx-auto px-4 pt-4 pb-20 sm:pb-6")
       )}>
         <Outlet />
       </main>
@@ -1335,7 +1337,7 @@ export default function Layout() {
       <TermsAcceptancePrompt />
 
       {/* Bottom Navigation (Mobile) */}
-      {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && !location.pathname.startsWith('/profile') && (
+      {navItems && navItems.length > 0 && !location.pathname.startsWith('/post-job') && !location.pathname.startsWith('/post-emergency-job') && !location.pathname.startsWith('/profile') && !location.pathname.startsWith('/chat/') && (
         <nav id="mobile-bottom-nav" className={cn(
           "sm:hidden fixed bottom-0 left-0 right-0 w-full backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] border-t pb-[env(safe-area-inset-bottom,0px)] h-[calc(4.5rem+env(safe-area-inset-bottom,0px))] flex items-center justify-between z-[100] transition-all duration-300",
           isDriverTerminal ? "bg-[#1A1A1E] border-[#2C2C30]" : 
