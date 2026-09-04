@@ -279,57 +279,190 @@ export function findMatchingTradeCategories(userText: string, maxResults: number
 /**
  * Normalizes trade strings and category aliases to ensure cross-matching.
  */
-function getCategoryAliases(category: string): string[] {
-  const cat = (category || "").toLowerCase().trim();
-  const aliases = new Set<string>([cat]);
+export function getCategoryAliases(categories: string | string[]): string[] {
+  const catList = Array.isArray(categories) ? categories : [categories];
+  const aliases = new Set<string>();
 
-  if (cat.includes("cake") || cat.includes("bake") || cat.includes("catering") || cat.includes("pastry")) {
-    ["bake n cake", "cake maker & baker", "cake maker", "baker", "baking", "wedding cakes", "celebration cakes", "bespoke bakes", "catering & private chef", "pastry chef"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("plumb") || cat.includes("gas") || cat.includes("heating") || cat.includes("boiler")) {
-    ["plumbing", "gas & heating", "gas engineering", "heating", "boiler engineer", "bathroom fitting"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("electr") || cat.includes("smart home") || cat.includes("eicr")) {
-    ["electrical", "electrician", "smart home & automation", "security systems"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("remov") || cat.includes("move") || cat.includes("man and van")) {
-    ["removals", "home & domestic removals", "house removals", "man & van"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("clean") || cat.includes("carpet") || cat.includes("bin")) {
-    ["home cleaning", "domestic & commercial cleaning", "specialist cleaning", "carpet & upholstery cleaning"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("paint") || cat.includes("decorat") || cat.includes("wallpaper")) {
-    ["painting & decorating", "painter & decorator", "decorating", "wallpapering"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("carpent") || cat.includes("joiner")) {
-    ["carpentry & joinery", "carpenter & joiner", "joiner", "door fitting"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("lock") || cat.includes("security")) {
-    ["locksmith", "security systems", "locksmith & security"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("tailor") || cat.includes("alterat") || cat.includes("seamstress") || cat.includes("laundry")) {
-    ["tailoring, alterations & laundry services", "tailoring", "garment alterations", "seamstress", "laundry"].forEach(a => aliases.add(a));
-  }
-  if (cat.includes("pet") || cat.includes("dog") || cat.includes("cat")) {
-    ["pet services", "pet care specialist", "dog walker", "cat sitter"].forEach(a => aliases.add(a));
-  }
+  catList.forEach((rawCat) => {
+    const cat = (rawCat || "").toLowerCase().trim();
+    if (!cat) return;
+    aliases.add(cat);
+
+    if (cat.includes("cake") || cat.includes("bake") || cat.includes("catering") || cat.includes("pastry")) {
+      ["bake n cake", "cake maker & baker", "cake maker", "baker", "baking", "wedding cakes", "celebration cakes", "bespoke bakes", "catering & private chef", "pastry chef"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("plumb") || cat.includes("gas") || cat.includes("heating") || cat.includes("boiler") || cat.includes("hvac") || cat.includes("radiator")) {
+      ["plumbing", "gas & heating", "gas engineering", "heating", "boiler engineer", "boiler installation", "boiler repair", "emergency leak repair", "gas safety certification", "bathroom fitting", "plumber"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("electr") || cat.includes("smart home") || cat.includes("eicr") || cat.includes("ev charger")) {
+      ["electrical", "electrician", "smart home & automation", "security systems", "ev charger fitting", "consumer unit upgrade", "eicr safety inspection"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("remov") || cat.includes("move") || cat.includes("man and van") || cat.includes("man & van")) {
+      ["removals", "home & domestic removals", "house removals", "man & van", "man and van", "house & garden clearance", "flat move"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("clean") || cat.includes("carpet") || cat.includes("bin") || cat.includes("tenancy")) {
+      ["home cleaning", "domestic & commercial cleaning", "specialist cleaning", "carpet & upholstery cleaning", "end of tenancy", "window cleaning", "wheelie bin"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("paint") || cat.includes("decorat") || cat.includes("wallpaper")) {
+      ["painting & decorating", "painter & decorator", "decorating", "wallpapering", "heritage decor", "interior painting", "exterior painting"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("carpent") || cat.includes("joiner") || cat.includes("door")) {
+      ["carpentry & joinery", "carpenter & joiner", "joiner", "door fitting", "door hanging", "timber decking"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("build") || cat.includes("roof") || cat.includes("brick") || cat.includes("extension") || cat.includes("loft")) {
+      ["builder", "building & construction", "roofing", "roofing services", "slate roofing", "house extension", "loft conversion", "guttering & drainage"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("lock") || cat.includes("security") || cat.includes("key")) {
+      ["locksmith", "security systems", "locksmith & security", "master locksmith", "key cutting", "emergency door opening"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("tailor") || cat.includes("alterat") || cat.includes("seamstress") || cat.includes("laundry")) {
+      ["tailoring, alterations & laundry services", "tailoring", "garment alterations", "bespoke tailoring", "seamstress", "laundry"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("pet") || cat.includes("dog") || cat.includes("cat")) {
+      ["pet services", "pet care specialist", "dog walker", "cat sitter", "pet care", "dog walking", "cat sitting"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("garden") || cat.includes("landscap") || cat.includes("tree") || cat.includes("paving")) {
+      ["landscaping & garden", "tree surgery & arboriculture", "driveways, patios & paving", "fencing", "decking"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("courier") || cat.includes("parcel") || cat.includes("delivery") || cat.includes("bulky")) {
+      ["courier, parcel & express delivery", "on-demand delivery & bulky goods courier", "express delivery", "courier"].forEach(a => aliases.add(a));
+    }
+    if (cat.includes("labour") || cat.includes("helper") || cat.includes("mate") || cat.includes("digging")) {
+      ["general labour, trade mates & site helpers", "site helper", "trade mate", "labourer"].forEach(a => aliases.add(a));
+    }
+  });
 
   return Array.from(aliases);
 }
 
 /**
+ * Calculates a strict trade relevance score (0 - 100) between a trader and target categories/inquiry.
+ * Returns 0 if the trader does not belong to the requested trade domain.
+ */
+export function calculateTradeRelevanceScore(
+  trader: any,
+  targetAliases: string[],
+  userQueryTokens: string[] = []
+): number {
+  if (!trader) return 0;
+
+  const traderTrades = (Array.isArray(trader.trades) ? trader.trades : [trader.trades || ""])
+    .filter(Boolean).map((t: string) => t.toLowerCase().trim());
+  const recCats = (Array.isArray(trader.recommendedCategories) ? trader.recommendedCategories : [trader.recommendedCategories || ""])
+    .filter(Boolean).map((t: string) => t.toLowerCase().trim());
+  const services = (Array.isArray(trader.services) ? trader.services : [trader.services || ""])
+    .filter(Boolean).map((s: string) => s.toLowerCase().trim());
+  const tags = (Array.isArray(trader.tags) ? trader.tags : [trader.tags || ""])
+    .filter(Boolean).map((tg: string) => tg.toLowerCase().trim());
+  const skills = (Array.isArray(trader.skills) ? trader.skills : [trader.skills || ""])
+    .filter(Boolean).map((sk: string) => sk.toLowerCase().trim());
+  const subcats = (Array.isArray(trader.subcategories) ? trader.subcategories : [trader.subcategories || ""])
+    .filter(Boolean).map((sb: string) => sb.toLowerCase().trim());
+
+  const traderCat = (trader.category || "").toLowerCase().trim();
+  const busCat = (trader.businessCategory || "").toLowerCase().trim();
+  const primary = (trader.primaryTrade || "").toLowerCase().trim();
+  const company = (trader.businessName || trader.companyName || "").toLowerCase().trim();
+  const bio = (trader.bio || "").toLowerCase().trim();
+
+  let score = 0;
+
+  // 1. Direct Primary Category or Primary Trade Match (+50 pts)
+  for (const alias of targetAliases) {
+    if (primary && (primary === alias || primary.includes(alias) || alias.includes(primary))) {
+      score += 50;
+      break;
+    }
+    if (traderCat && (traderCat === alias || traderCat.includes(alias) || alias.includes(traderCat))) {
+      score += 50;
+      break;
+    }
+    if (busCat && (busCat === alias || busCat.includes(alias) || alias.includes(busCat))) {
+      score += 45;
+      break;
+    }
+  }
+
+  // 2. Direct Trade List Match (+40 pts)
+  for (const alias of targetAliases) {
+    const hasTrade = traderTrades.some((tr: string) => tr === alias || tr.includes(alias) || alias.includes(tr));
+    if (hasTrade) {
+      score += 40;
+      break;
+    }
+  }
+
+  // 3. Recommended Category or Subcategory Match (+30 pts)
+  for (const alias of targetAliases) {
+    const hasRec = recCats.some((rc: string) => rc === alias || rc.includes(alias) || alias.includes(rc));
+    const hasSub = subcats.some((sb: string) => sb === alias || sb.includes(alias) || alias.includes(sb));
+    if (hasRec || hasSub) {
+      score += 30;
+      break;
+    }
+  }
+
+  // 4. Specific Service Offerings or Verified Skills Match (+20 pts)
+  for (const alias of targetAliases) {
+    const hasService = services.some((s: string) => s === alias || s.includes(alias) || alias.includes(s));
+    const hasTag = tags.some((tg: string) => tg === alias || tg.includes(alias) || alias.includes(tg));
+    const hasSkill = skills.some((sk: string) => sk === alias || sk.includes(alias) || alias.includes(sk));
+    if (hasService || hasTag || hasSkill) {
+      score += 20;
+      break;
+    }
+  }
+
+  // 5. Company Name trade keyword match (+15 pts)
+  for (const alias of targetAliases) {
+    if (company && company.includes(alias)) {
+      score += 15;
+      break;
+    }
+  }
+
+  // If there is ZERO trade/category connection, return 0 (strict gate)
+  if (score === 0) {
+    return 0;
+  }
+
+  // 6. User Query domain token reinforcement (only granted if trade gate already passed)
+  if (userQueryTokens.length > 0) {
+    const allProfileText = [...traderTrades, ...services, ...tags, ...skills, ...subcats, company, bio].join(" ");
+    let queryHits = 0;
+    for (const tok of userQueryTokens) {
+      if (allProfileText.includes(tok)) {
+        queryHits++;
+      }
+    }
+    score += Math.min(queryHits * 5, 20);
+  }
+
+  return score;
+}
+
+/**
  * Retrieves recommended traders using the Hybrid Fairness & Monetization Engine:
- * - Slot 1: Featured Pro ⚡ (Monetized / Priority Partner with top badges)
- * - Slot 2: Organic Match 🌟 (Fairness Rotation with distance & quality ranking)
- * - Slot 3 (optional): Newcomer Boost 🌟 (Equally rotated newly verified trader)
+ * - Accepts single category OR array of detected categories (e.g. from TradeBot AI)
+ * - Enforces strict Category-Aware Gating so unrelated trades (e.g. builders for a plumbing issue) never leak
+ * - Slot 1: Featured Pro ⚡ (Monetized / Priority Partner with top badges within matching category)
+ * - Slot 2: Organic Match 🌟 (Fairness Rotation with distance & quality ranking within matching category)
  */
 export async function getHybridTraderRecommendations(
-  category: string,
+  categories: string | string[],
   userPostcode?: string,
   liveTradersPool?: Tradesperson[],
   userQuery?: string
 ): Promise<TraderRecommendationCard[]> {
   try {
+    const categoryList = Array.isArray(categories) 
+      ? categories.filter(Boolean)
+      : (categories ? [categories] : []);
+    
+    if (categoryList.length === 0) {
+      categoryList.push("General Trades");
+    }
+
     let pool: Tradesperson[] = [];
 
     // 1. Fetch live traders from Firestore if available
@@ -337,7 +470,7 @@ export async function getHybridTraderRecommendations(
     if (!liveTradersPool || liveTradersPool.length === 0) {
       try {
         const usersRef = collection(db, "users");
-        const q = query(usersRef, where("role", "in", ["tradesperson", "trader", "business"]), limit(30));
+        const q = query(usersRef, where("role", "in", ["tradesperson", "trader", "business"]), limit(50));
         const snap = await getDocs(q);
         if (!snap.empty) {
           firestoreTraders = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Tradesperson));
@@ -347,7 +480,7 @@ export async function getHybridTraderRecommendations(
       }
     }
 
-    // Always merge seeded mock traders into pool so verified profiles are always accessible
+    // Always merge seeded mock traders into pool so verified profiles in all 86+ trade sectors are accessible
     const seedPool = INITIAL_MOCK_TRADERS as Tradesperson[];
     if (liveTradersPool && liveTradersPool.length > 0) {
       const existingUids = new Set(liveTradersPool.map(t => t.uid));
@@ -357,121 +490,95 @@ export async function getHybridTraderRecommendations(
       pool = [...firestoreTraders, ...seedPool.filter(s => !existingUids.has(s.uid))];
     }
 
-    // 2. Filter traders strictly relevant to the category and inquiry
-    const catLower = (category || "").toLowerCase().trim();
-    const queryLower = (userQuery || "").toLowerCase().trim();
-    const targetAliases = getCategoryAliases(category);
+    // 2. Strict Trade Relevance Filtering across all detected categories
+    const isAllCategories = categoryList.some(c => c.toLowerCase() === "all" || c.toLowerCase() === "general trades" || c.toLowerCase() === "all trades");
+    const targetAliases = getCategoryAliases(categoryList);
 
-    // Extract significant query tokens (min 3 chars, skip noise and generic non-trade words)
+    // Extract significant query tokens (min 3 chars, skip noise and generic words)
     const noiseWords = new Set([
       "how", "much", "does", "cost", "what", "where", "when", "who", "which", "is", "are", "was", "were", "been",
       "the", "and", "for", "with", "apply", "laws", "rule", "rules", "need", "hire", "find", "best", "good", "local",
       "system", "systems", "installed", "installing", "installation", "new", "complete", "including", "included",
       "house", "home", "full", "done", "week", "weeks", "work", "price", "prices", "quote", "quotes", "about", "tell",
-      "estimate", "service", "unit", "area", "type", "within", "around", "near", "nearby", "trader", "tradesperson",
-      "company", "business"
+      "estimate", "service", "services", "unit", "area", "type", "within", "around", "near", "nearby", "trader", "tradesperson",
+      "company", "business", "repair", "repairs", "fixed", "fixing", "problem", "problems", "issue", "issues",
+      "making", "sounds", "causes", "typical", "losing", "fault"
     ]);
-    const queryTokens = queryLower
+    
+    const queryTokens = (userQuery || "")
+      .toLowerCase()
       .split(/[^a-z0-9]+/i)
       .filter(t => t.length >= 3 && !noiseWords.has(t));
 
-    const relevant = pool.filter((traderObj) => {
-      const t = traderObj as any;
-      if (!catLower || catLower === "all") return true;
+    // Filter and score candidates based on strict trade domain gating
+    const scoredCandidates: Array<{
+      tp: any;
+      tradeScore: number;
+      rating: number;
+      reviews: number;
+      isVerified: boolean;
+      isGasSafe: boolean;
+      isNiceic: boolean;
+      isVideo: boolean;
+      isProSubscribed: boolean;
+      isAreaMatch: boolean;
+      totalScore: number;
+      isNewcomer: boolean;
+    }> = [];
 
-      const traderTrades = (t.trades || []).map((tr: string) => tr.toLowerCase());
-      const recCats = (t.recommendedCategories || []).map((rc: string) => rc.toLowerCase());
-      const traderCat = (t.category || "").toLowerCase();
-      const busCat = (t.businessCategory || "").toLowerCase();
-      const primary = (t.primaryTrade || "").toLowerCase();
-      const bio = (t.bio || "").toLowerCase();
-      const company = (t.businessName || t.companyName || "").toLowerCase();
-      const services = (t.services || []).map((s: string) => s.toLowerCase());
-      const tags = ((t as any).tags || []).map((tg: string) => tg.toLowerCase());
-      const skills = ((t as any).skills || []).map((sk: string) => sk.toLowerCase());
-      const subcats = (t.subcategories || []).map((sb: string) => sb.toLowerCase());
-
-      const allTraderText = [
-        ...traderTrades,
-        ...recCats,
-        traderCat,
-        busCat,
-        primary,
-        company,
-        ...services,
-        ...tags,
-        ...skills,
-        ...subcats,
-        bio
-      ].join(" ");
-
-      // Match 1: Target alias matches any of trader's trades, categories, or services
-      const matchesAlias = targetAliases.some((alias: string) => {
-        return (
-          traderTrades.some((tr: string) => tr.includes(alias) || alias.includes(tr)) ||
-          recCats.some((rc: string) => rc.includes(alias) || alias.includes(rc)) ||
-          traderCat.includes(alias) || alias.includes(traderCat) ||
-          busCat.includes(alias) || alias.includes(busCat) ||
-          primary.includes(alias) || alias.includes(primary) ||
-          services.some((s: string) => s.includes(alias) || alias.includes(s)) ||
-          tags.some((tg: string) => tg.includes(alias) || alias.includes(tg)) ||
-          subcats.some((sb: string) => sb.includes(alias) || alias.includes(sb)) ||
-          company.includes(alias)
-        );
-      });
-
-      // Match 2: Query token overlap against trader profile text
-      const tokenMatchCount = queryTokens.filter(tok => allTraderText.includes(tok)).length;
-      const matchesTokens = queryTokens.length > 0 && tokenMatchCount >= Math.min(2, queryTokens.length);
-
-      // Require alias match OR specific trade token match to prevent off-category traders
-      return matchesAlias || matchesTokens;
-    });
-
-    // CRITICAL FIX: If no relevant traders match this category, DO NOT return irrelevant traders!
-    // Returning an empty array triggers the Demand Gap notice cleanly rather than showing wrong profiles.
-    if (relevant.length === 0) {
-      return [];
-    }
-
-    const candidatePool = relevant;
     const userPrefix = (userPostcode || "").trim().split(" ")[0]?.toUpperCase() || "";
 
-    // 3. Score candidates for Featured Slot vs Organic Pool
-    const scoredCandidates = candidatePool.map((tpObj) => {
-      const tp: any = tpObj;
+    for (const traderObj of pool) {
+      const tp: any = traderObj;
+      const tradeScore = isAllCategories ? 50 : calculateTradeRelevanceScore(tp, targetAliases, queryTokens);
+
+      // STRICT GATE: Must have a valid trade relevance score (> 0) to enter the candidate pool
+      if (tradeScore <= 0) {
+        continue;
+      }
+
       const rating = tp.rating || 4.8;
-      const reviews = tp.reviewsCount || tp.totalReviews || tp.totalJobsCompleted || 12;
+      const reviews = tp.reviewsCount || tp.totalReviews || tp.totalJobsCompleted || tp.totalJobsDone || 12;
       const isVerified = tp.verificationStatus === "verified" || tp.isVerified === true;
-      const isGasSafe = tp.isGasSafeRegistered || tp.certifications?.some((c: any) => c.name?.toLowerCase().includes("gas safe"));
+      const isGasSafe = tp.isGasSafeRegistered || tp.certifications?.some((c: any) => c.name?.toLowerCase().includes("gas safe")) || tp.recommendedCategories?.includes("Gas & Heating");
       const isNiceic = tp.isNiceicApproved || tp.certifications?.some((c: any) => c.name?.toLowerCase().includes("niceic"));
-      const isVideo = Boolean(tp.videoVerificationUrl || tp.verificationVideoUrl || tp.isVideoVerified || tp.videoVerificationStatus === "verified" || tp.hasVerifiedVideoProSubscription);
-      const isProSubscribed = Boolean(tp.subscriptionType === "business" || tp.tier === "premium" || tp.subscriptionTier === "platinum" || (tp as any).isTradeOsPro || tp.hasVerifiedVideoProSubscription);
+      const isVideo = Boolean(tp.videoVerificationUrl || tp.verificationVideoUrl || tp.isVideoVerified || tp.videoVerificationStatus === "verified" || tp.videoVerificationStatus === "approved" || tp.hasVerifiedVideoProSubscription);
+      const isProSubscribed = Boolean(tp.subscriptionType === "business" || tp.subscriptionType === "pro" || tp.tier === "premium" || tp.subscriptionTier === "gold" || tp.subscriptionTier === "platinum" || tp.subscriptionTier === "pro" || tp.tierId === "Gold" || tp.tierId === "Platinum" || tp.tierId === "Pro" || tp.isTradeOsPro || tp.hasVerifiedVideoProSubscription);
 
       const tpPostcode = (tp.postcode || "").trim().toUpperCase();
       const isAreaMatch = !!(userPrefix && tpPostcode.startsWith(userPrefix));
 
-      // Calculate organic match score
-      let organicScore = rating * 20 + Math.min(reviews * 2, 30) + (isVerified ? 15 : 0) + (isAreaMatch ? 25 : 0);
+      // Calculate combined score
+      const totalScore = tradeScore + (rating * 10) + Math.min(reviews, 30) + (isVerified ? 15 : 0) + (isAreaMatch ? 20 : 0);
 
-      return {
+      scoredCandidates.push({
         tp,
+        tradeScore,
         rating,
         reviews,
         isVerified,
-        isGasSafe,
-        isNiceic,
+        isGasSafe: !!isGasSafe,
+        isNiceic: !!isNiceic,
         isVideo,
         isProSubscribed,
         isAreaMatch,
-        organicScore,
+        totalScore,
         isNewcomer: reviews <= 5
-      };
-    });
+      });
+    }
+
+    // If zero traders matched the requested categories, return empty to display genuine demand gap
+    if (scoredCandidates.length === 0) {
+      return [];
+    }
+
+    // Sort by trade relevance and total score
+    scoredCandidates.sort((a, b) => b.totalScore - a.totalScore);
 
     const recommendations: TraderRecommendationCard[] = [];
+    const primaryCategoryLabel = categoryList[0] || "Certified Specialist";
 
-    // --- SLOT 1: FEATURED PRO ⚡ (Monetized / Pro Tier Partner) ---
+    // --- SLOT 1: FEATURED PRO ⚡ (Monetized / Pro Tier Partner strictly within matching category) ---
     const featuredCandidates = scoredCandidates.filter((c) => c.isProSubscribed || (c.isVerified && c.rating >= 4.7));
     const featuredPick = featuredCandidates.length > 0
       ? featuredCandidates[Math.floor(Date.now() / (1000 * 60 * 30)) % featuredCandidates.length]
@@ -479,16 +586,16 @@ export async function getHybridTraderRecommendations(
 
     if (featuredPick) {
       const tp: any = featuredPick.tp;
-      const primaryTradeName = (tp.trades && tp.trades[0]) || tp.category || category || "Certified Specialist";
+      const primaryTradeName = (tp.trades && tp.trades[0]) || tp.category || primaryCategoryLabel;
       recommendations.push({
         uid: tp.uid || tp.id || "trader-featured-1",
-        name: tp.name || tp.displayName || tp.businessName || "Apex Pro Services",
+        name: tp.name || tp.displayName || tp.businessName || "Certified Trade Specialist",
         businessName: tp.businessName || tp.companyName || `${tp.name}'s ${primaryTradeName}`,
         avatarUrl: tp.avatarUrl || tp.photoURL || tp.profilePicture || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=150",
         category: primaryTradeName,
         rating: Math.max(4.7, featuredPick.rating),
         reviewsCount: Math.max(18, featuredPick.reviews),
-        hourlyRate: tp.hourlyRate || tp.baseRate || 45,
+        hourlyRate: tp.hourlyRate || tp.miniProfileSettings?.hourlyRate || tp.baseRate || 45,
         postcode: tp.postcode || "UK Wide",
         distanceMiles: featuredPick.isAreaMatch ? 1.4 : 3.8,
         isVerified: true,
@@ -505,12 +612,18 @@ export async function getHybridTraderRecommendations(
       });
     }
 
-    // --- SLOT 2: ORGANIC FAIR ROTATION MATCH 🌟 ---
+    // --- SLOT 2: ORGANIC FAIR ROTATION MATCH 🌟 (Strictly within trade-qualified candidate pool) ---
     const organicPool = scoredCandidates.filter((c) => c.tp.uid !== featuredPick?.tp.uid);
     const rotationSeed = Math.floor(Date.now() / (1000 * 60 * 15)); // 15-min fair share rotation
     
     if (organicPool.length > 0) {
+      // Sort organic pool with a combination of trade score and rotation hash to ensure relevant fair exposure
       const sortedOrganic = [...organicPool].sort((a, b) => {
+        // First prioritize high trade match
+        if (Math.abs(b.tradeScore - a.tradeScore) >= 20) {
+          return b.tradeScore - a.tradeScore;
+        }
+        // Then apply fairness rotation seed
         const hashA = ((a.tp.uid || "a").charCodeAt(0) + rotationSeed) % 23;
         const hashB = ((b.tp.uid || "b").charCodeAt(0) + rotationSeed) % 23;
         return hashA - hashB;
@@ -518,7 +631,7 @@ export async function getHybridTraderRecommendations(
 
       const organicPick = sortedOrganic[0];
       const tp: any = organicPick.tp;
-      const organicTradeName = (tp.trades && tp.trades[0]) || tp.category || category || "Local Specialist";
+      const organicTradeName = (tp.trades && tp.trades[0]) || tp.category || primaryCategoryLabel;
 
       recommendations.push({
         uid: tp.uid || tp.id || "trader-organic-2",
@@ -528,7 +641,7 @@ export async function getHybridTraderRecommendations(
         category: organicTradeName,
         rating: organicPick.rating,
         reviewsCount: organicPick.reviews,
-        hourlyRate: tp.hourlyRate || tp.baseRate || 40,
+        hourlyRate: tp.hourlyRate || tp.miniProfileSettings?.hourlyRate || tp.baseRate || 40,
         postcode: tp.postcode || "Local Area",
         distanceMiles: organicPick.isAreaMatch ? 0.9 : 2.6,
         isVerified: organicPick.isVerified,

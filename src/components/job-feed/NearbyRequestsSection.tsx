@@ -12,6 +12,8 @@ interface NearbyRequestsSectionProps {
   onSelectUrgencyFilter?: (urgency: string) => void;
   onClearDemandFilter?: () => void;
   onClearAllFilters?: () => void;
+  userTradeName?: string;
+  isTradesperson?: boolean;
 }
 
 export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
@@ -22,6 +24,8 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
   onSelectUrgencyFilter,
   onClearDemandFilter,
   onClearAllFilters,
+  userTradeName,
+  isTradesperson = false,
 }) => {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(() => {
     try {
@@ -275,7 +279,7 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
       )}
 
       {/* Rearranged High-Demand Filter Pills */}
-      {demandCategories.length > 0 && (
+      {demandCategories.length > 0 ? (
         <div className="space-y-1.5 pt-0.5">
           <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-500 tracking-wider">
             <span>Tap to Filter Feed by Demand:</span>
@@ -344,7 +348,19 @@ export const NearbyRequestsSection: React.FC<NearbyRequestsSectionProps> = ({
             })}
           </div>
         </div>
-      )}
+      ) : isTradesperson && userTradeName ? (
+        <div className="bg-white rounded-xl p-3 border border-black/10 flex items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Briefcase className="w-4 h-4 text-blue-600 shrink-0" />
+            <p className="text-xs font-bold text-slate-800 truncate">
+              No active homeowner requests for <strong>{userTradeName}</strong> in {locationName || "your area"} right now.
+            </p>
+          </div>
+          <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 shrink-0">
+            Live Feed
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 };

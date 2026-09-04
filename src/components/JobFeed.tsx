@@ -528,17 +528,6 @@ export default function JobFeed() {
     savedFiltersList,
   ]);
 
-  const availableDemandCategories = useMemo(() => {
-    const counts: Record<string, number> = {};
-    jobs.forEach((j) => {
-      const cat = j.category || "General";
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [jobs]);
-
   const handleAiSearch = async () => {
     if (!searchTerm.trim()) return;
     setIsAiSearching(true);
@@ -691,7 +680,203 @@ export default function JobFeed() {
     return scores;
   }, [jobs, profile]);
 
+  // Isolate jobs for Nearby Requests Section & Available Demand Categories:
+  // For tradespeople, strictly restrict local demand overview to jobs related to their business.
+  const demandSectionJobs = useMemo(() => {
+    return jobs.filter(job => {
+      // Exclude direct 1-to-1 jobs targeted to other traders
+      const isDirectJob = Boolean(
+        job.targetTradespersonId ||
+        job.targetTradespersonName ||
+        job.directTradespersonId ||
+        job.targetTraderId ||
+        job.claimedDeal?.traderId ||
+        job.claimedDeal?.traderName
+      );
+
+      if (isDirectJob) {
+        const isJobCreator = Boolean(
+          (job.customerId && user?.uid && job.customerId === user.uid) ||
+          (job.homeownerId && user?.uid && job.homeownerId === user.uid) ||
+          (job.userId && user?.uid && job.userId === user.uid)
+        );
+
+        const targetTraderName = (
+          job.targetTradespersonName ||
+          job.claimedDeal?.traderName ||
+          job.claimedDeal?.businessName ||
+          ""
+        ).trim().toLowerCase();
+
+        const myBusinessName = (profile?.businessName || "").trim().toLowerCase();
+        const myName = (profile?.name || "").trim().toLowerCase();
+        const myDisplayName = (profile?.displayName || "").trim().toLowerCase();
+
+        const isTargetTradesperson = Boolean(
+          (job.targetTradespersonId && user?.uid && job.targetTradespersonId === user.uid) ||
+          (job.directTradespersonId && user?.uid && job.directTradespersonId === user.uid) ||
+          (job.targetTraderId && user?.uid && job.targetTraderId === user.uid) ||
+          (job.claimedDeal?.traderId && user?.uid && job.claimedDeal.traderId === user.uid) ||
+          (targetTraderName && (
+            (myBusinessName && myBusinessName === targetTraderName) ||
+            (myName && myName === targetTraderName) ||
+            (myDisplayName && myDisplayName === targetTraderName)
+          ))
+        );
+
+        if (!isJobCreator && !isTargetTradesperson) {
+          return false;
+        }
+      }
+
+      // If user is a tradesperson, filter by their trade, category, services, tags & skills
+      if (profile?.role === "tradesperson") {
+        const rawTrades = Array.isArray(profile?.trades)
+          ? profile.trades
+          : typeof profile?.trades === "string"
+          ? (profile.trades as string).split(",")
+          : [];
+        const userTrades: string[] = [
+          ...rawTrades,
+          profile?.category,
+          profile?.tradeCategory,
+          profile?.primaryTrade,
+          profile?.businessType,
+          profile?.selectedCategory
+        ].filter(Boolean).map((t: string) => t.trim());
+
+        const rawServices = Array.isArray(profile?.services)
+          ? profile.services
+          : typeof profile?.services === "string"
+          ? (profile.services as string).split(",")
+          : [];
+        const userServices: string[] = rawServices.filter(Boolean).map((s: string) => s.trim());
+
+        const rawTags = [
+          ...(Array.isArray(profile?.tags) ? profile.tags : typeof profile?.tags === "string" ? (profile.tags as string).split(",") : []),
+          ...(Array.isArray(profile?.skills) ? profile.skills : typeof profile?.skills === "string" ? (profile.skills as string).split(",") : []),
+          ...(Array.isArray(profile?.specialties) ? profile.specialties : typeof profile?.specialties === "string" ? (profile.specialties as string).split(",") : [])
+        ];
+        const userTags: string[] = rawTags.filter(Boolean).map((t: string) => t.trim());
+
+        const hasTraderSpecialtyDefined = userTrades.length > 0 || userServices.length > 0 || userTags.length > 0;
+        if (!hasTraderSpecialtyDefined) return true;
+
+        const normJobCat = (job.category || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+        const normJobSub = (job.subcategory || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+        const normJobTitle = (job.title || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+        const normJobDesc = (job.description || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+
+        const matchesTrade = userTrades.some((trade: string) => {
+          const tLower = trade.toLowerCase();
+          const normTrade = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+          const jCat = (job.category || "").toLowerCase();
+          const jSub = (job.subcategory || "").toLowerCase();
+          const jTitle = (job.title || "").toLowerCase();
+          const jDesc = (job.description || "").toLowerCase();
+
+          if (jCat === tLower || jCat.includes(tLower) || tLower.includes(jCat)) return true;
+          if (normJobCat === normTrade || normJobCat.includes(normTrade) || normTrade.includes(normJobCat)) return true;
+          if (jSub && (jSub === tLower || jSub.includes(tLower) || tLower.includes(jSub) || normJobSub.includes(normTrade) || normTrade.includes(normJobSub))) return true;
+          if (jTitle.includes(tLower) || tLower.includes(jTitle) || normJobTitle.includes(normTrade)) return true;
+          if (jDesc.includes(tLower) || normJobDesc.includes(normTrade)) return true;
+          if (textContainsTokenMatch(jCat, tLower) || textContainsTokenMatch(jSub, tLower) || textContainsTokenMatch(jTitle, tLower)) return true;
+          return false;
+        });
+
+        const matchesService = userServices.some((service: string) => {
+          const sLower = service.toLowerCase();
+          const normService = sLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+          const jCat = (job.category || "").toLowerCase();
+          const jSub = (job.subcategory || "").toLowerCase();
+          const jTitle = (job.title || "").toLowerCase();
+          const jDesc = (job.description || "").toLowerCase();
+
+          return jCat.includes(sLower) || jSub.includes(sLower) || jTitle.includes(sLower) || jDesc.includes(sLower) ||
+                 normJobCat.includes(normService) || normJobSub.includes(normService) || normJobTitle.includes(normService) || normJobDesc.includes(normService) ||
+                 textContainsTokenMatch(jCat, sLower) || textContainsTokenMatch(jTitle, sLower);
+        });
+
+        const matchesSpecialization = userTags.some((tag: string) => {
+          const tLower = tag.toLowerCase();
+          const normTag = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+          const jCat = (job.category || "").toLowerCase();
+          const jSub = (job.subcategory || "").toLowerCase();
+          const jTitle = (job.title || "").toLowerCase();
+          const jDesc = (job.description || "").toLowerCase();
+
+          return jCat.includes(tLower) || jSub.includes(tLower) || jTitle.includes(tLower) || jDesc.includes(tLower) ||
+                 normJobCat.includes(normTag) || normJobSub.includes(normTag) || normJobTitle.includes(normTag) || normJobDesc.includes(normTag) ||
+                 textContainsTokenMatch(jTitle, tLower) || textContainsTokenMatch(jDesc, tLower);
+        });
+
+        const matchEngineScore = traderMatchScores[job.id]?.compositeScore || 0;
+        return matchesTrade || matchesService || matchesSpecialization || (matchEngineScore >= 70);
+      }
+
+      return true;
+    });
+  }, [jobs, profile, user?.uid, traderMatchScores]);
+
+  const availableDemandCategories = useMemo(() => {
+    const counts: Record<string, number> = {};
+    demandSectionJobs.forEach((j) => {
+      const cat = j.category || "General";
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [demandSectionJobs]);
+
   const filteredJobs = jobs.filter(job => {
+    // 1. Direct 1-on-1 Quote Request & Claimed Flash Deal Isolation Security
+    // If a job was submitted as a direct 1-to-1 quote request or claimed deal targeted to a specific tradesperson,
+    // only that specific targeted tradesperson or the homeowner who created the job can see it.
+    const isDirectJob = Boolean(
+      job.targetTradespersonId ||
+      job.targetTradespersonName ||
+      job.directTradespersonId ||
+      job.targetTraderId ||
+      job.claimedDeal?.traderId ||
+      job.claimedDeal?.traderName
+    );
+
+    if (isDirectJob) {
+      const isJobCreator = Boolean(
+        (job.customerId && user?.uid && job.customerId === user.uid) ||
+        (job.homeownerId && user?.uid && job.homeownerId === user.uid) ||
+        (job.userId && user?.uid && job.userId === user.uid)
+      );
+
+      const targetTraderName = (
+        job.targetTradespersonName ||
+        job.claimedDeal?.traderName ||
+        job.claimedDeal?.businessName ||
+        ""
+      ).trim().toLowerCase();
+
+      const myBusinessName = (profile?.businessName || "").trim().toLowerCase();
+      const myName = (profile?.name || "").trim().toLowerCase();
+      const myDisplayName = (profile?.displayName || "").trim().toLowerCase();
+
+      const isTargetTradesperson = Boolean(
+        (job.targetTradespersonId && user?.uid && job.targetTradespersonId === user.uid) ||
+        (job.directTradespersonId && user?.uid && job.directTradespersonId === user.uid) ||
+        (job.targetTraderId && user?.uid && job.targetTraderId === user.uid) ||
+        (job.claimedDeal?.traderId && user?.uid && job.claimedDeal.traderId === user.uid) ||
+        (targetTraderName && (
+          (myBusinessName && myBusinessName === targetTraderName) ||
+          (myName && myName === targetTraderName) ||
+          (myDisplayName && myDisplayName === targetTraderName)
+        ))
+      );
+
+      if (!isJobCreator && !isTargetTradesperson) {
+        return false; // Strictly hide direct jobs targeted to other tradespeople from this feed
+      }
+    }
+
     // Time-Gate Security Check
     const jobExclusiveUntil = job.exclusiveUntil?.toDate ? job.exclusiveUntil.toDate() : (job.exclusiveUntil ? new Date(job.exclusiveUntil) : null);
     const isCurrentlyExclusive = jobExclusiveUntil && jobExclusiveUntil > new Date();
@@ -786,7 +971,8 @@ export default function JobFeed() {
       profile?.category,
       profile?.tradeCategory,
       profile?.primaryTrade,
-      profile?.businessType
+      profile?.businessType,
+      profile?.selectedCategory
     ].filter(Boolean).map((t: string) => t.trim());
 
     const rawServices = Array.isArray(profile?.services)
@@ -803,43 +989,57 @@ export default function JobFeed() {
     ];
     const userTags: string[] = rawTags.filter(Boolean).map((t: string) => t.trim());
 
+    const normJobCat = (job.category || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+    const normJobSub = (job.subcategory || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+    const normJobTitle = (job.title || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+    const normJobDesc = (job.description || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+
     const matchesTrade = userTrades.some((trade: string) => {
       const tLower = trade.toLowerCase();
+      const normTrade = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
       const jCat = (job.category || "").toLowerCase();
       const jSub = (job.subcategory || "").toLowerCase();
       const jTitle = (job.title || "").toLowerCase();
       const jDesc = (job.description || "").toLowerCase();
 
       if (jCat === tLower || jCat.includes(tLower) || tLower.includes(jCat)) return true;
-      if (jSub && (jSub === tLower || jSub.includes(tLower) || tLower.includes(jSub))) return true;
-      if (jTitle.includes(tLower) || tLower.includes(jTitle)) return true;
-      if (jDesc.includes(tLower)) return true;
+      if (normJobCat === normTrade || normJobCat.includes(normTrade) || normTrade.includes(normJobCat)) return true;
+      if (jSub && (jSub === tLower || jSub.includes(tLower) || tLower.includes(jSub) || normJobSub.includes(normTrade) || normTrade.includes(normJobSub))) return true;
+      if (jTitle.includes(tLower) || tLower.includes(jTitle) || normJobTitle.includes(normTrade)) return true;
+      if (jDesc.includes(tLower) || normJobDesc.includes(normTrade)) return true;
       if (textContainsTokenMatch(jCat, tLower) || textContainsTokenMatch(jSub, tLower) || textContainsTokenMatch(jTitle, tLower)) return true;
       return false;
     });
 
     const matchesService = userServices.some((service: string) => {
       const sLower = service.toLowerCase();
+      const normService = sLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
       const jCat = (job.category || "").toLowerCase();
       const jSub = (job.subcategory || "").toLowerCase();
       const jTitle = (job.title || "").toLowerCase();
       const jDesc = (job.description || "").toLowerCase();
 
-      return jCat.includes(sLower) || jSub.includes(sLower) || jTitle.includes(sLower) || jDesc.includes(sLower) || textContainsTokenMatch(jCat, sLower) || textContainsTokenMatch(jTitle, sLower);
+      return jCat.includes(sLower) || jSub.includes(sLower) || jTitle.includes(sLower) || jDesc.includes(sLower) ||
+             normJobCat.includes(normService) || normJobSub.includes(normService) || normJobTitle.includes(normService) || normJobDesc.includes(normService) ||
+             textContainsTokenMatch(jCat, sLower) || textContainsTokenMatch(jTitle, sLower);
     });
 
     const matchesSpecialization = userTags.some((tag: string) => {
       const tLower = tag.toLowerCase();
+      const normTag = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
       const jCat = (job.category || "").toLowerCase();
       const jSub = (job.subcategory || "").toLowerCase();
       const jTitle = (job.title || "").toLowerCase();
       const jDesc = (job.description || "").toLowerCase();
 
-      return jCat.includes(tLower) || jSub.includes(tLower) || jTitle.includes(tLower) || jDesc.includes(tLower) || textContainsTokenMatch(jTitle, tLower);
+      return jCat.includes(tLower) || jSub.includes(tLower) || jTitle.includes(tLower) || jDesc.includes(tLower) ||
+             normJobCat.includes(normTag) || normJobSub.includes(normTag) || normJobTitle.includes(normTag) || normJobDesc.includes(normTag) ||
+             textContainsTokenMatch(jTitle, tLower) || textContainsTokenMatch(jDesc, tLower);
     });
 
+    const hasTraderSpecialtyDefined = userTrades.length > 0 || userServices.length > 0 || userTags.length > 0;
     const matchEngineScore = traderMatchScores[job.id]?.compositeScore || 0;
-    const isMatched = matchesService || matchesSpecialization || matchesTrade || matchEngineScore >= 50;
+    const isMatched = !hasTraderSpecialtyDefined || matchesService || matchesSpecialization || matchesTrade || (matchEngineScore >= 70 && (matchesTrade || matchesService || matchesSpecialization));
     
     // Filter out jobs scheduled for dates the tradesperson is busy or booked
     let matchesAvailability = true;
@@ -1723,13 +1923,15 @@ export default function JobFeed() {
 
       {activeTab === "feed" && (
         <NearbyRequestsSection
-          jobs={jobs}
+          jobs={demandSectionJobs}
           selectedCategories={selectedCategories}
           urgencyFilter={urgencyFilter}
           onSelectCategoryFilter={handleSelectCategoryFromNearby}
           onSelectUrgencyFilter={handleSelectUrgencyFromNearby}
           onClearDemandFilter={handleClearDemandFilter}
           onClearAllFilters={resetAllFilters}
+          userTradeName={profile?.category || profile?.trade || profile?.tradeCategory || profile?.businessCategory || profile?.businessName}
+          isTradesperson={profile?.role === "tradesperson"}
         />
       )}
 
@@ -2311,25 +2513,25 @@ export default function JobFeed() {
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
-        className="fixed bottom-20 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md z-40"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px)+0.75rem)] left-3 right-3 sm:left-auto sm:right-6 sm:max-w-md z-[90]"
       >
-        <div className="relative bg-blue-600 text-white p-4 pt-4 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-blue-500">
+        <div className="relative bg-blue-600 text-white p-3.5 sm:p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-2.5 sm:gap-3 border border-blue-400">
           <button
             type="button"
             onClick={() => setDismissedFilterKey(currentFilterKey)}
-            className="absolute -top-2 -right-2 w-7 h-7 bg-white text-slate-700 hover:bg-slate-100 rounded-full flex items-center justify-center shadow-md transition-all border border-slate-200 cursor-pointer active:scale-95"
+            className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white text-slate-700 hover:bg-slate-100 rounded-full flex items-center justify-center shadow-md transition-all border border-slate-300 cursor-pointer active:scale-95 z-10"
             title="Dismiss notification"
             aria-label="Dismiss banner"
           >
-            <X className="w-4 h-4 text-slate-600" />
+            <X className="w-4 h-4 text-slate-700 stroke-[2.5]" />
           </button>
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-              <Save className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <Save className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-sm truncate">Save selection as feed</p>
-              <p className="text-xs text-blue-100 truncate">
+              <p className="font-black text-xs sm:text-sm truncate leading-tight">Save selection as feed</p>
+              <p className="text-[11px] sm:text-xs text-blue-100 truncate leading-tight mt-0.5">
                 {selectedCategories.length > 0 ? selectedCategories.join(", ") : "Get notified for new jobs"}
               </p>
             </div>
@@ -2341,7 +2543,7 @@ export default function JobFeed() {
               handleSaveFilter(defaultName);
             }}
             disabled={isSavingFilter}
-            className="px-4 py-2 bg-white text-blue-600 rounded-xl font-black text-sm hover:bg-blue-50 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+            className="px-3.5 py-2 sm:px-4 sm:py-2 bg-white text-blue-600 rounded-xl font-black text-xs sm:text-sm hover:bg-blue-50 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
           >
             {isSavingFilter ? (
               <Loader2 className="w-4 h-4 animate-spin text-blue-600" />

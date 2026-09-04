@@ -84,27 +84,33 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
   const traderTrades = rawTrades.filter(Boolean).map((t: string) => (t || "").trim().toLowerCase());
   const jobText = `${job.category || ""} ${job.subcategory || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
   
-  let skillScore = 30; // base score
-  const hasExactCategory = traderTrades.some((t: string) => t && (t.includes(jobCategory) || jobCategory.includes(t)));
-  if (hasExactCategory) skillScore += 45;
+  const hasExactCategory = traderTrades.some((t: string) => t && (t.includes(jobCategory) || jobCategory.includes(t) || jobText.includes(t)));
 
   const rawTags = [
     ...(Array.isArray(trader.tags) ? trader.tags : typeof trader.tags === "string" ? (trader.tags as string).split(",") : []),
     ...(Array.isArray(trader.skills) ? trader.skills : typeof trader.skills === "string" ? (trader.skills as string).split(",") : []),
+    ...(Array.isArray(trader.services) ? trader.services : typeof trader.services === "string" ? (trader.services as string).split(",") : []),
     ...(Array.isArray(trader.specialties) ? trader.specialties : typeof trader.specialties === "string" ? (trader.specialties as string).split(",") : [])
   ];
   const traderTags = rawTags.filter(Boolean).map((s: string) => (s || "").trim().toLowerCase());
-  const matchedTagsCount = traderTags.filter((tag: string) => tag && jobText.includes(tag)).length;
-  skillScore += Math.min(25, matchedTagsCount * 8);
+  const matchedTagsCount = traderTags.filter((tag: string) => tag && (jobText.includes(tag) || tag.includes(jobCategory))).length;
+  
+  let skillScore = 0;
+  if (hasExactCategory) {
+    skillScore += 65;
+  }
+  if (matchedTagsCount > 0) {
+    skillScore += Math.min(35, matchedTagsCount * 12);
+  }
 
   const skillGroup: MatchSignalGroup = {
     name: "Skill & Past Job Similarity",
     weight: 25,
     score: Math.min(100, Math.round(skillScore)),
     factors: [
-      { name: "Trade Category Alignment", impact: hasExactCategory ? "Primary Specialty" : "Related Category", points: hasExactCategory ? 60 : 30 },
-      { name: "Keyword & Tag Overlap", impact: `${matchedTagsCount} Matched Technical Skills`, points: Math.min(25, matchedTagsCount * 8) },
-      { name: "Historical Work Similarity", impact: "Proven Track Record in Scope", points: 15 }
+      { name: "Trade Category Alignment", impact: hasExactCategory ? "Primary Specialty" : (matchedTagsCount > 0 ? "Related Specialty" : "Unrelated Category"), points: hasExactCategory ? 65 : (matchedTagsCount > 0 ? 25 : 0) },
+      { name: "Keyword & Tag Overlap", impact: `${matchedTagsCount} Matched Technical Skills`, points: Math.min(35, matchedTagsCount * 12) },
+      { name: "Historical Work Similarity", impact: hasExactCategory || matchedTagsCount > 0 ? "Proven Track Record in Scope" : "Different Trade Domain", points: hasExactCategory || matchedTagsCount > 0 ? 15 : 0 }
     ]
   };
   signalGroups.push(skillGroup);
@@ -149,9 +155,16 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
   signalGroups.push(availGroup);
 
   // --- COMPOSITE CALCULATION ---
-  const compositeScore = Math.round(
+  let rawComposite = Math.round(
     signalGroups.reduce((acc, g) => acc + (g.score * (g.weight / 100)), 0)
   );
+
+  // If there is zero trade category alignment or skill match, drastically cap composite score
+  if (skillScore === 0) {
+    rawComposite = Math.min(15, Math.round(rawComposite * 0.2));
+  }
+
+  const compositeScore = rawComposite;
 
   let rankTier: "Top Match" | "Strong Match" | "Good Match" | "Moderate Match" = "Moderate Match";
   if (compositeScore >= 88) rankTier = "Top Match";

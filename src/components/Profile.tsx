@@ -556,6 +556,7 @@ export default function Profile() {
   const [showUserGuide, setShowUserGuide] = useState(false);
   const [showProfileTermsModal, setShowProfileTermsModal] = useState(false);
   const [isAchievementsExpanded, setIsAchievementsExpanded] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isVerificationExpanded, setIsVerificationExpanded] = useState(false);
   const [isNotificationsExpanded, setIsNotificationsExpanded] = useState(false);
   const [showMatchTimingModal, setShowMatchTimingModal] = useState(false);
@@ -2042,13 +2043,13 @@ export default function Profile() {
             ))}
           </div>
           
-          {/* Sign Out Button */}
+          {/* Log Out Button */}
           <div className="mt-8 px-2">
             <button 
-              onClick={handleLogout}
-              className="w-full py-4 bg-[#0b1b3d] text-white rounded-full font-bold shadow-sm shadow-[#0b1b3d]/20 hover:bg-[#152a5c] active:scale-95 transition-all text-[15px] border-b-4 border-red-800 flex justify-center"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="w-full py-4 bg-[#0b1b3d] text-white rounded-full font-bold shadow-sm shadow-[#0b1b3d]/20 hover:bg-[#152a5c] active:scale-95 transition-all text-[15px] border-b-4 border-red-800 flex justify-center cursor-pointer"
             >
-              Sign Out
+              Log Out
             </button>
           </div>
 
@@ -2061,7 +2062,18 @@ export default function Profile() {
     <div id="account" className="max-w-2xl mx-auto pb-24 px-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-8 pb-4">
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Profile</h1>
+        <div className="flex flex-col">
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">Profile</h1>
+          <button 
+            type="button"
+            onClick={() => setShowLogoutConfirm(true)}
+            id="profile-logout-btn"
+            className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black shadow-xs text-xs font-black uppercase text-red-600 hover:bg-red-50 active:scale-95 transition-all self-start cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5 text-red-600" />
+            <span>Log Out</span>
+          </button>
+        </div>
         <button 
           onClick={() => navigate("/")} 
           className="w-12 h-12 bg-white border border-black hover:bg-slate-50 border-black rounded-full flex items-center justify-center transition-all shadow-sm text-slate-600 hover:text-slate-900 focus:ring-2 focus:ring-slate-200"
@@ -2996,13 +3008,14 @@ export default function Profile() {
       {/* Grouped Menu List End */}
       </>
 
-      {/* Sign Out Button */}
+      {/* Log Out Button */}
       <button 
-        onClick={handleLogout}
-        className="w-full bg-red-50 text-red-600 p-5 rounded-[2rem] border border-black font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition-all mb-8"
+        type="button"
+        onClick={() => setShowLogoutConfirm(true)}
+        className="w-full bg-red-50 text-red-600 p-5 rounded-[2rem] border border-black font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition-all mb-8 cursor-pointer"
       >
         <LogOut className="w-5 h-5" />
-        Sign Out
+        Log Out
       </button>
 
       {/* Tradesperson specific sections - Reviews */}
@@ -3812,6 +3825,39 @@ export default function Profile() {
           }));
         }}
       />
+
+      {/* Double Confirmation Logout Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-black">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center border border-black/10">
+                <LogOut className="w-8 h-8 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Log Out</h3>
+                <p className="text-slate-500 mt-2 text-sm">Are you sure you want to log out of your account?</p>
+              </div>
+              <div className="flex gap-3 w-full pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 p-3 rounded-xl border border-black text-slate-700 font-bold hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex-1 p-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20 cursor-pointer"
+                >
+                  Log Out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

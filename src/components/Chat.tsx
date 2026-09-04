@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { db, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, handleFirestoreError, OperationType, updateDoc, doc, getDoc, sendNotification, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, arrayUnion } from "@/src/firebase";
+import { db, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, handleFirestoreError, OperationType, updateDoc, doc, getDoc, sendNotification, uploadStorageFile, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ChevronLeft, Loader2, User as UserIcon, Briefcase, Image as ImageIcon, X, Mic, Square, Play, Pause, MousePointer2, Trash2 } from "lucide-react";
+import { Send, ChevronLeft, Loader2, User as UserIcon, Briefcase, Image as ImageIcon, X, Mic, Square, Play, Pause, MousePointer2, Trash2, FileText, Download, Maximize2, Paperclip } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { playSound } from "@/src/lib/sound";
+import { toast } from "sonner";
 
 export default function Chat() {
   const { conversationId } = useParams();
@@ -22,6 +23,7 @@ export default function Chat() {
   const [showHint, setShowHint] = useState(true);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -177,51 +179,70 @@ export default function Chat() {
   const quickReplies = getQuickReplies();
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user || !conversationId) return;
-
-    if (!file.type.startsWith("image/")) {
-       alert("Only image files are permitted in chat.");
-       return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-       alert("File size exceeds 10MB limit.");
-       return;
-    }
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user || !conversationId) return;
 
     setIsUploading(true);
+    setError(null);
+
     try {
-      const storageRef = ref(storage, `chats/${conversationId}/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, await file.arrayBuffer(), { contentType: file.type });
-      const url = await getDownloadURL(snapshot.ref);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 25 * 1024 * 1024) {
+          toast.error(`File "${file.name}" exceeds 25MB limit.`);
+          continue;
+        }
 
-      await addDoc(collection(db, "conversations", conversationId, "messages"), {
-        senderId: user.uid,
-        imageUrl: url,
-        createdAt: serverTimestamp(),
-      });
+        const isImg = file.type.startsWith("image/") || Boolean(file.name.match(/\.(jpg|jpeg|png|webp|gif|heic|bmp|tiff)$/i));
+        const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const storagePath = `chats/${conversationId}/${Date.now()}_${safeName}`;
 
-      await updateDoc(doc(db, "conversations", conversationId), {
-        lastMessage: "📷 Photo",
-        lastMessageAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        deletedBy: []
-      });
+        const url = await uploadStorageFile(file, storagePath, {
+          contentType: file.type || (isImg ? "image/jpeg" : "application/octet-stream"),
+          maxImageWidth: 1280,
+          quality: 0.75
+        });
 
-      if (conversation) {
-        const recipientId = conversation.participants.find((id: string) => id !== user.uid);
-        if (recipientId) {
-          await sendNotification(
-            recipientId,
-            "New Photo",
-            `You received a photo regarding "${conversation.jobTitle}"`,
-            "message",
-            `/chat/${conversationId}`
-          );
+        const messageData: Record<string, any> = {
+          senderId: user.uid,
+          fileName: file.name || "attachment",
+          fileSize: file.size || 0,
+          fileType: file.type || (isImg ? "image/jpeg" : "application/octet-stream"),
+          createdAt: serverTimestamp(),
+        };
+
+        if (isImg) {
+          messageData.imageUrl = url;
+        } else {
+          messageData.fileUrl = url;
+        }
+
+        await addDoc(collection(db, "conversations", conversationId, "messages"), messageData);
+
+        await updateDoc(doc(db, "conversations", conversationId), {
+          lastMessage: isImg ? "📷 Photo" : `📎 ${file.name}`,
+          lastMessageAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          deletedBy: []
+        });
+
+        if (conversation) {
+          const recipientId = conversation.participants?.find((id: string) => id !== user.uid);
+          if (recipientId) {
+            await sendNotification(
+              recipientId,
+              isImg ? "New Photo" : "New Attachment",
+              `You received a ${isImg ? "photo" : "file"} regarding "${conversation.jobTitle || 'Chat'}"`,
+              "message",
+              `/chat/${conversationId}`
+            );
+          }
         }
       }
-    } catch (err) {
+      toast.success("Media uploaded successfully");
+    } catch (err: any) {
       console.error("Error uploading image:", err);
+      toast.error(err?.message || "Failed to upload image");
       try {
         handleFirestoreError(err, OperationType.WRITE, `conversations/${conversationId}/messages`);
       } catch (e: any) {
@@ -429,26 +450,60 @@ export default function Chat() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                "flex flex-col max-w-[80%]",
+                "flex flex-col max-w-[85%] sm:max-w-[75%]",
                 msg.senderId === user?.uid ? "ml-auto items-end" : "mr-auto items-start"
               )}
             >
               <div className={cn(
-                "p-3 rounded-2xl text-sm",
+                "p-3 rounded-2xl text-sm shadow-xs",
                 msg.senderId === user?.uid 
                   ? "bg-blue-600 text-white rounded-tr-none" 
-                  : "bg-slate-100 text-slate-900 rounded-tl-none"
+                  : "bg-slate-100 text-slate-900 rounded-tl-none border border-black/5"
               )}>
                 {msg.imageUrl && (
-                  <div className="mb-2 rounded-lg overflow-hidden border border-black/10">
+                  <div 
+                    onClick={() => setActiveLightboxImage(msg.imageUrl)}
+                    className="mb-2 rounded-xl overflow-hidden border border-black/10 cursor-pointer relative group bg-black/5 shadow-xs"
+                    title="Click to expand"
+                  >
                     <img 
                       src={msg.imageUrl} 
                       alt="Shared photo" 
-                      className="max-w-full h-auto object-cover max-h-60"
+                      className="max-w-full h-auto object-cover max-h-72 rounded-xl group-hover:scale-[1.01] transition-transform duration-300"
                       referrerPolicy="no-referrer"
                     />
+                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="bg-black/75 text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-xs shadow-md">
+                        <Maximize2 className="w-3.5 h-3.5" /> Tap to view
+                      </span>
+                    </div>
                   </div>
                 )}
+
+                {msg.fileUrl && (
+                  <a
+                    href={msg.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={msg.fileName || "attachment"}
+                    className={cn(
+                      "mb-2 flex items-center gap-2.5 p-2.5 rounded-xl border transition-all text-xs font-semibold",
+                      msg.senderId === user?.uid 
+                        ? "bg-blue-700/60 border-white/20 text-white hover:bg-blue-700" 
+                        : "bg-white border-black/10 text-slate-900 hover:bg-slate-50"
+                    )}
+                  >
+                    <FileText className="w-5 h-5 shrink-0 text-blue-400" />
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="truncate font-bold">{msg.fileName || "Attached Document"}</p>
+                      {msg.fileSize && (
+                        <p className="text-[10px] opacity-70">{(msg.fileSize / 1024).toFixed(0)} KB</p>
+                      )}
+                    </div>
+                    <Download className="w-4 h-4 shrink-0 opacity-80" />
+                  </a>
+                )}
+
                 {msg.audioUrl && (
                   <div className="mb-2 min-w-[200px]">
                     <audio controls className="w-full h-8">
@@ -457,9 +512,10 @@ export default function Chat() {
                     </audio>
                   </div>
                 )}
-                {msg.text}
+
+                {msg.text && <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>}
               </div>
-              <span className="text-[10px] text-slate-400 mt-1">
+              <span className="text-[10px] text-slate-400 mt-1 px-1">
                 {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Sending..."}
               </span>
             </motion.div>
@@ -467,6 +523,47 @@ export default function Chat() {
         </AnimatePresence>
         <div ref={scrollRef} />
       </div>
+
+      {/* Fullscreen Image Lightbox */}
+      <AnimatePresence>
+        {activeLightboxImage && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-6"
+            onClick={() => setActiveLightboxImage(null)}
+          >
+            <div className="absolute top-4 right-4 flex items-center gap-3 z-10" onClick={(e) => e.stopPropagation()}>
+              <a 
+                href={activeLightboxImage} 
+                download="shared-photo.jpg" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md cursor-pointer"
+                title="Download photo"
+              >
+                <Download className="w-5 h-5" />
+              </a>
+              <button 
+                onClick={() => setActiveLightboxImage(null)}
+                className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="relative max-w-4xl max-h-[85vh] flex items-center justify-center p-2" onClick={(e) => e.stopPropagation()}>
+              <img 
+                src={activeLightboxImage} 
+                alt="Shared full preview" 
+                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Quick Replies */}
       {quickReplies.length > 0 && (
@@ -488,7 +585,8 @@ export default function Chat() {
       <form onSubmit={handleSendMessage} className="p-2 sm:p-4 border-t border-black flex gap-1 sm:gap-2 items-center bg-white shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.pdf,.doc,.docx"
+          multiple
           ref={fileInputRef}
           onChange={handleImageUpload}
           className="hidden"
@@ -514,9 +612,9 @@ export default function Chat() {
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
-              title="Share photo"
+              title="Share photo or document"
             >
-              {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
+              {isUploading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <ImageIcon className="w-5 h-5" />}
             </button>
             <button
               type="button"

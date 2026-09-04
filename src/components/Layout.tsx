@@ -947,15 +947,31 @@ export default function Layout() {
                 </span>
               </div>
             </Link>
-            <button 
-              onClick={() => setShowLogoutConfirm(true)}
-              id="header-signout-btn"
-              className="w-9 h-9 sm:w-11 sm:h-11 rounded-[14px] bg-white border border-black shadow-sm flex flex-col items-center justify-center text-black hover:bg-red-50 hover:text-red-600 transition-all active:scale-95 shrink-0"
-              title="Sign Out"
-            >
-              <LogOut className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 text-black hover:text-red-600 transition-colors" />
-              <span className="text-[7px] sm:text-[8px] font-black uppercase text-black tracking-tight leading-none mt-0.5">Exit</span>
-            </button>
+            <div className="relative group shrink-0">
+              {/* Soft Pulsing Bright Orange/Amber Ambient Glow Ring */}
+              <div className="absolute -inset-0.5 bg-gradient-to-tr from-orange-400 via-orange-500 to-amber-400 rounded-[15px] blur-[2px] opacity-80 group-hover:opacity-100 animate-pulse transition-opacity pointer-events-none" />
+
+              <button 
+                onClick={() => {
+                  triggerHaptic();
+                  setIsTradeBotOpen(true);
+                }}
+                id="header-ai-bot-btn"
+                className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-[14px] bg-slate-950 text-white border-2 border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.4)] hover:border-orange-400 flex flex-col items-center justify-center transition-all active:scale-95 shrink-0 cursor-pointer"
+                title="Ask AnyTrader AI Assistant (24/7)"
+              >
+                <div className="relative flex items-center justify-center">
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center border border-blue-300/40 shadow-inner">
+                    <Bot className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
+                  </div>
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 rounded-full ring-1 ring-slate-950 animate-pulse" />
+                </div>
+                <div className="flex items-center gap-0.5 leading-none mt-0.5">
+                  <span className="text-[6.5px] sm:text-[7.5px] font-black uppercase tracking-tight text-white">Ask</span>
+                  <span className="text-[6.5px] sm:text-[7.5px] font-black uppercase tracking-tight text-blue-400">AI</span>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -1319,7 +1335,7 @@ export default function Layout() {
                     className="w-full p-4 flex items-center gap-3 text-red-500 font-bold hover:bg-red-50 rounded-2xl transition-colors"
                   >
                     <LogOut className="w-5 h-5" />
-                    <span>Sign Out</span>
+                    <span>Log Out</span>
                   </button>
                 </div>
               </div>
@@ -1330,7 +1346,6 @@ export default function Layout() {
       {!isTaxiSide && (
         <>
           <TradeBot isOpen={isTradeBotOpen} onClose={() => setIsTradeBotOpen(false)} />
-          <FloatingTradeBotWidget />
           <ScrollToTopButton />
         </>
       )}

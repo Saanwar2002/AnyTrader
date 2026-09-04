@@ -553,78 +553,115 @@ export const writeBatch = (firestore: any) => {
   return batch;
 };
 
+// Client-side image compression helper
+export const compressImageFile = async (
+  fileOrBlob: File | Blob,
+  maxDimension = 1200,
+  quality = 0.75
+): Promise<{ blob: Blob; dataUrl: string }> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (!result) {
+        resolve({ blob: fileOrBlob, dataUrl: "" });
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          canvas.toBlob(
+            (compressedBlob) => {
+              resolve({
+                blob: compressedBlob || fileOrBlob,
+                dataUrl: dataUrl || result,
+              });
+            },
+            "image/jpeg",
+            quality
+          );
+          return;
+        }
+        resolve({ blob: fileOrBlob, dataUrl: result });
+      };
+      img.onerror = () => resolve({ blob: fileOrBlob, dataUrl: result });
+      img.src = result;
+    };
+    reader.onerror = () => resolve({ blob: fileOrBlob, dataUrl: "" });
+    reader.readAsDataURL(fileOrBlob);
+  });
+};
+
 export const uploadStorageFile = async (
   fileOrBlob: File | Blob,
   storagePath: string,
-  options?: { contentType?: string; maxImageWidth?: number }
+  options?: { contentType?: string; maxImageWidth?: number; quality?: number }
 ): Promise<string> => {
-  const fileType = options?.contentType || fileOrBlob.type || "image/jpeg";
+  const isImage = (options?.contentType || fileOrBlob.type || "").startsWith("image/") || 
+                  Boolean((fileOrBlob as File).name?.match(/\.(jpg|jpeg|png|webp|gif|heic|bmp|tiff)$/i));
   
-  // 1. Try Firebase Storage upload first with a safe timeout
+  let uploadBlob: Blob = fileOrBlob;
+  let fallbackDataUrl = "";
+  const fileType = options?.contentType || fileOrBlob.type || (isImage ? "image/jpeg" : "application/octet-stream");
+
+  if (isImage) {
+    try {
+      const compressed = await compressImageFile(fileOrBlob, options?.maxImageWidth || 1200, options?.quality || 0.75);
+      uploadBlob = compressed.blob;
+      fallbackDataUrl = compressed.dataUrl;
+    } catch (e) {
+      console.warn("Client side image compression error:", e);
+    }
+  }
+
+  // 1. Try Firebase Storage upload first with a safe 2.5s timeout
   try {
     const storageRef = ref(storage, storagePath);
-    const arrayBuffer = await fileOrBlob.arrayBuffer();
+    const arrayBuffer = await uploadBlob.arrayBuffer();
     
     const uploadPromise = uploadBytes(storageRef, arrayBuffer, { contentType: fileType }).then(
       async (snapshot) => await getDownloadURL(snapshot.ref)
     );
     
-    // Timeout after 7 seconds if storage retries or hangs
+    // Timeout after 2.5 seconds if storage retries or hangs
     const timeoutPromise = new Promise<string>((_, reject) => {
-      setTimeout(() => reject(new Error("Firebase Storage upload timed out")), 7000);
+      setTimeout(() => reject(new Error("Firebase Storage upload timed out")), 2500);
     });
 
     return await Promise.race([uploadPromise, timeoutPromise]);
   } catch (err: any) {
-    console.warn(`[Storage Upload Fallback] Firebase Storage upload failed (${err?.message || err}). Converting to local Data URL fallback...`);
+    console.warn(`[Storage Upload Fallback] Storage upload failed (${err?.message || err}). Using resilient fallback...`);
+    
+    if (fallbackDataUrl) {
+      return fallbackDataUrl;
+    }
 
-    // 2. Resilient Fallback: Convert to base64 Data URL (compressing image if > 200KB)
+    // Convert non-images or uncompressed files to data URL fallback
     return new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        if (!result) {
-          resolve("https://placehold.co/400x300?text=Uploaded+File");
-          return;
-        }
-
-        if (fileType.startsWith("image/") && result.length > 200000) {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement("canvas");
-            const maxDim = options?.maxImageWidth || 1024;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > maxDim || height > maxDim) {
-              if (width > height) {
-                height = Math.round((height * maxDim) / width);
-                width = maxDim;
-              } else {
-                width = Math.round((width * maxDim) / height);
-                height = maxDim;
-              }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.7);
-              resolve(compressedDataUrl);
-              return;
-            }
-            resolve(result);
-          };
-          img.onerror = () => resolve(result);
-          img.src = result;
-        } else {
-          resolve(result);
-        }
+        resolve(result || "https://placehold.co/400x300?text=Uploaded+File");
       };
       reader.onerror = () => resolve("https://placehold.co/400x300?text=Uploaded+File");
-      reader.readAsDataURL(fileOrBlob);
+      reader.readAsDataURL(uploadBlob);
     });
   }
 };

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, GripVertical, ChevronDown, Trophy, Play, Pause, Share2 } from "lucide-react";
+import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, GripVertical, ChevronDown, Trophy, Play, Pause, Share2, Loader2 } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react-google-maps/api";
 import { getGoogleMapsApiKey, triggerHaptic } from "@/src/lib/capacitor";
-import { db, collection, query, where, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
+import { db, collection, query, where, orderBy, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
 import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, textContainsTokenMatch, categoryMatchesSearch, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
 import { initSearchOptimizationService, recordUnmatchedSearch, onDynamicSynonymsUpdate } from "@/src/services/searchOptimizationService";
@@ -416,12 +416,83 @@ export default function FindTrades() {
   const [selectedTraderPreview, setSelectedTraderPreview] = useState<Tradesperson | null>(null);
   const [selectedMiniProfile, setSelectedMiniProfile] = useState<Tradesperson | null>(null);
   const [previewVisibleReviewsCount, setPreviewVisibleReviewsCount] = useState<number>(5);
+  const [previewReviews, setPreviewReviews] = useState<any[]>([]);
+  const [loadingPreviewReviews, setLoadingPreviewReviews] = useState<boolean>(false);
+  const [previewPortfolioItems, setPreviewPortfolioItems] = useState<any[]>([]);
 
   useEffect(() => {
-    if (selectedTraderPreview) {
+    if (!selectedTraderPreview) {
+      setPreviewReviews([]);
+      setPreviewPortfolioItems([]);
       setPreviewVisibleReviewsCount(5);
+      setLoadingPreviewReviews(false);
+      return;
     }
-  }, [selectedTraderPreview]);
+
+    setPreviewVisibleReviewsCount(5);
+    const traderId = selectedTraderPreview.uid || (selectedTraderPreview as any).id;
+    if (!traderId) return;
+
+    setLoadingPreviewReviews(true);
+
+    const isMockTrader = INITIAL_MOCK_TRADERS.some(
+      (t: any) => t.uid === traderId || t.id === traderId
+    );
+
+    // 1. Fetch real reviews from Firestore
+    const reviewsQ = query(
+      collection(db, "reviews"),
+      where("revieweeId", "==", traderId),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubReviews = onSnapshot(reviewsQ, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const active = fetched.filter((r: any) => r.status !== "cooling_off");
+      if (active.length > 0) {
+        setPreviewReviews(active);
+      } else if (isMockTrader) {
+        setPreviewReviews(generateTraderSeedReviews(selectedTraderPreview.name));
+      } else {
+        setPreviewReviews([]);
+      }
+      setLoadingPreviewReviews(false);
+    }, (error) => {
+      console.warn("Error fetching preview reviews:", error);
+      if (isMockTrader) {
+        setPreviewReviews(generateTraderSeedReviews(selectedTraderPreview.name));
+      } else {
+        setPreviewReviews([]);
+      }
+      setLoadingPreviewReviews(false);
+    });
+
+    // 2. Fetch real portfolio items from Firestore
+    const portfolioQ = query(
+      collection(db, "portfolioItems"),
+      where("consultantId", "==", traderId),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubPortfolio = onSnapshot(portfolioQ, (snapshot) => {
+      const fetchedPortfolio = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const existingArray = (selectedTraderPreview as any).portfolio || (selectedTraderPreview as any).portfolioImages || (selectedTraderPreview as any).workPhotos || [];
+      const formattedArray = Array.isArray(existingArray) ? existingArray.map((img: any, i: number) => typeof img === "string" ? { id: `arr-${i}`, imageUrl: img } : img) : [];
+      
+      const combined = [...fetchedPortfolio, ...formattedArray];
+      setPreviewPortfolioItems(combined);
+    }, (error) => {
+      console.warn("Error fetching preview portfolio:", error);
+      const existingArray = (selectedTraderPreview as any).portfolio || (selectedTraderPreview as any).portfolioImages || (selectedTraderPreview as any).workPhotos || [];
+      const formattedArray = Array.isArray(existingArray) ? existingArray.map((img: any, i: number) => typeof img === "string" ? { id: `arr-${i}`, imageUrl: img } : img) : [];
+      setPreviewPortfolioItems(formattedArray);
+    });
+
+    return () => {
+      unsubReviews();
+      unsubPortfolio();
+    };
+  }, [selectedTraderPreview?.uid, (selectedTraderPreview as any)?.id]);
   const resultsRef = React.useRef<HTMLDivElement>(null);
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
   const [isListening, setIsListening] = useState(false);
@@ -3099,93 +3170,163 @@ export default function FindTrades() {
                 {/* Trust Stats */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
                   <div className="bg-slate-50 border-2 border-black rounded-2xl p-3 text-center">
-                    <p className="text-lg font-black text-slate-900">{selectedTraderPreview.trustScore || 96}%</p>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Completion</p>
+                    <p className="text-lg font-black text-slate-900">
+                      {selectedTraderPreview.trustScore !== undefined && selectedTraderPreview.trustScore !== null
+                        ? `${selectedTraderPreview.trustScore}%`
+                        : (previewReviews.length > 0 || (selectedTraderPreview.totalReviews || 0) > 0)
+                          ? (selectedTraderPreview.rating ? `${(selectedTraderPreview.rating * 20).toFixed(0)}%` : "100%")
+                          : "100%"}
+                    </p>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Trust Score</p>
                   </div>
                   <div className="bg-slate-50 border-2 border-black rounded-2xl p-3 text-center">
-                    <p className="text-lg font-black text-slate-900">{selectedTraderPreview.totalJobsDone || 12}</p>
+                    <p className="text-lg font-black text-slate-900">{selectedTraderPreview.totalJobsDone ?? (selectedTraderPreview as any).jobsDone ?? 0}</p>
                     <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Jobs Done</p>
                   </div>
                   <div className="bg-slate-50 border-2 border-black rounded-2xl p-3 text-center">
-                    <p className="text-lg font-black text-slate-900">&lt; {selectedTraderPreview.avgReplyTime || 28}m</p>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Avg Reply</p>
+                    <p className="text-lg font-black text-slate-900">
+                      {selectedTraderPreview.avgReplyTime
+                        ? `< ${selectedTraderPreview.avgReplyTime}m`
+                        : (selectedTraderPreview.acceptanceRate ? `${selectedTraderPreview.acceptanceRate}%` : "< 1 hr")}
+                    </p>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                      {selectedTraderPreview.avgReplyTime ? "Avg Reply" : (selectedTraderPreview.acceptanceRate ? "Acceptance" : "Response")}
+                    </p>
                   </div>
                 </div>
 
-                <p className="text-sm text-slate-700 leading-relaxed font-medium mb-6 bg-slate-50 p-4 rounded-2xl italic border-2 border-black">
-                  {selectedTraderPreview.bio ? `"${selectedTraderPreview.bio.substring(0, 140)}${selectedTraderPreview.bio.length > 140 ? '...' : ''}"` : '"Professional tradesman with years of experience. Fully qualified and insured for your peace of mind."'}
-                </p>
+                {selectedTraderPreview.bio && selectedTraderPreview.bio.trim().length > 0 ? (
+                  <p className="text-sm text-slate-700 leading-relaxed font-medium mb-6 bg-slate-50 p-4 rounded-2xl italic border-2 border-black">
+                    "{selectedTraderPreview.bio.substring(0, 180)}{selectedTraderPreview.bio.length > 180 ? '...' : ''}"
+                  </p>
+                ) : (
+                  <div className="mb-6 bg-slate-50 p-3.5 rounded-2xl border border-black/10 flex items-center gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                    <p className="text-xs font-semibold text-slate-700">Verified trade professional on AnyTrader.</p>
+                  </div>
+                )}
 
                 {/* Portfolio Preview Horizontal Scroll */}
                 <div className="mb-6">
                   <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Briefcase className="w-3 h-3 text-slate-400" /> Recent Work
+                    <Briefcase className="w-3.5 h-3.5 text-slate-400" /> Recent Work {previewPortfolioItems.length > 0 && `(${previewPortfolioItems.length})`}
                   </h4>
-                  <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
-                    {/* Placeholder images for high-tier architectural feel */}
-                    {[1, 2, 3, 4, 5, 6].map(idx => (
-                      <div key={idx} className="w-28 h-28 shrink-0 rounded-2xl bg-slate-100 border-2 border-black overflow-hidden relative group">
-                        <img src={`https://picsum.photos/seed/${selectedTraderPreview.uid}${idx}/300/300`} alt="Portfolio Work" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                           <Search className="w-6 h-6 text-white" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {previewPortfolioItems.length > 0 ? (
+                    <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
+                      {previewPortfolioItems.map((item: any, idx: number) => {
+                        const imgUrl = item.imageUrl || item.url || item.photoUrl || (typeof item === 'string' ? item : null);
+                        if (!imgUrl) return null;
+                        return (
+                          <div key={item.id || idx} className="w-28 h-28 shrink-0 rounded-2xl bg-slate-100 border-2 border-black overflow-hidden relative group">
+                            <img src={imgUrl} alt={item.title || "Portfolio Work"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Search className="w-6 h-6 text-white" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 rounded-2xl p-4 border border-dashed border-black/20 text-center">
+                      <p className="text-xs text-slate-500 font-medium">No portfolio photos uploaded yet.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Top Reviews Preview */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                      <Star className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Client Reviews ({selectedTraderPreview.totalReviews || 10})
+                      <Star className={cn("w-3.5 h-3.5", previewReviews.length > 0 ? "text-orange-500 fill-orange-500" : "text-slate-300")} /> Client Reviews ({previewReviews.length})
                     </h4>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Showing {Math.min(previewVisibleReviewsCount, generateTraderSeedReviews(selectedTraderPreview.name).length)} of {generateTraderSeedReviews(selectedTraderPreview.name).length}
-                    </span>
+                    {previewReviews.length > 0 && (
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Showing {Math.min(previewVisibleReviewsCount, previewReviews.length)} of {previewReviews.length}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="space-y-3">
-                    {generateTraderSeedReviews(selectedTraderPreview.name)
-                      .slice(0, previewVisibleReviewsCount)
-                      .map((rev) => (
-                        <div key={rev.id} className="bg-slate-50 border-2 border-black p-4 rounded-2xl">
-                          <div className="flex items-center gap-1 mb-2">
-                            {Array(5).fill(0).map((_, i) => (
-                              <Star key={i} className={`w-3.5 h-3.5 ${i < rev.rating ? "text-orange-500 fill-orange-500" : "text-slate-200"}`} />
-                            ))}
-                          </div>
-                          <p className="text-sm text-slate-700 font-medium italic mb-2">"{rev.comment}"</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{rev.reviewerName} — {rev.timeAgo}</p>
-                        </div>
-                    ))}
-                  </div>
+                  {loadingPreviewReviews ? (
+                    <div className="flex justify-center py-6 bg-slate-50 rounded-2xl border border-black/10">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                    </div>
+                  ) : previewReviews.length > 0 ? (
+                    <>
+                      <div className="space-y-3">
+                        {previewReviews
+                          .slice(0, previewVisibleReviewsCount)
+                          .map((rev) => (
+                            <div key={rev.id} className="bg-slate-50 border-2 border-black p-4 rounded-2xl shadow-xs">
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-1">
+                                  {Array(5).fill(0).map((_, i) => (
+                                    <Star key={i} className={`w-3.5 h-3.5 ${i < (rev.rating || 5) ? "text-orange-500 fill-orange-500" : "text-slate-200"}`} />
+                                  ))}
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-400">
+                                  {rev.createdAt?.seconds 
+                                    ? new Date(rev.createdAt.seconds * 1000).toLocaleDateString()
+                                    : (rev.timeAgo || "Recently")}
+                                </span>
+                              </div>
+                              <p className="text-xs sm:text-sm text-slate-800 font-medium italic mb-2 leading-relaxed">"{rev.comment}"</p>
+                              {rev.reviewerName && (
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{rev.reviewerName}</p>
+                              )}
+                            </div>
+                        ))}
+                      </div>
 
-                  {generateTraderSeedReviews(selectedTraderPreview.name).length > previewVisibleReviewsCount ? (
-                    <button
-                      onClick={() => setPreviewVisibleReviewsCount(prev => prev + 5)}
-                      className="w-full mt-3 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl text-xs font-bold transition-all border border-black flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
-                    >
-                      <ChevronDown className="w-4 h-4 text-slate-700" />
-                      <span>Show More Reviews (+5 remaining)</span>
-                    </button>
-                  ) : generateTraderSeedReviews(selectedTraderPreview.name).length > 5 ? (
-                    <button
-                      onClick={() => setPreviewVisibleReviewsCount(5)}
-                      className="w-full mt-3 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-xs font-semibold transition-all border border-slate-300 flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <span>Show Fewer Reviews</span>
-                    </button>
-                  ) : null}
+                      {previewReviews.length > previewVisibleReviewsCount ? (
+                        <button
+                          onClick={() => setPreviewVisibleReviewsCount(prev => prev + 5)}
+                          className="w-full mt-3 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl text-xs font-bold transition-all border border-black flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                        >
+                          <ChevronDown className="w-4 h-4 text-slate-700" />
+                          <span>Show More Reviews (+5 of {previewReviews.length - previewVisibleReviewsCount} remaining)</span>
+                        </button>
+                      ) : previewReviews.length > 5 ? (
+                        <button
+                          onClick={() => setPreviewVisibleReviewsCount(5)}
+                          className="w-full mt-3 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-xs font-semibold transition-all border border-slate-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <span>Show Fewer Reviews</span>
+                        </button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="bg-slate-50 border border-dashed border-black/20 p-5 rounded-2xl text-center">
+                      <p className="text-xs text-slate-700 font-bold mb-1">No reviews yet</p>
+                      <p className="text-[11px] text-slate-500 font-medium">This tradesperson is newly registered on AnyTrader.</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Fixed Bottom Action Bar */}
               <div className="absolute bottom-0 left-0 right-0 bg-white border-t-2 border-black p-3.5 pb-6 sm:pb-4 flex items-center gap-4 justify-between shadow-[0_-10px_20px_rgba(0,0,0,0.06)] z-20">
-                <div className="hidden sm:block shrink-0">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Typical Range</p>
-                  <p className="text-base font-black text-slate-900">£150 - £250</p>
-                </div>
+                {(() => {
+                  const tp = selectedTraderPreview as any;
+                  let pricingText = "Free Quotes";
+                  if ((tp.totalJobsDone || 0) >= 5 && (tp.completedJobsRevenue || 0) > 0) {
+                    const avg = (tp.completedJobsRevenue || 0) / (tp.totalJobsDone || 1);
+                    const lower = Math.round(avg * 0.85 / 10) * 10;
+                    const upper = Math.round(avg * 1.15 / 10) * 10;
+                    pricingText = `£${lower} - £${upper}`;
+                  } else if (tp.miniProfileSettings?.callOutFee || tp.miniProfilePricing?.callOutFee || tp.callOutFee) {
+                    const callOut = tp.miniProfileSettings?.callOutFee ?? tp.miniProfilePricing?.callOutFee ?? tp.callOutFee;
+                    const hourly = tp.miniProfileSettings?.hourlyRate ?? tp.miniProfilePricing?.hourlyRate ?? tp.hourlyRate;
+                    pricingText = hourly ? `£${callOut} / £${hourly}hr` : `£${callOut} Callout`;
+                  } else if (tp.miniProfileSettings?.hourlyRate || tp.miniProfilePricing?.hourlyRate || tp.hourlyRate) {
+                    pricingText = `£${tp.miniProfileSettings?.hourlyRate ?? tp.miniProfilePricing?.hourlyRate ?? tp.hourlyRate}/hr`;
+                  }
+                  return (
+                    <div className="hidden sm:block shrink-0">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Typical Range</p>
+                      <p className="text-base font-black text-slate-900">{pricingText}</p>
+                    </div>
+                  );
+                })()}
                 <div className="flex-1 flex flex-col gap-2 w-full">
                   <button 
                     onClick={() => navigate(`/profile/${selectedTraderPreview.uid}`, { state: { openQuote: true, initialProfile: selectedTraderPreview, isB2B, linkedPropertyId: isB2B && selectedAsset ? selectedAsset.id : undefined, linkedPropertyName: isB2B && selectedAsset ? (selectedAsset.name || selectedAsset.propertyName || selectedAsset.address?.line1) : undefined } })}

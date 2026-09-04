@@ -111,8 +111,9 @@ How can I assist your project today?`,
     const primaryCategory = matchedCats[0] || "General Trades";
     const cleanExtractedQuery = extractCleanTradeQuery(userMessage);
 
-    // 2. Query hybrid trader recommendations in parallel
-    const tradersPromise = getHybridTraderRecommendations(primaryCategory, userPostcode, undefined, userMessage).catch(() => []);
+    // 2. Query hybrid trader recommendations in parallel with all matched categories
+    const categoriesForMatching = matchedCats.length > 0 ? matchedCats : [primaryCategory];
+    const tradersPromise = getHybridTraderRecommendations(categoriesForMatching, userPostcode, undefined, userMessage).catch(() => []);
 
     // 3. User context payload for Gemini
     const userContext = {
