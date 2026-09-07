@@ -386,6 +386,21 @@ service cloud.firestore {
         resource.data.get('userId', '') == request.auth.uid || 
         isAdmin()
       );
+      allow delete: if isSignedIn() && (
+        resource == null || 
+        resource.data.get('tradespersonId', '') == request.auth.uid || 
+        resource.data.get('proId', '') == request.auth.uid || 
+        resource.data.get('homeownerId', '') == request.auth.uid || 
+        resource.data.get('userId', '') == request.auth.uid || 
+        isAdmin() ||
+        resource.data.get('tradespersonId', '').matches('^seed-.*$') ||
+        resource.data.get('tradespersonId', '').matches('^sample_.*$') ||
+        resource.data.get('tradespersonId', '').matches('^mock-.*$') ||
+        (exists(/databases/$(database)/documents/jobs/$(jobId)) && (
+          get(/databases/$(database)/documents/jobs/$(jobId)).data.get('homeownerId', '') == request.auth.uid ||
+          get(/databases/$(database)/documents/jobs/$(jobId)).data.get('userId', '') == request.auth.uid
+        ))
+      );
     }
 
     // --- Consultancy System ---

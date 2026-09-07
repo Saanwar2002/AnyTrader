@@ -1,4 +1,5 @@
-import { textContainsTokenMatch } from "@/src/lib/fuzzyMatch";
+import { textContainsTokenMatch, getCategoryMetadata } from "@/src/lib/fuzzyMatch";
+import { categoryRegistry } from "@/src/services/categoryRegistrySync";
 import React, { useEffect, useState, useMemo } from "react";
 import { db, collection, collectionGroup, query, where, orderBy, limit, getDocs, onSnapshot, type FirebaseUser, handleFirestoreError, OperationType, updateDoc, setDoc, doc } from "@/src/firebase";
 import { parseNaturalLanguageSearch } from "@/src/services/gemini";
@@ -24,7 +25,6 @@ const iconMap: Record<string, any> = {
 };
 
 import { EmergencyTimer } from "./EmergencyTimer";
-import { NearbyRequestsSection } from "./job-feed/NearbyRequestsSection";
 
 export default function JobFeed() {
   const { user, profile, setProfile } = useAuth();
@@ -61,24 +61,34 @@ export default function JobFeed() {
       return [];
     }
   });
+  const isTraderRole = Boolean(
+    profile?.role === "tradesperson" ||
+    profile?.role === "business" ||
+    profile?.subscriptionType === "business" ||
+    (profile?.trades && (Array.isArray(profile.trades) ? profile.trades.length > 0 : Boolean(profile.trades))) ||
+    profile?.category ||
+    profile?.tradeCategory ||
+    profile?.businessCategory
+  );
+
   const [sortBy, setSortBy] = useState<"match" | "newest" | "urgency" | "completion">(() => {
     if (profile?.activeFilter?.sortBy) return profile.activeFilter.sortBy;
     const local = localStorage.getItem("job_feed_sortBy") as any;
     if (local) return local;
-    return profile?.role === "tradesperson" ? "match" : "newest";
+    return isTraderRole || !profile ? "match" : "newest";
   });
   const [activeTab, setActiveTab] = useState<"feed" | "how-it-works">("feed");
   const [showFilters, setShowFilters] = useState(false);
   const [showMatchedOnly, setShowMatchedOnly] = useState(() => {
-    if (profile?.activeFilter?.showMatchedOnly !== undefined) {
-      return profile.activeFilter.showMatchedOnly;
-    }
     const stored = localStorage.getItem("job_feed_showMatchedOnly");
     if (stored !== null) {
       return stored === "true";
     }
-    // Default to true for tradespeople so they see jobs in their trade by default
-    return profile?.role === "tradesperson";
+    if (profile?.activeFilter?.showMatchedOnly !== undefined) {
+      return profile.activeFilter.showMatchedOnly;
+    }
+    // "Best Match" toggle always ON by default for tradespeople unless explicitly toggled off
+    return isTraderRole || !profile;
   });
   const [urgencyFilter, setUrgencyFilter] = useState<string>(() => 
     profile?.activeFilter?.urgencyFilter || localStorage.getItem("job_feed_urgencyFilter") || "any"
@@ -250,20 +260,41 @@ export default function JobFeed() {
   // Persistence: Sync from profile when it loads for the first time
   useEffect(() => {
     if (profile && !hasSyncedFromCloud) {
+      const isTrader = Boolean(
+        profile.role === "tradesperson" ||
+        profile.role === "business" ||
+        profile.subscriptionType === "business" ||
+        (profile.trades && (Array.isArray(profile.trades) ? profile.trades.length > 0 : Boolean(profile.trades))) ||
+        profile.category ||
+        profile.tradeCategory ||
+        profile.businessCategory
+      );
+
+      const stored = localStorage.getItem("job_feed_showMatchedOnly");
+
       if (profile.activeFilter) {
         const af = profile.activeFilter;
         if (af.searchTerm) setSearchTerm(af.searchTerm);
         if (af.categories) setSelectedCategories(af.categories);
         if (af.sortBy) setSortBy(af.sortBy);
-        if (af.showMatchedOnly !== undefined) setShowMatchedOnly(af.showMatchedOnly);
+        if (stored !== null) {
+          setShowMatchedOnly(stored === "true");
+        } else if (af.showMatchedOnly !== undefined) {
+          setShowMatchedOnly(af.showMatchedOnly);
+        } else if (isTrader) {
+          setShowMatchedOnly(true);
+        }
         if (af.urgencyFilter) setUrgencyFilter(af.urgencyFilter);
         if (af.distanceFilter) setDistanceFilter(af.distanceFilter);
         if (af.priceFilter) setPriceFilter(af.priceFilter);
-      } else if (profile.role === "tradesperson") {
-        // Default tradespeople to show matched jobs for their trade if no active filter stored
-        const stored = localStorage.getItem("job_feed_showMatchedOnly");
+      } else if (isTrader) {
+        // Default tradespeople to show matched jobs for their trade unless explicitly toggled off
         if (stored !== "false") {
           setShowMatchedOnly(true);
+        }
+      } else if (profile.role === "homeowner" || profile.role === "customer") {
+        if (stored === null) {
+          setShowMatchedOnly(false);
         }
       }
       setHasSyncedFromCloud(true);
@@ -429,40 +460,6 @@ export default function JobFeed() {
       }).catch(console.error);
     }
     toast.success("All filters cleared");
-  };
-
-  const handleSelectCategoryFromNearby = (cat: string) => {
-    setDismissedFilterKey(null);
-    if (!cat) {
-      setSelectedCategories([]);
-      return;
-    }
-    // Tapping a category pill expresses clear user intent to view that category's jobs
-    setSelectedCategories([cat]);
-    setSelectedSavedFilterIds([]);
-    setSearchTerm("");
-    setShowMatchedOnly(false);
-    setDistanceFilter("any");
-    setPriceFilter("any");
-    if (urgencyFilter !== "any") {
-      setUrgencyFilter("any");
-    }
-  };
-
-  const handleSelectUrgencyFromNearby = (urgency: string) => {
-    setUrgencyFilter(urgency);
-    if (urgency !== "any") {
-      setSelectedSavedFilterIds([]);
-    }
-  };
-
-  const handleClearDemandFilter = () => {
-    setSelectedCategories([]);
-    setDismissedFilterKey(null);
-    if (urgencyFilter === "emergency") {
-      setUrgencyFilter("any");
-    }
-    toast.success("Demand filters cleared");
   };
 
   const hasActiveFilters = 
@@ -680,155 +677,6 @@ export default function JobFeed() {
     return scores;
   }, [jobs, profile]);
 
-  // Isolate jobs for Nearby Requests Section & Available Demand Categories:
-  // For tradespeople, strictly restrict local demand overview to jobs related to their business.
-  const demandSectionJobs = useMemo(() => {
-    return jobs.filter(job => {
-      // Exclude direct 1-to-1 jobs targeted to other traders
-      const isDirectJob = Boolean(
-        job.targetTradespersonId ||
-        job.targetTradespersonName ||
-        job.directTradespersonId ||
-        job.targetTraderId ||
-        job.claimedDeal?.traderId ||
-        job.claimedDeal?.traderName
-      );
-
-      if (isDirectJob) {
-        const isJobCreator = Boolean(
-          (job.customerId && user?.uid && job.customerId === user.uid) ||
-          (job.homeownerId && user?.uid && job.homeownerId === user.uid) ||
-          (job.userId && user?.uid && job.userId === user.uid)
-        );
-
-        const targetTraderName = (
-          job.targetTradespersonName ||
-          job.claimedDeal?.traderName ||
-          job.claimedDeal?.businessName ||
-          ""
-        ).trim().toLowerCase();
-
-        const myBusinessName = (profile?.businessName || "").trim().toLowerCase();
-        const myName = (profile?.name || "").trim().toLowerCase();
-        const myDisplayName = (profile?.displayName || "").trim().toLowerCase();
-
-        const isTargetTradesperson = Boolean(
-          (job.targetTradespersonId && user?.uid && job.targetTradespersonId === user.uid) ||
-          (job.directTradespersonId && user?.uid && job.directTradespersonId === user.uid) ||
-          (job.targetTraderId && user?.uid && job.targetTraderId === user.uid) ||
-          (job.claimedDeal?.traderId && user?.uid && job.claimedDeal.traderId === user.uid) ||
-          (targetTraderName && (
-            (myBusinessName && myBusinessName === targetTraderName) ||
-            (myName && myName === targetTraderName) ||
-            (myDisplayName && myDisplayName === targetTraderName)
-          ))
-        );
-
-        if (!isJobCreator && !isTargetTradesperson) {
-          return false;
-        }
-      }
-
-      // If user is a tradesperson, filter by their trade, category, services, tags & skills
-      if (profile?.role === "tradesperson") {
-        const rawTrades = Array.isArray(profile?.trades)
-          ? profile.trades
-          : typeof profile?.trades === "string"
-          ? (profile.trades as string).split(",")
-          : [];
-        const userTrades: string[] = [
-          ...rawTrades,
-          profile?.category,
-          profile?.tradeCategory,
-          profile?.primaryTrade,
-          profile?.businessType,
-          profile?.selectedCategory
-        ].filter(Boolean).map((t: string) => t.trim());
-
-        const rawServices = Array.isArray(profile?.services)
-          ? profile.services
-          : typeof profile?.services === "string"
-          ? (profile.services as string).split(",")
-          : [];
-        const userServices: string[] = rawServices.filter(Boolean).map((s: string) => s.trim());
-
-        const rawTags = [
-          ...(Array.isArray(profile?.tags) ? profile.tags : typeof profile?.tags === "string" ? (profile.tags as string).split(",") : []),
-          ...(Array.isArray(profile?.skills) ? profile.skills : typeof profile?.skills === "string" ? (profile.skills as string).split(",") : []),
-          ...(Array.isArray(profile?.specialties) ? profile.specialties : typeof profile?.specialties === "string" ? (profile.specialties as string).split(",") : [])
-        ];
-        const userTags: string[] = rawTags.filter(Boolean).map((t: string) => t.trim());
-
-        const hasTraderSpecialtyDefined = userTrades.length > 0 || userServices.length > 0 || userTags.length > 0;
-        if (!hasTraderSpecialtyDefined) return true;
-
-        const normJobCat = (job.category || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-        const normJobSub = (job.subcategory || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-        const normJobTitle = (job.title || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-        const normJobDesc = (job.description || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-
-        const matchesTrade = userTrades.some((trade: string) => {
-          const tLower = trade.toLowerCase();
-          const normTrade = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-          const jCat = (job.category || "").toLowerCase();
-          const jSub = (job.subcategory || "").toLowerCase();
-          const jTitle = (job.title || "").toLowerCase();
-          const jDesc = (job.description || "").toLowerCase();
-
-          if (jCat === tLower || jCat.includes(tLower) || tLower.includes(jCat)) return true;
-          if (normJobCat === normTrade || normJobCat.includes(normTrade) || normTrade.includes(normJobCat)) return true;
-          if (jSub && (jSub === tLower || jSub.includes(tLower) || tLower.includes(jSub) || normJobSub.includes(normTrade) || normTrade.includes(normJobSub))) return true;
-          if (jTitle.includes(tLower) || tLower.includes(jTitle) || normJobTitle.includes(normTrade)) return true;
-          if (jDesc.includes(tLower) || normJobDesc.includes(normTrade)) return true;
-          if (textContainsTokenMatch(jCat, tLower) || textContainsTokenMatch(jSub, tLower) || textContainsTokenMatch(jTitle, tLower)) return true;
-          return false;
-        });
-
-        const matchesService = userServices.some((service: string) => {
-          const sLower = service.toLowerCase();
-          const normService = sLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-          const jCat = (job.category || "").toLowerCase();
-          const jSub = (job.subcategory || "").toLowerCase();
-          const jTitle = (job.title || "").toLowerCase();
-          const jDesc = (job.description || "").toLowerCase();
-
-          return jCat.includes(sLower) || jSub.includes(sLower) || jTitle.includes(sLower) || jDesc.includes(sLower) ||
-                 normJobCat.includes(normService) || normJobSub.includes(normService) || normJobTitle.includes(normService) || normJobDesc.includes(normService) ||
-                 textContainsTokenMatch(jCat, sLower) || textContainsTokenMatch(jTitle, sLower);
-        });
-
-        const matchesSpecialization = userTags.some((tag: string) => {
-          const tLower = tag.toLowerCase();
-          const normTag = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-          const jCat = (job.category || "").toLowerCase();
-          const jSub = (job.subcategory || "").toLowerCase();
-          const jTitle = (job.title || "").toLowerCase();
-          const jDesc = (job.description || "").toLowerCase();
-
-          return jCat.includes(tLower) || jSub.includes(tLower) || jTitle.includes(tLower) || jDesc.includes(tLower) ||
-                 normJobCat.includes(normTag) || normJobSub.includes(normTag) || normJobTitle.includes(normTag) || normJobDesc.includes(normTag) ||
-                 textContainsTokenMatch(jTitle, tLower) || textContainsTokenMatch(jDesc, tLower);
-        });
-
-        const matchEngineScore = traderMatchScores[job.id]?.compositeScore || 0;
-        return matchesTrade || matchesService || matchesSpecialization || (matchEngineScore >= 70);
-      }
-
-      return true;
-    });
-  }, [jobs, profile, user?.uid, traderMatchScores]);
-
-  const availableDemandCategories = useMemo(() => {
-    const counts: Record<string, number> = {};
-    demandSectionJobs.forEach((j) => {
-      const cat = j.category || "General";
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [demandSectionJobs]);
-
   const filteredJobs = jobs.filter(job => {
     // 1. Direct 1-on-1 Quote Request & Claimed Flash Deal Isolation Security
     // If a job was submitted as a direct 1-to-1 quote request or claimed deal targeted to a specific tradesperson,
@@ -970,6 +818,7 @@ export default function JobFeed() {
       ...rawTrades,
       profile?.category,
       profile?.tradeCategory,
+      profile?.businessCategory,
       profile?.primaryTrade,
       profile?.businessType,
       profile?.selectedCategory
@@ -989,57 +838,96 @@ export default function JobFeed() {
     ];
     const userTags: string[] = rawTags.filter(Boolean).map((t: string) => t.trim());
 
-    const normJobCat = (job.category || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-    const normJobSub = (job.subcategory || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-    const normJobTitle = (job.title || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-    const normJobDesc = (job.description || "").toLowerCase().replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+    const jCat = (job.category || "").toLowerCase();
+    const jSub = (job.subcategory || "").toLowerCase();
+    const jTitle = (job.title || "").toLowerCase();
+    const jDesc = (job.description || "").toLowerCase();
 
-    const matchesTrade = userTrades.some((trade: string) => {
+    const normJobCat = jCat.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+    const normJobSub = jSub.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+    const normJobTitle = jTitle.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+    const normJobDesc = jDesc.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+
+    // Category Metadata Resolution (Synonyms & Related Terms)
+    const categoryMeta = getCategoryMetadata(job.category || "");
+    const regCat = categoryRegistry.getCategoryByName(job.category || "");
+    const categorySynonyms = Array.from(new Set([
+      ...(categoryMeta?.synonyms || []),
+      ...(regCat?.synonyms || [])
+    ])).map(s => (s || "").toLowerCase());
+
+    const categoryRelatedTerms = Array.from(new Set([
+      ...(categoryMeta?.related_terms || []),
+      ...(regCat?.related_terms || []),
+      ...(regCat?.relatedTerms || [])
+    ])).map(r => (r || "").toLowerCase());
+
+    // 1. Direct or Canonical Category Match
+    const matchesTradeCategory = userTrades.some((trade: string) => {
       const tLower = trade.toLowerCase();
       const normTrade = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-      const jCat = (job.category || "").toLowerCase();
-      const jSub = (job.subcategory || "").toLowerCase();
-      const jTitle = (job.title || "").toLowerCase();
-      const jDesc = (job.description || "").toLowerCase();
 
       if (jCat === tLower || jCat.includes(tLower) || tLower.includes(jCat)) return true;
       if (normJobCat === normTrade || normJobCat.includes(normTrade) || normTrade.includes(normJobCat)) return true;
-      if (jSub && (jSub === tLower || jSub.includes(tLower) || tLower.includes(jSub) || normJobSub.includes(normTrade) || normTrade.includes(normJobSub))) return true;
-      if (jTitle.includes(tLower) || tLower.includes(jTitle) || normJobTitle.includes(normTrade)) return true;
-      if (jDesc.includes(tLower) || normJobDesc.includes(normTrade)) return true;
-      if (textContainsTokenMatch(jCat, tLower) || textContainsTokenMatch(jSub, tLower) || textContainsTokenMatch(jTitle, tLower)) return true;
+      if (categorySynonyms.some(syn => syn && (syn.includes(tLower) || tLower.includes(syn) || syn.includes(normTrade) || normTrade.includes(syn)))) return true;
+      if (textContainsTokenMatch(jCat, tLower)) return true;
       return false;
     });
 
+    // 2. Subcategory, Title, or Description Match for Trade Discipline
+    const matchesTradeSubOrText = userTrades.some((trade: string) => {
+      const tLower = trade.toLowerCase();
+      const normTrade = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
+
+      if (jSub && (jSub === tLower || jSub.includes(tLower) || tLower.includes(jSub) || normJobSub.includes(normTrade) || normTrade.includes(normJobSub))) return true;
+      if (jTitle.includes(tLower) || tLower.includes(jTitle) || normJobTitle.includes(normTrade)) return true;
+      if (jDesc.includes(tLower) || normJobDesc.includes(normTrade)) return true;
+      if (textContainsTokenMatch(jSub, tLower) || textContainsTokenMatch(jTitle, tLower)) return true;
+      return false;
+    });
+
+    const matchesTrade = matchesTradeCategory || matchesTradeSubOrText;
+
+    // 3. Registered Services Match
     const matchesService = userServices.some((service: string) => {
       const sLower = service.toLowerCase();
       const normService = sLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-      const jCat = (job.category || "").toLowerCase();
-      const jSub = (job.subcategory || "").toLowerCase();
-      const jTitle = (job.title || "").toLowerCase();
-      const jDesc = (job.description || "").toLowerCase();
 
       return jCat.includes(sLower) || jSub.includes(sLower) || jTitle.includes(sLower) || jDesc.includes(sLower) ||
              normJobCat.includes(normService) || normJobSub.includes(normService) || normJobTitle.includes(normService) || normJobDesc.includes(normService) ||
-             textContainsTokenMatch(jCat, sLower) || textContainsTokenMatch(jTitle, sLower);
+             categoryRelatedTerms.some(rel => rel && (rel.includes(sLower) || sLower.includes(rel))) ||
+             textContainsTokenMatch(jCat, sLower) || textContainsTokenMatch(jSub, sLower) || textContainsTokenMatch(jTitle, sLower) || textContainsTokenMatch(jDesc, sLower);
     });
 
-    const matchesSpecialization = userTags.some((tag: string) => {
+    // 4. Tags, Skills & Specialties Match
+    const matchesTagOrSkill = userTags.some((tag: string) => {
       const tLower = tag.toLowerCase();
       const normTag = tLower.replace(/\band\b/g, "n").replace(/&/g, "n").replace(/[^a-z0-9]/g, " ").trim();
-      const jCat = (job.category || "").toLowerCase();
-      const jSub = (job.subcategory || "").toLowerCase();
-      const jTitle = (job.title || "").toLowerCase();
-      const jDesc = (job.description || "").toLowerCase();
 
       return jCat.includes(tLower) || jSub.includes(tLower) || jTitle.includes(tLower) || jDesc.includes(tLower) ||
              normJobCat.includes(normTag) || normJobSub.includes(normTag) || normJobTitle.includes(normTag) || normJobDesc.includes(normTag) ||
-             textContainsTokenMatch(jTitle, tLower) || textContainsTokenMatch(jDesc, tLower);
+             categoryRelatedTerms.some(rel => rel && (rel.includes(tLower) || tLower.includes(rel))) ||
+             categorySynonyms.some(syn => syn && (syn.includes(tLower) || tLower.includes(syn))) ||
+             textContainsTokenMatch(jCat, tLower) || textContainsTokenMatch(jSub, tLower) || textContainsTokenMatch(jTitle, tLower) || textContainsTokenMatch(jDesc, tLower);
     });
 
     const hasTraderSpecialtyDefined = userTrades.length > 0 || userServices.length > 0 || userTags.length > 0;
-    const matchEngineScore = traderMatchScores[job.id]?.compositeScore || 0;
-    const isMatched = !hasTraderSpecialtyDefined || matchesService || matchesSpecialization || matchesTrade || (matchEngineScore >= 70 && (matchesTrade || matchesService || matchesSpecialization));
+
+    // Strict Match Mode (when "Best Match Only" is toggled ON):
+    // Requires direct trade category alignment, direct service alignment, or verified subcategory/tag matches.
+    const isStrictMatched = !hasTraderSpecialtyDefined || 
+      matchesTradeCategory || 
+      matchesService || 
+      (matchesTradeSubOrText && Boolean(jSub || normJobSub)) || 
+      (matchesTagOrSkill && (matchesTrade || matchesService));
+
+    // Relaxed Match Mode (when "Best Match Only" is toggled OFF):
+    // Relaxes rules to show all relevant job offers aligned with the trader's trade skills,
+    // category, tags, or offered services. Out-of-domain random jobs remain strictly excluded!
+    const isRelaxedMatched = !hasTraderSpecialtyDefined || 
+      matchesTrade || 
+      matchesService || 
+      matchesTagOrSkill;
     
     // Filter out jobs scheduled for dates the tradesperson is busy or booked
     let matchesAvailability = true;
@@ -1093,10 +981,10 @@ export default function JobFeed() {
     const allCriteriaMatch = baseFiltersMatch && matchesAvailability && matchesUrgency && matchesPrice && matchesDistance && matchesSelectedSavedFilters;
 
     if (showMatchedOnly) {
-      return isMatched && allCriteriaMatch;
+      return isStrictMatched && allCriteriaMatch;
     }
 
-    return allCriteriaMatch;
+    return isRelaxedMatched && allCriteriaMatch;
   }).sort((a, b) => {
     // 1. Boosted emergency jobs ALWAYS go to the top
     if (a.isBoosted && !b.isBoosted) return -1;
@@ -1921,20 +1809,6 @@ export default function JobFeed() {
         </div>
       )}
 
-      {activeTab === "feed" && (
-        <NearbyRequestsSection
-          jobs={demandSectionJobs}
-          selectedCategories={selectedCategories}
-          urgencyFilter={urgencyFilter}
-          onSelectCategoryFilter={handleSelectCategoryFromNearby}
-          onSelectUrgencyFilter={handleSelectUrgencyFromNearby}
-          onClearDemandFilter={handleClearDemandFilter}
-          onClearAllFilters={resetAllFilters}
-          userTradeName={profile?.category || profile?.trade || profile?.tradeCategory || profile?.businessCategory || profile?.businessName}
-          isTradesperson={profile?.role === "tradesperson"}
-        />
-      )}
-
       {filteredJobs.length === 0 ? (
         jobs.length > 0 ? (
           <div className="bg-white p-8 sm:p-10 rounded-3xl border border-black text-center space-y-5 shadow-sm">
@@ -1946,7 +1820,9 @@ export default function JobFeed() {
                 No jobs match your current filters
               </h3>
               <p className="text-sm text-slate-600">
-                There are <strong className="text-slate-900 font-black">{jobs.length} jobs available</strong> in your area that are currently hidden by your filter settings.
+                {isTraderRole
+                  ? "There are no open jobs currently matching your trade category, skills, services, or applied filters."
+                  : `There are ${jobs.length} jobs available in your area that are currently hidden by your filter settings.`}
               </p>
             </div>
 
@@ -1999,34 +1875,9 @@ export default function JobFeed() {
                 className="w-full sm:w-auto px-6 py-3 bg-slate-900 hover:bg-black text-white rounded-xl font-black text-sm border border-black transition-all active:scale-95 shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4 text-emerald-400" />
-                <span>Clear All Filters & Show All {jobs.length} Jobs</span>
+                <span>{isTraderRole ? "Reset Filters & Refresh Feed" : `Clear All Filters & Show All ${jobs.length} Jobs`}</span>
               </button>
             </div>
-
-            {/* Quick jump to available categories */}
-            {availableDemandCategories.length > 0 && (
-              <div className="pt-4 border-t border-black/10 max-w-md mx-auto space-y-2.5">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                  Or jump directly to categories with jobs:
-                </span>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {availableDemandCategories.map((cat) => (
-                    <button
-                      key={cat.category}
-                      type="button"
-                      onClick={() => handleSelectCategoryFromNearby(cat.category)}
-                      className="px-3 py-2 bg-slate-50 hover:bg-blue-50 text-slate-900 hover:text-blue-700 rounded-xl border border-black font-black text-xs transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    >
-                      <Briefcase className="w-3.5 h-3.5 text-blue-600" />
-                      <span>{cat.category}</span>
-                      <span className="bg-slate-200 text-slate-900 px-1.5 py-0.2 rounded-full text-[10px] font-black">
-                        {cat.count}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <div className="bg-white p-12 rounded-3xl border border-black text-center space-y-6 shadow-sm">

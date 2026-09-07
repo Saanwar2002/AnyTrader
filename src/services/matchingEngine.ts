@@ -1,3 +1,6 @@
+import { getCategoryMetadata } from "@/src/lib/fuzzyMatch";
+import { categoryRegistry } from "@/src/services/categoryRegistrySync";
+
 /**
  * 40+ Signal Intelligent Matching Engine for AnyTrader Platform
  * Multi-dimensional scoring framework evaluating traders against job requirements.
@@ -75,6 +78,7 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
   signalGroups.push(locationGroup);
 
   // --- GROUP 3: Past Job Similarity & Trade Skill Match (25% Weight) ---
+  // Prioritizes category metadata (synonyms and related_terms)
   const jobCategory = (job.category || "").toLowerCase();
   const rawTrades = Array.isArray(trader.trades)
     ? trader.trades
@@ -84,7 +88,26 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
   const traderTrades = rawTrades.filter(Boolean).map((t: string) => (t || "").trim().toLowerCase());
   const jobText = `${job.category || ""} ${job.subcategory || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
   
+  // Category Metadata Resolution (Synonyms & Related Terms)
+  const categoryMeta = getCategoryMetadata(job.category || "");
+  const regCat = categoryRegistry.getCategoryByName(job.category || "");
+  const categorySynonyms = Array.from(new Set([
+    ...categoryMeta.synonyms,
+    ...(regCat?.synonyms || [])
+  ])).map(s => s.toLowerCase());
+
+  const categoryRelatedTerms = Array.from(new Set([
+    ...categoryMeta.related_terms,
+    ...(regCat?.related_terms || []),
+    ...(regCat?.relatedTerms || [])
+  ])).map(r => r.toLowerCase());
+
+  // Check exact category match OR synonym match
   const hasExactCategory = traderTrades.some((t: string) => t && (t.includes(jobCategory) || jobCategory.includes(t) || jobText.includes(t)));
+  const hasSynonymMatch = traderTrades.some((t: string) => 
+    categorySynonyms.some(syn => syn && (t.includes(syn) || syn.includes(t)))
+  );
+  const hasAlignedTradeCategory = hasExactCategory || hasSynonymMatch;
 
   const rawTags = [
     ...(Array.isArray(trader.tags) ? trader.tags : typeof trader.tags === "string" ? (trader.tags as string).split(",") : []),
@@ -93,14 +116,26 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
     ...(Array.isArray(trader.specialties) ? trader.specialties : typeof trader.specialties === "string" ? (trader.specialties as string).split(",") : [])
   ];
   const traderTags = rawTags.filter(Boolean).map((s: string) => (s || "").trim().toLowerCase());
-  const matchedTagsCount = traderTags.filter((tag: string) => tag && (jobText.includes(tag) || tag.includes(jobCategory))).length;
   
+  // High-priority matching against related terms and technical skills
+  const matchedRelatedTerms = categoryRelatedTerms.filter(rel => 
+    traderTags.some(tag => tag.includes(rel) || rel.includes(tag)) || jobText.includes(rel)
+  );
+  const matchedTagsCount = traderTags.filter((tag: string) => 
+    tag && (jobText.includes(tag) || tag.includes(jobCategory) || categorySynonyms.some(s => s.includes(tag) || tag.includes(s)))
+  ).length;
+  
+  const totalTechnicalMatches = Math.max(matchedTagsCount, matchedRelatedTerms.length);
+
   let skillScore = 0;
-  if (hasExactCategory) {
+  if (hasAlignedTradeCategory) {
     skillScore += 65;
-  }
-  if (matchedTagsCount > 0) {
-    skillScore += Math.min(35, matchedTagsCount * 12);
+    if (totalTechnicalMatches > 0) {
+      skillScore += Math.min(35, totalTechnicalMatches * 12);
+    }
+  } else if (traderTrades.length === 0 && totalTechnicalMatches > 0) {
+    // Unassigned or general traders without specific declared trades
+    skillScore += Math.min(35, totalTechnicalMatches * 10);
   }
 
   const skillGroup: MatchSignalGroup = {
@@ -108,9 +143,23 @@ export function calculateTraderMatchScore(trader: any, job: any): MatchEngineRes
     weight: 25,
     score: Math.min(100, Math.round(skillScore)),
     factors: [
-      { name: "Trade Category Alignment", impact: hasExactCategory ? "Primary Specialty" : (matchedTagsCount > 0 ? "Related Specialty" : "Unrelated Category"), points: hasExactCategory ? 65 : (matchedTagsCount > 0 ? 25 : 0) },
-      { name: "Keyword & Tag Overlap", impact: `${matchedTagsCount} Matched Technical Skills`, points: Math.min(35, matchedTagsCount * 12) },
-      { name: "Historical Work Similarity", impact: hasExactCategory || matchedTagsCount > 0 ? "Proven Track Record in Scope" : "Different Trade Domain", points: hasExactCategory || matchedTagsCount > 0 ? 15 : 0 }
+      { 
+        name: "Trade Category Alignment", 
+        impact: hasAlignedTradeCategory 
+          ? (hasSynonymMatch ? "Verified Trade via Synonym Mapping" : "Primary Specialty Match") 
+          : (totalTechnicalMatches > 0 ? "Related Specialty" : "Unrelated Category"), 
+        points: hasAlignedTradeCategory ? 65 : (totalTechnicalMatches > 0 ? 25 : 0) 
+      },
+      { 
+        name: "Synonyms & Technical Term Overlap", 
+        impact: `${totalTechnicalMatches} Matched Technical Terms & Skills`, 
+        points: Math.min(35, totalTechnicalMatches * 12) 
+      },
+      { 
+        name: "Historical Work Similarity", 
+        impact: hasAlignedTradeCategory || totalTechnicalMatches > 0 ? "Proven Track Record in Scope" : "Different Trade Domain", 
+        points: hasAlignedTradeCategory || totalTechnicalMatches > 0 ? 15 : 0 
+      }
     ]
   };
   signalGroups.push(skillGroup);

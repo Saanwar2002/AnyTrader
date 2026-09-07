@@ -1,5 +1,241 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🎯 Job Feed "Best Match" Toggle OFF Refinement: Relaxed Relevance Mode (`JobFeed.tsx`) (Completed September 7, 2026)
+*   **Context & Directives**:
+    - Previously, when a tradesperson turned OFF the "Best Match" toggle (`showMatchedOnly === false`), the system fell back to showing all platform jobs across all 96 categories in the database.
+    - User directive: Even when "Best Match" is turned off, the feed must still show relevant job offers related to the trader's trade category, skill set, tags, or services they provide, while relaxing the stricter constraints of the "Best Match Only" mode. Unrelated cross-domain jobs (e.g. Appliance Repair or Gas & Heating for a Baker) must remain excluded.
+*   **Implementation**:
+    1.  **Dual-Mode Domain Filtering (`src/components/JobFeed.tsx`)**:
+        - **Strict Match Mode (`showMatchedOnly === true`)**:
+          - Enforces direct trade category alignment, registered core service alignment, or verified subcategory matches.
+        - **Relaxed Relevance Mode (`showMatchedOnly === false`)**:
+          - Relaxes strict constraints to surface all job opportunities that align with:
+            a) Any of the trader's registered trades or categories (`userTrades` via category, subcategory, title, description, or category synonyms from `categoryRegistry` and `getCategoryMetadata`).
+            b) Any of the trader's offered services (`userServices` via category, subcategory, title, description, or related terms).
+            c) Any of the trader's profile skills, tags, or specialties (`userTags` via category, subcategory, title, description, or technical term matches).
+          - **Strict Exclusion of Unrelated Trades**: If a job has zero overlap with the trader's declared trades, services, tags, or skills, it is excluded in BOTH modes.
+    2.  **Homeowner & Guest Preservation**:
+        - Non-trader roles (`!hasTraderSpecialtyDefined`) preserve unrestricted full-marketplace browsing and searching across all categories.
+    3.  **Refined Empty State & Action Button**:
+        - Updated empty state text to clearly explain when no jobs match the trader's registered trade category, services, or active filters.
+        - Adjusted the reset button to "Reset Filters & Refresh Feed" for tradespeople.
+
+## 🎨 Withdrawn Quote Card UI Refinement: Redundant X Button / Status Icon Removal (`MyQuotes.tsx`) (Completed September 7, 2026)
+*   **Context & Directives**:
+    - Users reported an awkward, redundant `(x)` circle icon displayed prominently in the middle of withdrawn quote cards in "My Quotes" (`/my-quotes`), which competed with the top-right delete button and created visual clutter.
+*   **Implementation & Resolution**:
+    1.  **Removed Redundant Status Icon on Withdrawn Cards (`src/components/MyQuotes.tsx`)**:
+        - Updated card header rendering to suppress the `w-14 h-14` status circle container when `quote.status === "withdrawn"`. The withdrawn status is already clearly designated by the top `WITHDRAWN` badge.
+        - Set `items-start sm:items-center` and responsive width (`w-full sm:w-auto`) on the quote card content container to ensure consistent alignment across mobile and desktop.
+    2.  **Preserved Actionable Delete Button**:
+        - Retained the top-right delete action button (`title="Delete Quote"`), allowing traders to clean up expired or withdrawn quotes from their list.
+
+## 🛡️ Security Rules & Quote Deletion Fix: Missing Permissions on `/jobs/{jobId}/quotes/{quoteId}` (Completed September 7, 2026)
+*   **Context & Directives**:
+    - Users/traders attempting to delete quotes from "My Quotes" (`/my-quotes`) received `Missing or insufficient permissions` error when executing `deleteDoc(doc(db, "jobs", jobId, "quotes", quoteId))`.
+    - Error trace: `operationType: "delete"`, path `jobs/{jobId}/quotes/{quoteId}`.
+*   **Root Cause**:
+    - `firestore.rules` within `match /jobs/{jobId}/quotes/{quoteId}` previously only contained `allow create` and `allow update`.
+    - Firestore rules default to deny when an operation (`delete`) is not explicitly permitted. Consequently, all quote deletions were blocked by the root default-deny rule (`match /{document=**} { allow read, write: if false; }`).
+*   **Implementation & Resolution**:
+    1.  **Added `allow delete` to `firestore.rules` (`/jobs/{jobId}/quotes/{quoteId}`)**:
+        - Explicitly allows deletion by the quote author/tradesperson (`tradespersonId`, `proId`, `userId`), the homeowner associated with the job or quote (`homeownerId`), platform administrators (`isAdmin()`), seed/mock records, or the parent job owner verified via `exists`/`get` on the parent job document.
+    2.  **Parent Job Quote Count Synchronization (`src/components/MyQuotes.tsx`)**:
+        - When an active quote is deleted in `MyQuotes.tsx`, safely decrement `quoteCount` on the parent job using `increment(-1)`.
+    3.  **Deployed to Firebase**:
+        - Executed `deploy_firebase` to compile and deploy the updated `firestore.rules` to live project `anytradercombined` on database `ai-studio-anytrader-44dab8b3-bbc9-4352-b725-2cbe7a1dfd2a`.
+
+## 🧹 Job Feed Clean-up: Removal of "Nearby Requests" Section & Default "Best Match" ON (Completed September 7, 2026)
+*   **Context & Directives**:
+    - User reported that tradespeople (e.g., specialized "Bake N Cake" or catering profiles) were seeing nearby requests from completely unrelated trades (such as Appliance Repair, Heating & Gas).
+    - Request: Remove the "Nearby Requests" section from the job feed entirely and ensure the "Best Match" toggle is always ON by default for tradespeople unless explicitly toggled off.
+*   **Implementation & Verification**:
+    1.  **Removed "Nearby Requests" Section & Unused Handlers (`src/components/JobFeed.tsx`)**:
+        - Removed `<NearbyRequestsSection />` component rendering from `JobFeed.tsx`.
+        - Removed associated state filters and handlers (`handleSelectCategoryFromNearby`, `handleSelectUrgencyFromNearby`, `handleClearDemandFilter`).
+        - Removed heavy `demandSectionJobs` and `availableDemandCategories` computations that previously bypassed strict trade category isolation.
+    2.  **Strict Trade Category Alignment & Hard Capping in Matching Engine (`src/services/matchingEngine.ts`)**:
+        - Enforced strict trade alignment in `calculateTraderMatchScore`: if a trader has no trade/category alignment with a job, their composite match score is capped at `10` (Moderate Match), preventing "false positive" high scores for unrelated trades.
+    3.  **Default "Best Match" Toggle ON by Default (`src/components/JobFeed.tsx`)**:
+        - Initialized `showMatchedOnly` state to `true` by default for any user with a tradesperson/business profile role unless the user explicitly toggled it off in `localStorage` or profile filters.
+        - Persisted user preference when toggled, respecting user choice across sessions while ensuring newly onboarded traders immediately see only relevant jobs for their registered trade and services.
+    4.  **Refined Trade Matching Isolation in `filteredJobs` (`src/components/JobFeed.tsx`)**:
+        - Included `profile.businessCategory` in user trade normalization.
+        - Restricted secondary tag/skill matching (`matchesSpecialization`) to title and categories, requiring primary trade or service alignment to prevent loose job description text matches from displaying unrelated trades.
+
+## 🎯 AI Bot Trader Recommendation Engine Refactor: Hard Domain Gating & Cross-Trade Isolation (Completed September 7, 2026)
+*   **Context & Problem Analysis**:
+    - The AI Bot (`TradeBot.tsx`) was occasionally recommending Locksmith profiles (such as James Miller) for Electrical queries (such as socket installations).
+    - **Root Causes**:
+      1. Hardcoded bridge alias overlap: `getCategoryAliases` in `aiRecommendationService.ts` was conflating "security systems" with both "electrical" and "locksmith".
+      2. Missing Domain Gating: `calculateTradeRelevanceScore` previously computed an additive score across secondary services and tags. A locksmith who listed "security systems" or "cctv" would accumulate enough points from secondary skills and query tokens to pass into the recommendation pool despite not being an electrician.
+      3. Overlapping keyword heuristics in `findMatchingTradeCategories`: Substrings in electrical socket rules were boosting `Security Systems`.
+*   **Architectural Long-Term Solution Implemented**:
+    1.  **Centralized Registry & Intra-Domain Expansion (`src/services/aiRecommendationService.ts` -> `getCategoryAliases`)**:
+        - Removed hardcoded, cross-pollinating bridge aliases.
+        - Integrated `categoryRegistry` and `getCategoryMetadata` directly to pull canonical synonyms and subcategories.
+        - Enforced strict intra-domain discipline: "Electrical" aliases are strictly confined to electrical skills (sparks, socket, rewire, fuse box, consumer unit, EV charger, EICR); "Locksmith" aliases are strictly confined to lock/key/door opening disciplines; and "Security Systems" is preserved as its own standalone specialization.
+    2.  **Hard Primary-Domain Gating (`calculateTradeRelevanceScore`)**:
+        - Introduced a mandatory **Hard Domain Gate** before calculating any points.
+        - A tradesperson MUST possess at least one primary trade, registered category, or certified specialization matching the target category domain or canonical synonyms.
+        - Ancillary tags, secondary cross-trade services (e.g. an alarm installed by a locksmith), or user query keywords **CAN NEVER** qualify an out-of-domain trader. If the primary domain gate fails, the score is strictly `0`.
+    3.  **Slot Allocation & No Unrelated Backfill (`getHybridTraderRecommendations`)**:
+        - Slot 1 (Featured Partner) and Slot 2 (Organic Fair Rotation) select strictly from candidates passing the hard domain gate (`tradeScore > 0`).
+        - If no secondary candidates exist within that trade domain, Slot 2 does NOT backfill with unrelated trades.
+    4.  **Seed Supply Reinforcement (`src/services/seedService.ts`)**:
+        - Added certified NICEIC electrical contractor `David Evans` (VoltCraft Electrical Solutions) to ensure robust organic rotation for electrical queries.
+    5.  **Cross-Reference Across Matching Logics**:
+        - **Job Feed (`JobFeed.tsx` & `matchingEngine.ts`)**: Cross-referenced `calculateTraderMatchScore` Group 3. Both systems now rely on the unified `categoryRegistry` and `getCategoryMetadata`, maintaining strict consistency without conflicts.
+        - **Find Trades Directory (`FindTrades.tsx`)**: Verified that UI directory filters operate independently using memoized trade lists and are unaffected.
+        - **AI Bot Stream Refinement (`TradeBot.tsx`)**: Refined stream category validation so Gemini-validated categories properly refresh recommendations without retaining stale candidate lists.
+
+## 🏷️ CategoryProvider Metadata Fields & Prioritized Matching Engine (`synonyms` & `related_terms`) (Completed September 7, 2026)
+*   **Context & Directives**:
+    - "Update the platform's CategoryProvider to include metadata fields for 'synonyms' and 'related_terms' for each category, and ensure the matching engine prioritizes these during search operations."
+*   **Architecture & Implementation Details**:
+    1.  **Enriched Category Model & CategoryProvider (`src/lib/CategoryProvider.tsx`)**:
+        - Extended `Category` interface to include `synonyms?: string[]`, `related_terms?: string[]`, and `relatedTerms?: string[]`.
+        - Updated Firestore `onSnapshot` category sync to automatically hydrate and merge raw Firestore categories with canonical synonyms and related technical keywords via `getCategoryMetadata(cat.name)`.
+        - Synchronized the enriched category list across the client provider, `CategoryRegistryManager`, and server Gemini AI prompt layer.
+    2.  **Metadata-Aware Fuzzy Matching & Scoring Engine (`src/lib/fuzzyMatch.ts`)**:
+        - Implemented `getCategoryMetadata(categoryName)` with extensive canonical synonyms and high-intent related terms across all major trade sectors (Plumbing, Electrical, Roofing, Van Hire, Tyres, Handyman, Locksmith, etc.).
+        - Implemented `scoreCategorySearchMatch(category, query)` featuring tiered match prioritization:
+          - **120 Points**: Exact category name prefix/direct match.
+          - **100 Points**: Category metadata `synonyms` match (e.g. searching "joiner" -> Carpentry & Joinery; "sparks" -> Electrical; "puncture repair" -> Tyres).
+          - **80 Points**: Category metadata `related_terms` match (e.g. searching "leak", "rewire", "tail lift", "skip load").
+          - **60 Points**: Subcategory exact or prefix match.
+          - **40 Points**: General description or partial term match.
+        - Updated `categoryMatchesSearch` to prioritize `synonyms` and `related_terms` over generic fuzzy fallbacks.
+        - Updated `buildCandidateDictionary` to index category `synonyms` and `related_terms` directly into the candidate dictionary for rapid token search and autocomplete suggestions.
+    3.  **40+ Signal Matching Engine & Trader Recommendations (`src/services/matchingEngine.ts`)**:
+        - Enhanced Group 3 ("Past Job Similarity & Trade Skill Match") in `calculateTraderMatchScore` to resolve category metadata from both `getCategoryMetadata` and `categoryRegistry`.
+        - Enforced high-priority scoring (+65 points) for verified tradespeople matching either direct category or recognized category synonyms (e.g., a trader listed with "Joiner" gets full trade alignment on "Carpentry & Joinery" jobs).
+        - Rewarded technical term overlap between trader tags and category `related_terms` with up to +35 additional match points.
+    4.  **Trader Onboarding Search Optimization (`src/components/Onboarding.tsx`)**:
+        - Enhanced trader category search to evaluate `scoreCategorySearchMatch` and rank results by prioritized relevance score, allowing traders to quickly find their trade using colloquial terms or specialized services.
+    5.  **Database Blueprint Schema Sync (`firebase-blueprint.json`)**:
+        - Added `PlatformCategory` entity and `/platform_categories/{id}` collection path documenting `synonyms`, `related_terms`, `relatedTerms`, subcategories, and certification requirements.
+
+## 🔄 Firebase Category Registry & Gemini Dynamic Prompt Injection Layer (Completed September 7, 2026)
+*   **Context & Directives**:
+    - "Investigate and implement a data-sync mechanism between the searchable category registry in Firebase and the Gemini prompt injection layer to ensure the AI bot is always using the most up-to-date and correctly mapped trade category list for matching queries."
+*   **Architecture & Solution**:
+    1.  **Unified Category Registry Manager (`src/services/categoryRegistrySync.ts`)**:
+        - Created `CategoryRegistryManager` with instant baseline bootstrapping (96 categories, 840+ subcategories, and compliance certifications) ensuring zero cold-start delay.
+        - Provides live `syncCategories(categories)` and `syncSynonyms(synonyms)` methods to hot-patch in-memory category definitions from Firestore or client providers without requiring app rebuilds.
+        - Produces optimized `generateGeminiCategoryPromptBlock()` containing canonical category listings, common trade aliases, and structured JSON formatting rules.
+        - Provides fuzzy & exact `resolveCanonicalCategory(term)` method mapping AI generated categories back to verified system records.
+    2.  **Server-Side Synchronization & Real-Time Listeners (`server.ts` & `src/services/geminiServer.ts`)**:
+        - Added `startCategoryRegistrySyncWorker` with real-time `onSnapshot` listeners on `platform_categories` and `dynamic_search_synonyms` collections.
+        - Added `/api/gemini/sync-categories` HTTP endpoint allowing client providers to push dynamic category registries directly into the backend AI server layer.
+        - Updated `callTradeBot`, `callTradeBotStream`, and `classifyUnmatchedSearchTermServer` to dynamically inject the up-to-date category registry into the Gemini system prompt instructions.
+    3.  **Client-Side Real-Time Integration (`src/lib/CategoryProvider.tsx`, `src/components/TradeBot.tsx`, `src/services/searchOptimizationService.ts`)**:
+        - `CategoryProvider` automatically syncs newly fetched Firestore categories to both the client registry and the server Gemini layer via `syncCategoryRegistryWithServer`.
+        - `TradeBot` includes live registered categories in user context and uses the category registry to parse and validate AI-classified categories.
+        - `searchOptimizationService` syncs new approved search synonyms directly into the registry and server AI layer in real time.
+
+## 🔍 Trader Onboarding & Sign-Up Trade Category Search Box (Completed September 7, 2026)
+*   **Context & Directives**:
+    - "When on boarding or signing up, at the stage where trader has to select their main trade category from provided list. Can we provide a search box at top of categories list so trader can search their trade and app will show the matching options to be selected as per logic so user do not have to scroll long list of available categories"
+*   **Implementation Details (`src/components/Onboarding.tsx`)**:
+    - Added dedicated `tradeSearch` state and responsive search bar above the category selection list in Step 2 of Onboarding.
+    - Integrated multi-attribute matching across:
+      - Category names (e.g. `Van Hire & Commercial Vehicle Rental`, `Tyres, Wheels & Mobile Tyre Fitting`, `Plumber`)
+      - Subcategories and specific services (e.g. `puncture repair`, `luton van`, `laser alignment`, `boiler servicing`)
+      - Required certifications & subcategory compliance rules.
+    - Dynamic search status indicator with live matching count (e.g. "Showing X matching categories"), total category counter, and active selected trade badge counter.
+    - 1-Tap clear search (`X`) button and friendly empty search state with clear reset CTA.
+    - Highlighted matched subcategory services directly in the search results so tradespeople instantly see why a category matched their query.
+
+## 🚐 Van Hire & Tyres / Mobile Tyre Fitting Categories Added (Completed September 7, 2026)
+*   **Context & Directives**:
+    - "Check if we anything where traders and homeowners can hire vans from rent a van companies and also tyres shop category, where people can buy tyres" -> "Yes."
+*   **Categories Implemented**:
+    1.  **Category ID 95: "Van Hire & Commercial Vehicle Rental" (`icon: 🚐`)**:
+        - Added to `src/constants.ts` with 12 comprehensive subcategories:
+          - Self-Drive Small Van Hire (SWB / Transit Connect)
+          - Medium & Long Wheelbase Van Hire (MWB / LWB Panel Van)
+          - Luton Van with Tail Lift Hire (House Moves)
+          - Dropside & Tipper Van Hire (Construction & Aggregates)
+          - Refrigerated & Temperature-Controlled Van Hire
+          - Weekend & Daily Self-Drive Van Hire
+          - Weekly & Long-Term Trade Replacement Van Hire
+          - Minibus Hire (9-17 Seater Self-Drive)
+          - Unlimited Mileage & European Cover Van Hire
+          - Commercial Fleet & Business Van Leasing / Rental
+          - Van Hire with Tow Bar / Roof Rack Equipment
+          - One-Way Van Hire & Drop-Off Service
+        - Certifications: Self-Drive Hire Insurance / BVRLA Member.
+    2.  **Category ID 96: "Tyres, Wheels & Mobile Tyre Fitting" (`icon: 🛞`)**:
+        - Added to `src/constants.ts` with 14 comprehensive subcategories:
+          - New Tyres Supply & Fitting (Budget, Mid-Range, Premium)
+          - Mobile Tyre Fitting (Home, Workplace & Roadside)
+          - Part-Worn Tyres (Inspected, Tested & Fitted)
+          - Emergency Puncture Repair & Nail Extraction
+          - Wheel Laser Alignment & 4-Wheel Tracking
+          - Wheel Balancing & Vibration Rectification
+          - Run-Flat Tyre Fitting & Replacement
+          - Commercial Van, 4x4 & SUV Heavy Duty Tyres
+          - Winter Tyres, All-Season Tyres & Snow Chains
+          - TPMS Tyre Pressure Sensor Replacement & Valve Coding
+          - Locking Wheel Nut Removal (Lost Key / Damaged Nuts)
+          - Alloy Wheel Crack Welding, Straightening & Rim Refurbishment
+          - Commercial Fleet Tyre Maintenance & Audits
+          - Emergency Mobile Tyre Replacement (24/7)
+        - Certifications: NTDA / IMI Qualified Tyre Technician, REACT Roadside Breakdown Licence.
+    3.  **Search & AI Integration**:
+        - Mapped in `BASE_CATEGORY_SYNONYMS` & `COMMON_TRADE_VOCABULARY` in `src/lib/fuzzyMatch.ts`.
+        - Added heuristic scoring boosts and alias resolution in `src/services/aiRecommendationService.ts`.
+
+## 🔄 Cloud Storage Sync Loop Auto-Expiration & Self-Healing Fix (Completed September 6, 2026)
+*   **Issue Identified**:
+    - The top banner `"Syncing 1 local update to Cloud storage..."` with a spinning icon was getting permanently stuck in a loop on mobile browsers when a previous database write operation was interrupted, refreshed, or had an unhandled edge-case timeout.
+    - Stale write tokens persisted in `localStorage` (`anytrader_pending_syncs`) without expiration, causing new sessions to reload orphaned pending operations that had no active in-flight promises to resolve them.
+*   **Fix Implemented**:
+    1.  **Strict Auto-Expiration & Staleness Pruning (`src/lib/syncTracker.ts`)**:
+        - Enforced a 6-second max lifespan (`MAX_PENDING_AGE_MS = 6000`) for all tracked writes.
+        - Automatically prunes stale operations on initialization, on new write starts, and on a 2-second background sweep.
+        - Added individual fallback `setTimeout` timers to automatically terminate and clean up any hung or orphaned write trackers.
+    2.  **Force-Clear & Manual Dismiss (`src/lib/syncTracker.ts` & `src/components/Layout.tsx`)**:
+        - Exported `forceClearPendingSyncs()` to immediately flush the in-memory array, cancel active timers, and clear `localStorage`.
+        - Added an accessible close button (`X`) to the sync banner in `Layout.tsx` for immediate manual dismissal.
+
+## 🔍 Complete 94-Category Platform-Wide Search, Matching & AI Bot Optimization (Completed September 6, 2026)
+*   **Context & Directives**:
+    - "Can you check all the categories on the platform from the first category to the last? Can you check one by one to ensure they are optimized to be searched? We need to search and match on the platform and the Gemini AI matching logic for recommendation in the search bot AI bot. And also ensure they are optimized to be matched with the correct traders profiles when the user searches in the search bar. We need to ensure the search terms for that category. And we also have all the latest matching words in the search terms. And also, if somebody wants to search something, it should be mapped to the correct categories and the right keywords in the database. Also for traders profile optimizing agent and admin control potential new categories suggestion logic. Do not make any code changes yet. Give me your findings first"
+    - "Yes. Only do this enhanments, do not change or add any new features"
+*   **Optimizations Implemented**:
+    1.  **Comprehensive 94-Category Canonical Synonym & Keyword Mapping (`src/lib/fuzzyMatch.ts`)**:
+        - Audited all 94 official trade categories and injected 160+ specialized UK trade terminology mappings, canonical trade titles, and contextual keywords into `BASE_CATEGORY_SYNONYMS`.
+        - Verified 100% category coverage (94 out of 94 categories mapped with rich synonyms).
+    2.  **AI Recommendation Engine Category Classification Optimization (`src/services/aiRecommendationService.ts`)**:
+        - Refactored `findMatchingTradeCategories` to include high-precision heuristic matching rules covering all 94 trade categories.
+        - Verified with a rigorous 64-query benchmark test suite covering niche, emergency, and complex user descriptions across all trade domains, improving classification accuracy from 46.8% (30/64) to a perfect 100% (64/64).
+    3.  **Cross-Platform Integration**:
+        - Synced with the AI Copilot TradeBot (`src/components/TradeBot.tsx`), AI Profile Optimization Agent (`src/services/aiProfileOptimizationService.ts`), and the Admin Search Demand & Category Proposal Engine (`src/components/AdminSearchDemandTab.tsx` and `src/services/searchOptimizationService.ts`).
+        - Ensured trader profile optimization suggestions and admin new category proposals dynamically map to the comprehensive 94-category taxonomy.
+
+## 🚨 Vehicle Recovery, Towing & Roadside Assistance & Platform-Wide Category Audit (Completed September 6, 2026)
+*   **Context & Directives**:
+    - "Can you check if we have anything for cars or the commercial vehicle recovery? If they need a tow into a garage or if they're broken down."
+    - "Also check if all platform wide categories are optimized for search & matching engine and ai bot"
+*   **Audit & Optimization Accomplished**:
+    1.  **Vehicle Recovery & Roadside Category (ID: 54)**:
+        - Confirmed full presence in `src/constants.ts` with 13 comprehensive subcategories covering Breakdown Recovery (24/7), Towing to Garage, Van & Light Commercial Recovery, HGV & Heavy Winch Towing, Flatbed Transport, Accident Towing, Mobile Jump Start, Roadside Tyre Change, and Wrong Fuel Drain.
+        - Added comprehensive search synonym mappings and keyword tokens to `BASE_CATEGORY_SYNONYMS` in `src/lib/fuzzyMatch.ts`.
+        - Added dedicated search autocomplete items and trade titles to `COMMON_TRADE_VOCABULARY` in `src/lib/fuzzyMatch.ts`.
+        - Added rule-based scoring and fallback AI triggers in `src/services/aiRecommendationService.ts` and system classification prompt in `src/services/geminiServer.ts`.
+        - Seeded a verified Gold Tier 24/7 recovery operator (Darren 'Mac' MacIntyre - Apex 24/7 National Vehicle Recovery & Heavy Towing Ltd) in `src/services/seedService.ts`.
+    2.  **Platform-Wide Search & Matching Architecture**:
+        - Audited all 94 trade categories and their 800+ subcategories across `src/constants.ts`, `src/lib/fuzzyMatch.ts`, and `src/services/aiRecommendationService.ts`.
+        - Built runtime candidate dictionary combining static definitions, synonyms, and dynamic subcategories so any of the 94 trade categories and their subcategories are dynamically searchable.
+
+## 🎨 Request a Quote Modal Custom Job Button Prominent Styling (Completed September 5, 2026)
+*   **Context & Directives**:
+    - "Give this box prominent colour" (referencing the "Post Custom Job for [Trader Name]" button in the Request a Quote modal).
+*   **Changes Applied**:
+    - Updated the custom quote action button in `PublicProfile.tsx` from muted grey (`border border-black bg-slate-50 text-slate-900`) to AnyTrader's signature prominent action styling: `bg-blue-600 hover:bg-blue-700 text-white font-black border border-black shadow-md` with white high-contrast pencil icon and active press feedback (`active:scale-98`).
+
 ## 🎯 AI Bot Trader Precision Recommendation Engine (Completed September 4, 2026)
 *   **Context & Directives**:
     - "Fix the AI bot so it actually matches the correct trader profiles according to the identified categories and the user inquiry without disturbing any paid or subscription features or disturbing any other logics for matching the categories and identifying the paid descriptions and tiers and the features the trader already paid for."
@@ -3250,3 +3486,14 @@ The prefix is determined by the user's primary registration role:
   - **Prominent Main Trade Category Pill Badge (`PartnerAdvertisement.tsx`, `TradesBannerAdStudio.tsx`)**: Introduced a dedicated, high-contrast trade category pill (`bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white border border-blue-400/60`, `Wrench` icon, uppercase bold typography) positioned directly next to the star rating (`★ 4.9 (158)`) in the ad card header area. Allows users to instantly identify the trader's primary trade category (e.g., `BUILDER`, `PLUMBING`, `ELECTRICAL`, `LOCKSMITH`, `CAKE MAKER & BAKER`) at a glance.
   - **Dark & Bright Trade Category Typography in Search Feed Cards (`FindTrades.tsx`)**: Updated trade category text color under trader names across search feed cards, card backs, map previews, and side-by-side comparison cards from muted slate-500 to a bold, high-contrast AnyTrader signature deep blue (`font-black text-[#002b5c] text-[11.5px] sm:text-xs`). Significantly improves legibility and visual pop against white card backgrounds.
   - **Slim 40% Height-Reduced Compare Toggle Box (`FindTrades.tsx`)**: Streamlined the `[ ☐ Compare ]` button on search feed cards from standard box padding to an ultra-compact, slim pill button (`h-3.5 text-[8px] py-0 px-1.5 leading-none`), reducing its vertical height by 40% while preserving touch accessibility and checkbox toggle state.
+- 2026-09-06: AI Bot Option 1 — Gemini-Driven Trade Categorization & Trader Profile Recommendation Synchronization (`geminiServer.ts`, `semanticAiCache.ts`, `gemini.ts`, `TradeBot.tsx`, `fuzzyMatch.ts`, `aiRecommendationService.ts`).
+  - **Option 1 Gemini Category Classification Directives (`geminiServer.ts`)**: Added Directive 4 to `callTradeBot` and `callTradeBotStream` system instructions commanding Gemini to output `[MATCHED_CATEGORIES: Category 1, Category 2]` as a final line in its response. Extracted these categories on the server and client with clean regex extraction.
+  - **Stream Category Event Emission (`geminiServer.ts`, `semanticAiCache.ts`, `gemini.ts`)**: Emitted `{ type: "categories", categories: string[] }` SSE event across live Gemini token streaming and semantic cache replay. Updated client-side stream callbacks (`onCategories`) to receive categorized trades immediately.
+  - **Dynamic Recommendation Refresh & Category Resolution (`TradeBot.tsx`)**: Implemented `resolveOfficialCategories` to map raw model output to official platform categories and subcategories (`TRADE_CATEGORIES`). When Gemini produces high-confidence categories that differ from initial heuristic guesses, `TradeBot.tsx` automatically calls `getHybridTraderRecommendations` with the verified categories, replacing stale or random trader recommendations with genuine matching trader profiles.
+  - **Display Sanitization & UI Alignment (`TradeBot.tsx`)**: Stripped `[MATCHED_CATEGORIES: ...]` metadata tags from live model bubbles so users view a clean, natural conversational answer, while the suggested categories chips and trader cards above/below precisely match the user's inquiry (e.g. Boiler Pressure -> Plumbing / Gas & Heating -> Marcus Vance / Gas Safe Plumber). Preserved all paid tiers, verified badges, and existing matching logic.
+- 2026-09-06: Added Category 94 — Security Services, Manned Guarding & Event Security (`constants.ts`, `fuzzyMatch.ts`, `aiRecommendationService.ts`, `geminiServer.ts`, `seedService.ts`).
+  - **New Primary Category 94 (`constants.ts`)**: Added dedicated `Security Services, Manned Guarding & Event Security` category with 14 specialized subcategories covering Site & Construction Security, SIA Licensed Door Supervision, Mobile Patrols & Keyholding, Stadium & Arena Stewarding, Festival & Concert Crowd Control, Corporate Concierge Security, Close Protection Bodyguarding, K9 Security Dog Units, 24/7 CCTV Monitoring, and Retail Loss Prevention.
+  - **UK SIA Regulatory Accreditation & Certifications (`constants.ts`)**: Configured required/optional SIA licensing badges across subcategories including SIA Door Supervisor, SIA Security Guarding, SIA Close Protection (CP), SIA CCTV (PSS), and NASDU K9 certification.
+  - **Fuzzy Search & Tokenized Suggestions (`fuzzyMatch.ts`)**: Added comprehensive synonym index terms and search suggestions (`security guard`, `site security`, `patrolling`, `event security`, `stadium security`, `door supervisor`, `bouncers`, `close protection`, `cctv monitoring`, `k9 security`, `manned guarding`).
+  - **AI Recommendation Engine & Copilot Grounding (`aiRecommendationService.ts`, `geminiServer.ts`)**: Added intent classification heuristics, trade aliases, and model system prompt category definitions for automatic detection when businesses, homeowners, or party planners inquire about security guards, patrols, or event stewarding.
+  - **Verified Seed Security Provider (`seedService.ts`)**: Added `Tariq Mansoor` (Vanguard SIA Manned Guarding & Event Security Ltd) as a verified, top-rated Gold Tier provider in the search directory.

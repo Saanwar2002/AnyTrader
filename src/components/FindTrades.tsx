@@ -543,22 +543,22 @@ export default function FindTrades() {
   const [documentViewerTrader, setDocumentViewerTrader] = useState<any>(null);
   const [documentViewerInitialBadge, setDocumentViewerInitialBadge] = useState<string>("liability_insurance");
 
-  // Rebuild dictionary when tradespeople change or dynamic synonyms are registered
+  // Rebuild dictionary when tradespeople change, categories load, or dynamic synonyms are registered
   useEffect(() => {
-    setCandidateDictionary(buildCandidateDictionary(tradespeople));
-  }, [tradespeople]);
+    setCandidateDictionary(buildCandidateDictionary(tradespeople, categories));
+  }, [tradespeople, categories]);
 
   // Synchronize dynamic synonyms from Firestore and re-index dictionary on updates
   useEffect(() => {
     const unsubInit = initSearchOptimizationService();
     const unsubUpdate = onDynamicSynonymsUpdate(() => {
-      setCandidateDictionary(buildCandidateDictionary(tradespeople));
+      setCandidateDictionary(buildCandidateDictionary(tradespeople, categories));
     });
     return () => {
       if (typeof unsubInit === "function") unsubInit();
       if (typeof unsubUpdate === "function") unsubUpdate();
     };
-  }, [tradespeople]);
+  }, [tradespeople, categories]);
 
   // --- Live Auto-Complete Dropdown State ---
   const [isSearchFocused, setIsSearchFocused] = useState(false);

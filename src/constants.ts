@@ -1730,6 +1730,90 @@ export const UNSORTED_TRADE_CATEGORIES = [
       "Uniform, Workwear & Schoolwear Badging / Alterations",
       "Costume, Cosplay & Theatrical Garment Alterations"
     ]
+  },
+  {
+    id: 94,
+    name: "Security Services, Manned Guarding & Event Security",
+    icon: "🛡️",
+    requiredCertifications: ["SIA Security Licence (Door Supervision / Guarding / Close Protection)"],
+    subcategoryCertifications: {
+      "SIA Licensed Door Supervision (Venues, Clubs & Private Parties)": ["SIA Door Supervisor Licence"],
+      "Construction Site Static Guarding & Overnight Watch": ["SIA Security Guard / Door Supervisor Licence", "CSCS Card (Optional)"],
+      "Mobile Security Patrols & 24/7 Keyholding Response": ["SIA Security Guard / Keyholding Licence"],
+      "Stadium, Arena & Matchday Crowd Safety Stewarding": ["SIA Door Supervisor Licence / NVQ Spectator Safety"],
+      "VIP, Celebrity & Close Protection Bodyguarding": ["SIA Close Protection Licence (CP)"],
+      "24/7 Remote CCTV Monitoring & Control Room Liaison": ["SIA CCTV (Public Space Surveillance) Licence"],
+      "K9 Security Dog Handlers & Patrol Units": ["NASDU / BIPDT Certified Dog Handler", "SIA Security Licence"]
+    },
+    subcategories: [
+      "Construction Site Static Guarding & Overnight Watch",
+      "SIA Licensed Door Supervision (Venues, Clubs & Private Parties)",
+      "Mobile Security Patrols & 24/7 Keyholding Response",
+      "Stadium, Arena & Matchday Crowd Safety Stewarding",
+      "Festival, Concert & High-Capacity Event Crowd Control",
+      "Corporate Front-of-House Concierge & Building Security",
+      "VIP, Celebrity & Close Protection Bodyguarding",
+      "K9 Security Dog Handlers & Patrol Units",
+      "24/7 Remote CCTV Monitoring & Control Room Liaison",
+      "Retail Loss Prevention & Store Detective Guarding",
+      "Vacant Property & Commercial Compound Patrols",
+      "Gatehouse & Vehicle Access Control Logging",
+      "Car Park Stewarding & Traffic Flow Management",
+      "Event Bag Search, Metal Detector & Entry Scanning Teams"
+    ]
+  },
+  {
+    id: 95,
+    name: "Van Hire & Commercial Vehicle Rental",
+    icon: "🚐",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "Self-Drive Small Van Hire (SWB / Transit Connect)": ["Self-Drive Hire Insurance / BVRLA Member (Optional)"],
+      "Luton Van with Tail Lift Hire (House Moves)": ["Self-Drive Hire Insurance / BVRLA Member (Optional)"],
+      "Dropside & Tipper Van Hire (Construction & Aggregates)": ["Self-Drive Hire Insurance / BVRLA Member (Optional)"],
+      "Commercial Fleet & Business Van Leasing / Rental": ["BVRLA Member / Operator Licence Support (Optional)"]
+    },
+    subcategories: [
+      "Self-Drive Small Van Hire (SWB / Transit Connect)",
+      "Medium & Long Wheelbase Van Hire (MWB / LWB Panel Van)",
+      "Luton Van with Tail Lift Hire (House Moves)",
+      "Dropside & Tipper Van Hire (Construction & Aggregates)",
+      "Refrigerated & Temperature-Controlled Van Hire",
+      "Weekend & Daily Self-Drive Van Hire",
+      "Weekly & Long-Term Trade Replacement Van Hire",
+      "Minibus Hire (9-17 Seater Self-Drive)",
+      "Unlimited Mileage & European Cover Van Hire",
+      "Commercial Fleet & Business Van Leasing / Rental",
+      "Van Hire with Tow Bar / Roof Rack Equipment",
+      "One-Way Van Hire & Drop-Off Service"
+    ]
+  },
+  {
+    id: 96,
+    name: "Tyres, Wheels & Mobile Tyre Fitting",
+    icon: "🛞",
+    requiredCertifications: [],
+    subcategoryCertifications: {
+      "Mobile Tyre Fitting (Home, Workplace & Roadside)": ["NTDA / IMI Qualified Tyre Technician (Optional)", "REACT Roadside Breakdown Licence (Optional)"],
+      "Wheel Laser Alignment & 4-Wheel Tracking": ["IMI Wheel Alignment Certified (Optional)"],
+      "Alloy Wheel Crack Welding, Straightening & Rim Refurbishment": ["TIG Welding / Wheel Specialist Certification (Optional)"]
+    },
+    subcategories: [
+      "New Tyres Supply & Fitting (Budget, Mid-Range, Premium)",
+      "Mobile Tyre Fitting (Home, Workplace & Roadside)",
+      "Part-Worn Tyres (Inspected, Tested & Fitted)",
+      "Emergency Puncture Repair & Nail Extraction",
+      "Wheel Laser Alignment & 4-Wheel Tracking",
+      "Wheel Balancing & Vibration Rectification",
+      "Run-Flat Tyre Fitting & Replacement",
+      "Commercial Van, 4x4 & SUV Heavy Duty Tyres",
+      "Winter Tyres, All-Season Tyres & Snow Chains",
+      "TPMS Tyre Pressure Sensor Replacement & Valve Coding",
+      "Locking Wheel Nut Removal (Lost Key / Damaged Nuts)",
+      "Alloy Wheel Crack Welding, Straightening & Rim Refurbishment",
+      "Commercial Fleet Tyre Maintenance & Audits",
+      "Emergency Mobile Tyre Replacement (24/7)"
+    ]
   }
 ];
 

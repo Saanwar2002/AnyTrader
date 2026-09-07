@@ -480,6 +480,10 @@ export async function* streamFromSemanticCache(cached: CachedAiResponse) {
     yield { type: "sources", sources: cached.sources };
   }
 
+  if (cached.category) {
+    yield { type: "categories", categories: [cached.category] };
+  }
+
   yield { type: "done" };
 }
 

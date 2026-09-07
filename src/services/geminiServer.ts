@@ -9,8 +9,26 @@ import {
   getSemanticCacheTelemetry, 
   clearSemanticCache 
 } from "./semanticAiCache";
+import { categoryRegistry } from "./categoryRegistrySync.ts";
 
 export { getSemanticCacheTelemetry, clearSemanticCache };
+
+/**
+ * Synchronizes the server-side category registry with Firestore or client updates
+ */
+export function syncCategoryRegistryServer(categories?: any[], synonyms?: any[]) {
+  if (categories && categories.length > 0) {
+    categoryRegistry.syncCategories(categories);
+  }
+  if (synonyms && synonyms.length > 0) {
+    categoryRegistry.syncSynonyms(synonyms);
+  }
+  return {
+    success: true,
+    totalCategories: categoryRegistry.getAllCategories().length,
+    lastSyncedAt: categoryRegistry.getLastSyncTime(),
+  };
+}
 
 function getSafeAdminDb() {
   try {
@@ -1809,8 +1827,16 @@ export async function getShopRecommendations(role: string, category: string) {
 export async function callTradeBot(
   userMessage: string, 
   history: {role: "user" | "model", text: string}[],
-  userContext?: { role?: string; postcode?: string; propertySummary?: string }
+  userContext?: { role?: string; postcode?: string; propertySummary?: string; availableCategories?: string[]; categoryRegistryData?: any[]; dynamicSynonyms?: any[] }
 ) {
+  // Sync client-provided dynamic categories or synonyms into memory registry if passed
+  if (userContext?.categoryRegistryData && userContext.categoryRegistryData.length > 0) {
+    categoryRegistry.syncCategories(userContext.categoryRegistryData);
+  }
+  if (userContext?.dynamicSynonyms && userContext.dynamicSynonyms.length > 0) {
+    categoryRegistry.syncSynonyms(userContext.dynamicSynonyms);
+  }
+
   // 1. Fast Semantic Cache Check for repeat / high-frequency queries (<1ms)
   const isTopLevelQuery = !history || history.length <= 1;
   if (isTopLevelQuery) {
@@ -1832,6 +1858,8 @@ User Context:
 ${userContext.propertySummary ? `- Property Twin / Equipment: ${userContext.propertySummary}` : ""}
 ` : "";
 
+  const categoryPromptBlock = categoryRegistry.generateGeminiCategoryPromptBlock();
+
   const systemInstruction = `You are AnyTrader AI Assistant, the expert UK trade and home services copilot on AnyTrader.
 
 CRITICAL DIRECTIVES FOR RELEVANCE, ACCURACY & BREVITY:
@@ -1839,9 +1867,14 @@ CRITICAL DIRECTIVES FOR RELEVANCE, ACCURACY & BREVITY:
 2. RELEVANT SUMMARY BULLETS (Max 200 words total): Provide concise bullet points tailored specifically to what they asked:
    - 🎯 **Direct Diagnosis / Answer**: The exact solution, regulation rule, or trade explanation for their specific query.
    - 💷 **UK Price Benchmark & Duration**: Realistic £ GBP cost range and typical timeframe (if price/job related).
-   - 📋 **Key Safety & UK Standards**: Critical compliance checks (e.g., Gas Safe, Part P BS 7671, Awaab's Law, WRAS) strictly relevant to this issue.
+   - 📋 **Key Safety & UK Standards**: Critical compliance checks (e.g., Gas Safe, Part P BS 7671, Awaab's Law, WRAS, SIA Security Licensing, BVRLA, NTDA) strictly relevant to this issue.
    - 💡 **Actionable Pro Tip**: What to check immediately or specify when hiring a professional.
 3. STRICT WORD LIMIT: Keep the ENTIRE response strictly under 200 words (aim for 100–160 words).
+4. CLASSIFY MATCHED TRADE CATEGORIES: At the very end of your response, on a final separate line, output the 1 to 2 most relevant AnyTrader trade categories for the user's inquiry formatted strictly as:
+[MATCHED_CATEGORIES: Category Name 1, Category Name 2]
+Choose strictly from the registered trade categories provided below.
+
+${categoryPromptBlock}
 ${contextNote}
 Always perform live Google Searches when users ask about prices, regulations, or equipment diagnostics to provide accurate, real-time UK data. Keep responses structured, concise, and friendly.`;
 
@@ -1903,15 +1936,26 @@ Always perform live Google Searches when users ask about prices, regulations, or
       });
     }
 
+    // Extract validated trade categories mapped through category registry
+    const catMatch = finalText.match(/\[MATCHED_CATEGORIES:\s*([^\]]+)\]/i);
+    const parsedCats = (catMatch && catMatch[1])
+      ? catMatch[1]
+          .split(",")
+          .map(c => categoryRegistry.resolveCanonicalCategory(c.trim()))
+          .filter(Boolean)
+      : [];
+
     return {
       text: finalText,
-      sources: finalSources
+      sources: finalSources,
+      categories: parsedCats
     };
   } catch (error) {
     console.error("Gemini TradeBot Error:", error);
     return {
       text: "I'm currently unable to access live search grounding. Please try again shortly.",
-      sources: []
+      sources: [],
+      categories: []
     };
   }
 }
@@ -1919,8 +1963,16 @@ Always perform live Google Searches when users ask about prices, regulations, or
 export async function* callTradeBotStream(
   userMessage: string, 
   history: {role: "user" | "model", text: string}[],
-  userContext?: { role?: string; postcode?: string; propertySummary?: string }
+  userContext?: { role?: string; postcode?: string; propertySummary?: string; availableCategories?: string[]; categoryRegistryData?: any[]; dynamicSynonyms?: any[] }
 ) {
+  // Sync client-provided dynamic categories or synonyms into memory registry if passed
+  if (userContext?.categoryRegistryData && userContext.categoryRegistryData.length > 0) {
+    categoryRegistry.syncCategories(userContext.categoryRegistryData);
+  }
+  if (userContext?.dynamicSynonyms && userContext.dynamicSynonyms.length > 0) {
+    categoryRegistry.syncSynonyms(userContext.dynamicSynonyms);
+  }
+
   // 1. Fast Semantic Cache Check (<1ms response, 0 API quota consumption)
   const isTopLevelQuery = !history || history.length <= 1;
   if (isTopLevelQuery) {
@@ -1938,6 +1990,8 @@ User Context:
 ${userContext.propertySummary ? `- Property Twin / Equipment: ${userContext.propertySummary}` : ""}
 ` : "";
 
+  const categoryPromptBlock = categoryRegistry.generateGeminiCategoryPromptBlock();
+
   const systemInstruction = `You are AnyTrader AI Assistant, the expert UK trade and home services copilot on AnyTrader.
 
 CRITICAL DIRECTIVES FOR RELEVANCE, ACCURACY & BREVITY:
@@ -1945,9 +1999,14 @@ CRITICAL DIRECTIVES FOR RELEVANCE, ACCURACY & BREVITY:
 2. RELEVANT SUMMARY BULLETS (Max 200 words total): Provide concise bullet points tailored specifically to what they asked:
    - 🎯 **Direct Diagnosis / Answer**: The exact solution, regulation rule, or trade explanation for their specific query.
    - 💷 **UK Price Benchmark & Duration**: Realistic £ GBP cost range and typical timeframe (if price/job related).
-   - 📋 **Key Safety & UK Standards**: Critical compliance checks (e.g., Gas Safe, Part P BS 7671, Awaab's Law, WRAS) strictly relevant to this issue.
+   - 📋 **Key Safety & UK Standards**: Critical compliance checks (e.g., Gas Safe, Part P BS 7671, Awaab's Law, WRAS, SIA Security Licensing, BVRLA, NTDA) strictly relevant to this issue.
    - 💡 **Actionable Pro Tip**: What to check immediately or specify when hiring a professional.
 3. STRICT WORD LIMIT: Keep the ENTIRE response strictly under 200 words (aim for 100–160 words).
+4. CLASSIFY MATCHED TRADE CATEGORIES: At the very end of your response, on a final separate line, output the 1 to 2 most relevant AnyTrader trade categories for the user's inquiry formatted strictly as:
+[MATCHED_CATEGORIES: Category Name 1, Category Name 2]
+Choose strictly from the registered trade categories provided below.
+
+${categoryPromptBlock}
 ${contextNote}
 Always perform live Google Searches when users ask about prices, regulations, or equipment diagnostics to provide accurate, real-time UK data. Keep responses structured, concise, and friendly.`;
 
@@ -2022,6 +2081,18 @@ Always perform live Google Searches when users ask about prices, regulations, or
         text: accumulatedText,
         sources: finalSources
       });
+    }
+
+    // Extract validated trade categories mapped through category registry
+    const catMatch = accumulatedText.match(/\[MATCHED_CATEGORIES:\s*([^\]]+)\]/i);
+    if (catMatch && catMatch[1]) {
+      const parsedCats = catMatch[1]
+        .split(",")
+        .map(c => categoryRegistry.resolveCanonicalCategory(c.trim()))
+        .filter(Boolean);
+      if (parsedCats.length > 0) {
+        yield { type: "categories", categories: parsedCats };
+      }
     }
 
     yield { type: "done" };
@@ -2876,11 +2947,15 @@ export interface SynonymClassificationResult {
 
 const synonymClassificationCache = new Map<string, SynonymClassificationResult>();
 
-export async function classifyUnmatchedSearchTermServer(term: string): Promise<SynonymClassificationResult> {
+export async function classifyUnmatchedSearchTermServer(term: string, availableCategories?: any[]): Promise<SynonymClassificationResult> {
   const cleanTerm = (term || "").trim().toLowerCase();
   const cached = synonymClassificationCache.get(cleanTerm);
   if (cached) {
     return cached;
+  }
+
+  if (availableCategories && availableCategories.length > 0) {
+    categoryRegistry.syncCategories(availableCategories);
   }
 
   const defaultFallback: SynonymClassificationResult = {
@@ -2895,29 +2970,19 @@ export async function classifyUnmatchedSearchTermServer(term: string): Promise<S
     const genAI = getGenAI();
     const model = await getGlobalAiModel();
 
+    const categoryNamesList = categoryRegistry.getAllCategoryNames().map(name => `- "${name}"`).join("\n");
+
     const prompt = `You are AnyTrader's intelligent Trade Categorization & Search Optimization Engine.
 A homeowner searched for the term: "${cleanTerm}", but no traders or categories matched.
 Analyze this search term and assign it to the MOST appropriate Trade Category from the UK trade ecosystem.
-Examples of Trade Categories:
-- "Pet Services" (for terms like pet sitting, dog walking, pet care, cat sitting, dog boarding)
-- "Plumbing" (for terms like tap replacement, leak detection, radiator powerflush, boiler)
-- "Electrical" (for terms like fusebox, socket installation, rewire, ev charger)
-- "Carpentry & Joinery" (for terms like door hanging, fitted wardrobes, bespoke joinery)
-- "Painting & Decorating" (for terms like wallpapering, interior painting, exterior painting)
-- "Roofing & Guttering" (for terms like chimney repairs, flat roof, gutter clean, leadwork)
-- "Gardening & Landscaping" (for terms like lawn mowing, turfing, tree surgeon, patio)
-- "Cleaning & Domestic Services" (for terms like end of tenancy clean, carpet cleaning, oven cleaning)
-- "Specialist Cleaning" (for terms like wheelie bin cleaning, pressure washing, graffiti removal)
-- "Removals" (for terms like man and van, house removals, furniture courier)
-- "General Labour, Trade Mates & Site Helpers" (for terms like demolition helper, brick carrier, skip loader, site assistant)
-- "Tailoring, Alterations & Laundry Services" (for terms like dry cleaning, dress alterations, suit tailoring)
-- "Locksmiths & Security" (for terms like lock replacement, CCTV, safe opening)
-- "Handyman & General Property Maintenance" (for general odd jobs, flat pack assembly)
+
+AVAILABLE REGISTERED TRADE CATEGORIES:
+${categoryNamesList}
 
 Return ONLY valid JSON:
 {
-  "categoryName": "Exact Trade Category Name",
-  "tradeTitle": "Professional Trade Title (e.g., Pet Sitter & Animal Carer)",
+  "categoryName": "Exact Trade Category Name from the available registered list",
+  "tradeTitle": "Professional Trade Title (e.g., Pet Sitter & Animal Carer, Mobile Tyre Specialist, Van Hire Fleet Operator)",
   "keywords": ["keyword1", "keyword2", "keyword3", "keyword4"],
   "confidence": 0.95,
   "reasoning": "Brief 1-sentence explanation why this term belongs to this category."
@@ -2931,12 +2996,13 @@ Return ONLY valid JSON:
 
     const parsed = JSON.parse(response.text || "{}");
     if (parsed.categoryName) {
+      const canonicalCategory = categoryRegistry.resolveCanonicalCategory(parsed.categoryName);
       const result: SynonymClassificationResult = {
-        categoryName: parsed.categoryName,
+        categoryName: canonicalCategory,
         tradeTitle: parsed.tradeTitle || cleanTerm,
         keywords: Array.isArray(parsed.keywords) && parsed.keywords.length > 0 ? parsed.keywords : [cleanTerm],
         confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.85,
-        reasoning: parsed.reasoning || `Matched to ${parsed.categoryName}`,
+        reasoning: parsed.reasoning || `Matched to ${canonicalCategory}`,
       };
       synonymClassificationCache.set(cleanTerm, result);
       return result;

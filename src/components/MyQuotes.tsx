@@ -59,6 +59,18 @@ export default function MyQuotes() {
       
       // Update local state to remove the quote immediately
       setQuotes(prev => prev.filter(q => q.id !== deletingQuote.id));
+
+      // Decrement quoteCount on job if quote was active
+      if (!deletingQuote.status || deletingQuote.status === "pending" || deletingQuote.status === "submitted") {
+        try {
+          const { increment, updateDoc } = await import("firebase/firestore");
+          await updateDoc(doc(db, "jobs", deletingQuote.jobId), {
+            quoteCount: increment(-1)
+          });
+        } catch (err) {
+          console.warn("Could not decrement quoteCount on parent job:", err);
+        }
+      }
     } catch (error) {
       console.error("Error deleting quote:", error);
       handleFirestoreError(error, OperationType.DELETE, `jobs/${deletingQuote.jobId}/quotes/${deletingQuote.id}`);
@@ -392,21 +404,21 @@ export default function MyQuotes() {
             <Link
               key={quote.id}
               to={`/job/${quote.jobId}`}
-              className="bg-white p-5 rounded-xl border border-black shadow-sm hover:border-blue-600 transition-all flex flex-col sm:flex-row sm:items-center gap-4 group relative"
+              className="bg-white p-5 rounded-xl border border-black shadow-sm hover:border-blue-600 transition-all flex flex-col sm:flex-row items-start sm:items-center gap-4 group relative"
             >
-              <div className={cn(
-                "w-14 h-14 rounded-xl flex items-center justify-center shrink-0",
-                quote.status === "accepted" ? "bg-green-50 text-green-600" :
-                quote.status === "rejected" ? "bg-red-50 text-red-600" :
-                quote.status === "withdrawn" ? "bg-slate-50 text-slate-500" :
-                "bg-amber-50 text-amber-600"
-              )}>
-                {quote.status === "accepted" ? <CheckCircle2 className="w-7 h-7" /> :
-                 quote.status === "rejected" ? <XCircle className="w-7 h-7" /> :
-                 quote.status === "withdrawn" ? <XCircle className="w-7 h-7" /> :
-                 <Clock className="w-7 h-7" />}
-              </div>
-              <div className="flex-1 min-w-0 space-y-1">
+              {quote.status !== "withdrawn" && (
+                <div className={cn(
+                  "w-14 h-14 rounded-xl flex items-center justify-center shrink-0",
+                  quote.status === "accepted" ? "bg-green-50 text-green-600" :
+                  quote.status === "rejected" ? "bg-red-50 text-red-600" :
+                  "bg-amber-50 text-amber-600"
+                )}>
+                  {quote.status === "accepted" ? <CheckCircle2 className="w-7 h-7" /> :
+                   quote.status === "rejected" ? <XCircle className="w-7 h-7" /> :
+                   <Clock className="w-7 h-7" />}
+                </div>
+              )}
+              <div className="flex-1 min-w-0 space-y-1 w-full sm:w-auto">
                 <div className="flex items-center justify-between">
                   <span className={cn(
                     "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full",

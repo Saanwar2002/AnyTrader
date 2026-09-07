@@ -2461,6 +2461,43 @@
         "lastUpdated"
       ]
     },
+    "PlatformCategory": {
+      "title": "PlatformCategory",
+      "description": "Registered trade category with subcategories, required certifications, synonyms, and related search metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "icon": { "type": "string" },
+        "description": { "type": "string" },
+        "subcategories": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "requiredCertifications": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "subcategoryCertifications": {
+          "type": "object"
+        },
+        "synonyms": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "related_terms": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "relatedTerms": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
     "Property": {
       "title": "Property",
       "description": "A property asset managed under the homeowner/business platform.",
@@ -4141,6 +4178,12 @@
         "$ref": "#/entities/UnmatchedSearchTelemetry"
       },
       "description": "Telemetry collection for customer search terms with zero or low matching results."
+    },
+    "/platform_categories/{id}": {
+      "schema": {
+        "$ref": "#/entities/PlatformCategory"
+      },
+      "description": "Dynamic searchable platform categories registry with synonyms and related terms."
     }
   }
 }

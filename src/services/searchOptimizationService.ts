@@ -13,7 +13,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { registerDynamicSynonyms, SynonymMeta } from "../lib/fuzzyMatch";
-import { classifyUnmatchedSearchTerm, SynonymClassificationResult } from "./gemini";
+import { classifyUnmatchedSearchTerm, SynonymClassificationResult, syncCategoryRegistryWithServer } from "./gemini";
+import { categoryRegistry } from "./categoryRegistrySync";
 
 export interface UnmatchedSearchItem {
   id: string;
@@ -137,6 +138,8 @@ export function initSearchOptimizationService(): () => void {
           }
         });
         registerDynamicSynonyms(dynamicMap);
+        categoryRegistry.syncSynonyms(dynamicMap);
+        syncCategoryRegistryWithServer(undefined, dynamicMap);
         notifyDynamicSynonymsUpdated();
       },
       (error) => {
@@ -156,6 +159,8 @@ export function initSearchOptimizationService(): () => void {
               }
             });
             registerDynamicSynonyms(dynamicMap);
+            categoryRegistry.syncSynonyms(dynamicMap);
+            syncCategoryRegistryWithServer(undefined, dynamicMap);
             notifyDynamicSynonymsUpdated();
           })
           .catch((err) => console.warn("[SearchOptimizationService] Failed to load synonyms:", err));
@@ -311,14 +316,17 @@ export async function saveDynamicSynonym(
 
     await setDoc(docRef, docData, { merge: true });
 
-    // Instantly register in local runtime memory
-    registerDynamicSynonyms({
+    // Instantly register in local runtime memory and category registry
+    const newSynMap = {
       [cleanTerm]: {
         categoryName: meta.categoryName,
         tradeTitle: meta.tradeTitle,
         keywords: meta.keywords,
       }
-    });
+    };
+    registerDynamicSynonyms(newSynMap);
+    categoryRegistry.syncSynonyms(newSynMap);
+    syncCategoryRegistryWithServer(undefined, newSynMap);
     notifyDynamicSynonymsUpdated();
 
     return { success: true };
@@ -367,10 +375,11 @@ export async function fetchAllDynamicSynonyms(): Promise<StoredDynamicSynonym[]>
 
 /**
  * Uses Gemini AI to classify an unmatched search term and suggest the best category, trade title, and keywords.
- * Leverages server-side semantic caching to ensure zero duplicate token cost.
+ * Dynamically injects registered categories from category registry.
  */
 export async function classifySearchTermWithAi(term: string): Promise<SynonymClassificationResult> {
-  return classifyUnmatchedSearchTerm(term);
+  const availableCategories = categoryRegistry.getAllCategoryNames();
+  return classifyUnmatchedSearchTerm(term, availableCategories);
 }
 
 /**

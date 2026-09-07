@@ -380,10 +380,19 @@ export async function getBuildingRegsAndSupplierPricing(
   return callServerGemini("getBuildingRegsAndSupplierPricing", [category, description, postcode]);
 }
 
+export interface TradeBotUserContext {
+  role?: string;
+  postcode?: string;
+  propertySummary?: string;
+  availableCategories?: string[];
+  categoryRegistryData?: any[];
+  dynamicSynonyms?: any[];
+}
+
 export async function callTradeBot(
   userMessage: string, 
   history: {role: "user" | "model", text: string}[],
-  userContext?: { role?: string; postcode?: string; propertySummary?: string }
+  userContext?: TradeBotUserContext
 ): Promise<any> {
   return callServerGemini("callTradeBot", [userMessage, history, userContext]);
 }
@@ -391,6 +400,7 @@ export async function callTradeBot(
 export interface TradeBotStreamCallbacks {
   onChunk?: (textChunk: string, accumulatedText: string) => void;
   onSources?: (sources: { title: string; url: string }[]) => void;
+  onCategories?: (categories: string[]) => void;
   onDone?: (fullText: string) => void;
   onError?: (error: any) => void;
 }
@@ -398,9 +408,9 @@ export interface TradeBotStreamCallbacks {
 export async function callTradeBotStream(
   userMessage: string,
   history: { role: "user" | "model"; text: string }[],
-  userContext?: { role?: string; postcode?: string; propertySummary?: string },
+  userContext?: TradeBotUserContext,
   callbacks?: TradeBotStreamCallbacks
-): Promise<{ text: string; sources: { title: string; url: string }[] }> {
+): Promise<{ text: string; sources: { title: string; url: string }[]; categories?: string[] }> {
   const targetUrl = getApiUrl("/api/gemini/stream");
   const user = auth.currentUser;
   const token = user ? await user.getIdToken().catch(() => null) : null;
@@ -411,6 +421,7 @@ export async function callTradeBotStream(
 
   let accumulatedText = "";
   let sources: { title: string; url: string }[] = [];
+  let categories: string[] = [];
 
   try {
     const response = await fetch(targetUrl, {
@@ -453,6 +464,9 @@ export async function callTradeBotStream(
           } else if (parsed.type === "sources" && Array.isArray(parsed.sources)) {
             sources = parsed.sources;
             callbacks?.onSources?.(sources);
+          } else if (parsed.type === "categories" && Array.isArray(parsed.categories)) {
+            categories = parsed.categories;
+            callbacks?.onCategories?.(categories);
           } else if (parsed.type === "error") {
             throw new Error(parsed.error || "Streaming error occurred");
           }
@@ -465,17 +479,21 @@ export async function callTradeBotStream(
     }
 
     callbacks?.onDone?.(accumulatedText);
-    return { text: accumulatedText, sources };
+    return { text: accumulatedText, sources, categories };
   } catch (error: any) {
     console.warn("SSE Stream failed, falling back to unary call:", error);
     callbacks?.onError?.(error);
     const fallback = await callTradeBot(userMessage, history, userContext);
     const fallbackText = typeof fallback === "object" ? fallback.text : fallback;
     const fallbackSources = typeof fallback === "object" && Array.isArray(fallback.sources) ? fallback.sources : [];
+    const fallbackCategories = typeof fallback === "object" && Array.isArray(fallback.categories) ? fallback.categories : [];
     callbacks?.onChunk?.(fallbackText, fallbackText);
     callbacks?.onSources?.(fallbackSources);
+    if (fallbackCategories.length > 0) {
+      callbacks?.onCategories?.(fallbackCategories);
+    }
     callbacks?.onDone?.(fallbackText);
-    return { text: fallbackText, sources: fallbackSources };
+    return { text: fallbackText, sources: fallbackSources, categories: fallbackCategories };
   }
 }
 
@@ -712,8 +730,30 @@ export interface SynonymClassificationResult {
   reasoning: string;
 }
 
-export async function classifyUnmatchedSearchTerm(term: string): Promise<SynonymClassificationResult> {
-  return callServerGemini("classifyUnmatchedSearchTermServer", [term]);
+export async function classifyUnmatchedSearchTerm(term: string, availableCategories?: any[]): Promise<SynonymClassificationResult> {
+  return callServerGemini("classifyUnmatchedSearchTermServer", [term, availableCategories]);
+}
+
+/**
+ * Explicitly sends the dynamic category and synonym registry from client to server
+ */
+export async function syncCategoryRegistryWithServer(categories?: any[], synonyms?: any[] | Record<string, any>): Promise<{ success: boolean; totalCategories: number; lastSyncedAt: number }> {
+  try {
+    const targetUrl = getApiUrl("/api/gemini/sync-categories");
+    const res = await fetch(targetUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categories, synonyms })
+    });
+    if (!res.ok) {
+      console.warn("Category registry server sync notice: endpoint returned", res.status);
+      return { success: false, totalCategories: 0, lastSyncedAt: Date.now() };
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("Could not sync category registry with server:", err);
+    return { success: false, totalCategories: 0, lastSyncedAt: Date.now() };
+  }
 }
 
 

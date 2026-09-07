@@ -38,7 +38,7 @@ export default function Layout() {
   const [showTaxiComingSoonModal, setShowTaxiComingSoonModal] = useState(false);
   
   // Local Database Sync Status
-  const { pendingCount, hasPendingChanges } = useSyncStatus();
+  const { pendingCount, hasPendingChanges, forceClearPendingSyncs } = useSyncStatus();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [journeys, setJourneys] = useState<any[]>([]);
@@ -501,9 +501,19 @@ export default function Layout() {
               <span>You're offline. App will sync data once reconnected.</span>
             </div>
           ) : hasPendingChanges ? (
-            <div className={cn("px-4 py-1.5 flex items-center justify-center gap-2 text-xs font-bold shadow-sm transition-all bg-blue-50 text-blue-700 border-b border-blue-200", (!showMaintenanceBanner) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
-              <RefreshCw className="w-3.5 h-3.5 shrink-0 text-blue-600 animate-spin" />
-              <span>Syncing {pendingCount} local update{pendingCount > 1 ? "s" : ""} to Cloud storage...</span>
+            <div className={cn("px-4 py-1.5 flex items-center justify-between gap-2 text-xs font-bold shadow-sm transition-all bg-blue-50 text-blue-700 border-b border-blue-200", (!showMaintenanceBanner) && "pt-[calc(0.375rem+env(safe-area-inset-top,0px))]")}>
+              <div className="flex items-center gap-2 mx-auto">
+                <RefreshCw className="w-3.5 h-3.5 shrink-0 text-blue-600 animate-spin" />
+                <span>Syncing {pendingCount} local update{pendingCount > 1 ? "s" : ""} to Cloud storage...</span>
+              </div>
+              <button
+                onClick={() => forceClearPendingSyncs()}
+                title="Dismiss sync indicator"
+                className="p-0.5 text-blue-500 hover:text-blue-800 rounded transition-colors"
+                aria-label="Dismiss sync banner"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           ) : null}
 

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "./AuthProvider";
 import { useSearchParams } from "react-router-dom";
 import { db, doc, setDoc, serverTimestamp, handleFirestoreError, OperationType, collection, query, where, getDocs, updateDoc, onSnapshot, auth, logout, increment } from "@/src/firebase";
 import { RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
 import { motion } from "motion/react";
-import { User, Briefcase, Loader2, MapPin, Shield, CheckCircle2, ChevronRight, ChevronLeft, Upload, AlertCircle, Info, PoundSterling, Award, Gift, Home, Building2, Star, CarFront, Check, LogOut } from "lucide-react";
+import { User, Briefcase, Loader2, MapPin, Shield, CheckCircle2, ChevronRight, ChevronLeft, Upload, AlertCircle, Info, PoundSterling, Award, Gift, Home, Building2, Star, CarFront, Check, LogOut, Search, X } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import { useCategories } from "../lib/CategoryProvider";
@@ -12,6 +12,7 @@ import { lookupPostcode } from "@/src/services/postcodeService";
 import { generateMemberId } from "@/src/services/memberIdService";
 import { BLOCKED_DOMAINS, UNSORTED_TRADE_CATEGORIES, CONSULTANCY_CATEGORIES } from "@/src/constants";
 import { performInitialPublicRecordCheck } from "../services/verificationService";
+import { scoreCategorySearchMatch } from "@/src/lib/fuzzyMatch";
 
 export default function Onboarding() {
   const { user } = useAuth();
@@ -23,6 +24,7 @@ export default function Onboarding() {
   const [homeownerType, setHomeownerType] = useState<"homeowner" | "business" | null>(null); // Keep temporarily to not break types
   const [businessCategory, setBusinessCategory] = useState<string | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
+  const [tradeSearch, setTradeSearch] = useState("");
   const [vehicleCategories, setVehicleCategories] = useState<string[]>(['standard']);
   const [isPetFriendly, setIsPetFriendly] = useState<boolean>(false);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -56,6 +58,25 @@ export default function Onboarding() {
   }, []);
 
   const relevantCategories = businessLayer === "consultancy" ? CONSULTANCY_CATEGORIES : categories;
+
+  const filteredTradeCategories = useMemo(() => {
+    const query = tradeSearch.trim().toLowerCase();
+    if (!query) return relevantCategories;
+
+    return relevantCategories
+      .map((t: any) => ({
+        category: t,
+        score: scoreCategorySearchMatch(t, query)
+      }))
+      .filter(({ score, category }) => {
+        if (score > 0) return true;
+        const certMatch = category.requiredCertifications?.some((c: string) => c.toLowerCase().includes(query));
+        const subCertMatch = category.subcategoryCertifications && Object.keys(category.subcategoryCertifications).some((sub: string) => sub.toLowerCase().includes(query));
+        return certMatch || subCertMatch;
+      })
+      .sort((a, b) => b.score - a.score)
+      .map(({ category }) => category);
+  }, [relevantCategories, tradeSearch]);
 
   const requiredCerts = relevantCategories
     .filter((t: any) => selectedTrades.includes(t.name))
@@ -1000,67 +1021,156 @@ export default function Onboarding() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                {(businessLayer === "consultancy" ? CONSULTANCY_CATEGORIES : categories).map((t: any) => (
-                  <div key={t.id} className="space-y-2">
+              {/* Search Bar for Trades */}
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={tradeSearch}
+                    onChange={(e) => setTradeSearch(e.target.value)}
+                    placeholder={`Search ${businessLayer === "consultancy" ? "categories" : "trades or services"} (e.g. Plumber, Van Hire, Electrician, Tyres, Roofer...)`}
+                    className="w-full pl-11 pr-10 py-3.5 bg-white border border-black rounded-xl text-black font-medium text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                  />
+                  {tradeSearch && (
                     <button
-                      onClick={() => {
-                        setSelectedTrades(prev => 
-                          prev.includes(t.name) ? prev.filter(name => name !== t.name) : [...prev, t.name]
-                        );
-                      }}
-                      className={cn(
-                        "w-full p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all duration-300 group",
-                        selectedTrades.includes(t.name) 
-                          ? "bg-primary/5 border-primary text-primary shadow-lg shadow-primary/5" 
-                          : "bg-white border-black text-slate-600 hover:border-black"
-                      )}
+                      type="button"
+                      onClick={() => setTradeSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-black hover:bg-slate-100 rounded-full transition-all"
+                      title="Clear search"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-colors",
-                          selectedTrades.includes(t.name) ? "bg-primary text-white" : "bg-slate-50"
-                        )}>
-                          {t.icon}
-                        </div>
-                        <span className="font-black text-sm tracking-tight">{t.name}</span>
-                      </div>
-                      {selectedTrades.includes(t.name) && (
-                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                          <CheckCircle2 className="w-5 h-5 text-primary" />
-                        </motion.div>
-                      )}
+                      <X className="w-4 h-4" />
                     </button>
-                    {selectedTrades.includes(t.name) && t.subcategories && t.subcategories.length > 0 && (
-                      <motion.div 
-                        initial={{ opacity: 0, height: 0 }} 
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="ml-4 p-4 bg-slate-50 border border-black rounded-2xl space-y-3"
-                      >
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Specific Services:</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {t.subcategories.map((sub: string, subIdx: number) => (
-                            <label key={`${t.id}-${sub}-${subIdx}`} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-black group">
-                              <div className="relative flex items-center">
-                                <input 
-                                  type="checkbox" 
-                                  className="w-5 h-5 rounded-md border-2 border-black text-primary focus:ring-primary focus:ring-offset-0 transition-all cursor-pointer peer"
-                                  checked={selectedSubcategories.includes(sub)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) setSelectedSubcategories(prev => [...prev, sub]);
-                                    else setSelectedSubcategories(prev => prev.filter(s => s !== sub));
-                                  }}
-                                />
-                              </div>
-                              <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">{sub}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </motion.div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-600 px-1">
+                  <span>
+                    {tradeSearch.trim() ? (
+                      <>
+                        Showing <strong className="text-black font-bold">{filteredTradeCategories.length}</strong> matching {filteredTradeCategories.length === 1 ? 'category' : 'categories'}
+                      </>
+                    ) : (
+                      <>
+                        <strong className="text-black font-bold">{relevantCategories.length}</strong> total categories available
+                      </>
                     )}
-                  </div>
-                ))}
+                  </span>
+                  {selectedTrades.length > 0 && (
+                    <span className="bg-primary/10 text-primary font-bold px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
+                      {selectedTrades.length} selected
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {filteredTradeCategories.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 border border-black rounded-2xl space-y-3">
+                  <p className="text-sm font-bold text-slate-900">
+                    No {businessLayer === "consultancy" ? "categories" : "trades"} found matching "{tradeSearch}"
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Try searching a different trade name, service keyword, or clear your search to browse all categories.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTradeSearch("")}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-black rounded-xl text-xs font-black text-black hover:bg-slate-100 transition-all shadow-sm"
+                  >
+                    <X className="w-3.5 h-3.5" /> Clear Search
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                  {filteredTradeCategories.map((t: any) => {
+                    const isSelected = selectedTrades.includes(t.name);
+                    const matchingSubs = tradeSearch.trim()
+                      ? (t.subcategories || []).filter((sub: string) =>
+                          sub.toLowerCase().includes(tradeSearch.trim().toLowerCase())
+                        )
+                      : [];
+
+                    return (
+                      <div key={t.id} className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTrades(prev => 
+                              prev.includes(t.name) ? prev.filter(name => name !== t.name) : [...prev, t.name]
+                            );
+                          }}
+                          className={cn(
+                            "w-full p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all duration-300 group",
+                            isSelected 
+                              ? "bg-primary/5 border-primary text-primary shadow-lg shadow-primary/5" 
+                              : "bg-white border-black text-slate-600 hover:border-black"
+                          )}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-colors shrink-0",
+                              isSelected ? "bg-primary text-white" : "bg-slate-50"
+                            )}>
+                              {t.icon}
+                            </div>
+                            <div>
+                              <span className="font-black text-sm tracking-tight text-black block">{t.name}</span>
+                              {matchingSubs.length > 0 && !isSelected && (
+                                <span className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                                  Includes: {matchingSubs.slice(0, 2).join(", ")}{matchingSubs.length > 2 ? ` +${matchingSubs.length - 2} more` : ""}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                              <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
+                            </motion.div>
+                          )}
+                        </button>
+                        {isSelected && t.subcategories && t.subcategories.length > 0 && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="ml-4 p-4 bg-slate-50 border border-black rounded-2xl space-y-3"
+                          >
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Specific Services:</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {t.subcategories.map((sub: string, subIdx: number) => {
+                                const isSubMatched = tradeSearch.trim() && sub.toLowerCase().includes(tradeSearch.trim().toLowerCase());
+                                return (
+                                  <label 
+                                    key={`${t.id}-${sub}-${subIdx}`} 
+                                    className={cn(
+                                      "flex items-center gap-3 p-2 rounded-xl transition-colors cursor-pointer border group",
+                                      isSubMatched 
+                                        ? "bg-primary/10 border-primary/40 font-semibold" 
+                                        : "hover:bg-white border-transparent hover:border-black"
+                                    )}
+                                  >
+                                    <div className="relative flex items-center">
+                                      <input 
+                                        type="checkbox" 
+                                        className="w-5 h-5 rounded-md border-2 border-black text-primary focus:ring-primary focus:ring-offset-0 transition-all cursor-pointer peer"
+                                        checked={selectedSubcategories.includes(sub)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) setSelectedSubcategories(prev => [...prev, sub]);
+                                          else setSelectedSubcategories(prev => prev.filter(s => s !== sub));
+                                        }}
+                                      />
+                                    </div>
+                                    <span className="text-sm font-medium text-slate-800 group-hover:text-black transition-colors">{sub}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="flex gap-4">
                 <button

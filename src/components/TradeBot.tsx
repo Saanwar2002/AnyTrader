@@ -33,6 +33,8 @@ import {
   getHybridTraderRecommendations, 
   TraderRecommendationCard 
 } from "@/src/services/aiRecommendationService";
+import { TRADE_CATEGORIES } from "@/src/constants";
+import { categoryRegistry } from "@/src/services/categoryRegistrySync";
 import { recordUnmatchedSearch, extractCleanTradeQuery } from "@/src/services/searchOptimizationService";
 import { triggerHaptic } from "@/src/lib/capacitor";
 import { toast } from "sonner";
@@ -67,6 +69,23 @@ interface TradeBotProps {
   onClose: () => void;
 }
 
+function resolveOfficialCategories(rawList: string[], fallback: string[]): string[] {
+  if (!rawList || rawList.length === 0) return fallback;
+  const resolved: string[] = [];
+
+  for (const raw of rawList) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+
+    const canonical = categoryRegistry.resolveCanonicalCategory(trimmed);
+    if (canonical && !resolved.includes(canonical)) {
+      resolved.push(canonical);
+    }
+  }
+
+  return resolved.length > 0 ? resolved.slice(0, 3) : fallback;
+}
+
 export function TradeBot({ isOpen, onClose }: TradeBotProps) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
@@ -78,7 +97,7 @@ export function TradeBot({ isOpen, onClose }: TradeBotProps) {
     role: "model",
     text: `Hello ${profile?.name ? profile.name.split(" ")[0] : "there"}! I'm AnyTrader AI Copilot. 
 
-I'm trained on AnyTrader's UK platform data across 93+ trade sectors — connecting you with real verified local tradespeople, accurate £ GBP pricing, and safety standards (Gas Safe, Part P, Awaab's Law, FSA).
+I'm trained on AnyTrader's UK platform data across 94 trade sectors — connecting you with real verified local tradespeople, accurate £ GBP pricing, and safety standards (Gas Safe, Part P, Awaab's Law, FSA).
 
 How can I assist your project today?`,
     suggestedCategories: ["Plumbing", "Electrical", "Painting & Decorating", "Gas & Heating"]
@@ -115,11 +134,12 @@ How can I assist your project today?`,
     const categoriesForMatching = matchedCats.length > 0 ? matchedCats : [primaryCategory];
     const tradersPromise = getHybridTraderRecommendations(categoriesForMatching, userPostcode, undefined, userMessage).catch(() => []);
 
-    // 3. User context payload for Gemini
+    // 3. User context payload for Gemini with dynamic category synchronization
     const userContext = {
       role: userRole,
       postcode: userPostcode || "UK Wide",
-      propertySummary: (profile as any)?.boilerModel ? `Boiler: ${(profile as any).boilerModel}, EPC: ${(profile as any).epcRating || 'C'}` : undefined
+      propertySummary: (profile as any)?.boilerModel ? `Boiler: ${(profile as any).boilerModel}, EPC: ${(profile as any).epcRating || 'C'}` : undefined,
+      availableCategories: categoryRegistry.getAllCategoryNames()
     };
 
     // Add user message and prepare empty model message for token streaming
@@ -149,13 +169,14 @@ How can I assist your project today?`,
           onChunk: (_chunk, accumulatedText) => {
             finalAccumulatedText = accumulatedText;
             setIsLoading(false); // First token arrived! Transition from loading to active streaming
+            const cleanDisplay = accumulatedText.replace(/\[MATCHED_CATEGORIES:\s*[^\]]*\]?/gi, "").trim();
             setMessages(prev => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
               if (lastIdx >= 0 && updated[lastIdx].role === "model") {
                 updated[lastIdx] = {
                   ...updated[lastIdx],
-                  text: accumulatedText
+                  text: cleanDisplay
                 };
               }
               return updated;
@@ -175,6 +196,22 @@ How can I assist your project today?`,
               return updated;
             });
           },
+          onCategories: (streamedCats) => {
+            if (streamedCats && streamedCats.length > 0) {
+              const resolved = resolveOfficialCategories(streamedCats, matchedCats);
+              setMessages(prev => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === "model") {
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    suggestedCategories: resolved
+                  };
+                }
+                return updated;
+              });
+            }
+          },
           onError: (err) => {
             console.warn("TradeBot stream callback error:", err);
           }
@@ -182,9 +219,38 @@ How can I assist your project today?`,
       );
 
       // Await trader recommendations
-      const recommendedTraders = await tradersPromise;
-      const modelText = finalAccumulatedText || streamResult.text || "Here is the guidance for your request.";
+      let recommendedTraders = await tradersPromise;
+      const rawModelText = finalAccumulatedText || streamResult.text || "Here is the guidance for your request.";
+      const cleanDisplay = rawModelText.replace(/\[MATCHED_CATEGORIES:\s*[^\]]*\]?/gi, "").trim();
       const finalSources = capturedSources.length > 0 ? capturedSources : streamResult.sources || [];
+
+      // Extract Gemini-validated categories from streamResult or text regex tag
+      const catMatch = rawModelText.match(/\[MATCHED_CATEGORIES:\s*([^\]]+)\]/i);
+      const geminiRawCats = (streamResult.categories && streamResult.categories.length > 0)
+        ? streamResult.categories
+        : (catMatch && catMatch[1] ? catMatch[1].split(",").map(c => c.trim()).filter(Boolean) : []);
+
+      const validatedCategories = geminiRawCats.length > 0
+        ? resolveOfficialCategories(geminiRawCats, matchedCats)
+        : matchedCats;
+
+      // If Gemini returned high-confidence categories that differ from the initial heuristic, re-query recommendations
+      const categoriesDiffer = JSON.stringify(validatedCategories) !== JSON.stringify(matchedCats);
+      if (categoriesDiffer && validatedCategories.length > 0) {
+        try {
+          const refreshedTraders = await getHybridTraderRecommendations(
+            validatedCategories,
+            userPostcode,
+            undefined,
+            userMessage
+          );
+          recommendedTraders = refreshedTraders || [];
+        } catch (e) {
+          console.warn("Failed to refresh recommendations with Gemini categories:", e);
+        }
+      }
+
+      const finalPrimaryCategory = validatedCategories[0] || primaryCategory;
 
       // 4. Telemetry: Record unmatched search terms, categories, or trader supply gaps
       let demandGapNotice: Message["demandGapNotice"] = undefined;
@@ -198,18 +264,18 @@ How can I assist your project today?`,
         recordUnmatchedSearch(queryForTelemetry, userPostcode, {
           source: "ai_bot",
           gapType: "unmatched_category",
-          category: primaryCategory !== "General Trades" ? primaryCategory : "",
+          category: finalPrimaryCategory !== "General Trades" ? finalPrimaryCategory : "",
         });
       } else if (recommendedTraders.length === 0 && queryForTelemetry.length >= 3) {
         demandGapNotice = {
           type: "no_traders_found",
           searchTerm: queryForTelemetry,
-          category: primaryCategory,
+          category: finalPrimaryCategory,
         };
         recordUnmatchedSearch(queryForTelemetry, userPostcode, {
           source: "ai_bot",
           gapType: "no_traders_found",
-          category: primaryCategory,
+          category: finalPrimaryCategory,
         });
       }
 
@@ -218,9 +284,9 @@ How can I assist your project today?`,
         type: userMessage.toLowerCase().includes("emergency") || userMessage.toLowerCase().includes("burst") || userMessage.toLowerCase().includes("flooding")
           ? "emergency_job"
           : "post_job",
-        category: primaryCategory,
-        title: userMessage.length > 50 ? `${primaryCategory} Required` : userMessage,
-        description: `Request for ${primaryCategory} assistance.\n\nAI Diagnostic Summary:\n${modelText.slice(0, 200)}...`,
+        category: finalPrimaryCategory,
+        title: userMessage.length > 50 ? `${finalPrimaryCategory} Required` : userMessage,
+        description: `Request for ${finalPrimaryCategory} assistance.\n\nAI Diagnostic Summary:\n${cleanDisplay.slice(0, 200)}...`,
         estimatedBudget: "Market Standard (£120 - £350)"
       };
 
@@ -230,9 +296,9 @@ How can I assist your project today?`,
         if (lastIdx >= 0 && updated[lastIdx].role === "model") {
           updated[lastIdx] = {
             role: "model",
-            text: modelText,
+            text: cleanDisplay,
             sources: finalSources,
-            suggestedCategories: matchedCats,
+            suggestedCategories: validatedCategories,
             recommendedTraders: recommendedTraders.slice(0, 2),
             demandGapNotice,
             quickAction
@@ -318,7 +384,7 @@ How can I assist your project today?`,
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[11px] font-medium text-slate-300">
-                    Live UK Pricing • 93+ Trade Categories • Gas Safe & NICEIC
+                    Live UK Pricing • 94 Trade Categories • Gas Safe & NICEIC
                   </span>
                 </div>
               </div>

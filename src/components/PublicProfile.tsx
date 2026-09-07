@@ -1779,14 +1779,14 @@ export default function PublicProfile() {
                           budget: validDeal ? (validDeal.discountedPrice || validDeal.price) : undefined,
                         }}
                         className={cn(
-                          "w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-2xs cursor-pointer text-xs sm:text-sm",
+                          "w-full py-3.5 px-4 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer text-xs sm:text-sm active:scale-98 border border-black",
                           validDeal
                             ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                            : "border border-black bg-slate-50 hover:bg-slate-100 text-slate-900"
+                            : "bg-blue-600 hover:bg-blue-700 text-white"
                         )}
                       >
-                        {validDeal ? <Zap className="w-4 h-4 fill-white" /> : <Pencil className="w-4 h-4 text-slate-700" />}
-                        <span>{validDeal ? `Post Custom Job with ${validDeal.discountPercentage}% OFF` : `Post Custom Job for ${profile.name}`}</span>
+                        {validDeal ? <Zap className="w-4 h-4 fill-white shrink-0" /> : <Pencil className="w-4 h-4 text-white shrink-0" />}
+                        <span className="truncate">{validDeal ? `Post Custom Job with ${validDeal.discountPercentage}% OFF` : `Post Custom Job for ${profile.name}`}</span>
                       </Link>
                     );
                   })()}

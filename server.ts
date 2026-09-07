@@ -19,6 +19,39 @@ dotenv.config();
 
 
 
+// Real-time Firestore sync for Gemini Category Prompt Layer
+const startCategoryRegistrySyncWorker = (firestoreDb: admin.firestore.Firestore) => {
+  try {
+    firestoreDb.collection("platform_categories").onSnapshot((snapshot) => {
+      const categories: any[] = [];
+      snapshot.forEach((doc) => {
+        categories.push({ id: doc.id, ...doc.data() });
+      });
+      if (categories.length > 0) {
+        geminiServer.syncCategoryRegistryServer(categories);
+        console.log(`[Gemini Sync] Synchronized ${categories.length} Firestore categories to AI prompt layer.`);
+      }
+    }, (err) => {
+      console.warn("[Gemini Sync] Firestore category sync listener notice:", err.message);
+    });
+
+    firestoreDb.collection("dynamic_search_synonyms").onSnapshot((snapshot) => {
+      const synonyms: any[] = [];
+      snapshot.forEach((doc) => {
+        synonyms.push({ id: doc.id, ...doc.data() });
+      });
+      if (synonyms.length > 0) {
+        geminiServer.syncCategoryRegistryServer(undefined, synonyms);
+        console.log(`[Gemini Sync] Synchronized ${synonyms.length} search synonyms to AI prompt layer.`);
+      }
+    }, (err) => {
+      console.warn("[Gemini Sync] Firestore synonym sync listener notice:", err.message);
+    });
+  } catch (syncErr: any) {
+    console.warn("[Gemini Sync] Category sync worker initialization note:", syncErr?.message);
+  }
+};
+
 // Initialize Firebase Admin
 let db: admin.firestore.Firestore | null = null;
 const initFirebase = () => {
@@ -51,7 +84,10 @@ const initFirebase = () => {
         db.collection("users").limit(1).get()
           .then(() => {
              console.log(`Firestore connected to: ${dbId}`);
-             if (db) startInstantMatchEngine(db);
+             if (db) {
+               startInstantMatchEngine(db);
+               startCategoryRegistrySyncWorker(db);
+             }
           })
           .catch(err => {
             // Code 7: Permission Denied indicates lack of Service Account credentials
@@ -2373,6 +2409,18 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       res.json({ success: true, message: "Semantic cache successfully purged" });
     } catch (e: any) {
       res.status(500).json({ error: e.message || "Failed to clear cache" });
+    }
+  });
+
+  // Category Registry Synchronization Endpoint
+  app.post("/api/gemini/sync-categories", (req, res) => {
+    try {
+      const { categories, synonyms } = req.body || {};
+      const syncResult = geminiServer.syncCategoryRegistryServer(categories, synonyms);
+      res.json(syncResult);
+    } catch (e: any) {
+      console.error("Failed to sync category registry to Gemini server layer:", e);
+      res.status(500).json({ error: e.message || "Failed to sync categories" });
     }
   });
 
